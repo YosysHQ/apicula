@@ -1,4 +1,5 @@
 import numpy as np
+from PIL import Image
 from crcmod.predefined import mkPredefinedCrcFun
 
 crc16arc = mkPredefinedCrcFun('crc-16')
@@ -32,7 +33,13 @@ def read_bitstream(fname):
             if line.startswith("//") or len(line) < 1000: continue
             crc1, crc2 = crc(line)
             #if crc1 != crc2: print(crc1, crc2)
-            bitmap.append(bytearr(line)[:-8])
+            bitmap.append(bitarr(line))
 
     return np.array(bitmap)
 
+def display(fname, data):
+    im = Image.frombytes(
+            mode='1',
+            size=data.shape[::-1],
+            data=np.packbits(data, axis=1))
+    im.save(fname)
