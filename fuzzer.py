@@ -41,8 +41,8 @@ def configbits(n):
     return bits.reshape(n, 32)[1:-1,:size].T
 
 def find_bits(stack, n):
-    flipstack = np.flip(stack, axis=0)
-    bytestack = np.packbits(flipstack, axis=0, bitorder='little').astype(np.uint32)
+    #flipstack = np.flip(stack, axis=0)
+    bytestack = np.packbits(stack, axis=0, bitorder='little').astype(np.uint32)
     sequences = (bytestack[2]<<16)+(bytestack[1]<<8)+bytestack[0]
     indices = np.where((sequences>0) & (sequences<sequences.max()))
     return indices, sequences[indices]
@@ -75,7 +75,7 @@ class Lut4Fuzzer(Fuzzer):
         "Generate verilog for a LUT4 at this location"
         name = location_to_name(location)
         lut = codegen.Primitive("LUT4", name)
-        lut.params["INIT"] = np_to_vector(bits)
+        lut.params["INIT"] = np_to_vector(1^bits) # inverted
         lut.portmap['F'] = name+"_F"
         lut.portmap['I0'] = name+"_I0"
         lut.portmap['I1'] = name+"_I1"
@@ -144,16 +144,24 @@ def run_pnr(locations, fuzzer, bits):
 def run_batch():
     #TODO generalize/parameterize
     locations = list(tile_locations(28, 47, {10, 19, 28}))
-    bits = configbits(len(locations)*Lut4Fuzzer.cfg_bits)
+    nrofbits = len(locations)*Lut4Fuzzer.cfg_bits
+    bits = configbits(nrofbits)
     p = Pool()
     bitstreams = p.map(lambda cb: run_pnr(locations, Lut4Fuzzer(), cb), bits)
     np.savez_compressed("bitstreams.npz", *bitstreams)
     stack = np.stack(bitstreams)
-    indices, sequences = find_bits(stack, bits.shape[1])
+    indices, sequences = find_bits(stack, nrofbits)
     #debug image
     bitmap = np.zeros(stack[0].shape, dtype=np.uint8)
     bitmap[indices] = 1
     bslib.display("indices.png", bitmap)
+    mapping = {}
+    for x, y, seq in zip(*indices, sequences):
+        mapping[seq] = (x, y)
+    lf = Lut4Fuzzer()
+    for loc, bits in zip(locations, bslib.chunks(range(1, nrofbits+1), lf.cfg_bits)):
+        lf.report(loc, [mapping[i] for i in bits])
+
 
 
 if __name__ == "__main__":
