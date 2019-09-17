@@ -2,10 +2,10 @@ from itertools import chain
 
 class Module:
     def __init__(self):
-        self.inputs = []
-        self.outputs = []
-        self.wires = []
-        self.primitives = []
+        self.inputs = set()
+        self.outputs = set()
+        self.wires = set()
+        self.primitives = {}
 
     def write(self, f):
         f.write("module top(")
@@ -25,7 +25,7 @@ class Module:
         for wire in self.wires:
             f.write("wire {};\n".format(wire))
 
-        for module in self.primitives:
+        for module in self.primitives.values():
             module.write(f)
 
         f.write("endmodule\n")
