@@ -4,6 +4,7 @@ class Module:
     def __init__(self):
         self.inputs = set()
         self.outputs = set()
+        self.inouts = set()
         self.wires = set()
         self.primitives = {}
 
@@ -21,6 +22,8 @@ class Module:
             f.write("input {};\n".format(port))
         for port in self.outputs:
             f.write("output {};\n".format(port))
+        for port in self.inouts:
+            f.write("inout {};\n".format(port))
 
         for wire in self.wires:
             f.write("wire {};\n".format(wire))

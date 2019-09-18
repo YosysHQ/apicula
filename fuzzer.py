@@ -4,6 +4,8 @@ import os
 import tempfile
 import subprocess
 from collections import deque
+from itertools import chain
+from random import shuffle
 import numpy as np
 import codegen
 import bslib
@@ -71,6 +73,7 @@ class Fuzzer:
 class CluFuzzer(Fuzzer):
     scope = "CLU"
     ncls = 4 # 3 for REG
+
     def __init__(self, rows, cols, exclude):
         self.locations = []
         if self.scope == "CLU":
@@ -92,12 +95,27 @@ class CluFuzzer(Fuzzer):
                             for lut in ["A", "B"]:
                                 self.locations.append("R{}C{}[{}][{}]".format(row, col, cls, lut))
 
+        shuffle(self.locations)
+
     def constraints(self, constr, bits):
         "Generate cst lines for this fuzzer"
         for loc in self.locations:
             name = self.location_to_name(loc)
             constr.cells[name] = loc
 
+class PinFuzzer(Fuzzer):
+    def __init__(self, pins, exclude):
+        self.locations = []
+        for p in range(1, pins+1):
+            if p not in exclude:
+                self.locations.append(p)
+        shuffle(self.locations)
+
+    def constraints(self, constr, bits):
+        "Generate cst lines for this fuzzer"
+        for loc in self.locations:
+            name = "IOB{}".format(loc)
+            constr.ports[name] = loc
 
 class Lut4BitsFuzzer(CluFuzzer):
     """
@@ -238,6 +256,51 @@ class DffsrFuzzer(CluFuzzer):
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
 
+class IobFuzzer(PinFuzzer):
+    resources = {"IOB"}
+    loc_bits = 1
+    # last port is physical pin
+    kindmap = {
+            "IBUF": {"wires": ["O"], "inputs": ["I"]},
+            "OBUF": {"wires": ["I"], "outputs": ["O"]},
+            "TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
+            "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
+        #"TLVDS_IBUF": ["I", "IB", "O"],
+        #"TLVDS_OBUF": ["I", "OB", "O"],
+        #"TLVDS_TBUF": ["I", "OB", "O", "OEN"],
+        #"TLVDS_IOBUF": ["I", "IO", "IOB", "O", "OEN"],
+        #"MIPI_IBUF_HS": ["I", "IB", "OH"],
+        #"MIPI_IBUF_LP": ["I", "IB", "OL", "OB"],
+        #"MIPI_IBUF": ["I", "IB", "HSREN", "OEN", "OENB", "OH", "OB", "IO", "IOB"],
+        #"MIPI_OBUF": ["MODESEL", "I", "IB", "O", "OB"],
+        #"I3C_IOBUF": ["MODESEL", "I", "O", "IO"],
+    }
+
+    def __init__(self, kind, pins, exclude):
+        super().__init__(pins, exclude)
+        self.kind = kind
+        self.ports = self.kindmap[kind]
+
+    def primitives(self, mod, bits):
+        "Generate verilog for a DFF at this location"
+        for location, bits in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+            if bits[0]:
+                name = "IOB{}".format(location)
+                dff = codegen.Primitive(self.kind, name)
+                for port in chain.from_iterable(self.ports.values()):
+                    dff.portmap[port] = name+"_"+port
+
+                for direction, wires in self.ports.items():
+                    wnames = [name+"_"+w for w in wires]
+                    getattr(mod, direction).update(wnames)
+                mod.primitives[name] = dff
+
+    def constraints(self, constr, bits):
+        for loc, bits in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+            if bits[0]:
+                name = "IOB{}".format(loc)
+                constr.ports[name] = loc
+
 def run_pnr(fuzzers, bits):
     #TODO generalize/parameterize
     mod = codegen.Module()
@@ -332,6 +395,7 @@ if __name__ == "__main__":
     fuzzers = [
         #Lut4BitsFuzzer(28, 47, {10, 19, 28}),
         #DffFuzzer(28, 47, {10, 19, 28}),
-        DffsrFuzzer(28, 47, {10, 19, 28}),
+        #DffsrFuzzer(28, 47, {10, 19, 28}),
+        IobFuzzer("IBUF", 88, {1, 2, 5, 6, 7, 8, 9, 10, 12, 21, 22, 23, 24, 43, 44, 45, 46, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 78, 87, 88}),
     ]
     run_batch(fuzzers)
