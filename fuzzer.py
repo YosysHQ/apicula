@@ -6,6 +6,7 @@ import subprocess
 from collections import deque
 from itertools import chain
 from random import shuffle
+from warnings import warn
 import numpy as np
 import codegen
 import bslib
@@ -48,6 +49,8 @@ class Fuzzer:
     resources = set()
     # added to name to avoid conflicts
     prefix = ""
+    # values higher than this will trigger a warning
+    max_std = 20
 
     @property
     def cfg_bits(self):
@@ -55,6 +58,9 @@ class Fuzzer:
 
     def location_to_name(self, location):
         return self.prefix + re.sub("\[([0-4AB])\]", "_\\1", location)
+
+    def location_chunks(self, bits):
+        return zip(self.locations, bslib.chunks(bits, self.loc_bits))
 
     def primitives(self, mod, bits):
         "Generate verilog for this fuzzer"
@@ -64,10 +70,24 @@ class Fuzzer:
         "Generate cst lines for this fuzzer"
         raise NotImplementedError
 
+    def check(self, bits):
+        "Perform some basic checks on the bitstream bits"
+        if len(self.locations)*self.loc_bits != len(bits):
+            warn("{} clusters expected, but {} clusters found".format(
+                len(self.locations)*self.loc_bits,
+                len(bits)))
+
+        for loc, b in self.location_chunks(bits):
+            a = np.array(b)
+            std = np.std(a, axis=1)
+            if np.any(std > self.max_std):
+                warn("High deviation in location {}".format(loc))
+
+
     def report(self, bits):
         """Generate a report of the bistream locations
            corresponding to the provided config bits"""
-        for loc, b in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+        for loc, b in self.location_chunks(bits):
             print(self.__class__.__name__, loc, b)
 
 class CluFuzzer(Fuzzer):
@@ -128,7 +148,7 @@ class Lut4BitsFuzzer(CluFuzzer):
 
     def primitives(self, mod, bits):
         "Generate verilog for LUT4s"
-        for location, bits in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+        for location, bits in self.location_chunks(bits):
             name = self.location_to_name(location)
             lut = codegen.Primitive("LUT4", name)
             lut.params["INIT"] = np_to_vector(1^bits) # inverted
@@ -153,7 +173,7 @@ class DffFuzzer(CluFuzzer):
 
     def primitives(self, mod, bits):
         "Generate verilog for a LUT4 and DFF"
-        for location, bits in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+        for location, bits in self.location_chunks(bits):
             if bits[0]:
                 name = self.location_to_name(location)
                 location_a = location+"[A]_LUT"
@@ -199,7 +219,7 @@ class DffFuzzer(CluFuzzer):
                 mod.primitives[name_b_dff] = dff
 
     def constraints(self, constr, bits):
-        for loc, bits in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+        for loc, bits in self.location_chunks(bits):
             if bits[0]:
                 name = self.location_to_name(loc+"[A]_LUT")
                 constr.cells[name] = loc
@@ -244,7 +264,7 @@ class DffsrFuzzer(CluFuzzer):
 
     def primitives(self, mod, bits):
         "Generate verilog for a DFF at this location"
-        for location, bits in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+        for location, bits in self.location_chunks(bits):
             prim, port = self.ffmap[tuple(bits)]
             name = self.location_to_name(location)
             dff = codegen.Primitive(prim, name)
@@ -283,7 +303,7 @@ class IobFuzzer(PinFuzzer):
 
     def primitives(self, mod, bits):
         "Generate verilog for a DFF at this location"
-        for location, bits in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+        for location, bits in self.location_chunks(bits):
             if bits[0]:
                 name = "IOB{}".format(location)
                 dff = codegen.Primitive(self.kind, name)
@@ -296,7 +316,7 @@ class IobFuzzer(PinFuzzer):
                 mod.primitives[name] = dff
 
     def constraints(self, constr, bits):
-        for loc, bits in zip(self.locations, bslib.chunks(bits, self.loc_bits)):
+        for loc, bits in self.location_chunks(bits):
             if bits[0]:
                 name = "IOB{}".format(loc)
                 constr.ports[name] = loc
@@ -363,9 +383,12 @@ def run_batch(fuzzers):
     bits = configbits(nrofbits)
     p = Pool()
 
-    bitstreams = p.map(lambda cb: run_pnr(fuzzers, cb), bits)
-    stack = np.stack(bitstreams)
-    np.savez_compressed("bitstreams.npz", *bitstreams)
+    if True:
+        bitstreams = p.map(lambda cb: run_pnr(fuzzers, cb), bits)
+        stack = np.stack(bitstreams)
+        np.savez_compressed("bitstreams.npz", *bitstreams)
+    else:
+        stack = np.stack(list(np.load("bitstreams.npz").values()), axis=0)
 
     indices, sequences = find_bits(stack)
     #debug image
@@ -389,6 +412,7 @@ def run_batch(fuzzers):
             bits.append(mapping[bit])
 
         fuzzer.report(bits)
+        fuzzer.check(bits)
 
 
 if __name__ == "__main__":
