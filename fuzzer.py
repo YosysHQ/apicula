@@ -5,8 +5,9 @@ import tempfile
 import subprocess
 from collections import deque
 from itertools import chain
-from random import shuffle
+from random import shuffle, seed
 from warnings import warn
+from math import factorial
 import numpy as np
 import codegen
 import bslib
@@ -21,19 +22,45 @@ def np_to_vector(array):
             len(array),
             ''.join(str(int(n)) for n in array))
 
-def configbits(n):
+def popcnt(x):
+    res = 0
+    while x:
+        if x & 1:
+            res += 1
+        x >>= 1
+    return res
+
+def get_cb_size(n):
+    return factorial(n) // factorial(n // 2) // factorial((n + 1) // 2)
+
+def gen_cb(n):
+    res = []
+    for i in range(1, 2**n):
+        if popcnt(i) == (n + 1) // 2:
+            res.append(i)
+    assert len(res) == get_cb_size(n)
+    return res
+
+def get_codes(n):
+    bits = n.bit_length()
+    while get_cb_size(bits) < n:
+        bits += 1
+    cb = gen_cb(bits)
+    return cb[:n]
+
+def configbits(codes):
     """
     Given n bits of configuration data
-    generate ceil(log2(n)) uniquely identifying
+    generate uniquely identifying
     bit patterns for each configuration bit.
     This makes each configuration bit uniquely
     identifiable in the bitstream.
     """
-    n += 2 # exclude 0000 and FFFF to avoid trouble
-    byteview = np.arange(n, dtype=np.uint32).view(np.uint8)
+    codelen = len(codes)
+    bitlen = max(c.bit_length() for c in codes)
+    byteview = np.array(codes, dtype=np.uint32).view(np.uint8)
     bits = np.unpackbits(byteview, bitorder='little')
-    size = np.ceil(np.log2(n)).astype(np.int)
-    return bits.reshape(n, 32)[1:-1,:size].T
+    return bits.reshape(codelen, 32)[:,:bitlen].T
 
 def find_bits(stack):
     bytestack = np.packbits(stack, axis=0, bitorder='little').astype(np.uint32)
@@ -69,6 +96,14 @@ class Fuzzer:
     def constraints(self, constr, bits):
         "Generate cst lines for this fuzzer"
         raise NotImplementedError
+
+    def side_effects(self, bits):
+        """
+        Returns a list of codes that
+        don't map 1-1 to bitstream bits.
+        e.g. OR/AND of several other bits.
+        """
+        return []
 
     def check(self, bits):
         "Perform some basic checks on the bitstream bits"
@@ -380,10 +415,12 @@ def run_pnr(fuzzers, bits):
 
 def run_batch(fuzzers):
     nrofbits = sum([f.cfg_bits for f in fuzzers])
-    bits = configbits(nrofbits)
-    p = Pool()
+    codes = get_codes(nrofbits)
+    shuffle(codes)
+    bits = configbits(codes)
 
     if True:
+        p = Pool()
         bitstreams = p.map(lambda cb: run_pnr(fuzzers, cb), bits)
         stack = np.stack(bitstreams)
         np.savez_compressed("bitstreams.npz", *bitstreams)
@@ -397,25 +434,26 @@ def run_batch(fuzzers):
     bslib.display("indices.png", bitmap)
 
     seqloc = np.array([sequences, *indices]).T
-    seqloc = seqloc[seqloc[:,0].argsort()]
-    assert np.all(np.diff(seqloc[:,0])<=1), "sequences are missing"
+    #seqloc = seqloc[seqloc[:,0].argsort()]
+    assert not np.any(np.diff([popcnt(s) for s in sequences])), "sequences are missing"
 
     mapping = {}
     for seq, x, y in seqloc:
         mapping.setdefault(seq, []).append((x, y))
 
-    seqs = deque(range(1, nrofbits+1))
+    seqs = deque(codes)
     for fuzzer in fuzzers:
         bits = []
         for _ in range(fuzzer.cfg_bits):
-            bit = seqs.popleft()
-            bits.append(mapping[bit])
+            code = seqs.popleft()
+            bits.append(mapping[code])
 
         fuzzer.report(bits)
         fuzzer.check(bits)
 
 
 if __name__ == "__main__":
+    seed(1234)
     fuzzers = [
         #Lut4BitsFuzzer(28, 47, {10, 19, 28}),
         #DffFuzzer(28, 47, {10, 19, 28}),
