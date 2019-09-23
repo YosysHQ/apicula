@@ -1,4 +1,3 @@
-import sys, pdb
 import re
 import os
 import tempfile
@@ -9,9 +8,13 @@ from random import shuffle, seed
 from warnings import warn
 from math import factorial
 import numpy as np
+from multiprocessing.dummy import Pool
+
 import codegen
 import bslib
-from multiprocessing.dummy import Pool
+import pindef
+
+import sys, pdb
 # resource sets
 # CFU=CLU?
 # ENABLE: only one fuzzer switches things on and off at the same time
@@ -46,9 +49,9 @@ def get_codes(n):
     while get_cb_size(bits) < n:
         bits += 1
     cb = gen_cb(bits)
-    return cb[:n]
+    return bits, cb[:n]
 
-def configbits(codes):
+def configbits(bitlen, codes):
     """
     Given n bits of configuration data
     generate uniquely identifying
@@ -57,17 +60,20 @@ def configbits(codes):
     identifiable in the bitstream.
     """
     codelen = len(codes)
-    bitlen = max(c.bit_length() for c in codes)
     byteview = np.array(codes, dtype=np.uint32).view(np.uint8)
     bits = np.unpackbits(byteview, bitorder='little')
     return bits.reshape(codelen, 32)[:,:bitlen].T
 
-def find_bits(stack):
+def configcodes(stack):
+    "Turn bit arrays back into numbers"
     bytestack = np.packbits(stack, axis=0, bitorder='little').astype(np.uint32)
-    #sequences = (bytestack[2]<<16)+(bytestack[1]<<8)+bytestack[0]
     sequences = np.zeros(bytestack.shape[1:], dtype=np.uint32)
     for i in range(bytestack.shape[0]):
         sequences += bytestack[i] << (i*8)
+    return sequences
+
+def find_bits(stack):
+    sequences = configcodes(stack)
     indices = np.where((sequences>0) & (sequences<sequences.max()))
     return indices, sequences[indices]
 
@@ -78,10 +84,19 @@ class Fuzzer:
     prefix = ""
     # values higher than this will trigger a warning
     max_std = 20
+    # bits of side-effects
+    se_bits = 0
+    # list of side-effect identifiers
+    se_loc = []
 
     @property
     def cfg_bits(self):
         return len(self.locations)*self.loc_bits
+
+    @property
+    def se_bits(self):
+        # this is dumb and potentially slow
+        return self.side_effects(np.zeros((0, self.cfg_bits), dtype=np.uint8)).shape[1]
 
     def location_to_name(self, location):
         return self.prefix + re.sub("\[([0-4AB])\]", "_\\1", location)
@@ -103,7 +118,15 @@ class Fuzzer:
         don't map 1-1 to bitstream bits.
         e.g. OR/AND of several other bits.
         """
-        return []
+        return np.zeros((1, 0))
+
+    def side_effect_cfg(self):
+        """
+        For each side-effect, return a set of
+        config bits that triggers
+        the corresponding side-effect.
+        """
+        return np.zeros((0, self.cfg_bits))
 
     def check(self, bits):
         "Perform some basic checks on the bitstream bits"
@@ -124,6 +147,12 @@ class Fuzzer:
            corresponding to the provided config bits"""
         for loc, b in self.location_chunks(bits):
             print(self.__class__.__name__, loc, b)
+
+    def report_side_effects(self, bits):
+        """Generate a report of the bistream locations
+           corresponding to side-effect bits"""
+        for se, b in zip(self.se_loc, bits):
+            print(self.__class__.__name__, "se", se, b)
 
 class CluFuzzer(Fuzzer):
     scope = "CLU"
@@ -157,20 +186,6 @@ class CluFuzzer(Fuzzer):
         for loc in self.locations:
             name = self.location_to_name(loc)
             constr.cells[name] = loc
-
-class PinFuzzer(Fuzzer):
-    def __init__(self, pins, exclude):
-        self.locations = []
-        for p in range(1, pins+1):
-            if p not in exclude:
-                self.locations.append(p)
-        shuffle(self.locations)
-
-    def constraints(self, constr, bits):
-        "Generate cst lines for this fuzzer"
-        for loc in self.locations:
-            name = "IOB{}".format(loc)
-            constr.ports[name] = loc
 
 class Lut4BitsFuzzer(CluFuzzer):
     """
@@ -311,6 +326,26 @@ class DffsrFuzzer(CluFuzzer):
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
 
+class PinFuzzer(Fuzzer):
+    def __init__(self, series, package):
+        self.locations = []
+        self.banks = pindef.get_pins(series, package)
+        self.se_loc = self.banks.keys()
+        for bank in self.banks.values():
+            self.locations.extend(bank)
+        shuffle(self.locations)
+        self.bank_indices = {
+            bank: [self.locations.index(pin)
+                for pin in pins]
+            for bank, pins in self.banks.items()
+        }
+
+    def constraints(self, constr, bits):
+        "Generate cst lines for this fuzzer"
+        for loc in self.locations:
+            name = "IOB{}".format(loc)
+            constr.ports[name] = loc
+
 class IobFuzzer(PinFuzzer):
     resources = {"IOB"}
     loc_bits = 1
@@ -337,7 +372,7 @@ class IobFuzzer(PinFuzzer):
         self.ports = self.kindmap[kind]
 
     def primitives(self, mod, bits):
-        "Generate verilog for a DFF at this location"
+        "Generate verilog for an IOB at this location"
         for location, bits in self.location_chunks(bits):
             if bits[0]:
                 name = "IOB{}".format(location)
@@ -356,13 +391,30 @@ class IobFuzzer(PinFuzzer):
                 name = "IOB{}".format(loc)
                 constr.ports[name] = loc
 
+    def side_effects(self, bits):
+        "If any pin is turned on, the bank is also enabled"
+        return np.array([
+            np.any(bits[:,idc], axis=1)
+            for bank, idc in self.bank_indices.items()
+        ]).T
+
+    def side_effect_cfg(self):
+        "Turn each bank on seperately"
+        cfglist = []
+        for bank, indices in self.bank_indices.items():
+            cfg = np.zeros(self.cfg_bits, dtype=np.uint8)
+            cfg[indices] = 1
+            cfglist.append(cfg)
+        return np.vstack(cfglist)
+
 def run_pnr(fuzzers, bits):
     #TODO generalize/parameterize
     mod = codegen.Module()
     constr = codegen.Constraints()
+    start = 0
     for fuzzer in fuzzers:
-        cb = bits[:fuzzer.cfg_bits]
-        bits = bits[fuzzer.cfg_bits:]
+        cb = bits[start:start+fuzzer.cfg_bits]
+        start += fuzzer.cfg_bits
         fuzzer.primitives(mod, cb)
         fuzzer.constraints(constr, cb)
 
@@ -413,11 +465,47 @@ def run_pnr(fuzzers, bits):
         #print(tmpdir); input()
         return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")
 
+def get_extra_bits(fuzzers, bits):
+    "Extend bits with configurations that test side-effects"
+    groups = []
+    start = 0
+    for fuzzer in fuzzers:
+        cfg = fuzzer.side_effect_cfg()
+        group = np.zeros((cfg.shape[0], bits.shape[1]), dtype=np.uint8)
+        group[:,start:start+fuzzer.cfg_bits] = cfg
+        start += fuzzer.cfg_bits
+        groups.append(group)
+    gstack = np.vstack(groups)
+
+    nrofbits = gstack.shape[0]
+    codelen, codes = get_codes(nrofbits)
+    shuffle(codes)
+    sebits = configbits(codelen, codes)
+    rows = [np.sum(gstack[row==1], axis=0) for row in sebits]
+    rows.append(bits)
+    return codelen, np.vstack(rows)
+
+def get_extra_codes(fuzzers, bits):
+    "Get codes produces by fuzzer side-effects"
+    extra_bits = []
+    start = 0
+    for fuzzer in fuzzers:
+        cb = bits[:,start:start+fuzzer.cfg_bits]
+        start += fuzzer.cfg_bits
+        se = fuzzer.side_effects(cb)
+        if se.size:
+            extra_bits.append(se)
+    return configcodes(np.hstack(extra_bits))
+
 def run_batch(fuzzers):
     nrofbits = sum([f.cfg_bits for f in fuzzers])
-    codes = get_codes(nrofbits)
+    codelen, codes = get_codes(nrofbits)
     shuffle(codes)
-    bits = configbits(codes)
+    bits = configbits(codelen, codes)
+
+    secodelen, bits = get_extra_bits(fuzzers, bits)
+    codes = configcodes(bits) # extended codes
+    extra_codes = get_extra_codes(fuzzers, bits)
 
     if True:
         p = Pool()
@@ -428,36 +516,50 @@ def run_batch(fuzzers):
         stack = np.stack(list(np.load("bitstreams.npz").values()), axis=0)
 
     indices, sequences = find_bits(stack)
+
     #debug image
     bitmap = np.zeros(stack.shape[1:], dtype=np.uint8)
     bitmap[indices] = 1
     bslib.display("indices.png", bitmap)
 
     seqloc = np.array([sequences, *indices]).T
-    #seqloc = seqloc[seqloc[:,0].argsort()]
-    assert not np.any(np.diff([popcnt(s) for s in sequences])), "sequences are missing"
+    c_set = set(codes)
+    ec_set = set(extra_codes)
+    for s, x, y in seqloc:
+        if s in c_set:
+            print("Valid sequence at: {}, {}".format(x, y))
+            continue
+        if s in ec_set:
+            print("Side effect at: {}, {}".format(x, y))
+            continue
+        raise ValueError("invalid sequence at: {}, {}".format(x, y))
 
     mapping = {}
     for seq, x, y in seqloc:
         mapping.setdefault(seq, []).append((x, y))
 
-    seqs = deque(codes)
+    codesq = deque(codes)
+    extra_codesq = deque(extra_codes)
     for fuzzer in fuzzers:
         bits = []
+        extra_bits = []
         for _ in range(fuzzer.cfg_bits):
-            code = seqs.popleft()
+            code = codesq.popleft()
             bits.append(mapping[code])
+        for _ in range(fuzzer.se_bits):
+            code = extra_codesq.popleft()
+            extra_bits.append(mapping[code])
 
         fuzzer.report(bits)
+        fuzzer.report_side_effects(extra_bits)
         fuzzer.check(bits)
 
-
 if __name__ == "__main__":
-    seed(1234)
+    seed(0xdeadbeef)
     fuzzers = [
         #Lut4BitsFuzzer(28, 47, {10, 19, 28}),
         #DffFuzzer(28, 47, {10, 19, 28}),
-        #DffsrFuzzer(28, 47, {10, 19, 28}),
-        IobFuzzer("IBUF", 88, {1, 2, 5, 6, 7, 8, 9, 10, 12, 21, 22, 23, 24, 43, 44, 45, 46, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 78, 87, 88}),
+        DffsrFuzzer(28, 47, {10, 19, 28}),
+        IobFuzzer("IBUF", "GW1NR-9", "QN881"),
     ]
     run_batch(fuzzers)
