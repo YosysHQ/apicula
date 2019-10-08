@@ -1,0 +1,14 @@
+start run.tcl
+break readFse
+continue
+continue
+break fread
+set style enabled off
+set logging on
+
+#RDI, RSI, RDX, RCX
+while(1)
+  continue
+  printf "read at %#x of size %d nmemb %d\n", (long int)ftell($rcx), $rsi, $rdx
+  frame 1
+end
