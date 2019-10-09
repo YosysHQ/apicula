@@ -1,6 +1,7 @@
 import sys
 import numpy as np
 from bslib import display
+import pdb
 
 def rint(f, w):
     val = int.from_bytes(f.read(w), 'little', signed=True)
@@ -9,6 +10,8 @@ def rint(f, w):
 def readFse(f):
     print("check", rint(f, 4))
     tiles = {}
+    ttyp = rint(f, 4)
+    tiles['header'] = readOneFile(f, ttyp)
     while True:
         ttyp = rint(f, 4)
         if ttyp == 0x9a1d85: break
@@ -69,21 +72,22 @@ def readOneFile(f, fuselength):
         tmap.setdefault(typn, {})[typ] = t
     return tmap
 
-def render_tile(td):
-    w = td['width']
-    h = td['height']
-    tile = np.zeros(h*w, np.uint8)
-    for typ, sinfo in td['shortval'].items():
+def render_tile(d, ttyp):
+    w = d[ttyp]['width']
+    h = d[ttyp]['height']
+    tile = np.zeros((h, w), np.uint8)
+    for styp, sinfo in d[ttyp]['shortval'].items():
         for i in sinfo:
-            try:
-                tile[i[2]] = typ
-            except:
-                print(typ, i[2], w*h)
-    return tile.reshape((h, w))
+            num = d['header']['fuse'][1][i[2]][ttyp]
+            row = num // 100
+            col = num % 100
+            tile[row][col] = 1
+
+    return tile
 
 
 def render_bitmap(d):
-    tiles = d[134]['grid'][61]
+    tiles = d['header']['grid'][61]
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
     bitmap = np.zeros((height, width), np.uint8)
@@ -91,10 +95,11 @@ def render_bitmap(d):
     for row in tiles:
         x=0
         for typ in row:
+            #if typ==12: pdb.set_trace()
             td = d[typ]
             w = td['width']
             h = td['height']
-            bitmap[y:y+h,x:x+w] = render_tile(td)
+            bitmap[y:y+h,x:x+w] = render_tile(d, typ)
             x+=w
         y+=h
 
@@ -104,8 +109,6 @@ def render_bitmap(d):
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = readFse(f)
-    print("tile types", set([i for j in d[134]['grid'][61] for i in j]))
-    print("tiles     ", set(d.keys()))
     bm = render_bitmap(d)
     display("fuse.png", bm)
 
