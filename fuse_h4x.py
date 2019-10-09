@@ -78,10 +78,12 @@ def render_tile(d, ttyp):
     tile = np.zeros((h, w), np.uint8)
     for styp, sinfo in d[ttyp]['shortval'].items():
         for i in sinfo:
-            num = d['header']['fuse'][1][i[2]][ttyp]
-            row = num // 100
-            col = num % 100
-            tile[row][col] = 1
+            for fuse in i[2:]:
+                if fuse > 0:
+                    num = d['header']['fuse'][1][fuse][ttyp]
+                    row = num // 100
+                    col = num % 100
+                    tile[row][col] = 1
 
     return tile
 
