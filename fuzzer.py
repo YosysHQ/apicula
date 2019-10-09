@@ -3,7 +3,7 @@ import os
 import tempfile
 import subprocess
 from collections import deque
-from itertools import chain
+from itertools import chain, count
 from random import shuffle, seed
 from warnings import warn
 from math import factorial
@@ -326,6 +326,41 @@ class DffsrFuzzer(CluFuzzer):
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
 
+class OneHopWireFuzzer(CluFuzzer):
+    """
+    This fuzzer finds wires to adjacent tiles
+    """
+    resources = {"CLU_LUT"}
+    loc_bits = 4
+    scope = "LUT"
+    prefix = "LUT"
+
+    def neighbours(self, location):
+        for r, c in [(1,0), (0, 1), (-1, 0), (0, -1)]:
+            yield re.sub(
+                "R(\\d+)C(\\d+)",
+                lambda m: "R{}C{}".format(
+                    int(m[1])+r, int(m[2])+c),
+                location)
+
+    def primitives(self, mod, bits):
+        "Generate verilog for LUT4s"
+        for location, bits in self.location_chunks(bits):
+            name = self.location_to_name(location)
+            lut = codegen.Primitive("LUT4", name)
+            lut.params["INIT"] = "16'h0000"
+            lut.portmap['F'] = name+"_F"
+            neigh = self.neighbours(location)
+            for i, ne, bit in zip(count(), neigh, bits):
+                if bit:
+                    ne_name = self.location_to_name(ne)
+                    lut.portmap['I{}'.format(i)] = ne_name+"_F"
+                else:
+                    lut.portmap['I{}'.format(i)] = name+"_I{}".format(i)
+
+            mod.wires.update(lut.portmap.values())
+            mod.primitives[name] = lut
+
 class PinFuzzer(Fuzzer):
     def __init__(self, series, package):
         self.locations = []
@@ -437,7 +472,7 @@ def run_pnr(fuzzers, bits):
         "background_programming": "false",
         "secure_mode": "false"})
 
-    opt = codegen.PnrOptions(["warning_all"])
+    opt = codegen.PnrOptions([])
             #"sdf", "oc", "ibs", "posp", "o",
             #"warning_all", "timing", "reg_not_in_iob"])
 
@@ -463,7 +498,10 @@ def run_pnr(fuzzers, bits):
             pnr.write(f)
         subprocess.run(["/home/pepijn/bin/gowin/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
         #print(tmpdir); input()
-        return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")
+        try:
+            return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")
+        except FileNotFoundError:
+            return None
 
 def get_extra_bits(fuzzers, bits):
     "Extend bits with configurations that test side-effects"
@@ -478,12 +516,15 @@ def get_extra_bits(fuzzers, bits):
     gstack = np.vstack(groups)
 
     nrofbits = gstack.shape[0]
-    codelen, codes = get_codes(nrofbits)
-    shuffle(codes)
-    sebits = configbits(codelen, codes)
-    rows = [np.sum(gstack[row==1], axis=0) for row in sebits]
-    rows.append(bits)
-    return codelen, np.vstack(rows)
+    if nrofbits > 0:
+        codelen, codes = get_codes(nrofbits)
+        shuffle(codes)
+        sebits = configbits(codelen, codes)
+        rows = [np.sum(gstack[row==1], axis=0) for row in sebits]
+        rows.append(bits)
+        return codelen, np.vstack(rows)
+    else:
+        return 0, bits
 
 def get_extra_codes(fuzzers, bits):
     "Get codes produces by fuzzer side-effects"
@@ -495,7 +536,10 @@ def get_extra_codes(fuzzers, bits):
         se = fuzzer.side_effects(cb)
         if se.size:
             extra_bits.append(se)
-    return configcodes(np.hstack(extra_bits))
+    if extra_bits:
+        return configcodes(np.hstack(extra_bits))
+    else:
+        return []
 
 def run_batch(fuzzers):
     nrofbits = sum([f.cfg_bits for f in fuzzers])
@@ -510,7 +554,7 @@ def run_batch(fuzzers):
     if True:
         p = Pool()
         bitstreams = p.map(lambda cb: run_pnr(fuzzers, cb), bits)
-        stack = np.stack(bitstreams)
+        stack = np.stack([b for b in bitstreams if b is not None])
         np.savez_compressed("bitstreams.npz", *bitstreams)
     else:
         stack = np.stack(list(np.load("bitstreams.npz").values()), axis=0)
@@ -559,7 +603,8 @@ if __name__ == "__main__":
     fuzzers = [
         #Lut4BitsFuzzer(28, 47, {10, 19, 28}),
         #DffFuzzer(28, 47, {10, 19, 28}),
-        DffsrFuzzer(28, 47, {10, 19, 28}),
-        IobFuzzer("IBUF", "GW1NR-9", "QN881"),
+        #DffsrFuzzer(28, 47, {10, 19, 28}),
+        OneHopWireFuzzer(28, 47, {10, 19, 28}),
+        #IobFuzzer("IBUF", "GW1NR-9", "QN881"),
     ]
     run_batch(fuzzers)
