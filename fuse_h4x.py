@@ -1,6 +1,7 @@
 import sys
 import numpy as np
-from bslib import display
+from PIL import Image
+import random
 import pdb
 
 def rint(f, w):
@@ -15,7 +16,7 @@ def readFse(f):
     while True:
         ttyp = rint(f, 4)
         if ttyp == 0x9a1d85: break
-        print("tile type", ttyp)
+        #print("tile type", ttyp)
         tiles[ttyp] = readOneFile(f, ttyp)
     return tiles
 
@@ -30,7 +31,7 @@ def readOneFile(f, fuselength):
     for i in range(tables):
         typ = rint(f, 4)
         size = rint(f, 4)
-        print("Table type", typ, "of size", size)
+        #print("Table type", typ, "of size", size)
         if typ == 61:
             size2 = rint(f, 4)
             typn = "grid"
@@ -75,15 +76,18 @@ def readOneFile(f, fuselength):
 def render_tile(d, ttyp):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
-    tile = np.zeros((h, w), np.uint8)
-    for styp, sinfo in d[ttyp]['shortval'].items():
-        for i in sinfo:
-            for fuse in i[2:]:
-                if fuse > 0:
-                    num = d['header']['fuse'][1][fuse][ttyp]
-                    row = num // 100
-                    col = num % 100
-                    tile[row][col] = 1
+    tile = np.zeros((h, w), np.uint8)#+(255-ttyp)
+    for start, table in [(2, 'shortval'), (2, 'wire'), (16, 'longval'),
+                         (1, 'longfuse'), (0, 'const')]:
+        if table in d[ttyp]:
+            for styp, sinfo in d[ttyp][table].items():
+                for i in sinfo:
+                    for fuse in i[start:]:
+                        if fuse > 0:
+                            num = d['header']['fuse'][1][fuse][ttyp]
+                            row = num // 100
+                            col = num % 100
+                            tile[row][col] = styp
 
     return tile
 
@@ -101,12 +105,20 @@ def render_bitmap(d):
             td = d[typ]
             w = td['width']
             h = td['height']
-            bitmap[y:y+h,x:x+w] = render_tile(d, typ)
+            bitmap[y:y+h,x:x+w] += render_tile(d, typ)
             x+=w
         y+=h
 
     return bitmap
 
+def display(fname, data):
+    im = Image.frombytes(
+            mode='P',
+            size=data.shape[::-1],
+            data=data)
+    random.seed(123)
+    im.putpalette(random.choices(range(256), k=3*256))
+    im.save(fname)
 
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
