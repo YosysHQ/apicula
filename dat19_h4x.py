@@ -132,32 +132,32 @@ for i in range(32):
 pos = print_arr16('Luts', pos, 32)
 
 print()
-pos = print_u8('NumUnk1s', pos)
-pos = print_u8('NumUnk1Ins', pos)
+pos = print_u8('NumX0s', pos)
+pos = print_u8('NumX0Ins', pos)
 for i in range(8):
-    pos = print_arr16('Unk1Ins', pos, 0x1c)
-pos = print_arr16('Unk1s', pos, 8)
+    pos = print_arr16('X0Ins', pos, 0x1c)
+pos = print_arr16('X0s', pos, 8)
 
 print()
-pos = print_u8('NumUnk2s', pos)
-pos = print_u8('NumUnk2Ins', pos)
+pos = print_u8('NumX1s', pos)
+pos = print_u8('NumX1Ins', pos)
 for i in range(12):
-    pos = print_arr16('Unk2Ins', pos, 0x14)
-pos = print_arr16('Unk2s', pos, 12)
+    pos = print_arr16('X1Ins', pos, 0x14)
+pos = print_arr16('X1s', pos, 12)
 
 print()
-pos = print_u8('NumUnk3s', pos)
-pos = print_u8('NumUnk3Ins', pos)
+pos = print_u8('NumX2s', pos)
+pos = print_u8('NumX2Ins', pos)
 for i in range(32):
-    pos = print_arr16('Unk3Ins', pos, 0x15)
-pos = print_arr16('Unk3s', pos, 32)
+    pos = print_arr16('X2Ins', pos, 0x15)
+pos = print_arr16('X2s', pos, 32)
 
 print()
-pos = print_u8('NumUnk4s', pos)
-pos = print_u8('NumUnk4Ins', pos)
+pos = print_u8('NumX8s', pos)
+pos = print_u8('NumX8Ins', pos)
 for i in range(16):
-    pos = print_arr16('Unk4Ins', pos, 0x14)
-pos = print_arr16('Unk4s', pos, 16)
+    pos = print_arr16('X8Ins', pos, 0x14)
+pos = print_arr16('X8s', pos, 16)
 
 print()
 pos = print_u8('NumClks', pos)
@@ -188,11 +188,11 @@ for i in range(8):
 pos = print_arr16('Sels', pos, 8)
 
 print()
-pos = print_u8('NumUnk5s', pos)
-pos = print_u8('NumUnk5Ins', pos)
+pos = print_u8('NumX11s', pos)
+pos = print_u8('NumX11Ins', pos)
 for i in range(8):
-    pos = print_arr16('Unk5Ins', pos, 1)
-pos = print_arr16('Unk5s', pos, 8)
+    pos = print_arr16('X11Ins', pos, 1)
+pos = print_arr16('X11s', pos, 8)
 
 assert pos == 0x166e
 
