@@ -97,8 +97,7 @@ print()
 
 def print_arr8(name, pos, num, used):
     arr = list(d[pos:pos+num])
-    #print(name, hex(pos), arr[:used])
-    print(name, arr[:used])
+    print(name, hex(pos), arr[:used])
     insap(name, tuple(arr[:used]))
     for i in range(used, num):
         assert arr[i] == 0
@@ -108,8 +107,7 @@ def print_arr16(name, pos, num, used=None):
     if used is None:
         used = num
     arr = [int.from_bytes(d[pos+i*2:pos+i*2+2], 'little', signed=True) for i in range(num)]
-    #print(name, hex(pos), arr[:used])
-    print(name, arr[:used])
+    print(name, hex(pos), arr[:used])
     insap(name, tuple(arr[:used]))
     for i in range(used, num):
         assert arr[i] == -1
@@ -119,8 +117,7 @@ def print_arr32(name, pos, num, used=None):
     if used is None:
         used = num
     arr = [int.from_bytes(d[pos+i*4:pos+i*4+4], 'little', signed=True) for i in range(num)]
-    #print(name, hex(pos), arr[:used])
-    print(name, arr[:used])
+    print(name, hex(pos), arr[:used])
     insap(name, tuple(arr[:used]))
     for i in range(used, num):
         assert arr[i] == 0
