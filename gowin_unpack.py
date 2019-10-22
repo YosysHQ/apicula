@@ -1,6 +1,8 @@
 import sys
+import re
 import numpy as np
 import fuse_h4x as fse
+import codegen
 from bslib import read_bitstream
 from wirenames import wirenames
 
@@ -59,7 +61,7 @@ def scan_fuses(d, ttyp, tile):
             num = fuse[ttyp]
             frow = num // 100
             fcol = num % 100
-            if frow == row and fcol == col:
+            if frow == row and fcol == col and fnum > 100:
                 fuses.append(fnum)
     return set(fuses)
 
@@ -80,10 +82,16 @@ def parse_wires(tiledata):
     except KeyError:
         return wires
 
+    # put wires with more fuses later
+    # so they overwrite smaller subsets
+    data.sort(key=lambda l: [w > 0 for w in l[2:]])
+
     for w1, w2, *fuses in data:
         if w1 < 0:
+            print('neg', wirenames[-w1], wirenames[w2], fuses)
             excl.add((-w1, w2))
         elif (w1, w2) not in excl:
+            print('pos', wirenames[w1], wirenames[w2], fuses)
             wires.append((wirenames[w1], wirenames[w2]))
     return wires
 
@@ -100,23 +108,69 @@ def parse_luts(tiledata):
 
     return luts
 
+def wire2global(row, col, name):
+    if name.startswith("GB") or name in {'VCC', 'VSS'}:
+        # global wire
+        return name
+
+    m = re.match(r"([NESW])([128]\d)(\d)", name)
+    if not m:
+        # local wire
+        return f"R{row}C{col}_{name}"
+
+    # inter-tile wire
+    dirlut = {'N': (1, 0),
+              'E': (0, -1),
+              'S': (-1, 0),
+              'W': (0, 1)}
+    direction, wire, segment = m.groups()
+    rootrow = row + dirlut[direction][0]*int(segment)
+    rootcol = col + dirlut[direction][1]*int(segment)
+    return f"R{rootrow}C{rootcol}_{direction}{wire}"
+
+def tile2verilog(row, col, td, mod):
+    wires = parse_wires(td)
+    for src, dest in wires:
+        srcg = wire2global(row, col, src)
+        destg = wire2global(row, col, dest)
+        mod.wires.update({srcg, destg})
+        mod.assigns[destg] = srcg
+
+    luts = parse_luts(td)
+    for idx, val in luts.items():
+        name = f"R{row}C{col}_LUT4_{idx}"
+        lut = codegen.Primitive("LUT4", name)
+        lut.params["INIT"] = f"16'b{val:016b}"
+        lut.portmap['F'] = f"R{row}C{col}_F{idx}"
+        lut.portmap['I0'] = f"R{row}C{col}_A{idx}"
+        lut.portmap['I1'] = f"R{row}C{col}_B{idx}"
+        lut.portmap['I2'] = f"R{row}C{col}_C{idx}"
+        lut.portmap['I3'] = f"R{row}C{col}_D{idx}"
+        mod.wires.update(lut.portmap.values())
+        mod.primitives[name] = lut
+
+
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = fse.readFse(f)
     bitmap = read_bitstream(sys.argv[2])
     bitmap = np.fliplr(bitmap)
     bm = tile_bitmap(d, bitmap)
+    mod = codegen.Module()
     for idx, t in bm.items():
         row, col, typ = idx
-        #if typ != 14: continue
+        if typ != 17: continue
         print(idx)
         td = parse_tile(d, typ, t)
         print(td.keys())
         print(parse_wires(td))
         print(parse_luts(td))
         parse_wires(td)
-        #for bitrow in t:
-        #    print(*bitrow, sep='')
-        #fuses = scan_fuses(d, typ, t)
-        #scan_tables(d, typ, fuses)
+        for bitrow in t:
+            print(*bitrow, sep='')
+        fuses = scan_fuses(d, typ, t)
+        scan_tables(d, typ, fuses)
+        tile2verilog(row, col, td, mod)
+    with open("unpack.v", 'w') as f:
+        mod.write(f)
 
