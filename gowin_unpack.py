@@ -197,7 +197,7 @@ def tile2verilog(row, col, td, mod):
             dff = codegen.Primitive(typ, name)
             dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx}"
             dff.portmap['D'] = f"R{row}C{col}_F{lutidx}"
-            dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
+            dff.portmap['Q'] = f"R{row}C{col}_Q{lutidx}"
             dff.portmap['CE'] = f"R{row}C{col}_CE{idx}"
             if port:
                 dff.portmap[port] = f"R{row}C{col}_{port}{idx}"
@@ -209,7 +209,7 @@ def tile2verilog(row, col, td, mod):
             dff = codegen.Primitive(typ, name)
             dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx}"
             dff.portmap['D'] = f"R{row}C{col}_F{lutidx}"
-            dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
+            dff.portmap['Q'] = f"R{row}C{col}_Q{lutidx}"
             dff.portmap['CE'] = f"R{row}C{col}_CE{idx}"
             if port:
                 dff.portmap[port] = f"R{row}C{col}_{port}{idx}"
