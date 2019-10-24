@@ -87,7 +87,17 @@ def render_tile(d, ttyp):
                             num = d['header']['fuse'][1][fuse][ttyp]
                             row = num // 100
                             col = num % 100
-                            tile[row][col] = styp
+                            if table == "wire":
+                                if i[0] > 0:
+                                    if tile[row][col] == 0:
+                                        tile[row][col] = (styp + i[1]) % 256
+                                    else:
+                                        tile[row][col] = (tile[row][col] + (styp + i[1]) % 256) // 2
+                            elif table == "shortval" and styp == 5:
+                                assert tile[row][col] == 0
+                                tile[row][col] = (styp + i[0]) % 256
+                            else:
+                                tile[row][col] = styp
 
     return tile
 
@@ -123,6 +133,8 @@ def display(fname, data):
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = readFse(f)
-    bm = render_bitmap(d)
-    display("fuse.png", bm)
+    #bm = render_bitmap(d)
+    #display("fuse.png", bm)
+    t = render_tile(d, 12)
+    display("tile.png", t)
 

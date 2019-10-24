@@ -108,6 +108,33 @@ def parse_luts(tiledata):
 
     return luts
 
+def parse_dffs(tiledata):
+    try:
+        data = [
+            tiledata['shortval'].get(25),
+            tiledata['shortval'].get(26),
+            tiledata['shortval'].get(27),
+        ]
+    except KeyError:
+        return [None, None, None]
+
+    fuses = [d and frozenset(f[0] for f in d) for d in data]
+
+    dff_types = {
+        frozenset([-7, 20, 21]): 'DFF',
+        frozenset([21]): 'DFFS',
+        frozenset([20, 21]): 'DFFR',
+        frozenset([5, 21]): 'DFFP',
+        frozenset([5, 20, 21]): 'DFFC',
+        frozenset([3, 4, -7, 20, 21]): 'DFFN',
+        frozenset([3, 4, 21]): 'DFFNS',
+        frozenset([3, 4, 20, 21]): 'DFFNR',
+        frozenset([3, 4, 5, 21]): 'DFFNP',
+        frozenset([3, 4, 5, 20, 21]): 'DFFNC',
+    }
+   
+    return [dff_types.get(f) for f in fuses]
+
 def wire2global(row, col, name):
     if name.startswith("GB") or name in {'VCC', 'VSS'}:
         # global wire
@@ -149,12 +176,51 @@ def tile2verilog(row, col, td, mod):
         mod.wires.update(lut.portmap.values())
         mod.primitives[name] = lut
 
+    dffs = parse_dffs(td)
+    dffmap = {
+        "DFF": None,
+        "DFFS": "SET",
+        "DFFR": "RESET",
+        "DFFP": "PRESET",
+        "DFFC": "CLEAR",
+        "DFFNS": "SET",
+        "DFFNR": "RESET",
+        "DFFNP": "PRESET",
+        "DFFNC": "CLEAR",
+    }
+    for idx, typ in enumerate(dffs):
+        print(idx, typ)
+        if typ:
+            port = dffmap[typ]
+            lutidx = idx*2
+            name = f"R{row}C{col}_{typ}E_{idx}_A"
+            dff = codegen.Primitive(typ, name)
+            dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx}"
+            dff.portmap['D'] = f"R{row}C{col}_F{lutidx}"
+            dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
+            dff.portmap['CE'] = f"R{row}C{col}_CE{idx}"
+            if port:
+                dff.portmap[port] = f"R{row}C{col}_{port}{idx}"
+            mod.wires.update(dff.portmap.values())
+            mod.primitives[name] = dff
+
+            lutidx = idx*2+1
+            name = f"R{row}C{col}_{typ}E_{idx}_B"
+            dff = codegen.Primitive(typ, name)
+            dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx}"
+            dff.portmap['D'] = f"R{row}C{col}_F{lutidx}"
+            dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
+            dff.portmap['CE'] = f"R{row}C{col}_CE{idx}"
+            if port:
+                dff.portmap[port] = f"R{row}C{col}_{port}{idx}"
+            mod.wires.update(dff.portmap.values())
+            mod.primitives[name] = dff
+
 
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = fse.readFse(f)
     bitmap = read_bitstream(sys.argv[2])
-    bitmap = np.fliplr(bitmap)
     bm = tile_bitmap(d, bitmap)
     mod = codegen.Module()
     for idx, t in bm.items():

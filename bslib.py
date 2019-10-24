@@ -35,7 +35,7 @@ def read_bitstream(fname):
             #if crc1 != crc2: print(crc1, crc2)
             bitmap.append(bitarr(line))
 
-    return np.array(bitmap)
+    return np.fliplr(np.array(bitmap))
 
 def display(fname, data):
     im = Image.frombytes(
