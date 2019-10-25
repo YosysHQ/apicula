@@ -384,7 +384,6 @@ class PinFuzzer(Fuzzer):
 class IobFuzzer(PinFuzzer):
     resources = {"IOB"}
     loc_bits = 1
-    # last port is physical pin
     kindmap = {
             "IBUF": {"wires": ["O"], "inputs": ["I"]},
             "OBUF": {"wires": ["I"], "outputs": ["O"]},

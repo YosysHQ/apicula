@@ -24,7 +24,8 @@ def make_name(typ):
     name_idx += 1
     return f"my{typ}{name_idx}"
 
-def dff(mod):
+
+def dff(mod, cst):
     dffmap = {
         "DFFE": None,
         "DFFSE": "SET",
@@ -36,9 +37,10 @@ def dff(mod):
         "DFFNPE": "PRESET",
         "DFFNCE": "CLEAR",
     }
+    col = 2
     for typ, port in dffmap.items():
         name = make_name(typ)
-        yield name
+        #yield name
         dff = codegen.Primitive(typ, name)
         dff.portmap['CLK'] = name+"_CLK"
         dff.portmap['D'] = name+"_F"
@@ -48,6 +50,42 @@ def dff(mod):
             dff.portmap[port] = name+"_"+port
         mod.wires.update(dff.portmap.values())
         mod.primitives[name] = dff
+        cst.cells[name] = f"R2C{col}"
+        col += 1
+
+def iob(mod, cst):
+    iobmap = {
+        "IBUF": {"wires": ["O"], "inputs": ["I"]},
+        "OBUF": {"wires": ["I"], "outputs": ["O"]},
+        "TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
+        "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
+    }
+    for typ, conn in iobmap.items():
+        name = make_name(typ)
+        iob = codegen.Primitive(typ, name)
+        for port in chain.from_iterable(conn.values()):
+            iob.portmap[port] = name+"_"+port
+
+        for direction, wires in conn.items():
+            wnames = [name+"_"+w for w in wires]
+            getattr(mod, direction).update(wnames)
+        mod.primitives[name] = iob
+
+
+
+def read_posp(fname):
+    cst_parser = re.compile(r"(\w+) CST_R(\d+)C(\d+)\[([0-3])\]\[([AB])\]")
+    place_parser = re.compile(r"(\w+) PLACE_IO([TBLR])(\d+)\[([AB])\]")
+    with open(fname, 'r') as f:
+        for line in f:
+            cst = cst_parser.match(line)
+            place = place_parser.match(line)
+            if cst:
+                name, row, col, cls, lut = cst.groups()
+                yield "cst", name, int(row), int(col), int(cls), lut
+            elif place:
+                name, side, num, pin = place.groups()
+                yield "place", name, side, int(num), pin
 
 
 def run_pnr(mod, constr):
@@ -70,7 +108,7 @@ def run_pnr(mod, constr):
         "background_programming": "false",
         "secure_mode": "false"})
 
-    opt = codegen.PnrOptions([])
+    opt = codegen.PnrOptions(["posp"])
             #"sdf", "oc", "ibs", "posp", "o",
             #"warning_all", "timing", "reg_not_in_iob"])
 
@@ -95,105 +133,49 @@ def run_pnr(mod, constr):
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
         subprocess.run(["/home/pepijn/bin/gowin/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
-        #print(tmpdir); input()
+        print(tmpdir); input()
         try:
-            return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")
+            return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
+                   list(read_posp(tmpdir+"/impl/pnr/top.posp"))
         except FileNotFoundError:
             print(tmpdir)
             input()
             return None
 
-
-fuzzers = {
-    7: [],
-    12: [dff],
-    13: [dff],
-    14: [dff],
-    15: [dff],
-    16: [dff],
-    17: [dff],
-    20: [],
-    21: [],
-    22: [],
-    23: [],
-    24: [],
-    25: [],
-    26: [],
-    27: [],
-    28: [],
-    33: [],
-    38: [],
-    39: [],
-    40: [],
-    41: [],
-    44: [],
-    47: [],
-    48: [],
-    49: [],
-    50: [],
-    51: [],
-    52: [],
-    53: [],
-    54: [],
-    55: [],
-    56: [],
-    57: [],
-    58: [],
-    63: [],
-    64: [],
-    65: [],
-    66: [],
-    74: [],
-    75: [],
-    76: [],
-    77: [],
-    78: [],
-    79: [],
-    80: [],
-    81: [],
-    82: [],
-    83: [],
-    84: [],
-    85: [],
-    86: [],
-    87: [],
-    91: [],
-    92: []
-}
+fuzzers = [dff, iob]
 
 if __name__ == "__main__":
     with open("/home/pepijn/bin/gowin/IDE/share/device/GW1NR-9/GW1NR-9.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
 
     mod = codegen.Module()
-    constr = codegen.Constraints()
+    cst = codegen.Constraints()
     locations = {}
     for row, dat in enumerate(fse['header']['grid'][61]):
         for col, typ in enumerate(dat):
             locations.setdefault(typ, []).append((row, col, typ))
 
-    used_locations = {}
-    for typ, fzs in fuzzers.items():
-        names = chain(*(fz(mod) for fz in fzs))
-        for name, loc in zip(names, locations[typ]):
-            used_locations[loc] = name
-            row = loc[0]+1
-            col = loc[1]+1
-            constr.cells[name] = f"R{row}C{col}[2]"
+    for fz in fuzzers:
+        fz(mod, cst)
 
-    bitmap = run_pnr(mod, constr)
+    bitmap, posp = run_pnr(mod, cst)
     bm = gowin_unpack.tile_bitmap(fse, bitmap)
-    for idx, name in used_locations.items():
-        row, col, typ = idx
-        tile = bm[idx]
-        print(name, idx)
-        #td = gowin_unpack.parse_tile(fse, typ, tile)
-        #print(td.keys())
-        #print(gowin_unpack.parse_wires(td))
-        #print(gowin_unpack.parse_luts(td))
-        #for bitrow in tile:
-        #    print(*bitrow, sep='')
-        fuses = gowin_unpack.scan_fuses(fse, typ, tile)
-        gowin_unpack.scan_tables(fse, typ, fuses)
+    for cst_type, name, *info in posp:
+        if cst_type == "cst":
+            row, col, cls, lut = info
+            typ = fse['header']['grid'][61][row-1][col-1]
+            idx = (row-1, col-1, typ)
+            tile = bm[idx]
+            print(name, idx)
+            #td = gowin_unpack.parse_tile(fse, typ, tile)
+            #print(td.keys())
+            #print(gowin_unpack.parse_wires(td))
+            #print(gowin_unpack.parse_luts(td))
+            #for bitrow in tile:
+            #    print(*bitrow, sep='')
+            fuses = gowin_unpack.scan_fuses(fse, typ, tile)
+            gowin_unpack.scan_tables(fse, typ, fuses)
+        elif cst_type == "place":
+            print(info)
 
 
