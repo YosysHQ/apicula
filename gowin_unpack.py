@@ -153,7 +153,7 @@ def wire2global(row, col, name):
     direction, wire, segment = m.groups()
     rootrow = row + dirlut[direction][0]*int(segment)
     rootcol = col + dirlut[direction][1]*int(segment)
-    return f"R{rootrow}C{rootcol}_{direction}{wire}"
+    return f"R{rootrow}C{rootcol}_{direction}{wire}".replace('-', '_')
 
 def tile2verilog(row, col, td, mod):
     wires = parse_wires(td)
@@ -194,13 +194,13 @@ def tile2verilog(row, col, td, mod):
             port = dffmap[typ]
             lutidx = idx*2
             name = f"R{row}C{col}_{typ}E_{idx}_A"
-            dff = codegen.Primitive(typ, name)
+            dff = codegen.Primitive(typ+"E", name)
             dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx}"
             dff.portmap['D'] = f"R{row}C{col}_F{lutidx}"
             dff.portmap['Q'] = f"R{row}C{col}_Q{lutidx}"
             dff.portmap['CE'] = f"R{row}C{col}_CE{idx}"
             if port:
-                dff.portmap[port] = f"R{row}C{col}_{port}{idx}"
+                dff.portmap[port] = f"R{row}C{col}_LSR{idx}"
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
 
@@ -212,7 +212,7 @@ def tile2verilog(row, col, td, mod):
             dff.portmap['Q'] = f"R{row}C{col}_Q{lutidx}"
             dff.portmap['CE'] = f"R{row}C{col}_CE{idx}"
             if port:
-                dff.portmap[port] = f"R{row}C{col}_{port}{idx}"
+                dff.portmap[port] = f"R{row}C{col}_LSR{idx}"
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
 
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     mod = codegen.Module()
     for idx, t in bm.items():
         row, col, typ = idx
-        if typ != 17: continue
+        #if typ != 17: continue
         print(idx)
         td = parse_tile(d, typ, t)
         print(td.keys())
