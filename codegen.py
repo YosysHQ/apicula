@@ -6,7 +6,7 @@ class Module:
         self.outputs = set()
         self.inouts = set()
         self.wires = set()
-        self.assigns = {}
+        self.assigns = []
         self.primitives = {}
 
     def write(self, f):
@@ -29,7 +29,9 @@ class Module:
         for wire in self.wires:
             f.write("wire {};\n".format(wire))
 
-        for dest, src in self.assigns.items():
+        # unique assignments or not
+        #for dest, src in self.assigns:
+        for dest, src in dict(self.assigns).items():
             f.write("assign {} = {};\n".format(dest, src))
 
         for module in self.primitives.values():

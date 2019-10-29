@@ -1,6 +1,7 @@
 import sys
 import re
 import numpy as np
+from itertools import chain, count
 import fuse_h4x as fse
 import codegen
 from bslib import read_bitstream
@@ -88,10 +89,10 @@ def parse_wires(tiledata):
 
     for w1, w2, *fuses in data:
         if w1 < 0:
-            print('neg', wirenames[-w1], wirenames[w2], fuses)
+            #print('neg', wirenames[-w1], wirenames[w2], fuses)
             excl.add((-w1, w2))
         elif (w1, w2) not in excl:
-            print('pos', wirenames[w1], wirenames[w2], fuses)
+            #print('pos', wirenames[w1], wirenames[w2], fuses)
             wires.append((wirenames[w1], wirenames[w2]))
     return wires
 
@@ -135,6 +136,28 @@ def parse_dffs(tiledata):
    
     return [dff_types.get(f) for f in fuses]
 
+def parse_iob(tiledata):
+    try:
+        data = [
+            tiledata['longval'].get(23),
+            tiledata['longval'].get(24),
+        ]
+    except KeyError:
+        return [None, None]
+
+    fuses = [d and frozenset(f[0] for f in d) for d in data]
+    print(fuses)
+
+    iob_types = {
+        frozenset([-62, 47, 48, 49, 30]): 'IBUF',
+        frozenset([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 26, 30,
+                   47, 48, 49, 61, 63, -62, 66, 67, 68, 81]): 'OBUF',
+        # same as TBUF with unused input?
+        frozenset([-62, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 47, 48, 49, 26, 30]): 'IOBUF',
+    }
+   
+    return [iob_types.get(f) for f in fuses]
+
 def wire2global(row, col, name):
     if name.startswith("GB") or name in {'VCC', 'VSS'}:
         # global wire
@@ -156,12 +179,15 @@ def wire2global(row, col, name):
     return f"R{rootrow}C{rootcol}_{direction}{wire}".replace('-', '_')
 
 def tile2verilog(row, col, td, mod):
+    # fse is 0-based, floorplanner is 1-based
+    row += 1
+    col += 1
     wires = parse_wires(td)
     for src, dest in wires:
         srcg = wire2global(row, col, src)
         destg = wire2global(row, col, dest)
         mod.wires.update({srcg, destg})
-        mod.assigns[destg] = srcg
+        mod.assigns.append((destg, srcg))
 
     luts = parse_luts(td)
     for idx, val in luts.items():
@@ -189,7 +215,7 @@ def tile2verilog(row, col, td, mod):
         "DFFNC": "CLEAR",
     }
     for idx, typ in enumerate(dffs):
-        print(idx, typ)
+        #print(idx, typ)
         if typ:
             port = dffmap[typ]
             lutidx = idx*2
@@ -206,7 +232,7 @@ def tile2verilog(row, col, td, mod):
 
             lutidx = idx*2+1
             name = f"R{row}C{col}_{typ}E_{idx}_B"
-            dff = codegen.Primitive(typ, name)
+            dff = codegen.Primitive(typ+"E", name)
             dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx}"
             dff.portmap['D'] = f"R{row}C{col}_F{lutidx}"
             dff.portmap['Q'] = f"R{row}C{col}_Q{lutidx}"
@@ -216,6 +242,46 @@ def tile2verilog(row, col, td, mod):
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
 
+    iob = parse_iob(td)
+    iobmap = {
+        "IBUF": {"wires": ["O"], "inputs": ["I"]},
+        "OBUF": {"wires": ["I"], "outputs": ["O"]},
+        "TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
+        "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
+    }
+    portmap = {
+        ('I', 0): 'A0',
+        ('OEN', 0): 'B0',
+        ('O', 0): 'F6',
+        ('I', 1): 'D1',
+        ('OEN', 1): 'D5',
+        ('O', 1): 'Q6',
+    }
+    for idx, typ in enumerate(iob):
+        #print(idx, typ)
+        if typ:
+            name = f"R{row}C{col}_{typ}_{idx}"
+            wires = set(iobmap[typ]['wires'])
+            ports = set(chain.from_iterable(iobmap[typ].values())) - wires
+
+            iob = codegen.Primitive(typ, name)
+
+            for port in wires:
+                wname = portmap[(port, idx)]
+                iob.portmap[port] = f"R{row}C{col}_{wname}"
+
+            for port in ports:
+                iob.portmap[port] = f"R{row}C{col}_{port}{idx}"
+
+            for wires in iobmap[typ]['wires']:
+                wnames = [f"R{row}C{col}_{portmap[(w, idx)]}" for w in wires]
+                mod.wires.update(wnames)
+            for direction in ['inputs', 'outputs', 'inouts']:
+                for wires in iobmap[typ].get(direction, []):
+                    wnames = [f"R{row}C{col}_{w}{idx}" for w in wires]
+                    getattr(mod, direction).update(wnames)
+
+            mod.primitives[name] = iob
 
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
@@ -229,13 +295,13 @@ if __name__ == "__main__":
         print(idx)
         td = parse_tile(d, typ, t)
         print(td.keys())
-        print(parse_wires(td))
-        print(parse_luts(td))
-        parse_wires(td)
-        for bitrow in t:
-            print(*bitrow, sep='')
-        fuses = scan_fuses(d, typ, t)
-        scan_tables(d, typ, fuses)
+        #print(parse_wires(td))
+        #print(parse_luts(td))
+        print(parse_iob(td))
+        #for bitrow in t:
+        #    print(*bitrow, sep='')
+        #fuses = scan_fuses(d, typ, t)
+        #scan_tables(d, typ, fuses)
         tile2verilog(row, col, td, mod)
     with open("unpack.v", 'w') as f:
         mod.write(f)

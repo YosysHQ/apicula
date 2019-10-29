@@ -133,7 +133,7 @@ def run_pnr(mod, constr):
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
         subprocess.run(["/home/pepijn/bin/gowin/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
-        #print(tmpdir); input()
+        print(tmpdir); input()
         try:
             return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
                    list(read_posp(tmpdir+"/impl/pnr/top.posp"))
@@ -163,6 +163,7 @@ if __name__ == "__main__":
     for cst_type, name, *info in posp:
         if cst_type == "cst":
             row, col, cls, lut = info
+            print(name, row, col, cls, lut)
             row = row-1
             col = col-1
         elif cst_type == "place":
@@ -179,20 +180,20 @@ if __name__ == "__main__":
             elif side == 'R':
                 row = num-1
                 col = len(fse['header']['grid'][61][0])-1
+            print(name, row, col, side, num, pin)
 
         typ = fse['header']['grid'][61][row][col]
         idx = (row, col, typ)
 
         tile = bm[idx]
-        print(name, idx)
-        #td = gowin_unpack.parse_tile(fse, typ, tile)
-        #print(td.keys())
+        td = gowin_unpack.parse_tile(fse, typ, tile)
+        print(td)
         #print(gowin_unpack.parse_wires(td))
         #print(gowin_unpack.parse_luts(td))
         #for bitrow in tile:
         #    print(*bitrow, sep='')
-        fuses = gowin_unpack.scan_fuses(fse, typ, tile)
-        print("Fuses:", fuses)
-        gowin_unpack.scan_tables(fse, typ, fuses)
+        #fuses = gowin_unpack.scan_fuses(fse, typ, tile)
+        #print("Fuses:", fuses)
+        #gowin_unpack.scan_tables(fse, typ, fuses)
 
 
