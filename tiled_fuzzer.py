@@ -18,6 +18,10 @@ import gowin_unpack
 
 import sys, pdb
 
+gowinhome = os.getenv("GOWINHOME")
+if not gowinhome:
+    raise "GOWINHOME not set"
+
 name_idx = 0
 def make_name(typ):
     global name_idx
@@ -132,8 +136,8 @@ def run_pnr(mod, constr):
         pnr.opt = tmpdir+"/pnr.cfg"
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
-        subprocess.run(["/home/pepijn/bin/gowin/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
-        print(tmpdir); input()
+        subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
+        #print(tmpdir); input()
         try:
             return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
                    list(read_posp(tmpdir+"/impl/pnr/top.posp"))
@@ -145,7 +149,7 @@ def run_pnr(mod, constr):
 fuzzers = [dff, iob]
 
 if __name__ == "__main__":
-    with open("/home/pepijn/bin/gowin/IDE/share/device/GW1NR-9/GW1NR-9.fse", 'rb') as f:
+    with open(gowinhome + "/IDE/share/device/GW1NR-9/GW1NR-9.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
 
     mod = codegen.Module()

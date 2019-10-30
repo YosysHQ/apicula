@@ -20,6 +20,10 @@ import sys, pdb
 # ENABLE: only one fuzzer switches things on and off at the same time
 # IOB, CLU_LUT, CLU_MUX, CLU_DFF, CFU, BRAM, DSP, ENABLE
 
+gowinhome = os.getenv("GOWINHOME")
+if not gowinhome:
+    raise "GOWINHOME not set"
+
 def np_to_vector(array):
     return "{}'b{}".format(
             len(array),
@@ -495,7 +499,7 @@ def run_pnr(fuzzers, bits):
         pnr.opt = tmpdir+"/pnr.cfg"
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
-        subprocess.run(["/home/pepijn/bin/gowin/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
+        subprocess.run([gowinhome+"/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
         #print(tmpdir); input()
         try:
             return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")
