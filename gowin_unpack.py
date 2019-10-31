@@ -216,7 +216,19 @@ def wire2global(row, col, fse, name):
     if rootcol > width:
         rootcol = 2*width+1 - rootcol
         direction = uturnlut[direction]
-    return f"R{rootrow}C{rootcol}_{direction}{wire}".replace('-', '_')
+    # map cross wires to their origin
+    diaglut = {
+        'E11': 'EW10',
+        'W11': 'EW10',
+        'E12': 'EW20',
+        'W12': 'EW20',
+        'S11': 'SN10',
+        'N11': 'SN10',
+        'S12': 'SN20',
+        'N12': 'SN20',
+    }
+    name = diaglut.get(direction+wire, direction+wire)
+    return f"R{rootrow}C{rootcol}_{name}"
 
 def tile2verilog(row, col, td, mod, fse):
     # fse is 0-based, floorplanner is 1-based
