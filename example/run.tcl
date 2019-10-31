@@ -1,6 +1,6 @@
 # gw_sh run.tcl
 exec yosys -p "synth_gowin -top top -vout example_syn.v" example.v
-#add_file -cst littlebee/cpu/src/cpu.cst
+#add_file -cst example.cst
 #add_file -sdc littlebee/cpu/src/cpu.sdc
 add_file -vm example_syn.v
 #add_file -cfg littlebee/cpu/impl/pnr/device.cfg

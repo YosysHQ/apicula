@@ -152,13 +152,17 @@ def parse_iob(tiledata):
         frozenset([-62, 47, 48, 49, 30]): 'IBUF',
         frozenset([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 26, 30,
                    47, 48, 49, 61, 63, -62, 66, 67, 68, 81]): 'OBUF',
+        frozenset({3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 26, 30,
+                   47, 48, 49, 61, 63, -62, 66, 67, 68}): 'OBUF',
         # same as TBUF with unused input?
         frozenset([-62, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 47, 48, 49, 26, 30]): 'IOBUF',
     }
    
     return [iob_types.get(f) for f in fuses]
 
-def wire2global(row, col, name):
+def wire2global(row, col, fse, name):
+    width = len(fse['header']['grid'][61][0])
+    height = len(fse['header']['grid'][61])
     if name.startswith("GB") or name in {'VCC', 'VSS'}:
         # global wire
         return name
@@ -173,19 +177,33 @@ def wire2global(row, col, name):
               'E': (0, -1),
               'S': (-1, 0),
               'W': (0, 1)}
+    uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
     direction, wire, segment = m.groups()
     rootrow = row + dirlut[direction][0]*int(segment)
     rootcol = col + dirlut[direction][1]*int(segment)
+    # wires wrap around the edges
+    if rootrow < 1:
+        rootrow = 1 - rootrow
+        direction = uturnlut[direction]
+    if rootcol < 1:
+        rootcol = 1 - rootcol
+        direction = uturnlut[direction]
+    if rootrow > height:
+        rootrow = 2*height+1 - rootrow
+        direction = uturnlut[direction]
+    if rootcol > width:
+        rootcol = 2*width+1 - rootcol
+        direction = uturnlut[direction]
     return f"R{rootrow}C{rootcol}_{direction}{wire}".replace('-', '_')
 
-def tile2verilog(row, col, td, mod):
+def tile2verilog(row, col, td, mod, fse):
     # fse is 0-based, floorplanner is 1-based
     row += 1
     col += 1
     wires = parse_wires(td)
     for src, dest in wires:
-        srcg = wire2global(row, col, src)
-        destg = wire2global(row, col, dest)
+        srcg = wire2global(row, col, fse, src)
+        destg = wire2global(row, col, fse, dest)
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
@@ -302,7 +320,7 @@ if __name__ == "__main__":
         #    print(*bitrow, sep='')
         #fuses = scan_fuses(d, typ, t)
         #scan_tables(d, typ, fuses)
-        tile2verilog(row, col, td, mod)
+        tile2verilog(row, col, td, mod, d)
     with open("unpack.v", 'w') as f:
         mod.write(f)
 
