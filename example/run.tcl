@@ -10,4 +10,4 @@ run_pnr -opt pnr.cfg
 exec python ../gowin_unpack.py $::env(GOWINHOME)/IDE/share/device/GW1NR-9/GW1NR-9.fse impl/pnr/example_syn.fs
 exec yosys -p "proc; show -format png -prefix original" example.v
 exec yosys -p "read_verilog -lib +/gowin/cells_sim.v; show -format png -prefix post_syn" example_syn.v
-exec yosys -p "read_verilog -lib +/gowin/cells_sim.v; show -format png -prefix post_pnr" unpack.v
+exec yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show -format png -prefix post_pnr" unpack.v

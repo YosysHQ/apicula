@@ -7,6 +7,8 @@ import codegen
 from bslib import read_bitstream
 from wirenames import wirenames
 
+import pdb
+
 
 def tile_bitmap(d, bitmap):
     tiles = d['header']['grid'][61]
@@ -29,25 +31,34 @@ def tile_bitmap(d, bitmap):
 
     return res
 
+def fuse_lookup(d, ttyp, fuse):
+    if fuse >= 0:
+        num = d['header']['fuse'][1][fuse][ttyp]
+        row = num // 100
+        col = num % 100
+        return row, col
+
 def parse_tile(d, ttyp, tile):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
     res = {}
     for start, table in [(2, 'shortval'), (2, 'wire'), (16, 'longval'),
                          (1, 'longfuse'), (0, 'const')]:
-        if table in d[ttyp]:
-            for styp, sinfo in d[ttyp][table].items():
-                for i in sinfo:
-                    fusebits = []
-                    for fuse in i[start:]:
-                        if fuse >= 0:
-                            num = d['header']['fuse'][1][fuse][ttyp]
-                            row = num // 100
-                            col = num % 100
-                            bit = tile[row][col]
-                            fusebits.append(bit==1)
-                    if all(fusebits):
-                        res.setdefault(table, {}).setdefault(styp, []).append(tuple(i[:]))
+        if table in d[ttyp]: # skip missing entries
+            for subtyp, tablerows in d[ttyp][table].items():
+                items = {}
+                for row in tablerows:
+                    pos = row[0] > 0
+                    coords = {(fuse_lookup(d, ttyp, f), pos) for f in row[start:] if f > 0}
+                    idx = tuple(abs(attr) for attr in row[:start])
+                    items.setdefault(idx, {}).update(coords)
+
+                for idx, item in items.items():
+                    test = [tile[loc[0]][loc[1]] == val
+                            for loc, val in item.items()]
+                    if all(test):
+                        row = idx + tuple(item.keys())
+                        res.setdefault(table, {}).setdefault(subtyp, []).append(row)
 
     return res
 
@@ -79,21 +90,33 @@ def parse_wires(tiledata):
     excl = set()
     wires = []
     try:
-        data = tiledata['wire'][2]
+        data = [
+            tiledata['wire'].get(2),
+            tiledata['wire'].get(38),
+            tiledata['wire'].get(48),
+        ]
     except KeyError:
         return wires
 
-    # put wires with more fuses later
-    # so they overwrite smaller subsets
-    data.sort(key=lambda l: [w > 0 for w in l[2:]])
+    for table in data:
+        if table:
+            # put wires with more fuses later
+            # so they overwrite smaller subsets
+            table.sort(key=len)
 
-    for w1, w2, *fuses in data:
-        if w1 < 0:
-            #print('neg', wirenames[-w1], wirenames[w2], fuses)
-            excl.add((-w1, w2))
-        elif (w1, w2) not in excl:
-            #print('pos', wirenames[w1], wirenames[w2], fuses)
-            wires.append((wirenames[w1], wirenames[w2]))
+            for w1, w2, *fuses in table:
+                if w1 < 0:
+                    #print('neg', wirenames[-w1], wirenames[w2], fuses)
+                    excl.add((-w1, w2))
+                elif w1 > 1000:
+                    #print('1k1', wirenames[w1-1000], wirenames[w2], fuses)
+                    wires.append((wirenames[w1-1000], wirenames[w2]))
+                elif w2 > 1000:
+                    #print('1k2', wirenames[w1], wirenames[w2-1000], fuses)
+                    wires.append((wirenames[w1], wirenames[w2-1000]))
+                elif (w1, w2) not in excl:
+                    #print('pos', wirenames[w1], wirenames[w2], fuses)
+                    wires.append((wirenames[w1], wirenames[w2]))
     return wires
 
 def parse_luts(tiledata):
@@ -120,18 +143,19 @@ def parse_dffs(tiledata):
         return [None, None, None]
 
     fuses = [d and frozenset(f[0] for f in d) for d in data]
+    print(fuses)
 
     dff_types = {
-        frozenset([-7, 20, 21]): 'DFF',
-        frozenset([21]): 'DFFS',
-        frozenset([20, 21]): 'DFFR',
-        frozenset([5, 21]): 'DFFP',
-        frozenset([5, 20, 21]): 'DFFC',
-        frozenset([3, 4, -7, 20, 21]): 'DFFN',
-        frozenset([3, 4, 21]): 'DFFNS',
-        frozenset([3, 4, 20, 21]): 'DFFNR',
-        frozenset([3, 4, 5, 21]): 'DFFNP',
-        frozenset([3, 4, 5, 20, 21]): 'DFFNC',
+        frozenset([20, 21]): 'DFF',
+        frozenset([21, 7]): 'DFFS',
+        frozenset([20, 21, 7]): 'DFFR',
+        frozenset([5, 21, 7]): 'DFFP',
+        frozenset([5, 20, 21, 7]): 'DFFC',
+        frozenset([3, 4, 20, 21]): 'DFFN',
+        frozenset([3, 4, 21, 7]): 'DFFNS',
+        frozenset([3, 4, 20, 21, 7]): 'DFFNR',
+        frozenset([3, 4, 5, 21, 7]): 'DFFNP',
+        frozenset([3, 4, 5, 20, 21, 7]): 'DFFNC',
     }
    
     return [dff_types.get(f) for f in fuses]
@@ -149,13 +173,11 @@ def parse_iob(tiledata):
     print(fuses)
 
     iob_types = {
-        frozenset([-62, 47, 48, 49, 30]): 'IBUF',
+        frozenset([64, 47, 48, 49, 30]): 'IBUF',
         frozenset([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 26, 30,
-                   47, 48, 49, 61, 63, -62, 66, 67, 68, 81]): 'OBUF',
-        frozenset({3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 26, 30,
-                   47, 48, 49, 61, 63, -62, 66, 67, 68}): 'OBUF',
+                   47, 48, 49, 61, 63, 64, 66, 67, 68, 81]): 'OBUF',
         # same as TBUF with unused input?
-        frozenset([-62, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 47, 48, 49, 26, 30]): 'IOBUF',
+        frozenset([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 47, 48, 49, 26, 30]): 'IOBUF',
     }
    
     return [iob_types.get(f) for f in fuses]
@@ -163,7 +185,7 @@ def parse_iob(tiledata):
 def wire2global(row, col, fse, name):
     width = len(fse['header']['grid'][61][0])
     height = len(fse['header']['grid'][61])
-    if name.startswith("GB") or name in {'VCC', 'VSS'}:
+    if name.startswith("G") or name in {'VCC', 'VSS'}:
         # global wire
         return name
 
