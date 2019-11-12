@@ -6,3 +6,9 @@
 *.json
 *.cpp
 *.o
+*.il
+*.dot
+*.log
+*.pdf
+impl
+env
