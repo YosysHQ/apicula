@@ -335,6 +335,14 @@ def tile2verilog(row, col, td, mod, fse):
 
             mod.primitives[name] = iob
 
+    gnd = codegen.Primitive("GND", "mygnd")
+    gnd.portmap["G"] = "VSS"
+    mod.primitives["mygnd"] = gnd
+    vcc = codegen.Primitive("VCC", "myvcc")
+    vcc.portmap["V"] = "VCC"
+    mod.primitives["myvcc"] = vcc
+
+
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = fse.readFse(f)

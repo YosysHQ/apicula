@@ -115,7 +115,8 @@ def render_bitmap(d):
             td = d[typ]
             w = td['width']
             h = td['height']
-            bitmap[y:y+h,x:x+w] += render_tile(d, typ)
+            #bitmap[y:y+h,x:x+w] += render_tile(d, typ)
+            bitmap[y:y+h,x:x+w] = typ
             x+=w
         y+=h
 
@@ -133,8 +134,8 @@ def display(fname, data):
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = readFse(f)
-    #bm = render_bitmap(d)
-    #display("fuse.png", bm)
+    bm = render_bitmap(d)
+    display("fuse.png", bm)
     t = render_tile(d, 12)
     display("tile.png", t)
 
