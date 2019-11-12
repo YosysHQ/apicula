@@ -58,12 +58,12 @@ def addWire(row, col, num):
     except KeyError:
         return
     gname = wire2global(row, col, height, width, name)
-    print("wire", gname)
+    #print("wire", gname)
     try:
         ctx.addWire(name=gname, type=name, y=row, x=col)
     except AssertionError:
         pass
-        print("duplicate wire")
+        #print("duplicate wire")
 
 for row, rowdata in enumerate(grid, 1):
     for col, ttyp in enumerate(rowdata, 1):
@@ -73,14 +73,14 @@ for row, rowdata in enumerate(grid, 1):
             addWire(row, col, wire)
         # add aliasses
         # creat bels
-        print(row, col, ttyp)
+        #print(row, col, ttyp)
         if ttyp in {12, 13, 14, 15, 16, 17}:
             for z in range(6): # TODO 3rd CLS has no DFF, add constraint
                 belname = f"R{row}C{col}_SLICE{z}"
                 clkname = f"R{row}C{col}_CLK{z//2}"
                 fname = f"R{row}C{col}_F{z}"
                 qname = f"R{row}C{col}_Q{z}"
-                print("IOB", row, col, clkname, fname, qname)
+                #print("IOB", row, col, clkname, fname, qname)
                 ctx.addBel(name=belname, type="GENERIC_SLICE", loc=Loc(col, row, z), gb=False)
                 ctx.addBelInput(bel=belname, name="CLK", wire=clkname)
                 for k, n in [('A', 'I[0]'), ('B', 'I[1]'),
@@ -99,7 +99,7 @@ for row, rowdata in enumerate(grid, 1):
                 iname = f"R{row}C{col}_{inp}"
                 oname = f"R{row}C{col}_{outp}"
                 oename = f"R{row}C{col}_{oe}"
-                print("IOB", row, col, iname, oname, oename)
+                #print("IOB", row, col, iname, oname, oename)
                 ctx.addBel(name=belname, type="GENERIC_IOB", loc=Loc(col, row, z), gb=False)
                 ctx.addBelInput(bel=belname, name="I", wire=iname)
                 ctx.addBelInput(bel=belname, name="EN", wire=oename)
@@ -117,17 +117,17 @@ def addPip(row, col, srcnum, destnum):
         return
 
     pipname = f"R{row}C{col}_{srcname}_{destname}"
-    print("pip", pipname, srcname, gsrcname, destname, gdestname)
+    #print("pip", pipname, srcname, gsrcname, destname, gdestname)
     try:
         ctx.addPip(
             name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
             delay=ctx.getDelayFromNS(0.05), loc=Loc(col, row, 0))
     except IndexError:
         pass
-        print("Wire not found", gsrcname, gdestname)
+        #print("Wire not found", gsrcname, gdestname)
     except AssertionError:
         pass
-        print("Wire already exists", gsrcname, gdestname)
+        #print("Wire already exists", gsrcname, gdestname)
 
 def addAlias(row, col, srcnum, destnum):
     srcname = wirenames[srcnum]
@@ -137,7 +137,7 @@ def addAlias(row, col, srcnum, destnum):
     gdestname = wire2global(row, col, height, width, destname)
 
     pipname = f"R{row}C{col}_{srcname}_{destname}"
-    #print("alias", pipname)
+    ##print("alias", pipname)
     ctx.addAlias(
         name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
         delay=ctx.getDelayFromNS(0.01))
