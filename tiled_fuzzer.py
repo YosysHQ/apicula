@@ -163,6 +163,8 @@ if __name__ == "__main__":
         fz(mod, cst)
 
     bitmap, posp = run_pnr(mod, cst)
+    #bitmap = bslib.read_bitstream("empty.fs")
+    #posp = []
     bm = gowin_unpack.tile_bitmap(fse, bitmap)
     for cst_type, name, *info in posp:
         if cst_type == "cst":
@@ -199,5 +201,29 @@ if __name__ == "__main__":
         #fuses = gowin_unpack.scan_fuses(fse, typ, tile)
         #print("Fuses:", fuses)
         #gowin_unpack.scan_tables(fse, typ, fuses)
+
+    # corner tiles for bank enable
+    print("### CORNER TILES ###")
+    height = len(fse['header']['grid'][61])
+    width = len(fse['header']['grid'][61][0])
+    for row in [0, height-1]:
+        for col in [0, width-1]:
+            typ = fse['header']['grid'][61][row][col]
+            idx = (row, col, typ)
+            print(idx)
+
+            try:
+                tile = bm[idx]
+            except KeyError:
+                continue
+            td = gowin_unpack.parse_tile(fse, typ, tile)
+            #print(td)
+            #print(gowin_unpack.parse_wires(td))
+            #print(gowin_unpack.parse_luts(td))
+            #for bitrow in tile:
+            #    print(*bitrow, sep='')
+            fuses = gowin_unpack.scan_fuses(fse, typ, tile)
+            print("Fuses:", fuses)
+            gowin_unpack.scan_tables(fse, typ, fuses)
 
 
