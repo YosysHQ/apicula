@@ -44,6 +44,7 @@ def read_bitstream(fname):
                 continue
             crcdat.extend(ba[:-8])
             crc1 = (ba[-7] << 8) + ba[-8]
+            print(crcdat)
             crc2 = crc16arc(crcdat)
             assert crc1 == crc2, f"Not equal {crc1} {crc2}"
             crcdat = ba[-6:]
@@ -51,6 +52,39 @@ def read_bitstream(fname):
             frames = max(0, frames-1)
 
     return np.fliplr(np.array(bitmap))
+
+def write_bitstream(fname, bs, hdr, ftr):
+    bs = np.fliplr(bs)
+    padlen = 8 - bs.shape[1] % 8
+    pad = np.ones((bs.shape[0], padlen), dtype=np.uint8)
+    bs = np.hstack([pad, bs])
+    assert bs.shape[1] % 8 == 0
+    bs=np.packbits(bs, axis=1)
+
+    crcdat = bytearray()
+    preamble = 3
+    with open(fname, 'w') as f:
+        for ba in hdr:
+            if not preamble and ba[0] != 0xd2: # SPI address
+                crcdat.extend(ba)
+            preamble = max(0, preamble-1)
+            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write('\n')
+        for ba in bs:
+            f.write(''.join(f"{b:08b}" for b in ba))
+            crcdat.extend(ba)
+            print(crcdat)
+            crc = crc16arc(crcdat)
+            crcdat = bytearray(b'\xff'*6)
+            f.write(f"{crc&0xff:08b}{crc>>8:08b}")
+            f.write('1'*48)
+            f.write('\n')
+        for ba in ftr:
+            preamble = max(0, preamble-1)
+            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write('\n')
+
+    
 
 def display(fname, data):
     im = Image.frombytes(
