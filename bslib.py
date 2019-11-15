@@ -44,7 +44,6 @@ def read_bitstream(fname):
                 continue
             crcdat.extend(ba[:-8])
             crc1 = (ba[-7] << 8) + ba[-8]
-            print(crcdat)
             crc2 = crc16arc(crcdat)
             assert crc1 == crc2, f"Not equal {crc1} {crc2}"
             crcdat = ba[-6:]
@@ -52,6 +51,7 @@ def read_bitstream(fname):
             frames = max(0, frames-1)
 
     return np.fliplr(np.array(bitmap))
+
 
 def write_bitstream(fname, bs, hdr, ftr):
     bs = np.fliplr(bs)
@@ -73,7 +73,6 @@ def write_bitstream(fname, bs, hdr, ftr):
         for ba in bs:
             f.write(''.join(f"{b:08b}" for b in ba))
             crcdat.extend(ba)
-            print(crcdat)
             crc = crc16arc(crcdat)
             crcdat = bytearray(b'\xff'*6)
             f.write(f"{crc&0xff:08b}{crc>>8:08b}")
@@ -84,7 +83,6 @@ def write_bitstream(fname, bs, hdr, ftr):
             f.write(''.join(f"{b:08b}" for b in ba))
             f.write('\n')
 
-    
 
 def display(fname, data):
     im = Image.frombytes(

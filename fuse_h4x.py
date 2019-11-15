@@ -131,6 +131,52 @@ def display(fname, data):
     im.putpalette(random.choices(range(256), k=3*256))
     im.save(fname)
 
+def fuse_lookup(d, ttyp, fuse):
+    if fuse >= 0:
+        num = d['header']['fuse'][1][fuse][ttyp]
+        row = num // 100
+        col = num % 100
+        return row, col
+
+def tile_bitmap(d, bitmap, empty=False):
+    tiles = d['header']['grid'][61]
+    width = sum([d[i]['width'] for i in tiles[0]])
+    height = sum([d[i[0]]['height'] for i in tiles])
+    res = {}
+    y = 0
+    for idx, row in enumerate(tiles):
+        x=0
+        for jdx, typ in enumerate(row):
+            #if typ==12: pdb.set_trace()
+            td = d[typ]
+            w = td['width']
+            h = td['height']
+            tile = bitmap[y:y+h,x:x+w]
+            if tile.any() or empty:
+                res[(idx, jdx, typ)] = tile
+            x+=w
+        y+=h
+
+    return res
+
+def fuse_bitmap(d, bitmap):
+    tiles = d['header']['grid'][61]
+    width = sum([d[i]['width'] for i in tiles[0]])
+    height = sum([d[i[0]]['height'] for i in tiles])
+    res = np.zeros((height, width), dtype=np.uint8)
+    y = 0
+    for idx, row in enumerate(tiles):
+        x=0
+        for jdx, typ in enumerate(row):
+            td = d[typ]
+            w = td['width']
+            h = td['height']
+            res[y:y+h,x:x+w] = bitmap[(idx, jdx, typ)]
+            x+=w
+        y+=h
+
+    return res
+
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = readFse(f)

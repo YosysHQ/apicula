@@ -1,42 +1,15 @@
 import sys
 import re
+import random
 import numpy as np
 from itertools import chain, count
 import fuse_h4x as fse
+from fuse_h4x import fuse_lookup, tile_bitmap
 import codegen
 from bslib import read_bitstream
 from wirenames import wirenames
 
 import pdb
-
-
-def tile_bitmap(d, bitmap):
-    tiles = d['header']['grid'][61]
-    width = sum([d[i]['width'] for i in tiles[0]])
-    height = sum([d[i[0]]['height'] for i in tiles])
-    res = {}
-    y = 0
-    for idx, row in enumerate(tiles):
-        x=0
-        for jdx, typ in enumerate(row):
-            #if typ==12: pdb.set_trace()
-            td = d[typ]
-            w = td['width']
-            h = td['height']
-            tile = bitmap[y:y+h,x:x+w]
-            if tile.any():
-                res[(idx, jdx, typ)] = tile
-            x+=w
-        y+=h
-
-    return res
-
-def fuse_lookup(d, ttyp, fuse):
-    if fuse >= 0:
-        num = d['header']['fuse'][1][fuse][ttyp]
-        row = num // 100
-        col = num % 100
-        return row, col
 
 def parse_tile(d, ttyp, tile):
     w = d[ttyp]['width']
@@ -78,6 +51,7 @@ def scan_fuses(d, ttyp, tile):
     return set(fuses)
 
 def scan_tables(d, tiletyp, fuses):
+    res = []
     for tname, tables in d[tiletyp].items():
         if tname in {"width", "height"}: continue
         for ttyp, table in tables.items():
@@ -85,6 +59,23 @@ def scan_tables(d, tiletyp, fuses):
                 row_fuses = fuses.intersection(row)
                 if row_fuses:
                     print(f"fuses {row_fuses} found in {tname}({ttyp}): {row}")
+                    res.append(row)
+    return res
+
+def reduce_rows(rows, fuses, start=16, tries=1000):
+    rowmap = {frozenset(iv[:iv.index(0)]): frozenset(iv[start:(iv+[-1]).index(-1)]) for iv in rows}
+    features = {i for s in rowmap.keys() for i in s}
+    for _ in range(tries):
+        feat = random.sample(features, 1)[0]
+        features.remove(feat)
+        rem_fuses = set()
+        for k, v in rowmap.items():
+            if k & features:
+                rem_fuses.update(v)
+        if rem_fuses != fuses:
+            features.add(feat)
+    return features
+
 
 def parse_wires(tiledata):
     excl = set()
