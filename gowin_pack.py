@@ -58,7 +58,7 @@ def place(fuse, tilemap, bels):
             lutmap = infovaluemap(lutfuses)
             init = str(attr['INIT'])
             init = init*(16//len(init))
-            for bitnum, lutbit in enumerate(init):
+            for bitnum, lutbit in enumerate(init[::-1]):
                 if lutbit == '0':
                     fuses = lutmap[(num, bitnum)]
                     for f in fuses:
