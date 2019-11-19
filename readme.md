@@ -17,7 +17,7 @@ Project Apicula uses a combination of fuzzing and parsing of the vendor data fil
   * `bitstream.py` writes `.fasm`(unused) and `.vm`/`.posp` (for vendor floorplanner).
   * `blinky.v` example program
   * `simple.py` main Python script that generates all the bels and pips.
-  * `simple.sh` scripy to synth and PnR `blinky.v`.
+  * `simple.sh` script to synth and PnR `blinky.v`.
   * `simple_timing.py` generates the pip and port delays.
   * `synth` Yosys synthesis scripts and libs.
     * `cells_map.v` techmap file.
