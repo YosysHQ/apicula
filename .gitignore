@@ -1,6 +1,6 @@
 *.txt
 *.c
-*.png
+/*.png
 *.fs
 *.gif
 *.json

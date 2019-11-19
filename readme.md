@@ -4,6 +4,35 @@ Documentation of the Gowin FPGA bitstream format.
 
 Project Apicula uses a combination of fuzzing and parsing of the vendor data files to find the meaning of all the bits in the bitstream.
 
+#  Dependencies
+
+The latest Yosys and Nextpnr, installed with the generic backend.
+
+Python:
+* Numpy
+* Pillow
+* crcmod
+
+# Getting Started
+
+```bash
+virtualenv env
+source env/bin/activate
+export GOWINHOME=/gowin/installation
+pip install numpy pillow crcmod ipython
+cd generic
+bash simple.sh
+# open simple.vm and simple.posp in Gowin Floorplanner
+# look at blinky.il and blinky.png
+cd ..
+python gowin_pack.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.fse generic/pnrblinky.json
+# look at pack.png and pack.fs
+python gowin_unpack.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.fse pack.fs
+yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
+/gowin/installation/Programmer/bin/programmer_cli --device GW1NR-9 --run 2 --fsFile /path/to/pack.fs
+
+```
+
 # Files overview
 
 * `bslib.py` utilities for parsing `.fs` bitstream files in ascii format.
