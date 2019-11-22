@@ -106,6 +106,8 @@ The `.dat` parser was sort of patched to output a JSON file, but it would be a l
 
 The user-facing tools such as `gowin_pack` and `gowin_unpack` could really use some proper command line arguments, and could also be packaged in a proper Python package so that they can be installed easily.
 
+At the moment there are a few hard-coded references to GW1NR-9. All the core bitgen code is completely generic, based on the vendor data files, but the bitstream commands are hardcoded. Part of this ties into having a proper command line interface, another part is just making a table for the correct commands for each FPGA model.
+
 Eventually it'd be really sweet if there were some tests and continuous integration.
 
 ## Files overview
