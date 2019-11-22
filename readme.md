@@ -110,6 +110,15 @@ At the moment there are a few hard-coded references to GW1NR-9. All the core bit
 
 Eventually it'd be really sweet if there were some tests and continuous integration.
 
+
+### JTAG programmer
+
+Currently the vendor programming tool is used. For a truly end-to-end open source flow, a JTAG programmer would have to be written, or at least adapted for use with Gowin FPGAs.
+
+In some toolchains the IDE can generate a SVF file for use with other JTAG programmers. This could for example be used with OpenOCD. However, Gowin is not one of those toolchains.
+
+So what needs to be done is to extract the JTAG commands used by the vendor tools by either capturing USB packets, or using a logic analyser to decode the JTAG commands at the FPGA inputs. With these commands, a script can be written that converts a bitstream to an SVF file that could be used with OpenOCD.
+
 ## Files overview
 
 * `bslib.py` utilities for parsing `.fs` bitstream files in ascii format.
