@@ -20,7 +20,12 @@ virtualenv env
 source env/bin/activate
 export GOWINHOME=/gowin/installation
 pip install numpy pillow crcmod ipython
-cd generic
+python dat19_h4x.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.dat
+# look at dat.json
+cd legacy/empty
+/gowin/installation/IDE/bin/gw_sh run.tcl
+cp impl/pnr/empty.fs ../../
+cd ../../generic
 bash simple.sh
 # open simple.vm and simple.posp in Gowin Floorplanner
 # look at blinky.il and blinky.png
