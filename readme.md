@@ -82,7 +82,7 @@ For each FPGA, the vendor provides `.dat`, `.fse`, `.ini`, `.pwr`, and `.tm` fil
 
 The format of these other files is unknown, you're on your own here. I could only offer you some vague pointers based on experience from the other two files.
 
-For a description of the file format, [see the documentation](doc/filestructure.md).
+For a description of the known file format, [see the documentation](doc/filestructure.md).
 
 The parser for the `.fse` format is fairly robust and complete, but vendor software updates sometimes add new file and table types.
 The main thing lacking here is a better understanding of the meaning of all these tables. Part of this can be done with [fuzzing](#fuzzing), but another large part is just looking at the data for patterns and correlations. For example, some numbers might be indices into other tables, wire IDs, fuse IDs, or encoded X/Y positions.
@@ -94,7 +94,7 @@ The parser for the `.dat` file is more fragile and incomplete. This is mainly be
 
 Currently, the Nextpnr flow is based on the [simple example](https://github.com/YosysHQ/nextpnr/tree/master/generic/examples) of the generic target. This script is very slow to load (over a dozen seconds) and cannot be easily extended to support more of the Gowin FPGA. So this script should very much be seen as a proof of concept that is not worth extending.
 
-Eventually a proper Nextpnr will need to be written. This is quite a large chunk of code that needs to be written, but the upside is that the ice40 target can serve as a basis. [Some documentation is available](https://github.com/YosysHQ/nextpnr/blob/master/docs/coding.md)
+Eventually a proper Nextpnr target will need to be written. This is quite a large chunk of code that needs to be written, but the upside is that the ice40 target can serve as a basis. [Some documentation is available](https://github.com/YosysHQ/nextpnr/blob/master/docs/coding.md)
 
 Part of this will be writing a [binary blob assembler](https://github.com/YosysHQ/nextpnr/tree/master/bba) script to encode the vendor data files into a format suitable for Nextpnr, or port the Python parsers for the vendor files to C++ and use the vendor files directly with Nextpnr.
 
