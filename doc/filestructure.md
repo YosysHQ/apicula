@@ -70,7 +70,7 @@ The other files all correspond to a specific tile type, and have a width and hei
 
 The `wire` tables contain the pips of a tile. it is of the format `[src, dest, *fuses]`, where an unused fuse is `-1`. The wire IDs can be mapped to names with `wirenames.py`. Some rows have a negative source wire, which seems to indicate that this fuse should be set to zero. These negative fuses contain the "default" state of a pip. Some rows also have wire IDs that fall outside the valid wire range, it is expected this is some sort of flag, but the meaning is not known. Table 2 contains the main routing, the use of other wire tables is not known.
 
-`shortval` and `longval` describe bel features that can be configured. A "short" infovalue has 2 "features" and a "long" infovalue has 16 features. Unused features are zero. Some known tables:
+`shortval` and `longval` describe bel features that can be configured. A short value has 2 "features" and a long value has 16 "features". Unused features are zero. Some known tables:
 
 * 5: LUT bits, [LUT, bit, fuse]
 * 23-24: IOB configuration, meaning unknown, fuzzer output used
