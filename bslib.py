@@ -21,6 +21,9 @@ def bitarr(frame, pad):
 
 def read_bitstream(fname):
     bitmap = []
+    hdr = []
+    ftr = []
+    is_hdr = True
     crcdat = bytearray()
     preamble = 3
     frames = 0
@@ -29,10 +32,15 @@ def read_bitstream(fname):
             if line.startswith("//"): continue
             ba = bytearr(line)
             if not frames:
+                if is_hdr:
+                    hdr.append(ba)
+                else:
+                    ftr.append(ba)
                 if not preamble and ba[0] != 0xd2: # SPI address
                     crcdat.extend(ba)
                 if not preamble and ba[0] == 0x3b: # frame count
                     frames = int.from_bytes(ba[2:], 'big')
+                    is_hdr = False
                 if not preamble and ba[0] == 0x06: # device ID
                     if ba == b'\x06\x00\x00\x00\x11\x00\x58\x1b':
                         padding = 4
@@ -50,7 +58,7 @@ def read_bitstream(fname):
             bitmap.append(bitarr(line, padding))
             frames = max(0, frames-1)
 
-    return np.fliplr(np.array(bitmap))
+    return np.fliplr(np.array(bitmap)), hdr, ftr
 
 
 def write_bitstream(fname, bs, hdr, ftr):

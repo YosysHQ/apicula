@@ -337,7 +337,7 @@ def tile2verilog(row, col, td, mod, fse):
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = fse.readFse(f)
-    bitmap = read_bitstream(sys.argv[2])
+    bitmap = read_bitstream(sys.argv[2])[0]
     bm = tile_bitmap(d, bitmap)
     mod = codegen.Module()
     for idx, t in bm.items():

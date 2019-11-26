@@ -502,7 +502,7 @@ def run_pnr(fuzzers, bits):
         subprocess.run([gowinhome+"/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
         #print(tmpdir); input()
         try:
-            return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")
+            return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")[0]
         except FileNotFoundError:
             return None
 

@@ -139,7 +139,7 @@ def run_pnr(mod, constr):
         subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
         #print(tmpdir); input()
         try:
-            return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
+            return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")[0], \
                    list(read_posp(tmpdir+"/impl/pnr/top.posp"))
         except FileNotFoundError:
             print(tmpdir)
@@ -163,7 +163,7 @@ if __name__ == "__main__":
         fz(mod, cst)
 
     bitmap, posp = run_pnr(mod, cst)
-    #bitmap = bslib.read_bitstream("empty.fs")
+    #bitmap = bslib.read_bitstream("empty.fs")[0]
     #posp = []
     bm = gowin_unpack.tile_bitmap(fse, bitmap)
     for cst_type, name, *info in posp:

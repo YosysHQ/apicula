@@ -5,29 +5,6 @@ import bslib
 import fuse_h4x as fse
 from wirenames import wirenames, wirenumbers
 
-
-cmd_hdr = [
-    bytearray(b'\xb5\xb8'), # checksum
-    bytearray(b'\xff\xff'), # NOP
-    bytearray(b'\xa5\xc3'), # preamble
-    bytearray(b'\x06\x00\x00\x00\x11\x00\x58\x1b'), # ID CODE check
-    bytearray(b'\x10\x00\x00\x00\x00\x00\x00\x00'), # config register
-    bytearray(b'\x51\x00\xff\xff\xff\xff\xff\xff'), # unknown
-    bytearray(b'\x0b\x00\x00\x00'), # unknown
-    bytearray(b'\xd2\x00\xff\xff\x00\xff\xf0\x00'), # SPI flash address
-    bytearray(b'\x12\x00\x00\x00'), # init address?
-    bytearray(b'\x3b\x80\x02\xc8'), # number of frames
-]
-
-cmd_ftr = [
-    bytearray(b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x34\x73'),
-    bytearray(b'\x0a\x00\x00\x00\x00\x00\xb5\xb8'), # usercode
-    bytearray(b'\xff\xff\xff\xff\xff\xff\xff\xff'),
-    bytearray(b'\x08\x00\x00\x00'), # program done?
-    bytearray(b'\xff\xff\xff\xff\xff\xff\xff\xff'),
-    bytearray(b'\xff\xff')
-]
-
 def get_bels(data):
     belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB)(\d)")
     for cell in data['modules']['top']['cells'].values():
@@ -157,7 +134,7 @@ if __name__ == '__main__':
         fuse = fse.readFse(f)
     with open(sys.argv[2]) as f:
         pnr = json.load(f)
-    empty = bslib.read_bitstream('empty.fs')
+    empty, hdr, ftr = bslib.read_bitstream('empty.fs')
     tilemap = fse.tile_bitmap(fuse, empty, empty=True)
     bels = get_bels(pnr)
     place(fuse, tilemap, bels)
@@ -165,4 +142,4 @@ if __name__ == '__main__':
     route(fuse, tilemap, pips)
     res = fse.fuse_bitmap(fuse, tilemap)
     fse.display('pack.png', res)
-    bslib.write_bitstream('pack.fs', res, cmd_hdr, cmd_ftr)
+    bslib.write_bitstream('pack.fs', res, hdr, ftr)
