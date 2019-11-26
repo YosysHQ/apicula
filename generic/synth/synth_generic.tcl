@@ -4,7 +4,7 @@
 set LUT_K 4
 if {$argc > 0} { set LUT_K [lindex $argv 0] }
 yosys read_verilog -lib [file dirname [file normalize $argv0]]/prims.v
-yosys hierarchy -check
+yosys hierarchy -check -auto-top
 yosys proc
 yosys flatten
 yosys tribuf -logic
