@@ -15,7 +15,7 @@ def bytearr(frame):
 
 def bitarr(frame, pad):
     "Array of *content* bits"
-    data = frame.strip()[4:-64]
+    data = frame.strip()[pad:-64]
     return [int(n, base=2) for n in data]
 
 
