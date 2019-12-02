@@ -27,6 +27,14 @@ device = os.getenv("DEVICE")
 if not device:
     raise "DEVICE not set"
 
+params = {
+    "GW1NR-9": {
+        "package": "QN881",
+        "device": "GW1NR-9-QFN88-6",
+        "partnumber": "GW1NR-LV9QN88C6/I5",
+    },
+}[device]
+
 name_idx = 0
 def make_name(bel, typ):
     global name_idx
@@ -47,8 +55,12 @@ dffmap = {
 }
 def dff(mod, cst, locations):
     for ttyp in range(12, 17):
-        # iter causes the loop to not repeat the same locs per cls
-        locs = iter(locations[ttyp])
+        try:
+            # iter causes the loop to not repeat the same locs per cls
+            locs = iter(locations[ttyp])
+        except KeyError:
+            continue
+
         for cls in range(3):
             for loc, typ, port in zip(locs, dffmap.keys(), dffmap.values()):
                 lutname = make_name("DUMMY", "LUT4")
@@ -77,29 +89,37 @@ def dff(mod, cst, locations):
                 cst.cells[lutname] = f"R{row}C{col}[{cls}]"
                 cst.cells[name] = f"R{row}C{col}[{cls}]"
 
-def iob(mod, cst, loc):
-    iobmap = {
-        "IBUF": {"wires": ["O"], "inputs": ["I"]},
-        "OBUF": {"wires": ["I"], "outputs": ["O"]},
-        "TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
-        "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
-    }
-    for typ, conn in iobmap.items():
-        name = make_name(typ)
-        iob = codegen.Primitive(typ, name)
-        for port in chain.from_iterable(conn.values()):
-            iob.portmap[port] = name+"_"+port
+iobmap = {
+    "IBUF": {"wires": ["O"], "inputs": ["I"]},
+    "OBUF": {"wires": ["I"], "outputs": ["O"]},
+    #"TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
+    #"IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
+}
+def iob(mod, cst, locations):
+    for ttyp in [*range(52, 67), 91, 92]:
+        try:
+            # iter causes the loop to not repeat the same locs per cls
+            locs = iter(locations[ttyp])
+        except KeyError:
+            continue
 
-        for direction, wires in conn.items():
-            wnames = [name+"_"+w for w in wires]
-            getattr(mod, direction).update(wnames)
-        mod.primitives[name] = iob
+        for side in ['A', 'B']:
+            for loc, typ, conn in zip(locs, iobmap.keys(), iobmap.values()):
+                name = make_name("IOB", typ)
+                iob = codegen.Primitive(typ, name)
+                for port in chain.from_iterable(conn.values()):
+                    iob.portmap[port] = name+"_"+port
 
+                for direction, wires in conn.items():
+                    wnames = [name+"_"+w for w in wires]
+                    getattr(mod, direction).update(wnames)
+                mod.primitives[name] = iob
+                cst.ports[name] = loc
 
 
 def read_posp(fname):
     cst_parser = re.compile(r"(\w+) CST_R(\d+)C(\d+)\[([0-3])\]\[([AB])\]")
-    place_parser = re.compile(r"(\w+) PLACE_IO([TBLR])(\d+)\[([AB])\]")
+    place_parser = re.compile(r"(\w+) (?:PLACE|CST)_IO([TBLR])(\d+)\[([AB])\]")
     with open(fname, 'r') as f:
         for line in f:
             cst = cst_parser.match(line)
@@ -137,8 +157,8 @@ def run_pnr(mod, constr):
             #"warning_all", "timing", "reg_not_in_iob"])
 
     pnr = codegen.Pnr()
-    pnr.device = "GW1NR-9-QFN88-6"
-    pnr.partnumber = "GW1NR-LV9QN88C6/I5"
+    pnr.device = params['device']
+    pnr.partnumber = params['partnumber']
 
     with tempfile.TemporaryDirectory() as tmpdir:
         pnr.outdir = tmpdir
@@ -166,10 +186,8 @@ def run_pnr(mod, constr):
             input()
             return None
 
-fuzzers = [dff]
-
 if __name__ == "__main__":
-    with open(gowinhome + "/IDE/share/device/GW1NR-9/GW1NR-9.fse", 'rb') as f:
+    with open(gowinhome + f"/IDE/share/device/{device}/{device}.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
 
     db = chipdb.from_fse(fse)
@@ -181,13 +199,27 @@ if __name__ == "__main__":
         for col, typ in enumerate(dat):
             locations.setdefault(typ, []).append((row, col))
 
-    for fz in fuzzers:
-        fz(mod, cst, locations)
+    pin_names = pindef.get_locs(device, params['package'])
+    banks = {'T': fse['header']['grid'][61][0],
+             'B': fse['header']['grid'][61][-1],
+             'L': [row[0] for row in fse['header']['grid'][61]],
+             'R': [row[-1] for row in fse['header']['grid'][61]]}
+    pin_locations = {}
+    pin_re = re.compile(r"IO([TBRL])(\d+)([A-Z])")
+    for name in pin_names:
+        side, num, pin = pin_re.match(name).groups()
+        ttyp = banks[side][int(num)]
+        pin_locations.setdefault(ttyp, []).append(name)
+
+    # Add fuzzers here
+    #dff(mod, cst, locations)
+    iob(mod, cst, pin_locations)
 
     bitmap, posp = run_pnr(mod, cst)
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
     #bitmap = bslib.read_bitstream("empty.fs")[0]
     #posp = []
+    print(posp)
     bm = gowin_unpack.tile_bitmap(fse, bitmap)
     for cst_type, name, *info in posp:
         bel_type, cell_type = type_re.match(name).groups()
@@ -216,8 +248,8 @@ if __name__ == "__main__":
         idx = (row, col, typ)
 
         tile = bm[idx]
-        #for bitrow in tile:
-        #    print(*bitrow, sep='')
+        for bitrow in tile:
+            print(*bitrow, sep='')
 
         rows, cols = np.where(tile==1)
         loc = list(zip(rows, cols))
@@ -236,6 +268,10 @@ if __name__ == "__main__":
                     'LSR': chipdb.Wire(f"LSR{cls}"), # set/reset
                     'CE': chipdb.Wire(f"CE{cls}"), # clock enable
                 }
+        elif bel_type == "IOB":
+                bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
+                bel.modes[cell_type] = loc
+                # portmap is set from dat file
         else:
             raise ValueError(f"Type {bel_type} not handled")
 

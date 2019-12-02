@@ -5,7 +5,7 @@ from glob import glob
 docdir = expanduser("~/Documents/gowinsemi/")
 files = glob(docdir+"*Pinout.xlsx")
 
-def get_pins(series, package, special_pins=False):
+def get_package(series, package, special_pins):
     fname = None
     for f in files:
         if series in f:
@@ -18,5 +18,13 @@ def get_pins(series, package, special_pins=False):
     df = df[df['Function']=="I/O"]
     if not special_pins:
         df = df[df["Configuration Function"].isna()]
+    return df
+
+def get_pins(series, package, special_pins=False):
+    df = get_package(series, package, special_pins)
     df = df[["BANK", package]].astype("int32")
     return df.groupby("BANK")[package].apply(list).to_dict()
+
+def get_locs(series, package, special_pins=False):
+    df = get_package(series, package, special_pins)
+    return set(df["Pin Name"])

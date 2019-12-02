@@ -12,7 +12,7 @@ class Module:
     def write(self, f):
         f.write("module top(")
         first = True
-        for port in chain(self.inputs, self.outputs):
+        for port in chain(self.inputs, self.outputs, self.inouts):
             if not first:
                 f.write(", ")
             first = False
