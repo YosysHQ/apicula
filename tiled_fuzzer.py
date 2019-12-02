@@ -15,6 +15,7 @@ import bslib
 import pindef
 import fuse_h4x
 import gowin_unpack
+import chipdb
 
 import sys, pdb
 
@@ -22,42 +23,61 @@ gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise "GOWINHOME not set"
 
+device = os.getenv("DEVICE")
+if not device:
+    raise "DEVICE not set"
+
 name_idx = 0
-def make_name(typ):
+def make_name(bel, typ):
     global name_idx
     name_idx += 1
-    return f"my{typ}{name_idx}"
+    return f"inst{name_idx}_{bel}_{typ}"
 
 
-def dff(mod, cst):
-    dffmap = {
-        "DFFE": None,
-        "DFFSE": "SET",
-        "DFFRE": "RESET",
-        "DFFPE": "PRESET",
-        "DFFCE": "CLEAR",
-        "DFFNSE": "SET",
-        "DFFNRE": "RESET",
-        "DFFNPE": "PRESET",
-        "DFFNCE": "CLEAR",
-    }
-    col = 2
-    for typ, port in dffmap.items():
-        name = make_name(typ)
-        #yield name
-        dff = codegen.Primitive(typ, name)
-        dff.portmap['CLK'] = name+"_CLK"
-        dff.portmap['D'] = name+"_F"
-        dff.portmap['Q'] = name+"_Q"
-        dff.portmap['CE'] = name+"_CE"
-        if port:
-            dff.portmap[port] = name+"_"+port
-        mod.wires.update(dff.portmap.values())
-        mod.primitives[name] = dff
-        cst.cells[name] = f"R2C{col}"
-        col += 1
+dffmap = {
+    "DFF": None,
+    "DFFS": "SET",
+    "DFFR": "RESET",
+    "DFFP": "PRESET",
+    "DFFC": "CLEAR",
+    "DFFNS": "SET",
+    "DFFNR": "RESET",
+    "DFFNP": "PRESET",
+    "DFFNC": "CLEAR",
+}
+def dff(mod, cst, locations):
+    for ttyp in range(12, 17):
+        # iter causes the loop to not repeat the same locs per cls
+        locs = iter(locations[ttyp])
+        for cls in range(3):
+            for loc, typ, port in zip(locs, dffmap.keys(), dffmap.values()):
+                lutname = make_name("DUMMY", "LUT4")
+                lut = codegen.Primitive("LUT4", lutname)
+                lut.params["INIT"] = "16'hffff"
+                lut.portmap['F'] = lutname+"_F"
+                lut.portmap['I0'] = lutname+"_I0"
+                lut.portmap['I1'] = lutname+"_I1"
+                lut.portmap['I2'] = lutname+"_I2"
+                lut.portmap['I3'] = lutname+"_I3"
 
-def iob(mod, cst):
+                mod.wires.update(lut.portmap.values())
+                mod.primitives[lutname] = lut
+                name = make_name("DFF", typ)
+                dff = codegen.Primitive(typ, name)
+                dff.portmap['CLK'] = name+"_CLK"
+                dff.portmap['D'] = lutname+"_F"
+                dff.portmap['Q'] = name+"_Q"
+                if port:
+                    dff.portmap[port] = name+"_"+port
+                mod.wires.update(dff.portmap.values())
+                mod.primitives[name] = dff
+
+                row = loc[0]+1
+                col = loc[1]+1
+                cst.cells[lutname] = f"R{row}C{col}[{cls}]"
+                cst.cells[name] = f"R{row}C{col}[{cls}]"
+
+def iob(mod, cst, loc):
     iobmap = {
         "IBUF": {"wires": ["O"], "inputs": ["I"]},
         "OBUF": {"wires": ["I"], "outputs": ["O"]},
@@ -146,27 +166,31 @@ def run_pnr(mod, constr):
             input()
             return None
 
-fuzzers = [dff, iob]
+fuzzers = [dff]
 
 if __name__ == "__main__":
     with open(gowinhome + "/IDE/share/device/GW1NR-9/GW1NR-9.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
+
+    db = chipdb.from_fse(fse)
 
     mod = codegen.Module()
     cst = codegen.Constraints()
     locations = {}
     for row, dat in enumerate(fse['header']['grid'][61]):
         for col, typ in enumerate(dat):
-            locations.setdefault(typ, []).append((row, col, typ))
+            locations.setdefault(typ, []).append((row, col))
 
     for fz in fuzzers:
-        fz(mod, cst)
+        fz(mod, cst, locations)
 
     bitmap, posp = run_pnr(mod, cst)
+    type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
     #bitmap = bslib.read_bitstream("empty.fs")[0]
     #posp = []
     bm = gowin_unpack.tile_bitmap(fse, bitmap)
     for cst_type, name, *info in posp:
+        bel_type, cell_type = type_re.match(name).groups()
         if cst_type == "cst":
             row, col, cls, lut = info
             print(name, row, col, cls, lut)
@@ -192,38 +216,29 @@ if __name__ == "__main__":
         idx = (row, col, typ)
 
         tile = bm[idx]
-        td = gowin_unpack.parse_tile(fse, typ, tile)
-        print(td)
-        #print(gowin_unpack.parse_wires(td))
-        #print(gowin_unpack.parse_luts(td))
         #for bitrow in tile:
         #    print(*bitrow, sep='')
-        #fuses = gowin_unpack.scan_fuses(fse, typ, tile)
-        #print("Fuses:", fuses)
-        #gowin_unpack.scan_tables(fse, typ, fuses)
+
+        rows, cols = np.where(tile==1)
+        loc = list(zip(rows, cols))
+        print(cell_type, loc)
+
+        if bel_type == "DUMMY":
+            continue
+        elif bel_type == "DFF":
+            for i in range(2): # 2 DFF per CLS
+                bel = db.grid[row][col].bels.setdefault(f"DFF{cls}", chipdb.Bel())
+                bel.modes[cell_type] = loc
+                bel.portmap = {
+                    # D inputs hardwired to LUT F
+                    'Q': chipdb.Wire(f"Q{cls*2+i}"),
+                    'CLK': chipdb.Wire(f"CLK{cls}"),
+                    'LSR': chipdb.Wire(f"LSR{cls}"), # set/reset
+                    'CE': chipdb.Wire(f"CE{cls}"), # clock enable
+                }
+        else:
+            raise ValueError(f"Type {bel_type} not handled")
 
     # corner tiles for bank enable
     print("### CORNER TILES ###")
-    height = len(fse['header']['grid'][61])
-    width = len(fse['header']['grid'][61][0])
-    for row in [0, height-1]:
-        for col in [0, width-1]:
-            typ = fse['header']['grid'][61][row][col]
-            idx = (row, col, typ)
-            print(idx)
-
-            try:
-                tile = bm[idx]
-            except KeyError:
-                continue
-            td = gowin_unpack.parse_tile(fse, typ, tile)
-            #print(td)
-            #print(gowin_unpack.parse_wires(td))
-            #print(gowin_unpack.parse_luts(td))
-            #for bitrow in tile:
-            #    print(*bitrow, sep='')
-            fuses = gowin_unpack.scan_fuses(fse, typ, tile)
-            print("Fuses:", fuses)
-            gowin_unpack.scan_tables(fse, typ, fuses)
-
-
+    # TODO
