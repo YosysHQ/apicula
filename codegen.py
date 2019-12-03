@@ -9,6 +9,16 @@ class Module:
         self.assigns = []
         self.primitives = {}
 
+    def __add__(self, other):
+        m = Module()
+        m.inputs = self.inputs | other.inputs
+        m.outputs = self.outputs | other.outputs
+        m.inouts = self.inouts | other.inouts
+        m.wires = self.wires | other.wires
+        m.assigns = self.assigns + other.assigns
+        m.primitives = {**self.primitives, **other.primitives}
+        return m
+
     def write(self, f):
         f.write("module top(")
         first = True
@@ -63,6 +73,12 @@ class Constraints:
     def __init__(self):
         self.cells = {}
         self.ports = {}
+
+    def __add__(self, other):
+        cst = Constraints()
+        cst.cells = {**self.cells, **other.cells}
+        cst.ports = {**self.ports, **other.ports}
+        return cst
 
     def write(self, f):
         for key, val in self.cells.items():
