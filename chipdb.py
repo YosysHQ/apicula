@@ -132,3 +132,27 @@ def from_fse(fse):
 
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     return dev
+
+def dat_portmap(dat, dev):
+    for row in dev.grid:
+        for tile in row:
+            for name, bel in tile.bels.items():
+                if bel.portmap: continue
+                if name.startswith("IOB"):
+                    if len(tile.bels) > 2:
+                        idx = ord(name[-1]) - ord('A')
+                        inp = wirenames[dat['IobufIns'][idx]]
+                        bel.portmap['O'] = Wire(inp)
+                        out = wirenames[dat['IobufOuts'][idx]]
+                        bel.portmap['I'] = Wire(out)
+                        oe = wirenames[dat['IobufOes'][idx]]
+                        bel.portmap['OE'] = Wire(oe)
+                    else:
+                        pin = name[-1]
+                        inp = wirenames[dat[f'Iobuf{pin}Out']]
+                        bel.portmap['O'] = Wire(inp)
+                        out = wirenames[dat[f'Iobuf{pin}In']]
+                        bel.portmap['I'] = Wire(out)
+                        oe = wirenames[dat[f'Iobuf{pin}OE']]
+                        bel.portmap['OE'] = Wire(oe)
+

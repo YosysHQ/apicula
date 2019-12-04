@@ -9,12 +9,15 @@ from warnings import warn
 from math import factorial
 import numpy as np
 from multiprocessing.dummy import Pool
+import pickle
 
 import codegen
 import bslib
 import pindef
 import fuse_h4x
+#TODO proper API
 #import dat19_h4x
+import json
 import chipdb
 
 import sys, pdb
@@ -219,11 +222,14 @@ if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
 
+    with open("dat.json") as f:
+        dat = json.load(f)
+
     db = chipdb.from_fse(fse)
 
     locations = {}
-    for row, dat in enumerate(fse['header']['grid'][61]):
-        for col, typ in enumerate(dat):
+    for row, row_dat in enumerate(fse['header']['grid'][61]):
+        for col, typ in enumerate(row_dat):
             locations.setdefault(typ, []).append((row, col))
 
     pin_names = pindef.get_locs(device, params['package'], True, params['header'])
@@ -342,4 +348,7 @@ if __name__ == "__main__":
             bel = db.grid[row][col].bels.setdefault("BANK", chipdb.Bel())
             #TODO fuzz modes
             bel.modes.setdefault("DEFAULT", set()).update(loc)
-    breakpoint()
+
+    chipdb.dat_portmap(dat, db)
+    with open(f"{device}.pickle", 'wb') as f:
+        pickle.dump(db, f)
