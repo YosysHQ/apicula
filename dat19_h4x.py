@@ -1,7 +1,16 @@
+import os
 import sys
 import json
 
-with open(sys.argv[1], 'rb') as f:
+gowinhome = os.getenv("GOWINHOME")
+if not gowinhome:
+    raise "GOWINHOME not set"
+
+device = os.getenv("DEVICE")
+if not device:
+    raise "DEVICE not set"
+
+with open(f"{gowinhome}/IDE/share/device/{device}/{device}.dat", 'rb') as f:
     d = f.read()
 
 data = {}

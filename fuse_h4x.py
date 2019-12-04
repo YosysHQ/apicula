@@ -147,7 +147,7 @@ def tile_bitmap(d, bitmap, empty=False):
     for idx, row in enumerate(tiles):
         x=0
         for jdx, typ in enumerate(row):
-            #if typ==12: pdb.set_trace()
+            #if typ==87: pdb.set_trace()
             td = d[typ]
             w = td['width']
             h = td['height']

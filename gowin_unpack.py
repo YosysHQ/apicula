@@ -9,8 +9,6 @@ import codegen
 from bslib import read_bitstream
 from wirenames import wirenames
 
-import pdb
-
 def parse_tile(d, ttyp, tile):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
@@ -26,6 +24,7 @@ def parse_tile(d, ttyp, tile):
                     idx = tuple(abs(attr) for attr in row[:start])
                     items.setdefault(idx, {}).update(coords)
 
+                #print(items)
                 for idx, item in items.items():
                     test = [tile[loc[0]][loc[1]] == val
                             for loc, val in item.items()]
@@ -63,7 +62,7 @@ def scan_tables(d, tiletyp, fuses):
     return res
 
 def reduce_rows(rows, fuses, start=16, tries=1000):
-    rowmap = {frozenset(iv[:iv.index(0)]): frozenset(iv[start:(iv+[-1]).index(-1)]) for iv in rows}
+    rowmap = {frozenset(iv[:iv.index(0)]): frozenset(iv[start:(list(iv)+[-1]).index(-1)]) for iv in rows}
     features = {i for s in rowmap.keys() for i in s}
     for _ in range(tries):
         feat = random.sample(features, 1)[0]
@@ -134,7 +133,7 @@ def parse_dffs(tiledata):
         return [None, None, None]
 
     fuses = [d and frozenset(f[0] for f in d) for d in data]
-    print(fuses)
+    #print(fuses)
 
     dff_types = {
         frozenset([20, 21]): 'DFF',
@@ -156,12 +155,26 @@ def parse_iob(tiledata):
         data = [
             tiledata['longval'].get(23),
             tiledata['longval'].get(24),
+            # tile 86 and 87 on GW1N-1 have 10 pins
+            tiledata['longval'].get(40),
+            tiledata['longval'].get(41),
+            tiledata['longval'].get(42),
+            tiledata['longval'].get(43),
+            tiledata['longval'].get(44),
+            tiledata['longval'].get(45),
+            tiledata['longval'].get(46),
+            tiledata['longval'].get(47),
         ]
     except KeyError:
-        return [None, None]
+        return []
 
     fuses = [d and frozenset(f[0] for f in d) for d in data]
-    print(fuses)
+
+    print('IOB', fuses)
+    for d in data:
+        if d != None:
+            print(reduce_rows(d, {f for row in d for f in row[16:]}))
+
 
     iob_types = {
         frozenset([64, 47, 48, 49, 30]): 'IBUF',
@@ -343,12 +356,12 @@ if __name__ == "__main__":
     for idx, t in bm.items():
         row, col, typ = idx
         #if typ != 17: continue
-        print(idx)
+        #print(idx)
         td = parse_tile(d, typ, t)
-        print(td.keys())
+        #print(td.keys())
         #print(parse_wires(td))
         #print(parse_luts(td))
-        print(parse_iob(td))
+        parse_iob(td)
         #for bitrow in t:
         #    print(*bitrow, sep='')
         #fuses = scan_fuses(d, typ, t)

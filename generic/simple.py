@@ -12,10 +12,14 @@ gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise "GOWINHOME not set"
 
+dev = os.getenv("DEVICE")
+if not dev:
+    raise "DEVICE not set"
+
 with open("../dat.json") as f:
     data = json.load(f)
 
-with open(gowinhome+'/IDE/share/device/GW1NR-9/GW1NR-9.fse', 'rb') as f:
+with open(gowinhome+f'/IDE/share/device/{dev}/{dev}.fse', 'rb') as f:
     fse = fuse.readFse(f)
 
 grid = fse['header']['grid'][61]
@@ -90,7 +94,7 @@ for row, rowdata in enumerate(grid, 1):
                 ctx.addBelOutput(bel=belname, name="Q", wire=qname)
                 ctx.addBelOutput(bel=belname, name="F", wire=fname)
 
-        elif ttyp in {52, 53, 58, 63, 64, 65, 66}:
+        elif ttyp in {52, 53, 58, 63, 64, 65, 66, 91, 92}:
             for z, side in enumerate(['A', 'B']):
                 belname = f"R{row}C{col}_IOB{z}"
                 inp = wirenames[data[f"Iobuf{side}In"]]

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union
 import fuse_h4x as fuse
 from wirenames import wirenames
 import re
@@ -20,7 +20,7 @@ class Bel:
     """Respresents a Basic ELement
     with the specified modes mapped to bits
     and the specified portmap"""
-    modes: Dict[Union[int, str], List[Coord]] = field(default_factory=dict)
+    modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     portmap: Dict[str, Wire] = field(default_factory=dict)
 
 @dataclass
@@ -30,7 +30,7 @@ class Tile:
     width: int
     height: int
     # a mapping from source wire to bit coordinates
-    pips: Dict[Tuple[Wire, Wire], List[Coord]] = field(default_factory=dict)
+    pips: Dict[Tuple[Wire, Wire], Set[Coord]] = field(default_factory=dict)
     # a mapping from bel type to bel
     bels: Dict[str, Bel] = field(default_factory=dict)
 
@@ -81,7 +81,7 @@ def unpad(fuses, pad=-1):
 def fse_pips(fse, ttyp):
     pips = {}
     for srcid, destid, *fuses in fse[ttyp]['wire'][2]:
-        fuses = [fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)]
+        fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
         if srcid < 0:
             fuses = []
             srcid = -srcid
@@ -105,7 +105,7 @@ def fse_luts(fse, ttyp):
     for lutn, bit, *fuses in data:
         coord = fuse.fuse_lookup(fse, ttyp, fuses[0])
         bel = luts.setdefault(f"LUT{lutn}", Bel())
-        bel.modes[bit] = [coord]
+        bel.modes[bit] = {coord}
 
     # dicts are in insertion order
     for num, lut in enumerate(luts.values()):

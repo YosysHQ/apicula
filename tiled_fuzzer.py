@@ -14,7 +14,7 @@ import codegen
 import bslib
 import pindef
 import fuse_h4x
-import gowin_unpack
+#import dat19_h4x
 import chipdb
 
 import sys, pdb
@@ -216,7 +216,7 @@ def run_pnr(mod, constr):
             return None, None
 
 if __name__ == "__main__":
-    with open(gowinhome + f"/IDE/share/device/{device}/{device}.fse", 'rb') as f:
+    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
 
     db = chipdb.from_fse(fse)
@@ -257,12 +257,14 @@ if __name__ == "__main__":
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
-
+    empty, posp = run_pnr(codegen.Module(), codegen.Constraints())
+    empty_bm = fuse_h4x.tile_bitmap(fse, empty, True)
+    print(empty_bm)
     p = Pool()
     pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs))
 
     for bitmap, posp in pnr_res:
-        bm = gowin_unpack.tile_bitmap(fse, bitmap)
+        bm = fuse_h4x.tile_bitmap(fse, bitmap)
         for cst_type, name, *info in posp:
             bel_type, cell_type = type_re.match(name).groups()
             if cst_type == "cst":
@@ -294,7 +296,7 @@ if __name__ == "__main__":
                 print(*bitrow, sep='')
 
             rows, cols = np.where(tile==1)
-            loc = list(zip(rows, cols))
+            loc = set(zip(rows, cols))
             print(cell_type, loc)
 
             if bel_type == "DUMMY":
@@ -320,3 +322,24 @@ if __name__ == "__main__":
         # corner tiles for bank enable
         print("### CORNER TILES ###")
         # TODO
+        corners = [
+            (0, 0, fse['header']['grid'][61][0][0]),
+            (0, db.cols-1, fse['header']['grid'][61][0][-1]),
+            (db.rows-1, 0, fse['header']['grid'][61][-1][0]),
+            (db.rows-1, db.cols-1, fse['header']['grid'][61][-1][-1]),
+        ]
+        for idx in corners:
+            row, col, typ = idx
+            try:
+                empty = empty_bm[idx]
+                tile = bm[idx]
+            except KeyError:
+                continue
+            diff = empty ^ tile
+            rows, cols = np.where(diff==1)
+            loc = set(zip(rows, cols))
+            print(idx, loc)
+            bel = db.grid[row][col].bels.setdefault("BANK", chipdb.Bel())
+            #TODO fuzz modes
+            bel.modes.setdefault("DEFAULT", set()).update(loc)
+    breakpoint()

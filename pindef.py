@@ -18,6 +18,7 @@ def get_package(series, package, special_pins, header):
     df = df[df['Function']=="I/O"]
     df = df[df["Configuration Function"] != "RECONFIG_N"] # can't be output
     df = df[df["Configuration Function"] != "JTAGSEL_N"] # dedicated pin
+    df = df[df["Configuration Function"] != "JTAGSEL_N/LPLL_T_in"] # whack-a-mole
     if not special_pins:
         df = df[df["Configuration Function"].isna()]
     return df
