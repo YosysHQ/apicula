@@ -10,11 +10,11 @@ import fuse_h4x as fuse
 
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
-    raise "GOWINHOME not set"
+    raise Exception("GOWINHOME not set")
 
 dev = os.getenv("DEVICE")
 if not dev:
-    raise "DEVICE not set"
+    raise Exception("DEVICE not set")
 
 with open("../dat.json") as f:
     data = json.load(f)

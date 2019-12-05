@@ -24,11 +24,11 @@ import sys, pdb
 
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
-    raise "GOWINHOME not set"
+    raise Exception("GOWINHOME not set")
 
 device = os.getenv("DEVICE")
 if not device:
-    raise "DEVICE not set"
+    raise Exception("DEVICE not set")
 
 params = {
     "GW1NR-9": {

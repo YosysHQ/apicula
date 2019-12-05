@@ -22,7 +22,7 @@ import sys, pdb
 
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
-    raise "GOWINHOME not set"
+    raise Exception("GOWINHOME not set")
 
 def np_to_vector(array):
     return "{}'b{}".format(

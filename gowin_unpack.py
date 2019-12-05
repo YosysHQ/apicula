@@ -1,190 +1,45 @@
 import sys
+import os
 import re
 import random
 import numpy as np
 from itertools import chain, count
-import fuse_h4x as fse
-from fuse_h4x import fuse_lookup, tile_bitmap
+import pickle
 import codegen
+import chipdb
 from bslib import read_bitstream
 from wirenames import wirenames
 
-def parse_tile(d, ttyp, tile):
-    w = d[ttyp]['width']
-    h = d[ttyp]['height']
-    res = {}
-    for start, table in [(2, 'shortval'), (2, 'wire'), (16, 'longval'),
-                         (1, 'longfuse'), (0, 'const')]:
-        if table in d[ttyp]: # skip missing entries
-            for subtyp, tablerows in d[ttyp][table].items():
-                items = {}
-                for row in tablerows:
-                    pos = row[0] > 0
-                    coords = {(fuse_lookup(d, ttyp, f), pos) for f in row[start:] if f > 0}
-                    idx = tuple(abs(attr) for attr in row[:start])
-                    items.setdefault(idx, {}).update(coords)
+device = os.getenv("DEVICE")
+if not device:
+    raise Exception("DEVICE not set")
 
-                #print(items)
-                for idx, item in items.items():
-                    test = [tile[loc[0]][loc[1]] == val
-                            for loc, val in item.items()]
-                    if all(test):
-                        row = idx + tuple(item.keys())
-                        res.setdefault(table, {}).setdefault(subtyp, []).append(row)
+def parse_tile(tiledata, tile):
+    bels = {}
+    for name, bel in tiledata.bels.items():
+        for flag, bits in bel.flags.items():
+            used_bits = {tile[row][col] for row, col in bits}
+            if all(used_bits):
+                bels.setdefault(name, set()).add(flag)
+        mode_bits = {(row, col)
+                     for row, col in bel.mode_bits
+                     if tile[row][col] == 1}
+        for mode, bits in bel.modes.items():
+            if bits == mode_bits:
+                bels.setdefault(name, set()).add(mode)
 
-    return res
+    pips = {}
+    for dest, srcs in tiledata.pips.items():
+        pip_bits = set().union(*srcs.values())
+        used_bits = {(row, col)
+                     for row, col in pip_bits
+                     if tile[row][col] == 1}
+        for src, bits in srcs.items():
+            if bits == used_bits:
+                pips[dest] = src
 
-def scan_fuses(d, ttyp, tile):
-    w = d[ttyp]['width']
-    h = d[ttyp]['height']
-    fuses = []
-    rows, cols = np.where(tile==1)
-    for row, col in zip(rows, cols):
-        # ripe for optimization
-        for fnum, fuse in enumerate(d['header']['fuse'][1]):
-            num = fuse[ttyp]
-            frow = num // 100
-            fcol = num % 100
-            if frow == row and fcol == col and fnum > 100:
-                fuses.append(fnum)
-    return set(fuses)
+    return bels, pips
 
-def scan_tables(d, tiletyp, fuses):
-    res = []
-    for tname, tables in d[tiletyp].items():
-        if tname in {"width", "height"}: continue
-        for ttyp, table in tables.items():
-            for row in table:
-                row_fuses = fuses.intersection(row)
-                if row_fuses:
-                    print(f"fuses {row_fuses} found in {tname}({ttyp}): {row}")
-                    res.append(row)
-    return res
-
-def reduce_rows(rows, fuses, start=16, tries=1000):
-    rowmap = {frozenset(iv[:iv.index(0)]): frozenset(iv[start:(list(iv)+[-1]).index(-1)]) for iv in rows}
-    features = {i for s in rowmap.keys() for i in s}
-    for _ in range(tries):
-        feat = random.sample(features, 1)[0]
-        features.remove(feat)
-        rem_fuses = set()
-        for k, v in rowmap.items():
-            if k & features:
-                rem_fuses.update(v)
-        if rem_fuses != fuses:
-            features.add(feat)
-    return features
-
-
-def parse_wires(tiledata):
-    excl = set()
-    wires = []
-    try:
-        data = [
-            tiledata['wire'].get(2),
-            tiledata['wire'].get(38),
-            tiledata['wire'].get(48),
-        ]
-    except KeyError:
-        return wires
-
-    for table in data:
-        if table:
-            # put wires with more fuses later
-            # so they overwrite smaller subsets
-            table.sort(key=len)
-
-            for w1, w2, *fuses in table:
-                if w1 < 0:
-                    #print('neg', wirenames[-w1], wirenames[w2], fuses)
-                    excl.add((-w1, w2))
-                elif w1 > 1000:
-                    #print('1k1', wirenames[w1-1000], wirenames[w2], fuses)
-                    wires.append((wirenames[w1-1000], wirenames[w2]))
-                elif w2 > 1000:
-                    #print('1k2', wirenames[w1], wirenames[w2-1000], fuses)
-                    wires.append((wirenames[w1], wirenames[w2-1000]))
-                elif (w1, w2) not in excl:
-                    #print('pos', wirenames[w1], wirenames[w2], fuses)
-                    wires.append((wirenames[w1], wirenames[w2]))
-    return wires
-
-def parse_luts(tiledata):
-    excl = set()
-    luts = {}
-    try:
-        data = tiledata['shortval'][5]
-    except KeyError:
-        return luts
-
-    for lut, bit, *fuses in data:
-        luts[lut] = luts.get(lut, 0xffff) & ~(1<<bit)
-
-    return luts
-
-def parse_dffs(tiledata):
-    try:
-        data = [
-            tiledata['shortval'].get(25),
-            tiledata['shortval'].get(26),
-            tiledata['shortval'].get(27),
-        ]
-    except KeyError:
-        return [None, None, None]
-
-    fuses = [d and frozenset(f[0] for f in d) for d in data]
-    #print(fuses)
-
-    dff_types = {
-        frozenset([20, 21]): 'DFF',
-        frozenset([21, 7]): 'DFFS',
-        frozenset([20, 21, 7]): 'DFFR',
-        frozenset([5, 21, 7]): 'DFFP',
-        frozenset([5, 20, 21, 7]): 'DFFC',
-        frozenset([3, 4, 20, 21]): 'DFFN',
-        frozenset([3, 4, 21, 7]): 'DFFNS',
-        frozenset([3, 4, 20, 21, 7]): 'DFFNR',
-        frozenset([3, 4, 5, 21, 7]): 'DFFNP',
-        frozenset([3, 4, 5, 20, 21, 7]): 'DFFNC',
-    }
-   
-    return [dff_types.get(f) for f in fuses]
-
-def parse_iob(tiledata):
-    try:
-        data = [
-            tiledata['longval'].get(23),
-            tiledata['longval'].get(24),
-            # tile 86 and 87 on GW1N-1 have 10 pins
-            tiledata['longval'].get(40),
-            tiledata['longval'].get(41),
-            tiledata['longval'].get(42),
-            tiledata['longval'].get(43),
-            tiledata['longval'].get(44),
-            tiledata['longval'].get(45),
-            tiledata['longval'].get(46),
-            tiledata['longval'].get(47),
-        ]
-    except KeyError:
-        return []
-
-    fuses = [d and frozenset(f[0] for f in d) for d in data]
-
-    print('IOB', fuses)
-    for d in data:
-        if d != None:
-            print(reduce_rows(d, {f for row in d for f in row[16:]}))
-
-
-    iob_types = {
-        frozenset([64, 47, 48, 49, 30]): 'IBUF',
-        frozenset([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 26, 30,
-                   47, 48, 49, 61, 63, 64, 66, 67, 68, 81]): 'OBUF',
-        # same as TBUF with unused input?
-        frozenset([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 47, 48, 49, 26, 30]): 'IOBUF',
-    }
-   
-    return [iob_types.get(f) for f in fuses]
 
 def wire2global(row, col, fse, name):
     width = len(fse['header']['grid'][61][0])
@@ -348,25 +203,22 @@ def tile2verilog(row, col, td, mod, fse):
 
 
 if __name__ == "__main__":
-    with open(sys.argv[1], 'rb') as f:
-        d = fse.readFse(f)
-    bitmap = read_bitstream(sys.argv[2])[0]
-    bm = tile_bitmap(d, bitmap)
+    with open(f"{device}.pickle", 'rb') as f:
+        db = pickle.load(f)
+    bitmap = read_bitstream(sys.argv[1])[0]
+    bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
     for idx, t in bm.items():
-        row, col, typ = idx
-        #if typ != 17: continue
-        #print(idx)
-        td = parse_tile(d, typ, t)
-        #print(td.keys())
-        #print(parse_wires(td))
-        #print(parse_luts(td))
-        parse_iob(td)
+        row, col = idx
+        dbtile = db.grid[row][col]
+        #if idx == (10, 9): breakpoint()
+        print(idx)
+        bels, pips = parse_tile(dbtile, t)
+        print(bels)
+        #print(pips)
         #for bitrow in t:
         #    print(*bitrow, sep='')
-        #fuses = scan_fuses(d, typ, t)
-        #scan_tables(d, typ, fuses)
-        tile2verilog(row, col, td, mod, d)
+        #tile2verilog(row, col, td, mod, d)
     with open("unpack.v", 'w') as f:
         mod.write(f)
 

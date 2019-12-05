@@ -20,8 +20,15 @@ class Bel:
     """Respresents a Basic ELement
     with the specified modes mapped to bits
     and the specified portmap"""
+    # there can be zero or more flags
+    flags: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
+    # there can be only one mode, modes are exclusive
     modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     portmap: Dict[str, Wire] = field(default_factory=dict)
+
+    @property
+    def mode_bits(self):
+        return set().union(*self.modes.values())
 
 @dataclass
 class Tile:
@@ -30,7 +37,7 @@ class Tile:
     width: int
     height: int
     # a mapping from source wire to bit coordinates
-    pips: Dict[Tuple[Wire, Wire], Set[Coord]] = field(default_factory=dict)
+    pips: Dict[Wire, Dict[Wire, Set[Coord]]] = field(default_factory=dict)
     # a mapping from bel type to bel
     bels: Dict[str, Bel] = field(default_factory=dict)
 
@@ -83,7 +90,7 @@ def fse_pips(fse, ttyp):
     for srcid, destid, *fuses in fse[ttyp]['wire'][2]:
         fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
         if srcid < 0:
-            fuses = []
+            fuses = set()
             srcid = -srcid
         if srcid > 1000:
             srcid -= 1000 # what does it mean?
@@ -91,7 +98,7 @@ def fse_pips(fse, ttyp):
             destid -= 1000 # what does it mean?
         src = id2wire(srcid)
         dest = id2wire(destid)
-        pips[(src, dest)] = fuses
+        pips.setdefault(dest, {})[src] = fuses
 
     return pips
 
@@ -105,7 +112,7 @@ def fse_luts(fse, ttyp):
     for lutn, bit, *fuses in data:
         coord = fuse.fuse_lookup(fse, ttyp, fuses[0])
         bel = luts.setdefault(f"LUT{lutn}", Bel())
-        bel.modes[bit] = {coord}
+        bel.flags[bit] = {coord}
 
     # dicts are in insertion order
     for num, lut in enumerate(luts.values()):
@@ -156,3 +163,18 @@ def dat_portmap(dat, dev):
                         oe = wirenames[dat[f'Iobuf{pin}OE']]
                         bel.portmap['OE'] = Wire(oe)
 
+def tile_bitmap(dev, bitmap, empty=False):
+    res = {}
+    y = 0
+    for idx, row in enumerate(dev.grid):
+        x=0
+        for jdx, td in enumerate(row):
+            w = td.width
+            h = td.height
+            tile = bitmap[y:y+h,x:x+w]
+            if tile.any() or empty:
+                res[(idx, jdx)] = tile
+            x+=w
+        y+=h
+
+    return res

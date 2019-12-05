@@ -177,6 +177,72 @@ def fuse_bitmap(d, bitmap):
 
     return res
 
+def parse_tile(d, ttyp, tile):
+    w = d[ttyp]['width']
+    h = d[ttyp]['height']
+    res = {}
+    for start, table in [(2, 'shortval'), (2, 'wire'), (16, 'longval'),
+                         (1, 'longfuse'), (0, 'const')]:
+        if table in d[ttyp]: # skip missing entries
+            for subtyp, tablerows in d[ttyp][table].items():
+                items = {}
+                for row in tablerows:
+                    pos = row[0] > 0
+                    coords = {(fuse_lookup(d, ttyp, f), pos) for f in row[start:] if f > 0}
+                    idx = tuple(abs(attr) for attr in row[:start])
+                    items.setdefault(idx, {}).update(coords)
+
+                #print(items)
+                for idx, item in items.items():
+                    test = [tile[loc[0]][loc[1]] == val
+                            for loc, val in item.items()]
+                    if all(test):
+                        row = idx + tuple(item.keys())
+                        res.setdefault(table, {}).setdefault(subtyp, []).append(row)
+
+    return res
+
+def scan_fuses(d, ttyp, tile):
+    w = d[ttyp]['width']
+    h = d[ttyp]['height']
+    fuses = []
+    rows, cols = np.where(tile==1)
+    for row, col in zip(rows, cols):
+        # ripe for optimization
+        for fnum, fuse in enumerate(d['header']['fuse'][1]):
+            num = fuse[ttyp]
+            frow = num // 100
+            fcol = num % 100
+            if frow == row and fcol == col and fnum > 100:
+                fuses.append(fnum)
+    return set(fuses)
+
+def scan_tables(d, tiletyp, fuses):
+    res = []
+    for tname, tables in d[tiletyp].items():
+        if tname in {"width", "height"}: continue
+        for ttyp, table in tables.items():
+            for row in table:
+                row_fuses = fuses.intersection(row)
+                if row_fuses:
+                    print(f"fuses {row_fuses} found in {tname}({ttyp}): {row}")
+                    res.append(row)
+    return res
+
+def reduce_rows(rows, fuses, start=16, tries=1000):
+    rowmap = {frozenset(iv[:iv.index(0)]): frozenset(iv[start:(list(iv)+[-1]).index(-1)]) for iv in rows}
+    features = {i for s in rowmap.keys() for i in s}
+    for _ in range(tries):
+        feat = random.sample(features, 1)[0]
+        features.remove(feat)
+        rem_fuses = set()
+        for k, v in rowmap.items():
+            if k & features:
+                rem_fuses.update(v)
+        if rem_fuses != fuses:
+            features.add(feat)
+    return features
+
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         d = readFse(f)
