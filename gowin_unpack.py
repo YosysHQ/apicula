@@ -211,7 +211,10 @@ if __name__ == "__main__":
     for idx, t in bm.items():
         row, col = idx
         dbtile = db.grid[row][col]
-        #if idx == (10, 9): breakpoint()
+        #if idx == (10, 9):
+        #    from fuse_h4x import *
+        #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
+        #    breakpoint()
         print(idx)
         bels, pips = parse_tile(dbtile, t)
         print(bels)

@@ -38,10 +38,10 @@ params = {
         "partnumber": "GW1NR-LV9QN88C6/I5",
     },
     "GW1N-1": {
-        "package": "LQ144",
+        "package": "QN48",
         "header": 0,
-        "device": "GW1N-1-LQFP144-6",
-        "partnumber": "GW1N-LV1LQ144C6/I5",
+        "device": "GW1N-1-QFN48-6",
+        "partnumber": "GW1N-LV1QN48C6/I5",
     },
 }[device]
 
@@ -64,19 +64,20 @@ dffmap = {
     "DFFNC": "CLEAR",
 }
 def dff(locations):
-    for ttyp in range(12, 17):
+    for ttyp in range(12, 17): # for each tile type
         mod = codegen.Module()
         cst = codegen.Constraints()
         try:
+            # get all tiles of this type
             # iter causes the loop to not repeat the same locs per cls
             locs = iter(locations[ttyp])
         except KeyError:
             continue
 
-        for cls in range(3):
-            for typ, port in dffmap.items():
+        for cls in range(3): # for each cls
+            for typ, port in dffmap.items(): # for each bel type
                 try:
-                    loc = next(locs)
+                    loc = next(locs) # get the next unused tile
                 except StopIteration:
                     yield ttyp, mod, cst
                     locs = iter(locations[ttyp])
@@ -114,24 +115,37 @@ def dff(locations):
 iobmap = {
     "IBUF": {"wires": ["O"], "inputs": ["I"]},
     "OBUF": {"wires": ["I"], "outputs": ["O"]},
-    "TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
+    #"TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
 def iob(locations):
-    for ttyp, pins in locations.items():
+    for ttyp, tiles in locations.items(): # for each tile of this type
         mod = codegen.Module()
         cst = codegen.Constraints()
-        for pin, names in pins.items():
-            locs = iter(names)
+        # get bels in this ttyp
+        bels = {name[-1] for loc in tiles.values() for name in loc}
+        locs = tiles.copy()
+        for pin in bels: # [A, B, C, D, ...]
             for typ, conn in iobmap.items():
-                try:
-                    loc = next(locs)
-                except StopIteration:
+                # find the next location that has pin
+                # or make a new module
+                for tile, names in locs.items():
+                    name = tile+pin
+                    if name in names:
+                        del locs[tile]
+                        loc = name
+                        break
+                else: # no usable tiles
                     yield ttyp, mod, cst
-                    locs = iter(names)
-                    loc = next(locs)
+                    locs = tiles.copy()
                     mod = codegen.Module()
                     cst = codegen.Constraints()
+                    for tile, names in locs.items():
+                        name = tile+pin
+                        if name in names:
+                            del locs[tile]
+                            loc = name
+                            break
 
                 name = make_name("IOB", typ)
                 iob = codegen.Primitive(typ, name)
@@ -160,8 +174,8 @@ def read_posp(fname):
             elif place:
                 name, side, num, pin = place.groups()
                 yield "place", name, side, int(num), pin
-            elif line and not line.startswith('//'):
-                print(line)
+            elif line.strip() and not line.startswith('//'):
+                raise Exception(line)
 
 
 def run_pnr(mod, constr):
@@ -243,7 +257,7 @@ if __name__ == "__main__":
         side, num, pin = pin_re.match(name).groups()
         ttyp = banks[side][int(num)-1]
         ttyp_pins = pin_locations.setdefault(ttyp, {})
-        ttyp_pins.setdefault(pin, []).append(name)
+        ttyp_pins.setdefault(name[:-1], set()).add(name)
 
     modmap = {}
     cstmap = {}
@@ -264,13 +278,14 @@ if __name__ == "__main__":
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
     empty, posp = run_pnr(codegen.Module(), codegen.Constraints())
-    empty_bm = fuse_h4x.tile_bitmap(fse, empty, True)
-    print(empty_bm)
+    #empty_bm = fuse_h4x.tile_bitmap(fse, empty, True)
     p = Pool()
     pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs))
 
     for bitmap, posp in pnr_res:
-        bm = fuse_h4x.tile_bitmap(fse, bitmap)
+        seen = {}
+        diff = bitmap ^ empty
+        bm = fuse_h4x.tile_bitmap(fse, diff)
         for cst_type, name, *info in posp:
             bel_type, cell_type = type_re.match(name).groups()
             if cst_type == "cst":
@@ -294,8 +309,17 @@ if __name__ == "__main__":
                     col = len(fse['header']['grid'][61][0])-1
                 print(name, row, col, side, num, pin)
 
+
             typ = fse['header']['grid'][61][row][col]
             idx = (row, col, typ)
+
+            # verify integrity
+            if bel_type != "DUMMY":
+                if (row, col) in seen:
+                    oldname = seen[(row, col)]
+                    raise Exception(f"Location {idx} used by {oldname} and {name}")
+                else:
+                    seen[(row, col)] = name
 
             tile = bm[idx]
             for bitrow in tile:
@@ -337,12 +361,10 @@ if __name__ == "__main__":
         for idx in corners:
             row, col, typ = idx
             try:
-                empty = empty_bm[idx]
                 tile = bm[idx]
             except KeyError:
                 continue
-            diff = empty ^ tile
-            rows, cols = np.where(diff==1)
+            rows, cols = np.where(tile==1)
             loc = set(zip(rows, cols))
             print(idx, loc)
             bel = db.grid[row][col].bels.setdefault("BANK", chipdb.Bel())
