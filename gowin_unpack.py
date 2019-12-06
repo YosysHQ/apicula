@@ -41,39 +41,31 @@ def parse_tile(tiledata, tile):
     return bels, pips
 
 
-def wire2global(row, col, fse, name):
-    width = len(fse['header']['grid'][61][0])
-    height = len(fse['header']['grid'][61])
-    if name.startswith("G") or name in {'VCC', 'VSS'}:
+def wire2global(row, col, db, wire):
+    if wire.name.startswith("G") or wire.name in {'VCC', 'VSS'}:
         # global wire
-        return name
+        return wire.name
 
-    m = re.match(r"([NESW])([128]\d)(\d)", name)
-    if not m:
-        # local wire
-        return f"R{row}C{col}_{name}"
-
-    # inter-tile wire
-    dirlut = {'N': (1, 0),
-              'E': (0, -1),
-              'S': (-1, 0),
-              'W': (0, 1)}
-    uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
+    m = re.match(r"([NESW])([128]\d)(\d)", wire.name)
+    if not m: # not an inter-tile wire
+        return f"R{row}C{col}_{wire.name}"
     direction, wire, segment = m.groups()
-    rootrow = row + dirlut[direction][0]*int(segment)
-    rootcol = col + dirlut[direction][1]*int(segment)
+
+    rootrow = row + wire.offset[0]
+    rootcol = col + wire.offset[1]
     # wires wrap around the edges
+    uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
     if rootrow < 1:
         rootrow = 1 - rootrow
         direction = uturnlut[direction]
     if rootcol < 1:
         rootcol = 1 - rootcol
         direction = uturnlut[direction]
-    if rootrow > height:
-        rootrow = 2*height+1 - rootrow
+    if rootrow > db.rows:
+        rootrow = 2*db.rows+1 - rootrow
         direction = uturnlut[direction]
-    if rootcol > width:
-        rootcol = 2*width+1 - rootcol
+    if rootcol > db.cols:
+        rootcol = 2*db.cols+1 - rootcol
         direction = uturnlut[direction]
     # map cross wires to their origin
     diaglut = {
@@ -89,106 +81,85 @@ def wire2global(row, col, fse, name):
     name = diaglut.get(direction+wire, direction+wire)
     return f"R{rootrow}C{rootcol}_{name}"
 
-def tile2verilog(row, col, td, mod, fse):
-    # fse is 0-based, floorplanner is 1-based
-    row += 1
-    col += 1
-    wires = parse_wires(td)
-    for src, dest in wires:
-        srcg = wire2global(row, col, fse, src)
-        destg = wire2global(row, col, fse, dest)
+
+dffmap = {
+    "DFF": None,
+    "DFFS": "SET",
+    "DFFR": "RESET",
+    "DFFP": "PRESET",
+    "DFFC": "CLEAR",
+    "DFFNS": "SET",
+    "DFFNR": "RESET",
+    "DFFNP": "PRESET",
+    "DFFNC": "CLEAR",
+}
+iobmap = {
+    "IBUF": {"wires": ["O"], "inputs": ["I"]},
+    "OBUF": {"wires": ["I"], "outputs": ["O"]},
+    "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
+}
+def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
+    # db is 0-based, floorplanner is 1-based
+    row = dbrow+1
+    col = dbcol+1
+    for dest, src in pips.items():
+        srcg = wire2global(row, col, db, src)
+        destg = wire2global(row, col, db, dest)
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    luts = parse_luts(td)
-    for idx, val in luts.items():
-        name = f"R{row}C{col}_LUT4_{idx}"
-        lut = codegen.Primitive("LUT4", name)
-        lut.params["INIT"] = f"16'b{val:016b}"
-        lut.portmap['F'] = f"R{row}C{col}_F{idx}"
-        lut.portmap['I0'] = f"R{row}C{col}_A{idx}"
-        lut.portmap['I1'] = f"R{row}C{col}_B{idx}"
-        lut.portmap['I2'] = f"R{row}C{col}_C{idx}"
-        lut.portmap['I3'] = f"R{row}C{col}_D{idx}"
-        mod.wires.update(lut.portmap.values())
-        mod.primitives[name] = lut
+    belre = re.compile(r"(IOB|LUT|DFF|BANK)(\w*)")
+    for bel, flags in bels.items():
+        typ, idx = belre.match(bel).groups()
 
-    dffs = parse_dffs(td)
-    dffmap = {
-        "DFF": None,
-        "DFFS": "SET",
-        "DFFR": "RESET",
-        "DFFP": "PRESET",
-        "DFFC": "CLEAR",
-        "DFFNS": "SET",
-        "DFFNR": "RESET",
-        "DFFNP": "PRESET",
-        "DFFNC": "CLEAR",
-    }
-    for idx, typ in enumerate(dffs):
-        #print(idx, typ)
-        if typ:
-            port = dffmap[typ]
-            lutidx = idx*2
-            name = f"R{row}C{col}_{typ}E_{idx}_A"
+        if typ == "LUT":
+            val = sum(1<<f for f in flags)
+            name = f"R{row}C{col}_LUT4_{idx}"
+            lut = codegen.Primitive("LUT4", name)
+            lut.params["INIT"] = f"16'b{val:016b}"
+            lut.portmap['F'] = f"R{row}C{col}_F{idx}"
+            lut.portmap['I0'] = f"R{row}C{col}_A{idx}"
+            lut.portmap['I1'] = f"R{row}C{col}_B{idx}"
+            lut.portmap['I2'] = f"R{row}C{col}_C{idx}"
+            lut.portmap['I3'] = f"R{row}C{col}_D{idx}"
+            mod.wires.update(lut.portmap.values())
+            mod.primitives[name] = lut
+        elif typ == "DFF":
+            kind, = flags # DFF only have one flag
+            idx = int(idx)
+            port = dffmap[kind]
+            name = f"R{row}C{col}_{typ}E_{idx}"
             dff = codegen.Primitive(typ+"E", name)
-            dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx}"
-            dff.portmap['D'] = f"R{row}C{col}_F{lutidx}"
-            dff.portmap['Q'] = f"R{row}C{col}_Q{lutidx}"
-            dff.portmap['CE'] = f"R{row}C{col}_CE{idx}"
+            dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx//2}"
+            dff.portmap['D'] = f"R{row}C{col}_F{idx}"
+            dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
+            dff.portmap['CE'] = f"R{row}C{col}_CE{idx//2}"
             if port:
-                dff.portmap[port] = f"R{row}C{col}_LSR{idx}"
+                dff.portmap[port] = f"R{row}C{col}_LSR{idx//2}"
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
 
-            lutidx = idx*2+1
-            name = f"R{row}C{col}_{typ}E_{idx}_B"
-            dff = codegen.Primitive(typ+"E", name)
-            dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx}"
-            dff.portmap['D'] = f"R{row}C{col}_F{lutidx}"
-            dff.portmap['Q'] = f"R{row}C{col}_Q{lutidx}"
-            dff.portmap['CE'] = f"R{row}C{col}_CE{idx}"
-            if port:
-                dff.portmap[port] = f"R{row}C{col}_LSR{idx}"
-            mod.wires.update(dff.portmap.values())
-            mod.primitives[name] = dff
+        elif typ == "IOB":
+            kind, = flags # IOB only have one flag
+            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+            name = f"R{row}C{col}_{kind}_{idx}"
+            wires = set(iobmap[kind]['wires'])
+            ports = set(chain.from_iterable(iobmap[kind].values())) - wires
 
-    iob = parse_iob(td)
-    iobmap = {
-        "IBUF": {"wires": ["O"], "inputs": ["I"]},
-        "OBUF": {"wires": ["I"], "outputs": ["O"]},
-        "TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
-        "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
-    }
-    portmap = {
-        ('I', 0): 'A0',
-        ('OEN', 0): 'B0',
-        ('O', 0): 'F6',
-        ('I', 1): 'D1',
-        ('OEN', 1): 'D5',
-        ('O', 1): 'Q6',
-    }
-    for idx, typ in enumerate(iob):
-        #print(idx, typ)
-        if typ:
-            name = f"R{row}C{col}_{typ}_{idx}"
-            wires = set(iobmap[typ]['wires'])
-            ports = set(chain.from_iterable(iobmap[typ].values())) - wires
-
-            iob = codegen.Primitive(typ, name)
+            iob = codegen.Primitive(kind, name)
 
             for port in wires:
-                wname = portmap[(port, idx)]
+                wname = portmap[port].name
                 iob.portmap[port] = f"R{row}C{col}_{wname}"
 
             for port in ports:
                 iob.portmap[port] = f"R{row}C{col}_{port}{idx}"
 
-            for wires in iobmap[typ]['wires']:
-                wnames = [f"R{row}C{col}_{portmap[(w, idx)]}" for w in wires]
+            for wires in iobmap[kind]['wires']:
+                wnames = [f"R{row}C{col}_{portmap[w].name}" for w in wires]
                 mod.wires.update(wnames)
             for direction in ['inputs', 'outputs', 'inouts']:
-                for wires in iobmap[typ].get(direction, []):
+                for wires in iobmap[kind].get(direction, []):
                     wnames = [f"R{row}C{col}_{w}{idx}" for w in wires]
                     getattr(mod, direction).update(wnames)
 
@@ -221,7 +192,7 @@ if __name__ == "__main__":
         #print(pips)
         #for bitrow in t:
         #    print(*bitrow, sep='')
-        #tile2verilog(row, col, td, mod, d)
+        tile2verilog(row, col, bels, pips, mod, db)
     with open("unpack.v", 'w') as f:
         mod.write(f)
 
