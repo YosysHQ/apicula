@@ -12,6 +12,7 @@ The latest Yosys and Nextpnr, installed with the generic backend.
 
 Python:
 * Numpy
+* Pandas
 * Pillow
 * crcmod
 
@@ -22,7 +23,7 @@ virtualenv env
 source env/bin/activate
 export GOWINHOME=/gowin/installation
 export DEVICE="GW1NR-9"
-pip install numpy pillow crcmod ipython
+pip install numpy pandas pillow crcmod ipython
 python dat19_h4x.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.dat
 # look at dat.json
 cd legacy/empty
@@ -135,6 +136,7 @@ So what needs to be done is to extract the JTAG commands used by the vendor tool
 * `example` a simple test program.
 * `fuse_h4x.py` a parser for vendor `.fse` files used in bitgen.
 * `fuzzer.py` a fuzzer for finding bit locations of various things, not based on vendor files.
+* `chipdb.py` a library for combining vendor and fuzzing data into a single chipDB
 * `generic` Python files for the Nextpnr generic target
   * `bitstream.py` writes `.fasm`(unused) and `.vm`/`.posp` (for vendor floorplanner).
   * `blinky.v` example program

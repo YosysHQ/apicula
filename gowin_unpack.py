@@ -46,10 +46,10 @@ def wire2global(row, col, db, wire):
         # global wire
         return wire.name
 
-    m = re.match(r"([NESW])([128]\d)(\d)", wire.name)
+    m = re.match(r"([NESW])([128]\d)", wire.name)
     if not m: # not an inter-tile wire
         return f"R{row}C{col}_{wire.name}"
-    direction, wire, segment = m.groups()
+    direction, num = m.groups()
 
     rootrow = row + wire.offset[0]
     rootcol = col + wire.offset[1]
@@ -78,7 +78,7 @@ def wire2global(row, col, db, wire):
         'S12': 'SN20',
         'N12': 'SN20',
     }
-    name = diaglut.get(direction+wire, direction+wire)
+    name = diaglut.get(direction+num, direction+num)
     return f"R{rootrow}C{rootcol}_{name}"
 
 
@@ -129,7 +129,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
             idx = int(idx)
             port = dffmap[kind]
             name = f"R{row}C{col}_{typ}E_{idx}"
-            dff = codegen.Primitive(typ+"E", name)
+            dff = codegen.Primitive(kind+"E", name)
             dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx//2}"
             dff.portmap['D'] = f"R{row}C{col}_F{idx}"
             dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
@@ -182,16 +182,16 @@ if __name__ == "__main__":
     for idx, t in bm.items():
         row, col = idx
         dbtile = db.grid[row][col]
-        #if idx == (10, 9):
-        #    from fuse_h4x import *
-        #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
-        #    breakpoint()
         print(idx)
         bels, pips = parse_tile(dbtile, t)
         print(bels)
         #print(pips)
         #for bitrow in t:
         #    print(*bitrow, sep='')
+        #if idx == (8, 7):
+        #    from fuse_h4x import *
+        #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
+        #    breakpoint()
         tile2verilog(row, col, bels, pips, mod, db)
     with open("unpack.v", 'w') as f:
         mod.write(f)
