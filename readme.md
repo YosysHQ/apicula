@@ -15,6 +15,7 @@ Python:
 * Pandas
 * Pillow
 * crcmod
+* xlrd
 
 ## Getting Started
 
@@ -23,8 +24,8 @@ virtualenv env
 source env/bin/activate
 export GOWINHOME=/gowin/installation
 export DEVICE="GW1NR-9"
-pip install numpy pandas pillow crcmod ipython
-python dat19_h4x.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.dat
+pip install numpy pandas pillow crcmod xlrd ipython
+python dat19_h4x.py
 # look at dat.json
 cd legacy/empty
 /gowin/installation/IDE/bin/gw_sh run.tcl
