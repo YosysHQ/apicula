@@ -149,9 +149,9 @@ def dat_portmap(dat, dev):
                     if len(tile.bels) > 2:
                         idx = ord(name[-1]) - ord('A')
                         inp = wirenames[dat['IobufIns'][idx]]
-                        bel.portmap['O'] = Wire(inp)
+                        bel.portmap['I'] = Wire(inp)
                         out = wirenames[dat['IobufOuts'][idx]]
-                        bel.portmap['I'] = Wire(out)
+                        bel.portmap['O'] = Wire(out)
                         oe = wirenames[dat['IobufOes'][idx]]
                         bel.portmap['OE'] = Wire(oe)
                     else:
