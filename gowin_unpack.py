@@ -14,7 +14,7 @@ device = os.getenv("DEVICE")
 if not device:
     raise Exception("DEVICE not set")
 
-def parse_tile(tiledata, tile):
+def parse_tile_(tiledata, tile):
     bels = {}
     for name, bel in tiledata.bels.items():
         for flag, bits in bel.flags.items():
@@ -140,7 +140,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
             mod.primitives[name] = dff
 
         elif typ == "IOB":
-            kind, = flags # IOB only have one flag
+            kind, = flags.intersection(iobmap.keys())
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
             name = f"R{row}C{col}_{kind}_{idx}"
             wires = set(iobmap[kind]['wires'])
@@ -183,15 +183,15 @@ if __name__ == "__main__":
         row, col = idx
         dbtile = db.grid[row][col]
         print(idx)
-        bels, pips = parse_tile(dbtile, t)
-        print(bels)
-        #print(pips)
         #for bitrow in t:
         #    print(*bitrow, sep='')
-        #if idx == (8, 7):
+        #if idx == (5, 0):
         #    from fuse_h4x import *
         #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
         #    breakpoint()
+        bels, pips = parse_tile_(dbtile, t)
+        print(bels)
+        #print(pips)
         tile2verilog(row, col, bels, pips, mod, db)
     with open("unpack.v", 'w') as f:
         mod.write(f)

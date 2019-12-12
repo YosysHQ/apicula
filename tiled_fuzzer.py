@@ -372,6 +372,7 @@ if __name__ == "__main__":
             bel.modes.setdefault("DEFAULT", set()).update(loc)
 
     chipdb.dat_portmap(dat, db)
+    chipdb.shared2flag(db)
     #TODO proper serialization format
     with open(f"{device}.pickle", 'wb') as f:
         pickle.dump(db, f)
