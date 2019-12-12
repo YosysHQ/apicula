@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union, ByteString
 import fuse_h4x as fuse
 from wirenames import wirenames
 import re
+import numpy as np
 
 # represents a row, column coordinate
 # can be either tiles or bits within tiles
@@ -45,6 +46,9 @@ class Tile:
 class Device:
     # a grid of tiles
     grid: List[List[Tile]] = field(default_factory=list)
+    cmd_hdr: List[ByteString] = field(default_factory=list)
+    cmd_ftr: List[ByteString] = field(default_factory=list)
+    template: np.ndarray = None
 
     @property
     def rows(self):

@@ -225,8 +225,8 @@ def run_pnr(mod, constr):
         subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
         #print(tmpdir); input()
         try:
-            return bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs")[0], \
-                   list(read_posp(tmpdir+"/impl/pnr/top.posp"))
+            return (*bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
+                   list(read_posp(tmpdir+"/impl/pnr/top.posp")))
         except FileNotFoundError:
             print(tmpdir)
             input()
@@ -277,12 +277,14 @@ if __name__ == "__main__":
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
-    empty, posp = run_pnr(codegen.Module(), codegen.Constraints())
-    #empty_bm = fuse_h4x.tile_bitmap(fse, empty, True)
+    empty, hdr, ftr, posp = run_pnr(codegen.Module(), codegen.Constraints())
+    db.cmd_hdr = hdr
+    db.cmd_ftr = ftr
+    db.template = empty
     p = Pool()
     pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs))
 
-    for bitmap, posp in pnr_res:
+    for bitmap, hdr, ftr, posp in pnr_res:
         seen = {}
         diff = bitmap ^ empty
         bm = fuse_h4x.tile_bitmap(fse, diff)
