@@ -6,7 +6,7 @@ Project Apicula uses a combination of fuzzing and parsing of the vendor data fil
 
 ##  Dependencies
 
-Version 1.9 of the Gowin vendor tools.
+Version 1.9 of the Gowin vendor tools, and a copy of the Excel pinout files downloaded in `~/Documents/gowinsemi`
 
 The latest Yosys and Nextpnr, installed with the generic backend.
 
@@ -142,7 +142,7 @@ So what needs to be done is to extract the JTAG commands used by the vendor tool
   * `bitstream.py` writes `.fasm`(unused) and `.vm`/`.posp` (for vendor floorplanner).
   * `blinky.v` example program
   * `simple.py` main Python script that generates all the bels and pips.
-  * `simple.sh` script to synth and PnR `blinky.v`.
+  * `simple.sh` script to synth and PnR Verilog files.
   * `simple_timing.py` generates the pip and port delays.
   * `synth` Yosys synthesis scripts and libs.
     * `cells_map.v` techmap file.
