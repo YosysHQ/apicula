@@ -6,80 +6,39 @@ import re
 import code
 sys.path.append(os.path.join(sys.path[0], '..'))
 from wirenames import wirenames
-import fuse_h4x as fuse
+import pickle
+import chipdb
 
-gowinhome = os.getenv("GOWINHOME")
-if not gowinhome:
-    raise Exception("GOWINHOME not set")
-
-dev = os.getenv("DEVICE")
-if not dev:
+device = os.getenv("DEVICE")
+if not device:
     raise Exception("DEVICE not set")
 
-with open("../dat.json") as f:
-    data = json.load(f)
+with open(f"../{device}.pickle", 'rb') as f:
+    db = pickle.load(f)
 
-with open(gowinhome+f'/IDE/share/device/{dev}/{dev}.fse', 'rb') as f:
-    fse = fuse.readFse(f)
-
-grid = fse['header']['grid'][61]
-width = len(grid[0])
-height = len(grid)
-
-def wire2global(row, col, height, width, name):
-    m = re.match(r"([NESW])([128]\d)(\d)", name)
-    if not m:
-        # local wire
-        return f"R{row}C{col}_{name}"
-
-    # inter-tile wire
-    dirlut = {'N': (1, 0),
-              'E': (0, -1),
-              'S': (-1, 0),
-              'W': (0, 1)}
-    uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
-    direction, wire, segment = m.groups()
-    rootrow = row + dirlut[direction][0]*int(segment)
-    rootcol = col + dirlut[direction][1]*int(segment)
-    # wires wrap around the edges
-    if rootrow < 1:
-        rootrow = 1 - rootrow
-        direction = uturnlut[direction]
-    if rootcol < 1:
-        rootcol = 1 - rootcol
-        direction = uturnlut[direction]
-    if rootrow > height:
-        rootrow = 2*height+1 - rootrow
-        direction = uturnlut[direction]
-    if rootcol > width:
-        rootcol = 2*width+1 - rootcol
-        direction = uturnlut[direction]
-    return f"R{rootrow}C{rootcol}_{direction}{wire}"
-
-def addWire(row, col, num):
-    try:
-        name = wirenames[num]
-    except KeyError:
-        return
-    gname = wire2global(row, col, height, width, name)
+def addWire(row, col, wire):
+    gname = chipdb.wire2global(row, col, db, wire)
     #print("wire", gname)
     try:
-        ctx.addWire(name=gname, type=name, y=row, x=col)
+        ctx.addWire(name=gname, type=wire.name, y=row, x=col)
     except AssertionError:
         pass
         #print("duplicate wire")
 
-for row, rowdata in enumerate(grid, 1):
-    for col, ttyp in enumerate(rowdata, 1):
+belre = re.compile(r"(IOB|LUT|DFF|BANK)(\w*)")
+for row, rowdata in enumerate(db.grid, 1):
+    for col, tile in enumerate(rowdata, 1):
         # add wires
-        wires = {abs(w) for fs in fse[ttyp]['wire'][2] for w in fs[:2]}
+        wires = set(chain(tile.pips.keys(), *tile.pips.values()))
         for wire in wires:
             addWire(row, col, wire)
         # add aliasses
         # creat bels
         #print(row, col, ttyp)
-        if ttyp in {12, 13, 14, 15, 16, 17}:
-            for z in range(6): # TODO 3rd CLS has no DFF, add constraint
+        for name, bel in tile.bels.items():
+            typ, idx = belre.match(name).groups()
+            if typ == "DFF":
+                z = int(idx)
                 belname = f"R{row}C{col}_SLICE{z}"
                 clkname = f"R{row}C{col}_CLK{z//2}"
                 fname = f"R{row}C{col}_F{z}"
@@ -94,12 +53,12 @@ for row, rowdata in enumerate(grid, 1):
                 ctx.addBelOutput(bel=belname, name="Q", wire=qname)
                 ctx.addBelOutput(bel=belname, name="F", wire=fname)
 
-        elif ttyp in {52, 53, 58, 63, 64, 65, 66, 91, 92}:
-            for z, side in enumerate(['A', 'B']):
-                belname = f"R{row}C{col}_IOB{z}"
-                inp = wirenames[data[f"Iobuf{side}In"]]
-                outp = wirenames[data[f"Iobuf{side}Out"]]
-                oe = wirenames[data[f"Iobuf{side}OE"]]
+            elif typ == "IOB":
+                z = ord(idx)-ord('A')
+                belname = f"R{row}C{col}_IOB{idx}"
+                inp = bel.portmap['I'].name
+                outp = bel.portmap['O'].name
+                oe = bel.portmap['OE'].name
                 iname = f"R{row}C{col}_{inp}"
                 oname = f"R{row}C{col}_{outp}"
                 oename = f"R{row}C{col}_{oe}"
@@ -110,47 +69,23 @@ for row, rowdata in enumerate(grid, 1):
                 ctx.addBelOutput(bel=belname, name="O", wire=oname)
 
 
-def addPip(row, col, srcnum, destnum):
-    try:
-        srcname = wirenames[srcnum]
-        gsrcname = wire2global(row, col, height, width, srcname)
-
-        destname = wirenames[destnum]
-        gdestname = wire2global(row, col, height, width, destname)
-    except KeyError:
-        return
-
-    pipname = f"R{row}C{col}_{srcname}_{destname}"
-    #print("pip", pipname, srcname, gsrcname, destname, gdestname)
-    try:
-        ctx.addPip(
-            name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
-            delay=ctx.getDelayFromNS(0.05), loc=Loc(col, row, 0))
-    except IndexError:
-        pass
-        #print("Wire not found", gsrcname, gdestname)
-    except AssertionError:
-        pass
-        #print("Wire already exists", gsrcname, gdestname)
-
-def addAlias(row, col, srcnum, destnum):
-    srcname = wirenames[srcnum]
-    gsrcname = wire2global(row, col, height, width, srcname)
-
-    destname = wirenames[destnum]
-    gdestname = wire2global(row, col, height, width, destname)
-
-    pipname = f"R{row}C{col}_{srcname}_{destname}"
-    ##print("alias", pipname)
-    ctx.addAlias(
-        name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
-        delay=ctx.getDelayFromNS(0.01))
-
-for row, rowdata in enumerate(grid, 1):
-    for col, ttyp in enumerate(rowdata, 1):
-        for dest, srcs in zip(data['X11s'], data['X11Ins']):
-            addAlias(row, col, srcs[0], dest)
-        for src, dest, *fuses in fse[ttyp]['wire'][2]:
-            addPip(row, col, abs(src), abs(dest))
+for row, rowdata in enumerate(db.grid, 1):
+    for col, tile in enumerate(rowdata, 1):
+        for dest, srcs in tile.pips.items():
+            for src in srcs.keys():
+                srcname = chipdb.wire2global(row, col, db, src)
+                destname = chipdb.wire2global(row, col, db, dest)
+                pipname = f"R{row}C{col}_{src.name}_{dest.name}"
+                #print("pip", pipname, srcname, gsrcname, destname, gdestname)
+                try:
+                    ctx.addPip(
+                        name=pipname, type=dest.name, srcWire=srcname, dstWire=destname,
+                        delay=ctx.getDelayFromNS(0.05), loc=Loc(col, row, 0))
+                except IndexError:
+                    pass
+                    #print("Wire not found", gsrcname, gdestname)
+                except AssertionError:
+                    pass
+                    #print("Wire already exists", gsrcname, gdestname)
 
 #code.interact(local=locals())

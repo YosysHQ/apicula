@@ -41,47 +41,6 @@ def parse_tile_(tiledata, tile):
     return bels, pips
 
 
-def wire2global(row, col, db, wire):
-    if wire.name.startswith("G") or wire.name in {'VCC', 'VSS'}:
-        # global wire
-        return wire.name
-
-    m = re.match(r"([NESW])([128]\d)", wire.name)
-    if not m: # not an inter-tile wire
-        return f"R{row}C{col}_{wire.name}"
-    direction, num = m.groups()
-
-    rootrow = row + wire.offset[0]
-    rootcol = col + wire.offset[1]
-    # wires wrap around the edges
-    uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
-    if rootrow < 1:
-        rootrow = 1 - rootrow
-        direction = uturnlut[direction]
-    if rootcol < 1:
-        rootcol = 1 - rootcol
-        direction = uturnlut[direction]
-    if rootrow > db.rows:
-        rootrow = 2*db.rows+1 - rootrow
-        direction = uturnlut[direction]
-    if rootcol > db.cols:
-        rootcol = 2*db.cols+1 - rootcol
-        direction = uturnlut[direction]
-    # map cross wires to their origin
-    diaglut = {
-        'E11': 'EW10',
-        'W11': 'EW10',
-        'E12': 'EW20',
-        'W12': 'EW20',
-        'S11': 'SN10',
-        'N11': 'SN10',
-        'S12': 'SN20',
-        'N12': 'SN20',
-    }
-    name = diaglut.get(direction+num, direction+num)
-    return f"R{rootrow}C{rootcol}_{name}"
-
-
 dffmap = {
     "DFF": None,
     "DFFS": "SET",
@@ -103,8 +62,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
     row = dbrow+1
     col = dbcol+1
     for dest, src in pips.items():
-        srcg = wire2global(row, col, db, src)
-        destg = wire2global(row, col, db, dest)
+        srcg = chipdb.wire2global(row, col, db, src)
+        destg = chipdb.wire2global(row, col, db, dest)
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 

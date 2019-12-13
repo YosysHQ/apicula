@@ -18,15 +18,15 @@ param_map = {
 #gen_7_ PLACE_IOT8[B] //IBUF
 #gen_4_ PLACE_R13C6[0][A]
 def write_posp(f):
-    belre = re.compile(r"R(\d+)C(\d+)_(SLICE|IOB)(\d)")
+    belre = re.compile(r"R(\d+)C(\d+)_(SLICE|IOB)(\w)")
     namere = re.compile(r"\W+")
     for name, cell in ctx.cells:
         row, col, typ, idx = belre.match(cell.bel).groups()
-        idx = int(idx)
         row = int(row)
         col = int(col)
         name = namere.sub('_', name)
         if typ == 'SLICE':
+            idx = int(idx)
             cls = idx//2
             side = ['A', 'B'][idx%2]
             lutname = name + "_LUT"
@@ -53,7 +53,6 @@ def write_posp(f):
                 mod.wires.update(lut.portmap.values())
                 mod.primitives[dffname] = lut
         elif typ == 'IOB':
-            side = ['A', 'B'][idx]
             if row == 1:
                 edge = 'T'
                 num = col
@@ -66,7 +65,7 @@ def write_posp(f):
             else:
                 edge = 'B'
                 num = col
-            f.write(f"{name} PLACE_IO{edge}{num}[{side}]\n")
+            f.write(f"{name} PLACE_IO{edge}{num}[{idx}]\n")
 
             iob = codegen.Primitive("IOBUF", name)
             iob.portmap['I'] = f"R{row}C{col}_I{idx}"
