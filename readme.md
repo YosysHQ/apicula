@@ -19,6 +19,9 @@ Python:
 
 ## Getting Started
 
+For GW1NR-9
+TODO: update
+
 ```bash
 virtualenv env
 source env/bin/activate
@@ -42,10 +45,12 @@ python gowin_pack.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.fse ge
 python gowin_unpack.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.fse pack.fs
 yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
 /gowin/installation/Programmer/bin/programmer_cli --device GW1NR-9 --run 2 --fsFile /path/to/pack.fs
-
 ```
 
-For running on another device, an empty donor bitstream needs to be generated for the device, and the correct data files need to be provided. And then deal with all the bugs...
+For GW1N-1
+TODO: add instructions
+
+Other devices are currently not supported. Read on to learn how to contribute other devices.
 
 ## Status
 
