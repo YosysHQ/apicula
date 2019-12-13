@@ -111,11 +111,11 @@ There are quite a few sketchy places in the code that could use some tender lovi
 
 The `.dat` parser was sort of patched to output a JSON file, but it would be a lot nicer if one could just import it as a library and get Python datastructures back directly. Both parsers could optionally be extended to map known IDs to more human readable values (`wirenames.py` for example), provide a more convenient structure, and chomp of padding values.
 
-The fuzzers should be extended so that they run against all FPGA types. This is important to detect differences between FPGAs. This does not require much in-depth knowledge. Just parameterizing all the hardcoded bits. A bit more involved is extending the fuzzer to fuzz global settings and constraints, these would need to be assigned config bits and toggle them accordingly.
+The fuzzers should be extended so that they run against all FPGA types. This is important to detect differences between FPGAs and generate ChipDBs for all of them. This does not require much in-depth knowledge. Just adding parameters for all FPGA types. A bit more involved is extending the fuzzer to fuzz global settings and constraints, these would need to be assigned config bits and toggle them accordingly.
 
-The user-facing tools such as `gowin_pack` and `gowin_unpack` could really use some proper command line arguments, and could also be packaged in a proper Python package so that they can be installed easily.
+The user-facing tools such as `gowin_pack` and `gowin_unpack` could really use some proper command line arguments, and could also be packaged in a proper Python package so that they can be installed easily. They could also be ported to something other than Python for speed.
 
-At the moment there are a few hard-coded references to GW1NR-9. Part of this ties into having a proper command line interface, a Nextpnr target, and documenting all the commands and "default" fuses, another part is just parameterizing all the places where it's currently hardcoded.
+Currently the ChipDB is just using Pickle because it's easy. This is however not a good format going forward. Some research needs to be done into a suitable format. This might involve either a single database, or a "master" database in a human readable format, and derived databases for PnR and bitgen.
 
 Eventually it'd be really sweet if there were some tests and continuous integration.
 
