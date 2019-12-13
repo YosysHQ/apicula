@@ -131,13 +131,13 @@ So what needs to be done is to extract the JTAG commands used by the vendor tool
 ## Files overview
 
 * `bslib.py` utilities for parsing `.fs` bitstream files in ascii format.
+* `chipdb.py` a library for combining vendor and fuzzing data into a single chipDB
 * `codegen.py` utilities for generating Verilog netlist files.
 * `dat19_h4x.py` a parser for vendor `.dat` files used in PnR.
 * `doc` documentation.
 * `example` a simple test program.
 * `fuse_h4x.py` a parser for vendor `.fse` files used in bitgen.
 * `fuzzer.py` a fuzzer for finding bit locations of various things, not based on vendor files.
-* `chipdb.py` a library for combining vendor and fuzzing data into a single chipDB
 * `generic` Python files for the Nextpnr generic target
   * `bitstream.py` writes `.fasm`(unused) and `.vm`/`.posp` (for vendor floorplanner).
   * `blinky.v` example program
