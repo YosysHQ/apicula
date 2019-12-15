@@ -236,7 +236,7 @@ if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
 
-    with open("dat.json") as f:
+    with open(f"{device}.json") as f:
         dat = json.load(f)
 
     db = chipdb.from_fse(fse)
@@ -339,10 +339,10 @@ if __name__ == "__main__":
                     bel.modes[cell_type] = loc
                     bel.portmap = {
                         # D inputs hardwired to LUT F
-                        'Q': chipdb.Wire(f"Q{cls*2+i}"),
-                        'CLK': chipdb.Wire(f"CLK{cls}"),
-                        'LSR': chipdb.Wire(f"LSR{cls}"), # set/reset
-                        'CE': chipdb.Wire(f"CE{cls}"), # clock enable
+                        'Q': f"Q{cls*2+i}",
+                        'CLK': f"CLK{cls}",
+                        'LSR': f"LSR{cls}", # set/reset
+                        'CE': f"CE{cls}", # clock enable
                     }
             elif bel_type == "IOB":
                     bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
@@ -374,6 +374,7 @@ if __name__ == "__main__":
             bel.modes.setdefault("DEFAULT", set()).update(loc)
 
     chipdb.dat_portmap(dat, db)
+    chipdb.dat_aliases(dat, db)
     chipdb.shared2flag(db)
     #TODO proper serialization format
     with open(f"{device}.pickle", 'wb') as f:

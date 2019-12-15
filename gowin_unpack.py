@@ -61,7 +61,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
     # db is 0-based, floorplanner is 1-based
     row = dbrow+1
     col = dbcol+1
-    for dest, src in pips.items():
+    aliases = db.grid[dbrow][dbcol].aliases
+    for dest, src in chain(pips.items(), aliases.items()):
         srcg = chipdb.wire2global(row, col, db, src)
         destg = chipdb.wire2global(row, col, db, dest)
         mod.wires.update({srcg, destg})
@@ -108,14 +109,14 @@ def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
             iob = codegen.Primitive(kind, name)
 
             for port in wires:
-                wname = portmap[port].name
+                wname = portmap[port]
                 iob.portmap[port] = f"R{row}C{col}_{wname}"
 
             for port in ports:
                 iob.portmap[port] = f"R{row}C{col}_{port}{idx}"
 
             for wires in iobmap[kind]['wires']:
-                wnames = [f"R{row}C{col}_{portmap[w].name}" for w in wires]
+                wnames = [f"R{row}C{col}_{portmap[w]}" for w in wires]
                 mod.wires.update(wnames)
             for direction in ['inputs', 'outputs', 'inouts']:
                 for wires in iobmap[kind].get(direction, []):

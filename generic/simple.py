@@ -20,7 +20,7 @@ def addWire(row, col, wire):
     gname = chipdb.wire2global(row, col, db, wire)
     #print("wire", gname)
     try:
-        ctx.addWire(name=gname, type=wire.name, y=row, x=col)
+        ctx.addWire(name=gname, type=wire, y=row, x=col)
     except AssertionError:
         pass
         #print("duplicate wire")
@@ -56,9 +56,9 @@ for row, rowdata in enumerate(db.grid, 1):
             elif typ == "IOB":
                 z = ord(idx)-ord('A')
                 belname = f"R{row}C{col}_IOB{idx}"
-                inp = bel.portmap['I'].name
-                outp = bel.portmap['O'].name
-                oe = bel.portmap['OE'].name
+                inp = bel.portmap['I']
+                outp = bel.portmap['O']
+                oe = bel.portmap['OE']
                 iname = f"R{row}C{col}_{inp}"
                 oname = f"R{row}C{col}_{outp}"
                 oename = f"R{row}C{col}_{oe}"
@@ -69,25 +69,40 @@ for row, rowdata in enumerate(db.grid, 1):
                 ctx.addBelOutput(bel=belname, name="O", wire=oname)
 
 
+def addPip(row, col, srcname, destname):
+    gsrcname = chipdb.wire2global(row, col, db, srcname)
+    gdestname = chipdb.wire2global(row, col, db, destname)
+
+    pipname = f"R{row}C{col}_{srcname}_{destname}"
+    #print("pip", pipname, srcname, gsrcname, destname, gdestname)
+    try:
+        ctx.addPip(
+            name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
+            delay=ctx.getDelayFromNS(0.05), loc=Loc(col, row, 0))
+    except IndexError:
+        pass
+        #print("Wire not found", gsrcname, gdestname)
+    except AssertionError:
+        pass
+        #print("Wire already exists", gsrcname, gdestname)
+
+def addAlias(row, col, srcname, destname):
+    gsrcname = chipdb.wire2global(row, col, db, srcname)
+    gdestname = chipdb.wire2global(row, col, db, destname)
+
+    pipname = f"R{row}C{col}_{srcname}_{destname}"
+    ##print("alias", pipname)
+    ctx.addAlias(
+        name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
+        delay=ctx.getDelayFromNS(0.01))
+
+
 for row, rowdata in enumerate(db.grid, 1):
     for col, tile in enumerate(rowdata, 1):
         for dest, srcs in tile.pips.items():
             for src in srcs.keys():
-                srcname = chipdb.wire2global(row, col, db, src)
-                destname = chipdb.wire2global(row, col, db, dest)
-                src_row = row+src.offset[0]
-                src_col = col+src.offset[1]
-                pipname = f"R{src_row}C{src_col}_{src.name}_R{row}C{col}_{dest.name}"
-                #print("pip", pipname, srcname, gsrcname, destname, gdestname)
-                try:
-                    ctx.addPip(
-                        name=pipname, type=dest.name, srcWire=srcname, dstWire=destname,
-                        delay=ctx.getDelayFromNS(0.05), loc=Loc(col, row, 0))
-                except IndexError:
-                    pass
-                    #print("Wire not found", gsrcname, gdestname)
-                except AssertionError:
-                    pass
-                    #print("Wire already exists", gsrcname, gdestname)
+                addPip(row, col, src, dest)
+        for dest, src in tile.aliases.items():
+            addAlias(row, col, src, dest)
 
 #code.interact(local=locals())

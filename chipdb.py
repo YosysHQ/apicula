@@ -9,13 +9,6 @@ import numpy as np
 # can be either tiles or bits within tiles
 Coord = Tuple[int, int]
 
-@dataclass(frozen=True)
-class Wire:
-    """Represents a named wire
-    driven at the specified relative offset"""
-    name: str
-    offset: Coord = (0, 0)
-
 @dataclass
 class Bel:
     """Respresents a Basic ELement
@@ -25,7 +18,7 @@ class Bel:
     flags: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     # there can be only one mode, modes are exclusive
     modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
-    portmap: Dict[str, Wire] = field(default_factory=dict)
+    portmap: Dict[str, str] = field(default_factory=dict)
 
     @property
     def mode_bits(self):
@@ -37,8 +30,11 @@ class Tile:
     for this specific tile type"""
     width: int
     height: int
-    # a mapping from source wire to bit coordinates
-    pips: Dict[Wire, Dict[Wire, Set[Coord]]] = field(default_factory=dict)
+    # a mapping from dest, source wire to bit coordinates
+    pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
+    # always-connected dest, src aliases
+    # should this be on the tile? Always the same...
+    aliases: Dict[str, str] = field(default_factory=dict)
     # a mapping from bel type to bel
     bels: Dict[str, Bel] = field(default_factory=dict)
 
@@ -66,23 +62,6 @@ class Device:
     def width(self):
         return sum(tile.width for tile in self.grid[0])
 
-def id2wire(wid):
-    name = wirenames[wid]
-    m = re.match(r"([NESW])([128]\d)(\d)", name)
-    if not m:
-        # local/global wire
-        return Wire(name)
-
-    # inter-tile wire
-    dirlut = {'N': (1, 0),
-              'E': (0, -1),
-              'S': (-1, 0),
-              'W': (0, 1)}
-    direction, wire, segment = m.groups()
-    row = dirlut[direction][0]*int(segment)
-    col = dirlut[direction][1]*int(segment)
-    return Wire(f"{direction}{wire}", (row, col))
-
 def unpad(fuses, pad=-1):
     try:
         return fuses[:fuses.index(pad)]
@@ -100,8 +79,8 @@ def fse_pips(fse, ttyp):
             srcid -= 1000 # what does it mean?
         if destid > 1000:
             destid -= 1000 # what does it mean?
-        src = id2wire(srcid)
-        dest = id2wire(destid)
+        src = wirenames[srcid]
+        dest = wirenames[destid]
         pips.setdefault(dest, {})[src] = fuses
 
     return pips
@@ -121,11 +100,11 @@ def fse_luts(fse, ttyp):
     # dicts are in insertion order
     for num, lut in enumerate(luts.values()):
         lut.portmap = {
-            'F': Wire(f"F{num}"),
-            'I0': Wire(f"A{num}"),
-            'I1': Wire(f"B{num}"),
-            'I2': Wire(f"C{num}"),
-            'I3': Wire(f"D{num}"),
+            'F': f"F{num}",
+            'I0': f"A{num}",
+            'I1': f"B{num}",
+            'I2': f"C{num}",
+            'I3': f"D{num}",
         }
     return luts
 
@@ -153,19 +132,25 @@ def dat_portmap(dat, dev):
                     if len(tile.bels) > 2:
                         idx = ord(name[-1]) - ord('A')
                         inp = wirenames[dat['IobufIns'][idx]]
-                        bel.portmap['I'] = Wire(inp)
+                        bel.portmap['I'] = inp
                         out = wirenames[dat['IobufOuts'][idx]]
-                        bel.portmap['O'] = Wire(out)
+                        bel.portmap['O'] = out
                         oe = wirenames[dat['IobufOes'][idx]]
-                        bel.portmap['OE'] = Wire(oe)
+                        bel.portmap['OE'] = oe
                     else:
                         pin = name[-1]
                         inp = wirenames[dat[f'Iobuf{pin}Out']]
-                        bel.portmap['O'] = Wire(inp)
+                        bel.portmap['O'] = inp
                         out = wirenames[dat[f'Iobuf{pin}In']]
-                        bel.portmap['I'] = Wire(out)
+                        bel.portmap['I'] = out
                         oe = wirenames[dat[f'Iobuf{pin}OE']]
-                        bel.portmap['OE'] = Wire(oe)
+                        bel.portmap['OE'] = oe
+
+def dat_aliases(dat, dev):
+    for idx, row in enumerate(dev.grid):
+        for jdx, td in enumerate(row):
+            for dest, (src,) in zip(dat['X11s'], dat['X11Ins']):
+                td.aliases[wirenames[dest]] = wirenames[src]
 
 def tile_bitmap(dev, bitmap, empty=False):
     res = {}
@@ -223,20 +208,24 @@ def shared2flag(dev):
                         print(belb)
 
 
+uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
+dirlut = {'N': (1, 0),
+          'E': (0, -1),
+          'S': (-1, 0),
+          'W': (0, 1)}
 def wire2global(row, col, db, wire):
-    if wire.name.startswith("G") or wire.name in {'VCC', 'VSS'}:
+    if wire.startswith("G") or wire in {'VCC', 'VSS'}:
         # global wire
-        return wire.name
+        return wire
 
-    m = re.match(r"([NESW])([128]\d)", wire.name)
+    m = re.match(r"([NESW])([128]\d)(\d)", wire)
     if not m: # not an inter-tile wire
-        return f"R{row}C{col}_{wire.name}"
-    direction, num = m.groups()
+        return f"R{row}C{col}_{wire}"
+    direction, num, segment = m.groups()
 
-    rootrow = row + wire.offset[0]
-    rootcol = col + wire.offset[1]
+    rootrow = row + dirlut[direction][0]*int(segment)
+    rootcol = col + dirlut[direction][1]*int(segment)
     # wires wrap around the edges
-    uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
     if rootrow < 1:
         rootrow = 1 - rootrow
         direction = uturnlut[direction]
@@ -250,15 +239,5 @@ def wire2global(row, col, db, wire):
         rootcol = 2*db.cols+1 - rootcol
         direction = uturnlut[direction]
     # map cross wires to their origin
-    diaglut = {
-        'E11': 'EW10',
-        'W11': 'EW10',
-        'E12': 'EW20',
-        'W12': 'EW20',
-        'S11': 'SN10',
-        'N11': 'SN10',
-        'S12': 'SN20',
-        'N12': 'SN20',
-    }
-    name = diaglut.get(direction+num, direction+num)
-    return f"R{rootrow}C{rootcol}_{name}"
+    #name = diaglut.get(direction+num, direction+num)
+    return f"R{rootrow}C{rootcol}_{direction}{num}"

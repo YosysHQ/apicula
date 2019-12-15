@@ -19,18 +19,12 @@ def get_bels(data):
         yield (cell['type'], int(row), int(col), num, cell['parameters'])
 
 def get_pips(data):
-    pipre = re.compile(r"R(\d+)C(\d+)_(\w+)_R(\d+)C(\d+)_(\w+);")
+    pipre = re.compile(r"R(\d+)C(\d+)_(\w+)_(\w+);")
     for net in data['modules']['top']['netnames'].values():
         routing = net['attributes']['ROUTING']
         pips = pipre.findall(routing)
-        for src_row, src_col, src, dest_row, dest_col, dest in pips:
-            row = int(dest_row)
-            col = int(dest_col)
-            srow = int(src_row)
-            scol = int(src_col)
-            dest = chipdb.Wire(dest)
-            src = chipdb.Wire(src, (srow-row, scol-col))
-            yield int(dest_row), int(dest_col), src, dest
+        for row, col, src, dest in pips:
+            yield int(row), int(col), src, dest
 
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
@@ -64,8 +58,8 @@ def place(db, tilemap, bels):
                 bits = iob.modes['OBUF'] | iob.flags.get('OBUFC', set())
             else:
                 raise ValueError("IOB has no in or output")
-            for row, col in bits:
-                tile[row][col] = 1
+            for r, c in bits:
+                tile[r][c] = 1
 
             #bank enable
             if row == 1: # top bank
@@ -100,6 +94,7 @@ def route(db, tilemap, pips):
             bits = tiledata.pips[dest][src]
         except KeyError:
             print(src, dest, "not found in tile", row, col)
+            breakpoint()
             continue
         for row, col in bits:
             tile[row][col] = 1
