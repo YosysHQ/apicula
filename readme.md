@@ -19,20 +19,20 @@ Python:
 
 ## Getting Started
 
-For GW1NR-9 devices such as the Trenz TEC0117
+For the Trenz TEC0117, use GW1NR-9, for the Sipeed Tang Nano, use GW1N-1.
 
 ```bash
 virtualenv env
 source env/bin/activate
 export GOWINHOME=/gowin/installation
-export DEVICE="GW1NR-9"
+export DEVICE="GW1NR-9" # TEC0117
+export DEVICE="GW1N-1" # Tang Nano
 pip install numpy pandas pillow crcmod xlrd ipython
-python dat19_h4x.py # makes GW1NR-9.json
-python tiled_fuzzer.py # makes GW1NR-9.pickle
+python dat19_h4x.py # makes $DEVICE.json
+python tiled_fuzzer.py # makes $DEVICE.pickle
 cd generic
-bash simple.sh blinky.v
-# or
-bash simple.sh attosoc/*.v
+bash simple.sh blinky.v # TEC0117
+bash simple.sh blinkygw1n1.v # Tang Nano
 # open blinky.vm and blinky.posp in Gowin Floorplanner
 # look at blinky.il and blinky.png
 cd ..
@@ -40,29 +40,7 @@ python gowin_pack.py generic/pnrblinky.json
 # look at pack.png and pack.fs
 python gowin_unpack.py pack.fs
 yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
-/gowin/installation/Programmer/bin/programmer_cli --device GW1NR-9 --run 2 --fsFile /path/to/pack.fs
-```
-
-For GW1N-1 devices such as the Sipeed Tang Nano
-
-```bash
-virtualenv env
-source env/bin/activate
-export GOWINHOME=/gowin/installation
-export DEVICE="GW1N-1"
-pip install numpy pandas pillow crcmod xlrd ipython
-python dat19_h4x.py # makes GW1N-1.json
-python tiled_fuzzer.py # makes GW1N-1.pickle
-cd generic
-bash simple.sh blinkygw1n1.v
-# open blinky.vm and blinky.posp in Gowin Floorplanner
-# look at blinky.il and blinky.png
-cd ..
-python gowin_pack.py generic/pnrblinky.json
-# look at pack.png and pack.fs
-python gowin_unpack.py pack.fs
-yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
-/gowin/installation/Programmer/bin/programmer_cli --device GW1N-1 --run 2 --fsFile /path/to/pack.fs
+/gowin/installation/Programmer/bin/programmer_cli --device $DEVICE --run 2 --fsFile /path/to/pack.fs
 ```
 
 Other devices are currently not supported. Read on to learn how to contribute other devices.
