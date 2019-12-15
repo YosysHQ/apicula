@@ -183,6 +183,21 @@ def tile_bitmap(dev, bitmap, empty=False):
 
     return res
 
+def fuse_bitmap(db, bitmap):
+    tiles = db.grid
+    res = np.zeros((db.height, db.width), dtype=np.uint8)
+    y = 0
+    for idx, row in enumerate(db.grid):
+        x=0
+        for jdx, td in enumerate(row):
+            w = td.width
+            h = td.height
+            res[y:y+h,x:x+w] = bitmap[(idx, jdx)]
+            x+=w
+        y+=h
+
+    return res
+
 def shared2flag(dev):
     "Convert mode bits that are shared between bels to flags"
     for idx, row in enumerate(dev.grid):

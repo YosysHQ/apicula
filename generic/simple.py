@@ -75,7 +75,9 @@ for row, rowdata in enumerate(db.grid, 1):
             for src in srcs.keys():
                 srcname = chipdb.wire2global(row, col, db, src)
                 destname = chipdb.wire2global(row, col, db, dest)
-                pipname = f"R{row}C{col}_{src.name}_{dest.name}"
+                src_row = row+src.offset[0]
+                src_col = col+src.offset[1]
+                pipname = f"R{src_row}C{src_col}_{src.name}_R{row}C{col}_{dest.name}"
                 #print("pip", pipname, srcname, gsrcname, destname, gdestname)
                 try:
                     ctx.addPip(
