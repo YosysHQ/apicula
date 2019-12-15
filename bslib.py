@@ -63,7 +63,7 @@ def read_bitstream(fname):
 
 def write_bitstream(fname, bs, hdr, ftr):
     bs = np.fliplr(bs)
-    padlen = 8 - bs.shape[1] % 8
+    padlen = bs.shape[1] % 8
     pad = np.ones((bs.shape[0], padlen), dtype=np.uint8)
     bs = np.hstack([pad, bs])
     assert bs.shape[1] % 8 == 0
