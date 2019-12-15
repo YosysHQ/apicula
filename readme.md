@@ -67,7 +67,7 @@ Fuzzing can be used to discover the meaning of the vendor files.
 
 `tiled_fuzzer.py` is a fuzzer that uses vendor files to find bits in a specific tile type. Adding code for a new primitive or tile type is relatively easy. All that is neede is a function that uses `codegen.py` to generate the primitive of interest, which has to be added to the `fuzzers` list. Then the output at the bottom of the script can be adjusted to your needs.
 
-There is a `gowin_unpack.parse_tile` function which uses our understanding of the vendor files to look for matching items. On the other hand `gowin_unpack.scan_fuses` will just give you a list of fuses that were set in the tile, and `gowin_unpack.scan_tables` will go through *all* vendor data tables and spit out even a partial match. The latter will give false positives, but is helpful when discovering new tables.
+There is a `fuse_h4x.parse_tile` function which uses our understanding of the vendor files to look for matching items. On the other hand `fuse_h4x.scan_fuses` will just give you a list of fuses that were set in the tile, and `fuse_h4x.scan_tables` will go through *all* vendor data tables and spit out even a partial match. The latter will give false positives, but is helpful when discovering new tables.
 
 `fuzzer.py` is a bit more complex to write new fuzzers for, but could be usefull in some cases. It is for example much more efficient in fuzzing array parameters such as LUT bits, BRAM contents, and PLL settings. Have a look at `Lut4BitsFuzzer` for ideas about how to fuzz BRAM and DRAM for example.
 
