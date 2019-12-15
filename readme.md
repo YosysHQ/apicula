@@ -19,8 +19,7 @@ Python:
 
 ## Getting Started
 
-For GW1NR-9
-TODO: update
+For GW1NR-9 devices such as the Trenz TEC0117
 
 ```bash
 virtualenv env
@@ -28,34 +27,50 @@ source env/bin/activate
 export GOWINHOME=/gowin/installation
 export DEVICE="GW1NR-9"
 pip install numpy pandas pillow crcmod xlrd ipython
-python dat19_h4x.py
-# look at dat.json
-cd legacy/empty
-/gowin/installation/IDE/bin/gw_sh run.tcl
-cp impl/pnr/empty.fs ../../
-cd ../../generic
+python dat19_h4x.py # makes GW1NR-9.json
+python tiled_fuzzer.py # makes GW1NR-9.pickle
+cd generic
 bash simple.sh blinky.v
 # or
 bash simple.sh attosoc/*.v
 # open blinky.vm and blinky.posp in Gowin Floorplanner
 # look at blinky.il and blinky.png
 cd ..
-python gowin_pack.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.fse generic/pnrblinky.json
+python gowin_pack.py generic/pnrblinky.json
 # look at pack.png and pack.fs
-python gowin_unpack.py /gowin/installation/IDE/share/device/GW1NR-9/GW1NR-9.fse pack.fs
+python gowin_unpack.py pack.fs
 yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
 /gowin/installation/Programmer/bin/programmer_cli --device GW1NR-9 --run 2 --fsFile /path/to/pack.fs
 ```
 
-For GW1N-1
-TODO: add instructions
+For GW1N-1 devices such as the Sipeed Tang Nano
+
+```bash
+virtualenv env
+source env/bin/activate
+export GOWINHOME=/gowin/installation
+export DEVICE="GW1N-1"
+pip install numpy pandas pillow crcmod xlrd ipython
+python dat19_h4x.py # makes GW1N-1.json
+python tiled_fuzzer.py # makes GW1N-1.pickle
+cd generic
+bash simple.sh blinkygw1n1.v
+# open blinky.vm and blinky.posp in Gowin Floorplanner
+# look at blinky.il and blinky.png
+cd ..
+python gowin_pack.py generic/pnrblinky.json
+# look at pack.png and pack.fs
+python gowin_unpack.py pack.fs
+yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
+/gowin/installation/Programmer/bin/programmer_cli --device GW1N-1 --run 2 --fsFile /path/to/pack.fs
+```
 
 Other devices are currently not supported. Read on to learn how to contribute other devices.
 
 ## Status
 
 This project is in its very early stages, and not ready for general use.
-It only supports very rudimentary FPGA features, and has only been tested with the Trenz TEC0117 board with a GW1NR-9 FPGA.
+It only supports very rudimentary FPGA features, and has only been tested with the Trenz TEC0117 board with a GW1NR-9 FPGA and Sipeed Tang Nano with a GW1N-1 FPGA.
 
 For users, there is a very basic and slow Nextpnr script based on the generic target. It can be modified to synthesize simple designs. These can be packed into a bitstream using `gowin_pack`. This exprimental flow only uses basic IOB, and 3/4 of the available DFF and LUT. No other resources are supported yet. Global routing is not supported, so you might have setup and hold time violations.
 

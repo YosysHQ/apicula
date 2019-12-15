@@ -436,5 +436,5 @@ pos = print_outs(['I3cIns'], pos, 0x26)
 pos = print_outs(['I3cOuts'], pos, 0x28)
 #assert pos == 0x6fd18
 
-with open('dat.json', 'w') as f:
+with open(f'{device}.json', 'w') as f:
     json.dump(data, f)
