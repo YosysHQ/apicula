@@ -32,7 +32,9 @@ python dat19_h4x.py # makes $DEVICE.json
 python tiled_fuzzer.py # makes $DEVICE.pickle
 cd generic
 bash simple.sh blinky.v # TEC0117
+bash simple.sh attosoc/*.v # TEC0117
 bash simple.sh blinkygw1n1.v # Tang Nano
+bash simple.sh nanolcd/*.v # Tang Nano
 # open blinky.vm and blinky.posp in Gowin Floorplanner
 # look at blinky.il and blinky.png
 cd ..
