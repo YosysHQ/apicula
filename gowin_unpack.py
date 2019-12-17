@@ -100,7 +100,10 @@ def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
             mod.primitives[name] = dff
 
         elif typ == "IOB":
-            kind, = flags.intersection(iobmap.keys())
+            try:
+                kind, = flags.intersection(iobmap.keys())
+            except ValueError:
+                continue
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
             name = f"R{row}C{col}_{kind}_{idx}"
             wires = set(iobmap[kind]['wires'])
