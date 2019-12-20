@@ -56,6 +56,14 @@ For users, there is a very basic and slow Nextpnr script based on the generic ta
 
 For developers, there are two fuzzers, parsers for vendor data files, and a `gowin_unpack` script to inspect bitstreams. One fuzzer efficiently fuzzes the whole FPGA without any assumptions, while the other fuzzer uses vendor data files to inspect specific tiles. The vendor data parsers are fairly complete in the sense that there are few unparsed sections left, but understanding of the parsed data leaves a lot to be desired. The bitstream packer and unpacker take a few shortcuts when it comes to commands, but completely parse and emit correct data frames.
 
+## Resources
+
+Check out the `doc` folder for documentation about the FPGA architecture, vendor file structure, and bitstream structure.
+
+My internship report about this project [can be downloaded here](https://github.com/pepijndevos/internshipreport).
+
+I did a few [livestreams on twitch](https://www.twitch.tv/pepijnthefox) working on this project, which are collected [on this playlist](https://www.youtube.com/playlist?list=PLIYslVBAlKZad3tjr5Y4gqBV3QKQ5_tPw)
+
 ## What remains to be done / how can I help?
 
 There is a lot of work left to do before this is a mature and complete FPGA flow.
