@@ -10,7 +10,7 @@ Version 1.9 of the Gowin vendor tools, and a copy of the Excel pinout files down
 
 The latest Yosys and Nextpnr, installed with the generic backend.
 
-Python:
+Python 3.7+:
 * Numpy
 * Pandas
 * Pillow
