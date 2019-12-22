@@ -16,6 +16,7 @@ Python 3.7+:
 * Pillow
 * crcmod
 * xlrd
+* dataclasses (Python 3.6 only)
 
 ## Getting Started
 
