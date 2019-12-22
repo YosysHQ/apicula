@@ -83,7 +83,7 @@ There is a `fuse_h4x.parse_tile` function which uses our understanding of the ve
 
 Things that could be fuzzed:
 
-* ALU modes, look at `CIN` and `COUT` wires.
+* ALU modes
 * DRAM modes and bits
 * IOB logic levels and drive stengths, may require some refactoring to fuzz constraints.
 * BRAM modes and bits
@@ -111,7 +111,7 @@ Currently, the Nextpnr flow is based on the [simple example](https://github.com/
 
 Eventually a proper Nextpnr target will need to be written. This is quite a large chunk of code that needs to be written, but the upside is that the ice40 target can serve as a basis. [Some documentation is available](https://github.com/YosysHQ/nextpnr/blob/master/docs/coding.md)
 
-Part of this will be writing a [binary blob assembler](https://github.com/YosysHQ/nextpnr/tree/master/bba) script to encode the vendor data files into a format suitable for Nextpnr, or port the Python parsers for the vendor files to C++ and use the vendor files directly with Nextpnr.
+Part of this will be writing a [binary blob assembler](https://github.com/YosysHQ/nextpnr/tree/master/bba) script to encode the chipDB data files into a format suitable for Nextpnr, or using the master chipDB directly.
 
 ### Refactoring
 
