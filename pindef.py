@@ -8,7 +8,7 @@ files = glob(docdir+"*Pinout.xlsx")
 def get_package(series, package, special_pins, header):
     fname = None
     for f in files:
-        if series in f:
+        if "%s Pinout" % series in f:
             fname = f
             break
     assert fname, "No file found for {}".format(series)
