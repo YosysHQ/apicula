@@ -7,8 +7,8 @@ Project Apicula uses a combination of fuzzing and parsing of the vendor data fil
 ##  Dependencies
 
 Version 1.9.1.01 of the Gowin vendor tools. Newer versions may work, but have not been tested. A copy of the following Gowin files downloaded in `~/Documents/gowinsemi`:
-* UG107-1.07E_GW1N-1 Pinout.xlsx
-* UG801-1.5E_GW1NR-9 Pinout.xlsx
+* `UG107-1.07E_GW1N-1 Pinout.xlsx`
+* `UG801-1.5E_GW1NR-9 Pinout.xlsx`
 
 The latest Yosys and Nextpnr, installed with the generic backend.
 
