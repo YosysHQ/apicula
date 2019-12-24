@@ -41,7 +41,7 @@ def readOneFile(f, fuselength):
             t = readTable(f, size, fuselength, 2)
         elif typ in {7, 8, 9, 10, 0xb, 0xc, 0xd, 0xe, 0xf, 0x10,
                      0x27, 0x31, 0x34, 0x37, 0x39, 0x3b, 0x3e,
-                     0x3f, 0x41, 0x43, 0x46, 0x48, 0x4a, 0x4c}:
+                     0x3f, 0x41, 0x43, 0x46, 0x48, 0x4a, 0x4c, 0x4e}:
             typn = "logicinfo"
             t = readTable(f, size, 3, 2)
         elif typ in {2, 0x26, 0x30}:
@@ -69,7 +69,7 @@ def readOneFile(f, fuselength):
             typn = "const"
             t = readTable(f, size, 1, 2)
         else:
-            raise ValueError("Unknown type at {}".format(hex(f.tell())))
+            raise ValueError("Unknown type {} at {}".format(hex(typ), hex(f.tell())))
         tmap.setdefault(typn, {})[typ] = t
     return tmap
 

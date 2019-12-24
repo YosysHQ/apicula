@@ -4,6 +4,7 @@ import tempfile
 import subprocess
 from collections import deque
 from itertools import chain, count, zip_longest
+from functools import reduce
 from random import shuffle, seed
 from warnings import warn
 from math import factorial
@@ -270,9 +271,9 @@ if __name__ == "__main__":
         modmap.setdefault(ttyp, []).append(mod)
         cstmap.setdefault(ttyp, []).append(cst)
 
-    modules = [sum(m, start=codegen.Module())
+    modules = [reduce(lambda a, b: a+b, m, codegen.Module())
                for m in zip_longest(*modmap.values(), fillvalue=codegen.Module())]
-    constrs = [sum(c, start=codegen.Constraints())
+    constrs = [reduce(lambda a, b: a+b, c, codegen.Constraints())
                for c in zip_longest(*cstmap.values(), fillvalue=codegen.Constraints())]
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
