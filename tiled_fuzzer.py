@@ -186,7 +186,7 @@ def run_pnr(mod, constr):
         "MSPI regular_io": "true",
         "READY regular_io": "true",
         "DONE regular_io": "true",
-        "RECONFIG_N regular_io": "true",
+        "RECONFIG_N regular_io": "false", # not recommended
         "MODE regular_io": "true",
         "CRC_check": "true",
         "compress": "false",
