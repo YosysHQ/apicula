@@ -181,13 +181,13 @@ def read_posp(fname):
 
 def run_pnr(mod, constr):
     cfg = codegen.DeviceConfig({
-        "JTAG regular_io": "true",
+        "JTAG regular_io": "false",
         "SSPI regular_io": "true",
         "MSPI regular_io": "true",
-        "READY regular_io": "true",
-        "DONE regular_io": "true",
+        "READY regular_io": "false",
+        "DONE regular_io": "false",
         "RECONFIG_N regular_io": "false", # not recommended
-        "MODE regular_io": "true",
+        "MODE regular_io": "false",
         "CRC_check": "true",
         "compress": "false",
         "encryption": "false",

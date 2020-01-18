@@ -48,8 +48,6 @@ yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
 /gowin/installation/Programmer/bin/programmer_cli --device $DEVICE --run 2 --fsFile /path/to/pack.fs
 ```
 
-**Warning**: Do not program the bitstream to flash (`--run 5`) unless you know what you are doing. Current defaults use all dual-use pins as I/O, possibly leaving you unable to repgrogram your device easily.
-
 Other devices are currently not supported. Read on to learn how to contribute other devices.
 
 ## Status
