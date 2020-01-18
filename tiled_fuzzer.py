@@ -247,7 +247,7 @@ if __name__ == "__main__":
         for col, typ in enumerate(row_dat):
             locations.setdefault(typ, []).append((row, col))
 
-    pin_names = pindef.get_locs(device, params['package'], True, params['header'])
+    pin_names = pindef.get_locs(device, params['package'], False, params['header'])
     banks = {'T': fse['header']['grid'][61][0],
              'B': fse['header']['grid'][61][-1],
              'L': [row[0] for row in fse['header']['grid'][61]],

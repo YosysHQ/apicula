@@ -10,6 +10,8 @@ Version 1.9.1.01 of the Gowin vendor tools. Newer versions may work, but have no
 * `UG107-1.07E_GW1N-1 Pinout.xlsx`
 * `UG801-1.5E_GW1NR-9 Pinout.xlsx`
 
+Optionally [openFPGALoader](https://github.com/trabucayre/openFPGALoader) for a complete open source end-to-end flow.
+
 The latest Yosys and Nextpnr, installed with the generic backend.
 
 Python 3.6+:
@@ -46,6 +48,7 @@ python gowin_pack.py generic/pnrblinky.json
 python gowin_unpack.py pack.fs
 yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
 /gowin/installation/Programmer/bin/programmer_cli --device $DEVICE --run 2 --fsFile /path/to/pack.fs
+openFPGALoader -m -b littleBee pack.fs # FOSS programmer
 ```
 
 Other devices are currently not supported. Read on to learn how to contribute other devices.
