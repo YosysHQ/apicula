@@ -7,7 +7,7 @@ Project Apicula uses a combination of fuzzing and parsing of the vendor data fil
 ##  Dependencies
 
 Version 1.9.1.01 of the Gowin vendor tools. Newer versions may work, but have not been tested. A copy of the following Gowin files downloaded in `~/Documents/gowinsemi`:
-* `UG107-1.07E_GW1N-1 Pinout.xlsx`
+* `UG107-1.09E_GW1N-1 Pinout.xlsx`
 * `UG801-1.5E_GW1NR-9 Pinout.xlsx`
 
 Optionally [openFPGALoader](https://github.com/trabucayre/openFPGALoader) for a complete open source end-to-end flow.
