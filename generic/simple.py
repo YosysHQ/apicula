@@ -25,7 +25,7 @@ def addWire(row, col, wire):
         pass
         #print("duplicate wire")
 
-belre = re.compile(r"(IOB|LUT|DFF|BANK)(\w*)")
+belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG)(\w*)")
 for row, rowdata in enumerate(db.grid, 1):
     for col, tile in enumerate(rowdata, 1):
         # add wires

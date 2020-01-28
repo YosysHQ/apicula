@@ -412,6 +412,15 @@ if __name__ == "__main__":
     chipdb.dat_portmap(dat, db)
     chipdb.dat_aliases(dat, db)
     chipdb.shared2flag(db)
+
+    # set template dual-mode pins to HW mode
+    for pin in dualmode_pins:
+        try:
+            loc, = db.grid[0][0].bels['CFG'].flags[pin.upper()]
+        except KeyError:
+            continue
+        db.template[loc] = 0
+
     #TODO proper serialization format
     with open(f"{device}.pickle", 'wb') as f:
         pickle.dump(db, f)
