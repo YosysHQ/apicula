@@ -2,7 +2,7 @@ import re
 import os
 import tempfile
 import subprocess
-from collections import deque
+from collections import deque, Counter
 from itertools import chain, count, zip_longest
 from functools import reduce
 from random import shuffle, seed
@@ -80,7 +80,7 @@ def dff(locations):
                 try:
                     loc = next(locs) # get the next unused tile
                 except StopIteration:
-                    yield ttyp, mod, cst
+                    yield ttyp, mod, cst, {}
                     locs = iter(locations[ttyp])
                     loc = next(locs)
                     mod = codegen.Module()
@@ -111,7 +111,7 @@ def dff(locations):
                 col = loc[1]+1
                 cst.cells[lutname] = f"R{row}C{col}[{cls}]"
                 cst.cells[name] = f"R{row}C{col}[{cls}]"
-        yield ttyp, mod, cst
+        yield ttyp, mod, cst, {}
 
 iobmap = {
     "IBUF": {"wires": ["O"], "inputs": ["I"]},
@@ -119,7 +119,8 @@ iobmap = {
     #"TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
-def iob(locations):
+def iob(locations, corners):
+    cnt = Counter() # keep track of how many runs are needed
     for ttyp, tiles in locations.items(): # for each tile of this type
         mod = codegen.Module()
         cst = codegen.Constraints()
@@ -137,7 +138,8 @@ def iob(locations):
                         loc = name
                         break
                 else: # no usable tiles
-                    yield ttyp, mod, cst
+                    yield ttyp, mod, cst, {}
+                    cnt[ttyp] += 1
                     locs = tiles.copy()
                     mod = codegen.Module()
                     cst = codegen.Constraints()
@@ -159,8 +161,24 @@ def iob(locations):
                 mod.primitives[name] = iob
                 cst.ports[name] = loc
 
-            yield ttyp, mod, cst
+            yield ttyp, mod, cst, {}
+            cnt[ttyp] += 1
+    # insert dummie in the corners to detect the bank enable bits
+    runs = cnt.most_common(1)[0][1]
+    for n in range(runs):
+        for ttyp in corners:
+            mod = codegen.Module()
+            cst = codegen.Constraints()
+            cfg = {}
+            yield ttyp, mod, cst, cfg
 
+dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'mode'}
+def dualmode(ttyp):
+    for pin in dualmode_pins:
+        mod = codegen.Module()
+        cst = codegen.Constraints()
+        cfg = {pin: 'false'}
+        yield ttyp, mod, cst, cfg
 
 def read_posp(fname):
     cst_parser = re.compile(r"(\w+) CST_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
@@ -179,15 +197,15 @@ def read_posp(fname):
                 raise Exception(line)
 
 
-def run_pnr(mod, constr):
+def run_pnr(mod, constr, config):
     cfg = codegen.DeviceConfig({
-        "JTAG regular_io": "false",
-        "SSPI regular_io": "true",
-        "MSPI regular_io": "true",
-        "READY regular_io": "false",
-        "DONE regular_io": "false",
-        "RECONFIG_N regular_io": "false", # not recommended
-        "MODE regular_io": "false",
+        "JTAG regular_io": config.get('jtag', "true"),
+        "SSPI regular_io": config.get('sspi', "true"),
+        "MSPI regular_io": config.get('mspi', "true"),
+        "READY regular_io": config.get('ready', "true"),
+        "DONE regular_io": config.get('done', "true"),
+        "RECONFIG_N regular_io": config.get('reconfig', "true"),
+        "MODE regular_io": config.get('mode', "true"),
         "CRC_check": "true",
         "compress": "false",
         "encryption": "false",
@@ -227,11 +245,12 @@ def run_pnr(mod, constr):
         #print(tmpdir); input()
         try:
             return (*bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
-                   list(read_posp(tmpdir+"/impl/pnr/top.posp")))
+                   list(read_posp(tmpdir+"/impl/pnr/top.posp")), \
+                   config)
         except FileNotFoundError:
             print(tmpdir)
             input()
-            return None, None
+            return None, None, None, None, None
 
 if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
@@ -247,7 +266,7 @@ if __name__ == "__main__":
         for col, typ in enumerate(row_dat):
             locations.setdefault(typ, []).append((row, col))
 
-    pin_names = pindef.get_locs(device, params['package'], False, params['header'])
+    pin_names = pindef.get_locs(device, params['package'], True, params['header'])
     banks = {'T': fse['header']['grid'][61][0],
              'B': fse['header']['grid'][61][-1],
              'L': [row[0] for row in fse['header']['grid'][61]],
@@ -262,30 +281,40 @@ if __name__ == "__main__":
 
     modmap = {}
     cstmap = {}
+    cfgmap = {}
     # Add fuzzers here
     fuzzers = chain(
-        iob(pin_locations),
+        iob(pin_locations, [
+            fse['header']['grid'][61][0][0],
+            fse['header']['grid'][61][-1][0],
+            fse['header']['grid'][61][0][-1],
+            fse['header']['grid'][61][-1][-1],
+        ]),
         dff(locations),
+        dualmode(fse['header']['grid'][61][0][0]),
     )
-    for ttyp, mod, cst in fuzzers:
+    for ttyp, mod, cst, cfg in fuzzers:
         modmap.setdefault(ttyp, []).append(mod)
         cstmap.setdefault(ttyp, []).append(cst)
+        cfgmap.setdefault(ttyp, []).append(cfg)
 
     modules = [reduce(lambda a, b: a+b, m, codegen.Module())
                for m in zip_longest(*modmap.values(), fillvalue=codegen.Module())]
     constrs = [reduce(lambda a, b: a+b, c, codegen.Constraints())
                for c in zip_longest(*cstmap.values(), fillvalue=codegen.Constraints())]
+    configs = [reduce(lambda a, b: {**a, **b}, c, {})
+               for c in zip_longest(*cfgmap.values(), fillvalue={})]
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
-    empty, hdr, ftr, posp = run_pnr(codegen.Module(), codegen.Constraints())
+    empty, hdr, ftr, posp, config = run_pnr(codegen.Module(), codegen.Constraints(), {})
     db.cmd_hdr = hdr
     db.cmd_ftr = ftr
     db.template = empty
     p = Pool()
-    pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs))
+    pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs, configs))
 
-    for bitmap, hdr, ftr, posp in pnr_res:
+    for bitmap, hdr, ftr, posp, config in pnr_res:
         seen = {}
         diff = bitmap ^ empty
         bm = fuse_h4x.tile_bitmap(fse, diff)
@@ -325,12 +354,12 @@ if __name__ == "__main__":
                     seen[(row, col)] = name
 
             tile = bm[idx]
-            for bitrow in tile:
-                print(*bitrow, sep='')
+            #for bitrow in tile:
+            #    print(*bitrow, sep='')
 
             rows, cols = np.where(tile==1)
             loc = set(zip(rows, cols))
-            print(cell_type, loc)
+            #print(cell_type, loc)
 
             if bel_type == "DUMMY":
                 continue
@@ -370,9 +399,15 @@ if __name__ == "__main__":
             rows, cols = np.where(tile==1)
             loc = set(zip(rows, cols))
             print(idx, loc)
-            bel = db.grid[row][col].bels.setdefault("BANK", chipdb.Bel())
+            try:
+                flag, = dualmode_pins.intersection(config)
+                bel = db.grid[row][col].bels.setdefault("CFG", chipdb.Bel())
+                bel.flags.setdefault(flag.upper(), set()).update(loc)
+            except ValueError:
+                mode = "DEFAULT"
+                bel = db.grid[row][col].bels.setdefault("BANK", chipdb.Bel())
+                bel.modes.setdefault(mode, set()).update(loc)
             #TODO fuzz modes
-            bel.modes.setdefault("DEFAULT", set()).update(loc)
 
     chipdb.dat_portmap(dat, db)
     chipdb.dat_aliases(dat, db)
