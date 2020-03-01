@@ -17,20 +17,46 @@ chunklen = 0x3ab8 # length of each class
 def to_float(s):
     return struct.unpack('f', s)[0]
 
-def parse_lut(data):
+def float_data(data, paths):
     res = {}
-    paths = ['a_f', 'b_f', 'c_f', 'd_f', 'a_ofx', 'b_ofx', 'c_ofx', 'd_ofx']
     for i, name in enumerate(paths):
         for j in range(4):
             idx = i*4+j
-            res.setdefault(name,[]).append(to_float(data[i*4:i*4+4]))
+            res.setdefault(name,[]).append(to_float(data[idx*4:idx*4+4]))
     return res
+
+def parse_lut(data):
+    paths = ['a_f', 'b_f', 'c_f', 'd_f', 'a_ofx', 'b_ofx', 'c_ofx', 'd_ofx']
+    return float_data(data, paths)
 
 def parse_sram(data):
     pass
 
 def parse_dff(data):
-    pass
+    paths = [
+        'di_clksetpos', # 0x0
+        'di_clksetneg', # 0x4
+        'di_clkholdpos', # 0x8
+        'di_clkholdneg', # 0xc
+        'ce_clksetpos', # 0x10
+        'ce_clksteneg', # 0x14
+        'ce_clkholdpos', # 0x18
+        'ce_clkholdneg', # 0x1c
+        'lsr_clksetpos_syn', # 0x20
+        'lsr_clksetneg_syn', # 0x24
+        'lsr_clkholdpos_syn', # 0x28
+        'lsr_clkholdneg_syn', # 0x2c
+        'clk_qpos', # 0x30
+        'clk_qneg', # 0x34
+        'lsr_q', # 0x38
+        'lsr_clksetpos_asyn', # 0x3c
+        'lsr_clksetneg_asyn', # 0x40
+        'lsr_clkholdpos_asyn', # 0x44
+        'lsr_clkholdneg_asyn', # 0x48
+        'clk_clk', # 0x4c
+        'lsr_lsr', # 0x50
+    ]
+    return float_data(data, paths)
 
 def parse_dl(data):
     pass
