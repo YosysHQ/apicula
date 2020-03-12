@@ -50,7 +50,7 @@ def place(db, tilemap, bels):
                     tile[row][col] = 1
 
         elif typ == "GENERIC_IOB":
-            assert sum(attr.values()) <= 1, "Complex IOB unsuported"
+            assert sum([int(v, 2) for v in attr.values()]) <= 1, "Complex IOB unsuported"
             iob = tiledata.bels[f'IOB{num}']
             if attr["INPUT_USED"]:
                 bits = iob.modes['IBUF'] | iob.flags.get('IBUFC', set())
