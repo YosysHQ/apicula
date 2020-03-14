@@ -77,7 +77,9 @@ def parse_dsp(data):
     pass
 
 def parse_fanout(data):
-    pass
+    #TODO fan num?
+    paths = ['OXFan', 'X1Fan', 'SX1Fan', 'X2Fan', 'X8Fan', 'FFan', 'QFan']
+    return float_data(data, paths)
 
 def parse_glbsrc(data):
     pass
@@ -86,7 +88,9 @@ def parse_hclk(data):
     pass
 
 def parse_iodelay(data):
-    pass
+    paths = ['GI_DO', 'SDTAP_DO', 'SETN_DO', 'VALUE_DO',
+             'SDTAP_DF', 'SETN_DF', 'VALUE_DF']
+    return float_data(data, paths)
 
 def parse_io(data):
     pass
@@ -95,7 +99,8 @@ def parse_iregoreg(data):
     pass
 
 def parse_wire(data):
-    pass
+    paths = ['OX', 'FX1', 'X2', 'X8', 'ISB', 'X0CTL', 'X0CLK', 'X0ME']
+    return float_data(data, paths)
 
 offsets = {
     #0x0: parse_alu,
@@ -136,5 +141,6 @@ if __name__ == "__main__":
             res = parse_chunk(chunk)
             for name, tm in res:
                 if tm:
-                    print(name, tm)
+                    print(name)
+                    print(tm)
 
