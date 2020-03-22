@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import pickle
+import numpy as np
 import json
 import chipdb
 import bslib
@@ -99,6 +100,25 @@ def route(db, tilemap, pips):
         for row, col in bits:
             tile[row][col] = 1
 
+def header_footer(db, bs):
+    """
+    Generate fs header and footer
+    Currently limited to checksum with
+    CRC_check and security_bit_enable set
+    """
+    bs = np.fliplr(bs)
+    bs=np.packbits(bs, axis=1)
+    # configuration data checksum is computed on all
+    # data in 16bit format
+    bb = np.array(bs.flat)
+
+    res = int(bb[0::2].sum() * pow(2,8) + bb[1::2].sum())
+    checksum = res & 0xffff
+    db.cmd_hdr[0] = bytearray.fromhex(f"{checksum:x}")
+
+    # same task for line 2 in footer
+    db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
+
 if __name__ == '__main__':
     with open(f"{device}.pickle", 'rb') as f:
         db = pickle.load(f)
@@ -110,5 +130,6 @@ if __name__ == '__main__':
     pips = get_pips(pnr)
     route(db, tilemap, pips)
     res = chipdb.fuse_bitmap(db, tilemap)
+    header_footer(db, res)
     bslib.display('pack.png', res)
     bslib.write_bitstream('pack.fs', res, db.cmd_hdr, db.cmd_ftr)
