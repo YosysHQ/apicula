@@ -26,7 +26,11 @@ def float_data(data, paths):
     return res
 
 def parse_lut(data):
-    paths = ['a_f', 'b_f', 'c_f', 'd_f', 'a_ofx', 'b_ofx', 'c_ofx', 'd_ofx']
+    paths = ['a_f', 'b_f', 'c_f', 'd_f', 'a_ofx', 'b_ofx', 'c_ofx', 'd_ofx', 'm0_ofx0', 'm1_ofx1', 'fx_ofx1']
+    return float_data(data, paths)
+
+def parse_alu(data):
+    paths = ['a_f', 'b_f', 'd_f', 'a0_fco', 'b0_fco', 'd0_fco', 'fci_fco', 'fci_f0']
     return float_data(data, paths)
 
 def parse_sram(data):
@@ -103,8 +107,8 @@ def parse_wire(data):
     return float_data(data, paths)
 
 offsets = {
-    #0x0: parse_alu,
     0x0: parse_lut,
+    0xb0: parse_alu,
     0x130: parse_sram,
     0x240: parse_dff,
     0x390: parse_dl,

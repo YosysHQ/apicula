@@ -68,7 +68,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG)(\w*)")
     for bel, flags in bels.items():
         typ, idx = belre.match(bel).groups()
 
