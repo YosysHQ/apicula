@@ -135,7 +135,6 @@ def parse_bram(data):
         'clk_clk', # 0xe0
     ]
     return float_data(data, paths)
-    pass
 
 def parse_dsp(data):
     pass
