@@ -34,7 +34,26 @@ def parse_alu(data):
     return float_data(data, paths)
 
 def parse_sram(data):
-    pass
+    paths = [
+        'rad0_do', # 0 also unnumbered
+        'rad1_do', # 4
+        'rad2_do', # 8
+        'rad3_do', # 0xc
+        'clk_di_set', # 0x10
+        'clk_di_hold', # 0x14
+        'clk_wre_set', # 0x18
+        'clk_wre_hold', # 0x1c
+        'clk_wad0_set', # 0x20 also unnumbered
+        'clk_wad0_hold', # 0x24 also unnumbered
+        'clk_wad1_set', # 0x28
+        'clk_wad1_hold', # 0x2c
+        'clk_wad2_set', # 0x30
+        'clk_wad2_hold', # 0x34
+        'clk_wad3_set', # 0x38
+        'clk_wad3_hold', # 0x3c
+        'clk_do', # 0x40
+    ]
+    return float_data(data, paths)
 
 def parse_dff(data):
     paths = [
