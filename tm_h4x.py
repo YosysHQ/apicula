@@ -75,6 +75,66 @@ def parse_dll(data):
     pass
 
 def parse_bram(data):
+    paths = [
+        'clka_doa', # 0
+        'clkb_dob', # 4
+        'clkb_do', # 8
+        'clk_do', # 0xc
+        'clka_reseta_set', # 0x10
+        'clka_ocea_set', # 0x14
+        'clka_cea_set', # 0x18
+        'clka_wrea_set', # 0x1c
+        'clka_dia_set', # 0x20
+        'clka_di_set', # 0x24
+        'clka_ada_set', # 0x28
+        'clka_blksel_set', # 0x2c
+        'clka_reseta_hold', # 0x30
+        'clka_ocea_hold', # 0x34
+        'clka_cea_hold', # 0x38
+        'clka_wrea_hold', # 0x3c
+        'clka_dia_hold', # 0x40
+        'clka_di_hold', # 0x44
+        'clka_ada_hold', # 0x48
+        'clka_blkset_hold', # 0x4c
+        'clkb_resetb_set', # 0x50
+        'clkb_oceb_set', # 0x54
+        'clkb_ceb_set', # 0x58
+        'clkb_oce_set' # 0x5c
+        'clkb_wreb_set', # 0x60
+        'clkb_dib_set', # 0x64
+        'clkb_adb_set', # 0x68
+        'clkb_blkset_set' # 0x6c
+        'clkb_resetb_hold', # 0x70
+        'clkb_oceb_hold', # 0x74
+        'clkb_ceb_hold', # 0x78
+        'clkb_oce_hold', # 0x7c
+        'clkb_wreb_hold', # 0x80
+        'clkb_dib_hold', # 0x84
+        'clkb_adb_hold', # 0x88
+        'clkb_blksel_hold', # 0x8c
+        'clk_ce_set', # 0x90
+        'clk_oce_set', # 0x94
+        'clk_reset_set', # 0x98
+        'clk_wre_set', # 0x9c
+        'clk_ad_set', # 0xa0
+        'clk_di_set', # 0xa4
+        'clk_blksel_set', # 0a8
+        'clk_ce_hold', # 0xac
+        'clk_oce_hold', # 0xb0
+        'clk_reset_hold' # 0xb4
+        'clk_wre_hold', # 0xb8
+        'clk_ad_hold', #0xbc
+        'clk_di_hold', # 0xc0
+        'clk_blksel_hold', # 0xc4
+        'clk_reset_set_syn', # 0xc8
+        'clk_reset_hold_syn', # 0xcc
+        'clka_reseta_set_syn', # 0xd0
+        'clka_reseta_hold_syn', # 0xd4
+        'clkb_resetb_set_syn', # 0xd8
+        'clkb_resetb_hold_syn', # 0xdc
+        'clk_clk', # 0xe0
+    ]
+    return float_data(data, paths)
     pass
 
 def parse_dsp(data):
