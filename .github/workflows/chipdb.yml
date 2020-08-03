@@ -1,0 +1,22 @@
+name: Chipdb builder
+
+on:
+  push:
+    branches:
+        - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build chipdb
+      run: |
+        docker build . --file Dockerfile --tag apicula-chipdb
+        docker run --env DEVICE=GW1N-1  -v $(pwd)/apicula-chipdb:/artifacts --rm apicula-chipdb:latest
+        docker run --env DEVICE=GW1NR-9 -v $(pwd)/apicula-chipdb:/artifacts --rm apicula-chipdb:latest
+    - name: Archive artifact
+      uses: actions/upload-artifact@v2
+      with:
+          name: apicula-chipdb
+          path: apicula-chipdb
