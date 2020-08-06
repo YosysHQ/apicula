@@ -17,7 +17,7 @@ with open(f"../{device}.pickle", 'rb') as f:
     db = pickle.load(f)
 
 
-added_wires = []
+added_wires = set()
 def addWire(row, col, wire):
     gname = chipdb.wire2global(row, col, db, wire)
     #print("wire", gname)
@@ -25,7 +25,7 @@ def addWire(row, col, wire):
         # print(f"Duplicate wire {gname}")
         return
     else:
-        added_wires.append(gname)
+        added_wires.add(gname)
         ctx.addWire(name=gname, type=wire, y=row, x=col)
 
 belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG)(\w*)")
