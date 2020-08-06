@@ -42,6 +42,7 @@ class Tile:
 class Device:
     # a grid of tiles
     grid: List[List[Tile]] = field(default_factory=list)
+    timing: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)
     template: np.ndarray = None

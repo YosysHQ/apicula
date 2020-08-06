@@ -122,7 +122,7 @@ def parse_bram(data):
         'clkb_wreb_set', # 0x60
         'clkb_dib_set', # 0x64
         'clkb_adb_set', # 0x68
-        'clkb_blkset_set' # 0x6c
+        'clkb_blkset_set', # 0x6c
         'clkb_resetb_hold', # 0x70
         'clkb_oceb_hold', # 0x74
         'clkb_ceb_hold', # 0x78
@@ -140,7 +140,7 @@ def parse_bram(data):
         'clk_blksel_set', # 0a8
         'clk_ce_hold', # 0xac
         'clk_oce_hold', # 0xb0
-        'clk_reset_hold' # 0xb4
+        'clk_reset_hold', # 0xb4
         'clk_wre_hold', # 0xb8
         'clk_ad_hold', #0xbc
         'clk_di_hold', # 0xc0
@@ -213,8 +213,49 @@ dspoffsets = {
 }
 def parse_chunk(chunk):
     for off, parser in offsets.items():
-        yield parser.__name__, parser(chunk[off:])
+        yield parser.__name__[6:], parser(chunk[off:])
 
+
+if device.lower().startswith("gw1n"):
+    chunk_order = [
+        "C5/I4",
+        "C5/I42a8",
+        "C6/I5",
+        "C6/I52a8",
+        "A4",
+        "A42a8",
+        "ES",
+        "ES2a8",
+    ]
+elif device.lower().startswith("gw2a"):
+    chunk_order = [
+        "C8/I7",
+        "C8/I72a8",
+        "C7/I6",
+        "C7/I62a8",
+        "A6",
+        "A62a8",
+        "C9/I8",
+        "C9/I82a8",
+    ]
+else:
+    chunk_order = []
+
+
+def read_tm(f):
+    tmdat = {}
+    for i, chunk in enumerate(iter(lambda: f.read(chunklen), b'')):
+        try:
+            speed_class = chunk_order[i]
+        except IndexError:
+            speed_class = i
+        tmdat[speed_class] = {}
+        assert len(chunk) == chunklen
+        res = parse_chunk(chunk)
+        for name, tm in res:
+            if tm:
+                tmdat[speed_class][name] = tm
+    return tmdat
 
 if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:

@@ -18,6 +18,7 @@ import pindef
 import fuse_h4x
 #TODO proper API
 #import dat19_h4x
+import tm_h4x
 import json
 import chipdb
 
@@ -259,7 +260,11 @@ if __name__ == "__main__":
     with open(f"{device}.json") as f:
         dat = json.load(f)
 
+    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
+        tm = tm_h4x.read_tm(f)
+
     db = chipdb.from_fse(fse)
+    db.timing = tm
 
     locations = {}
     for row, row_dat in enumerate(fse['header']['grid'][61]):
