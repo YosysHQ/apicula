@@ -1,13 +1,31 @@
+import os
+import pickle
+import chipdb
+
+device = os.getenv("DEVICE")
+if not device:
+    raise Exception("DEVICE not set")
+
+timing_class = "C6/I5" # TODO parameterize
+
+with open(f"../{device}.pickle", 'rb') as f:
+    db = pickle.load(f)
+
+timing = db.timing[timing_class]
+
 for cname, cell in ctx.cells:
     if cell.type != "GENERIC_SLICE":
         continue
     if cname in ("$PACKER_GND", "$PACKER_VCC"):
         continue
-    K = int(cell.params["K"])
+    ports = ['a', 'b', 'c', 'd']
     ctx.addCellTimingClock(cell=cname, port="CLK")
-    for i in range(K):
-        ctx.addCellTimingSetupHold(cell=cname, port="I[%d]" % i, clock="CLK",
-            setup=ctx.getDelayFromNS(0.2), hold=ctx.getDelayFromNS(0))
-    ctx.addCellTimingClockToOut(cell=cname, port="Q", clock="CLK", clktoq=ctx.getDelayFromNS(0.2))
-    for i in range(K):
-        ctx.addCellTimingDelay(cell=cname, fromPort="I[%d]" % i, toPort="F", delay=ctx.getDelayFromNS(0.2))
+    for i, port in enumerate(ports):
+        setup = ctx.getDelayFromNS(max(timing['dff']['di_clksetpos']))
+        hold = ctx.getDelayFromNS(max(timing['dff']['di_clkholdpos']))
+        ctx.addCellTimingSetupHold(cell=cname, port="I[%d]" % i, clock="CLK", setup=setup, hold=hold)
+    clkout = ctx.getDelayFromNS(max(timing['dff']['clk_qpos']))
+    ctx.addCellTimingClockToOut(cell=cname, port="Q", clock="CLK", clktoq=clkout)
+    for i, port in enumerate(ports):
+        delay = ctx.getDelayFromNS(max(timing['lut'][f'{port}_f']))
+        ctx.addCellTimingDelay(cell=cname, fromPort="I[%d]" % i, toPort="F", delay=delay)

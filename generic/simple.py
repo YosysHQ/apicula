@@ -1,6 +1,5 @@
 import sys
 import os
-import json
 from itertools import chain
 import re
 import code
@@ -17,7 +16,7 @@ with open(f"../{device}.pickle", 'rb') as f:
     db = pickle.load(f)
 
 
-added_wires = []
+added_wires = set([])
 def addWire(row, col, wire):
     gname = chipdb.wire2global(row, col, db, wire)
     #print("wire", gname)
@@ -25,7 +24,7 @@ def addWire(row, col, wire):
         # print(f"Duplicate wire {gname}")
         return
     else:
-        added_wires.append(gname)
+        added_wires.add(gname)
         ctx.addWire(name=gname, type=wire, y=row, x=col)
 
 belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG)(\w*)")
@@ -79,9 +78,10 @@ def addPip(row, col, srcname, destname):
     pipname = f"R{row}C{col}_{srcname}_{destname}"
     #print("pip", pipname, srcname, gsrcname, destname, gdestname)
     try:
+        # delay is crude fudge from vendor critical path
         ctx.addPip(
             name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
-            delay=ctx.getDelayFromNS(0.05), loc=Loc(col, row, 0))
+            delay=ctx.getDelayFromNS(1.225), loc=Loc(col, row, 0))
     except IndexError:
         pass
         #print("Wire not found", gsrcname, gdestname)
@@ -94,7 +94,8 @@ def addAlias(row, col, srcname, destname):
     gdestname = chipdb.wire2global(row, col, db, destname)
 
     pipname = f"R{row}C{col}_{srcname}_{destname}"
-    ##print("alias", pipname)
+    #print("alias", pipname)
+    #I don't think these are physical wires with extra delay
     ctx.addAlias(
         name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
         delay=ctx.getDelayFromNS(0.01))
@@ -108,4 +109,5 @@ for row, rowdata in enumerate(db.grid, 1):
         for dest, src in tile.aliases.items():
             addAlias(row, col, src, dest)
 
+ctx.setDelayScaling(0.5, 0.5)
 #code.interact(local=locals())
