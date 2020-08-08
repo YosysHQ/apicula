@@ -15,17 +15,14 @@ if not device:
 with open(f"../{device}.pickle", 'rb') as f:
     db = pickle.load(f)
 
-
-added_wires = set([])
 def addWire(row, col, wire):
     gname = chipdb.wire2global(row, col, db, wire)
     #print("wire", gname)
-    if gname in added_wires:
-        # print(f"Duplicate wire {gname}")
-        return
-    else:
-        added_wires.add(gname)
+    try:
         ctx.addWire(name=gname, type=wire, y=row, x=col)
+    except AssertionError:
+        pass
+        #print("duplicate wire")
 
 belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG)(\w*)")
 for row, rowdata in enumerate(db.grid, 1):
