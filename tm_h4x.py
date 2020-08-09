@@ -25,6 +25,15 @@ def float_data(data, paths):
             res.setdefault(name,[]).append(to_float(data[idx*4:idx*4+4]))
     return res
 
+def to_int(s):
+    return struct.unpack('I', s)[0]
+
+def int_data(data, paths):
+    res = {}
+    for i, name in enumerate(paths):
+        res[name] = to_int(data[i*4:i*4+4])
+    return res
+
 def parse_lut(data):
     paths = ['a_f', 'b_f', 'c_f', 'd_f', 'a_ofx', 'b_ofx', 'c_ofx', 'd_ofx', 'm0_ofx0', 'm1_ofx1', 'fx_ofx1']
     return float_data(data, paths)
@@ -159,9 +168,27 @@ def parse_dsp(data):
     pass
 
 def parse_fanout(data):
-    #TODO fan num?
-    paths = ['OXFan', 'X1Fan', 'SX1Fan', 'X2Fan', 'X8Fan', 'FFan', 'QFan']
-    return float_data(data, paths)
+    paths = [
+        'X0Fan', # 0x00
+        'X1Fan', # 0x04
+        'SX1Fan', # 0x08
+        'X2Fan', # 0x0C
+        'X8Fan', # 0x10
+        'FFan', # 0x14
+        'QFan', # 0x18
+        'OFFan', # 0x1c
+    ]
+    int_paths = [
+        'X0FanNum',
+        'X1FanNum',
+        'SX1FanNum',
+        'X2FanNum',
+        'X8FanNum',
+        'FFanNum',
+        'QFanNum',
+        'OFFanNum',
+    ]
+    return {**float_data(data, paths), **int_data(data[0x80:], int_paths)}
 
 def parse_glbsrc(data):
     pass
@@ -181,7 +208,16 @@ def parse_iregoreg(data):
     pass
 
 def parse_wire(data):
-    paths = ['OX', 'FX1', 'X2', 'X8', 'ISB', 'X0CTL', 'X0CLK', 'X0ME']
+    paths = [
+        'X0', # 0x00
+        'FX1', # 0x04
+        'X2', # 0x08
+        'X8', # 0x0C
+        'ISB', # 0x10
+        'X0CTL', # 0x14
+        'X0CLK', # 0x18
+        'X0ME', # 0x1C
+    ]
     return float_data(data, paths)
 
 offsets = {
@@ -219,24 +255,24 @@ def parse_chunk(chunk):
 if device.lower().startswith("gw1n"):
     chunk_order = [
         "C5/I4",
-        "C5/I42a8",
+        "C5/I42_LV",
         "C6/I5",
-        "C6/I52a8",
-        "A4",
-        "A42a8",
+        "C6/I5_LV",
         "ES",
-        "ES2a8",
+        "ES_LV",
+        "A4",
+        "A4_LV",
     ]
 elif device.lower().startswith("gw2a"):
     chunk_order = [
         "C8/I7",
-        "C8/I72a8",
+        "C8/I7_LV",
         "C7/I6",
-        "C7/I62a8",
+        "C7/I6_LV",
         "A6",
-        "A62a8",
+        "A6_LV",
         "C9/I8",
-        "C9/I82a8",
+        "C9/I8_LV",
     ]
 else:
     chunk_order = []

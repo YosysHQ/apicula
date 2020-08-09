@@ -15,6 +15,9 @@ if not device:
 with open(f"../{device}.pickle", 'rb') as f:
     db = pickle.load(f)
 
+timing_class = "C6/I5" # TODO parameterize
+timing = db.timing[timing_class]
+
 def addWire(row, col, wire):
     gname = chipdb.wire2global(row, col, db, wire)
     #print("wire", gname)
@@ -68,6 +71,17 @@ for row, rowdata in enumerate(db.grid, 1):
                 ctx.addBelOutput(bel=belname, name="O", wire=oname)
 
 
+wlens = {0: 'X0', 1: 'FX1', 2: 'X2', 8: 'X8'}
+def wiredelay(wire):
+    m = re.match(r"[NESWX]+([0128])", wire)
+    if not m: # no known delay
+        return ctx.getDelayFromNS(0)
+    wlen = int(m.groups()[0])
+    name = wlens.get(wlen)
+    return ctx.getDelayFromNS(max(timing['wire'][name]))
+
+
+
 def addPip(row, col, srcname, destname):
     gsrcname = chipdb.wire2global(row, col, db, srcname)
     gdestname = chipdb.wire2global(row, col, db, destname)
@@ -78,7 +92,7 @@ def addPip(row, col, srcname, destname):
         # delay is crude fudge from vendor critical path
         ctx.addPip(
             name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
-            delay=ctx.getDelayFromNS(1.225), loc=Loc(col, row, 0))
+            delay=wiredelay(destname), loc=Loc(col, row, 0))
     except IndexError:
         pass
         #print("Wire not found", gsrcname, gdestname)
@@ -91,7 +105,7 @@ def addAlias(row, col, srcname, destname):
     gdestname = chipdb.wire2global(row, col, db, destname)
 
     pipname = f"R{row}C{col}_{srcname}_{destname}"
-    #print("alias", pipname)
+    print("alias", pipname)
     #I don't think these are physical wires with extra delay
     ctx.addAlias(
         name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
@@ -106,5 +120,5 @@ for row, rowdata in enumerate(db.grid, 1):
         for dest, src in tile.aliases.items():
             addAlias(row, col, src, dest)
 
-ctx.setDelayScaling(0.5, 0.5)
+ctx.setDelayScaling(0.05, 0.5)
 #code.interact(local=locals())
