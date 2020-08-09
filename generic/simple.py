@@ -105,7 +105,7 @@ def addAlias(row, col, srcname, destname):
     gdestname = chipdb.wire2global(row, col, db, destname)
 
     pipname = f"R{row}C{col}_{srcname}_{destname}"
-    print("alias", pipname)
+    #print("alias", pipname)
     #I don't think these are physical wires with extra delay
     ctx.addAlias(
         name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
