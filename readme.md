@@ -33,8 +33,7 @@ export GOWINHOME=/gowin/installation
 export DEVICE="GW1NR-9" # TEC0117
 export DEVICE="GW1N-1" # Tang Nano
 pip install numpy pandas pillow crcmod xlrd ipython
-python dat19_h4x.py # makes $DEVICE.json
-python tiled_fuzzer.py # makes $DEVICE.pickle
+make # makes $DEVICE.pickle
 cd generic
 bash simple.sh blinky.v # TEC0117
 bash simple.sh attosoc/*.v # TEC0117
