@@ -191,7 +191,26 @@ def parse_fanout(data):
     return {**float_data(data, paths), **int_data(data[0x80:], int_paths)}
 
 def parse_glbsrc(data):
-    pass
+    paths = [
+        'CIB_CENT_PCLK', # 0x00
+        'PIO_CENT_PCLK', # 0x04
+        'CENT_SPINE_PCLK', # 0x08
+        'SPINE_TAP_PCLK', # 0x0c
+        'TAP_BRANCH_PCLK', # 0x10
+        'BRANCH_PCLK', # 0x14
+        'CIB_PIC_INSIDE', # 0x18
+        'CIB_CENT_SCLK', # 0x1c
+        'PIO_CENT_SCLK', # 0x20
+        'CENT_SPINE_SCLK', # 0x24
+        'SPINE_TAP_SCLK_0', # 0x28
+        'SPINE_TAP_SCLK_1', # 0x2c (getter takes index)
+        'TAP_BRANCH_SCLK', # 0x30
+        'BRANCH_SCLK', # 0x34
+        'GSRREC_SET', # 0x38
+        'GSRREC_HLD', # 0x3c
+        'GSR_MPW', # 0x40
+    ]
+    return float_data(data, paths)
 
 def parse_hclk(data):
     pass
