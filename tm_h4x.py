@@ -190,6 +190,11 @@ def parse_fanout(data):
     ]
     return {**float_data(data, paths), **int_data(data[0x80:], int_paths)}
 
+# P/S = primary/secondary clock?
+# clock path:
+# CIB/PIO -> CENT -> SPINE -> TAP -> BRANCH
+# CIB in ECP5 = configurable interconnect block
+# PIO in ECP5 = programmable IO
 def parse_glbsrc(data):
     paths = [
         'CIB_CENT_PCLK', # 0x00
@@ -212,8 +217,16 @@ def parse_glbsrc(data):
     ]
     return float_data(data, paths)
 
+
+# HclkPathDly = 0x8 + 0x0 + 0xc
 def parse_hclk(data):
-    pass
+    paths = [
+        'HclkInMux', # 0x0
+        'HclkHbrgMux', # 0x4
+        'HclkOutMux', # 0x8
+        'HclkDivMux', # 0xc
+    ]
+    return float_data(data, paths)
 
 def parse_iodelay(data):
     paths = ['GI_DO', 'SDTAP_DO', 'SETN_DO', 'VALUE_DO',
