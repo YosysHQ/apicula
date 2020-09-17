@@ -1,6 +1,9 @@
 import os
 import sys
 import json
+import struct
+
+from pyapicula.parsers import dat
 
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
@@ -46,67 +49,14 @@ def print_u64(name, pos):
     print(f'{name} [0x{pos:06x}]: {v} [0x{v:016x}]')
     return pos + 8
 
+# memoryview allows zero-copy slicing
+reader = dat.DatFileReader(memoryview(d))
+grid_info = reader.read_grid_info()
+grid_w = grid_info.columns
+grid_h = grid_info.rows
+print(reader.print_grid())
 
-pos = 0x026060
-z = [
-    int.from_bytes(d[pos + i * 2 : pos + i * 2 + 2], 'little')
-    for i in range(4)
-]
-grid_h, grid_w, cc_y, cc_x = z
-data['rows'] = grid_h
-data['cols'] = grid_w
-data['center'] = (cc_y, cc_x)
-print(grid_h, grid_w)
-print(cc_y, cc_x)
-
-for i in [2, 1, 0]:
-    print('    ', end='')
-    for x in range(grid_w):
-        n = x // 10**i % 10
-        print(n, end='')
-    print()
-
-print()
-
-data['grid'] = []
-for y in range(150):
-    if y in range(grid_h):
-        print(f'{y:3} ', end='')
-        row = []
-        data['grid'].append(row)
-    for x in range(200):
-        idx = y * 200 + x
-        pos = 5744 + 4 * idx
-        a = int.from_bytes(d[pos:pos+4], 'little')
-        pos = 125744
-        b = d[pos+idx]
-        c = {
-            (0, 0): ' ', # empty
-            (1, 1): 'I', # I/O
-            (2, 1): 'L', # LVDS (GW2A* only)
-            (3, 1): 'R', # routing?
-            (4, 0): 'c', # CFU, disabled
-            (4, 1): 'C', # CFU
-            (5, 1): 'M', # CFU with RAM option
-            (6, 0): 'b', # blockram padding
-            (6, 1): 'B', # blockram
-            (7, 0): 'd', # dsp padding
-            (7, 1): 'D', # dsp
-            (8, 0): 'p', # pll padding
-            (8, 1): 'P', # pll
-            (9, 1): 'Q', # dll
-        }[a, b]
-        if y in range(grid_h) and x in range(grid_w):
-            row.append(c)
-            if x == cc_x and y == cc_y:
-                assert c == 'b'
-                print('#', end='')
-            else:
-                print(f'{c}', end='')
-        else:
-            assert c == ' '
-    if y in range(grid_h):
-        print()
+data.update(reader.to_json_dict())
 
 print()
 
