@@ -129,7 +129,9 @@ def display(fname, data):
             data=data)
     random.seed(123)
     im.putpalette(random.choices(range(256), k=3*256))
-    im.save(fname)
+    if fname:
+        im.save(fname)
+    return im
 
 def fuse_lookup(d, ttyp, fuse):
     if fuse >= 0:

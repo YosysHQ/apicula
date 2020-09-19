@@ -97,4 +97,6 @@ def display(fname, data):
             mode='1',
             size=data.shape[::-1],
             data=np.packbits(data, axis=1))
-    im.save(fname)
+    if fname:
+        im.save(fname)
+    return im

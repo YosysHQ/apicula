@@ -31,3 +31,10 @@ def get_pins(series, package, special_pins=False, header=0):
 def get_locs(series, package, special_pins=False, header=0):
     df = get_package(series, package, special_pins, header)
     return {p.split('/')[0] for p in df["Pin Name"]}
+
+def get_clock_locs(series, package, header=0):
+    df = get_package(series, package, True, header)
+    df = df[df["Configuration Function"].str.startswith("GCLK", na=False)]
+    return {tuple(p.split('/')) for p in df["Pin Name"]}
+    
+
