@@ -182,7 +182,7 @@ def dualmode(ttyp):
         yield ttyp, mod, cst, cfg
 
 def read_posp(fname):
-    cst_parser = re.compile(r"(\w+) CST_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
+    cst_parser = re.compile(r"(\w+) (?:PLACE|CST)_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
     place_parser = re.compile(r"(\w+) (?:PLACE|CST)_IO([TBLR])(\d+)\[([A-Z])\]")
     with open(fname, 'r') as f:
         for line in f:
