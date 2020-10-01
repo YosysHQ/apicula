@@ -4,15 +4,11 @@ Documentation of the Gowin FPGA bitstream format.
 
 Project Apicula uses a combination of fuzzing and parsing of the vendor data files to find the meaning of all the bits in the bitstream.
 
-##  Dependencies
+## Dependencies
 
-Version 1.9.1.01 of the Gowin vendor tools. Newer versions may work, but have not been tested. A copy of the following Gowin files downloaded in `~/Documents/gowinsemi`:
-* `UG107-1.09E_GW1N-1 Pinout.xlsx`
-* `UG801-1.5E_GW1NR-9 Pinout.xlsx`
+The latest git Yosys and Nextpnr, installed with the generic target.
 
-Optionally [openFPGALoader](https://github.com/trabucayre/openFPGALoader) for a complete open source end-to-end flow.
-
-The latest Yosys and Nextpnr, installed with the generic backend.
+[openFPGALoader](https://github.com/trabucayre/openFPGALoader) for loading the bitstream.
 
 Python 3.6+:
 * Numpy
@@ -22,18 +18,39 @@ Python 3.6+:
 * xlrd
 * dataclasses (Python 3.6 only)
 
+### Developer dependencies
+
+In addition to the above, to run the fuzzers and build the ChipDB, the following additional dependencies are needed.
+
+Version 1.9.1.01 of the Gowin vendor tools. Newer versions may work, but have not been tested. A copy of the following Gowin files downloaded in `~/Documents/gowinsemi`:
+* `UG107-1.09E_GW1N-1 Pinout.xlsx`
+* `UG801-1.5E_GW1NR-9 Pinout.xlsx`
+
+Alternatively, you can use the `Dockerfile` to run the fuzzers in a container.
+
 ## Getting Started
 
-For the Trenz TEC0117, use GW1NR-9, for the Sipeed Tang Nano, use GW1N-1.
+For the Trenz TEC0117, use GW1NR-9, for the Sipeed Tang Nano, use GW1N-1. Other devices are currently not supported. Read on to learn how to contribute other devices.
+
 
 ```bash
 virtualenv env
 source env/bin/activate
-export GOWINHOME=/gowin/installation
 export DEVICE="GW1NR-9" # TEC0117
 export DEVICE="GW1N-1" # Tang Nano
 pip install numpy pandas pillow crcmod xlrd ipython
+```
+
+Developers should generate the ChipDB first. Users can skip this step and download the latest ChipDB from the build artefact in the "Actions" tab. The pickle file should be placed in the Apicula directory.
+
+```bash
+export GOWINHOME=/gowin/installation
 make # makes $DEVICE.pickle
+```
+
+From there, the ChipDB can be used to compile an example program.
+
+```
 cd generic
 bash simple.sh blinky.v # TEC0117
 bash simple.sh attosoc/*.v # TEC0117
@@ -46,11 +63,10 @@ python gowin_pack.py generic/pnrblinky.json
 # look at pack.png and pack.fs
 python gowin_unpack.py pack.fs
 yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
-/gowin/installation/Programmer/bin/programmer_cli --device $DEVICE --run 2 --fsFile /path/to/pack.fs
-openFPGALoader -m -b littleBee pack.fs # FOSS programmer
+openFPGALoader -b littleBee pack.fs # TEC0117
+openFPGALoader -b tangnano pack.fs # Tang Nano
 ```
 
-Other devices are currently not supported. Read on to learn how to contribute other devices.
 
 ## Status
 
@@ -67,7 +83,9 @@ Check out the `doc` folder for documentation about the FPGA architecture, vendor
 
 My internship report about this project [can be downloaded here](https://github.com/pepijndevos/internshipreport).
 
-I did a few [livestreams on twitch](https://www.twitch.tv/pepijnthefox) working on this project, which are collected [on this playlist](https://www.youtube.com/playlist?list=PLIYslVBAlKZad3tjr5Y4gqBV3QKQ5_tPw)
+I did a few [livestreams on twitch](https://www.twitch.tv/pepijnthefox) working on this project, which are collected [on this playlist](https://www.youtube.com/playlist?list=PLIYslVBAlKZad3tjr5Y4gqBV3QKQ5_tPw) I've also started to write Jupyter notebooks of my explorations that are more condensed than a video.
+
+You can also come chat on Freenode in #apicula
 
 ## What remains to be done / how can I help?
 
@@ -98,17 +116,19 @@ Things that could be fuzzed:
 
 ### Parsing
 
-For each FPGA, the vendor provides `.dat`, `.fse`, `.ini`, `.pwr`, and `.tm` files. Of these, only parsers for `.dat` and `.fse` have been written. It is expected that the `.pwr`, and `.tm` files contain respectively power and timing data, which will be of crucial importance when writing a full-fledged Nextpnr flow.
+For each FPGA, the vendor provides `.dat`, `.fse`, `.ini`, `.pwr`, and `.tm` files. Of these, only parsers for `.dat`, `.fse` and `.tm` have been written.
 
 The format of these other files is unknown, you're on your own here. I could only offer you some vague pointers based on experience from the other two files.
 
-For a description of the known file format, [see the documentation](doc/filestructure.md).
+For a description of the known file formats, [see the documentation](doc/filestructure.md).
 
 The parser for the `.fse` format is fairly robust and complete, but vendor software updates sometimes add new file and table types.
 The main thing lacking here is a better understanding of the meaning of all these tables. Part of this can be done with [fuzzing](#fuzzing), but another large part is just looking at the data for patterns and correlations. For example, some numbers might be indices into other tables, wire IDs, fuse IDs, or encoded X/Y positions.
 
 
 The parser for the `.dat` file is more fragile and incomplete. This is mainly because it just appears to be a fixed format struct with array fields. New vendor software versions sometimes add new fields, breaking the parser. Here there are actually a few gaps in the data that have not been decoded and named. It is suspected that at least some of these gaps are related to pinouts and packaging.
+
+The format of the '.tm' appears to be just a big collection of floats. Not all of them have a meaning that is well understood, but the parser itself is fairly complete.
 
 ### Nextpnr
 
@@ -132,15 +152,6 @@ Currently the ChipDB is just using Pickle because it's easy. This is however not
 
 Eventually it'd be really sweet if there were some tests and continuous integration.
 
-
-### JTAG programmer
-
-Currently the vendor programming tool is used. For a truly end-to-end open source flow, a JTAG programmer would have to be written, or at least adapted for use with Gowin FPGAs.
-
-In some toolchains the IDE can generate a SVF file for use with other JTAG programmers. This could for example be used with OpenOCD. However, Gowin is not one of those toolchains.
-
-So what needs to be done is to extract the JTAG commands used by the vendor tools by either capturing USB packets, or using a logic analyser to decode the JTAG commands at the FPGA inputs. With these commands, a script can be written that converts a bitstream to an SVF file that could be used with OpenOCD.
-
 ## Files overview
 
 * `bslib.py` utilities for parsing `.fs` bitstream files in ascii format.
@@ -148,7 +159,6 @@ So what needs to be done is to extract the JTAG commands used by the vendor tool
 * `codegen.py` utilities for generating Verilog netlist files.
 * `dat19_h4x.py` a parser for vendor `.dat` files used in PnR.
 * `doc` documentation.
-* `example` a simple test program.
 * `fuse_h4x.py` a parser for vendor `.fse` files used in bitgen.
 * `fuzzer.py` a fuzzer for finding bit locations of various things, not based on vendor files.
 * `generic` Python files for the Nextpnr generic target
@@ -166,4 +176,5 @@ So what needs to be done is to extract the JTAG commands used by the vendor tool
 * `legacy` old bash fuzzers, sometimes useful for a quick test.
 * `pindef.py` extract pinout information form vendor spreadsheets.
 * `tiled_fuzzer.py` a simplified fuzzer that uses vendor data files to fuzz a specific tile type.
+* `tm_h4x.py` a parser for vendor timing information.
 * `wirenames.py` mapping between vendor wire IDs and names.

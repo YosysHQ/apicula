@@ -1,6 +1,6 @@
 # File structure
 
-Two important types of vendor files are parsed, `.dat` and `.fse`. Other files also exist for things such as timing and power, but these are not currently parsed.
+Three important types of vendor files are parsed, `.dat`, `.fse`, and `.tm`. Other files also exist, but these are not currently parsed.
 
 # Wire names
 
@@ -40,7 +40,7 @@ Some unknown areas remain in this file, a large part of which is expected to be 
 
 The first thing of interest is the tile grid, which is stored in a 150x200 array, prefixed by the size of the actual FPGA, and the location of the center tile (suspected root of the clock tree). There is a 32-bit tile type (overkill much?) and a 8-bit "used" value. Gowin employs binning, so some devices have half of their tiles "disabled" here. Of note is that this tile grid contains an extra ring of tiles between the IOB and CFU that is not present in the bitstream.
 
-Then follow discriptions of some primitives and their inputs. The forma for a thing Foo is that there is `NumFoos` describing how many Foos there are, `NumFooIns` describing the number of Foo inputs, followed by the list of `Foos` and the list of `FooIns`. These numbers are wires IDs that can be mapped to names with `wirenames.py`.
+Then follow discriptions of some primitives and their inputs. The format for a thing Foo is that there is `NumFoos` describing how many Foos there are, `NumFooIns` describing the number of Foo inputs, followed by the list of `Foos` and the list of `FooIns`. These numbers are wires IDs that can be mapped to names with `wirenames.py`.
 
 Then follow description of various things about pins and banks that are not fully understood.
 
@@ -79,3 +79,27 @@ The `wire` tables contain the pips of a tile. it is of the format `[src, dest, *
 
 The `const` table just contains some fuses that are always set, their meaning is unknown.
 The meaning of `wiresearch` and `alonenode` tables is not known.
+
+# Timing file
+
+The `.tm` file contains timing info for the FPGA. This format is again more or less a C struct mapped to a file, however, the format is rather simple.
+
+The file is split in several timing classes. Within a timing class there are several large subsections for things like LUTs, DFF, or routing. Within these sections are list of items, like the delay between two ports or some setup/hold time. Each item is expressed as 4 floating point numbers.
+
+The reason there are 4 numbers is because NMOS transistors are more effective than PMOS transistors of the same size. An NMOS can pull down a wire faster than a PMOS can pull it up. So if there is an input and an output, that means 4 possible transitions.
+
+Since we can assume the falling edge is faster, looking at items like the following, it can be seen that for the LUT the first and third item are lower and identical. For the DFF on the other hand, the first two items are lower than the second two items.
+
+Since the first item relates to "data-in setuptime", and there is no combinational path through a DFF, it follows that these numbers can only relate to the input rising/falling edge. For the LUT clearly the output matters a great deal, and by elimination it *only* seems to take output times in to account.
+
+```
+'di_clksetpos': [0.36000001430511475, 0.36000001430511475, 0.5759999752044678, 0.5759999752044678]
+'a_f': [1.2081600427627563, 1.2542400360107422, 1.2081600427627563, 1.2542400360107422]
+```
+
+So this means that the numbers represent
+
+1. input falling, output falling
+2. input falling, output rising
+3. input rising, output falling
+4. input rising, output rising
