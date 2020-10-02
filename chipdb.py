@@ -32,6 +32,7 @@ class Tile:
     height: int
     # a mapping from dest, source wire to bit coordinates
     pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
+    clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     # always-connected dest, src aliases
     # should this be on the tile? Always the same...
     aliases: Dict[str, str] = field(default_factory=dict)
@@ -69,20 +70,21 @@ def unpad(fuses, pad=-1):
     except ValueError:
         return fuses
 
-def fse_pips(fse, ttyp):
+def fse_pips(fse, ttyp, table=2):
     pips = {}
-    for srcid, destid, *fuses in fse[ttyp]['wire'][2]:
-        fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
-        if srcid < 0:
-            fuses = set()
-            srcid = -srcid
-        if srcid > 1000:
-            srcid -= 1000 # what does it mean?
-        if destid > 1000:
-            destid -= 1000 # what does it mean?
-        src = wirenames[srcid]
-        dest = wirenames[destid]
-        pips.setdefault(dest, {})[src] = fuses
+    if table in fse[ttyp]['wire']:
+        for srcid, destid, *fuses in fse[ttyp]['wire'][table]:
+            fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+            if srcid < 0:
+                fuses = set()
+                srcid = -srcid
+            #if srcid >= 1000:
+            #    srcid -= 1000 # what does it mean?
+            #if destid >= 1000:
+            #    destid -= 1000 # what does it mean?
+            src = wirenames.get(srcid, srcid)
+            dest = wirenames.get(destid, destid)
+            pips.setdefault(dest, {})[src] = fuses
 
     return pips
 
@@ -118,6 +120,7 @@ def from_fse(fse):
         h = fse[ttyp]['height']
         tile = Tile(w, h)
         tile.pips = fse_pips(fse, ttyp)
+        tile.clock_pips = fse_pips(fse, ttyp, 38)
         tile.bels = fse_luts(fse, ttyp)
         tiles[ttyp] = tile
 

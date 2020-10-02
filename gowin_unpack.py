@@ -38,7 +38,17 @@ def parse_tile_(tiledata, tile):
             if bits == used_bits:
                 pips[dest] = src
 
-    return bels, pips
+    clock_pips = {}
+    for dest, srcs in tiledata.clock_pips.items():
+        pip_bits = set().union(*srcs.values())
+        used_bits = {(row, col)
+                     for row, col in pip_bits
+                     if tile[row][col] == 1}
+        for src, bits in srcs.items():
+            if bits == used_bits:
+                clock_pips[dest] = src
+
+    return bels, pips, clock_pips
 
 
 dffmap = {
@@ -152,9 +162,10 @@ if __name__ == "__main__":
         #    from fuse_h4x import *
         #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
         #    breakpoint()
-        bels, pips = parse_tile_(dbtile, t)
+        bels, pips, clock_pips = parse_tile_(dbtile, t)
         print(bels)
         #print(pips)
+        print(clock_pips)
         tile2verilog(row, col, bels, pips, mod, db)
     with open("unpack.v", 'w') as f:
         mod.write(f)
