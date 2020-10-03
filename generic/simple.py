@@ -33,7 +33,7 @@ for row, rowdata in enumerate(db.grid, 1):
         # add wires
         wires = set(chain(tile.pips.keys(), *tile.pips.values()))
         for wire in wires:
-            addWire(row, col, wire)
+            addWire(row, col, str(wire))
         # add aliasses
         # creat bels
         #print(row, col, ttyp)
@@ -116,7 +116,7 @@ for row, rowdata in enumerate(db.grid, 1):
     for col, tile in enumerate(rowdata, 1):
         for dest, srcs in tile.pips.items():
             for src in srcs.keys():
-                addPip(row, col, src, dest)
+                addPip(row, col, str(src), str(dest))
         for dest, src in tile.aliases.items():
             addAlias(row, col, src, dest)
 
