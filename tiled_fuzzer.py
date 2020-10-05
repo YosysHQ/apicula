@@ -40,10 +40,10 @@ params = {
         "partnumber": "GW1NR-LV9QN88C6/I5",
     },
     "GW1N-1": {
-        "package": "QN48",
+        "package": "LQ144",
         "header": 1, # stupid note in excel
-        "device": "GW1N-1-QFN48-6",
-        "partnumber": "GW1N-LV1QN48C6/I5",
+        "device": "GW1N-1-LQFP144-6",
+        "partnumber": "GW1N-LV1LQ144C6/I5",
     },
 }[device]
 
