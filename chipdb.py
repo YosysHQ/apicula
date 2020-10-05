@@ -78,10 +78,10 @@ def fse_pips(fse, ttyp, table=2):
             if srcid < 0:
                 fuses = set()
                 srcid = -srcid
-            #if srcid >= 1000:
-            #    srcid -= 1000 # what does it mean?
-            #if destid >= 1000:
-            #    destid -= 1000 # what does it mean?
+            if srcid >= 1000:
+                srcid -= 1000 # what does it mean?
+            if destid >= 1000:
+                destid -= 1000 # what does it mean?
             src = wirenames.get(srcid, srcid)
             dest = wirenames.get(destid, destid)
             pips.setdefault(dest, {})[src] = fuses
