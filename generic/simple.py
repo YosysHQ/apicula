@@ -120,5 +120,7 @@ for row, rowdata in enumerate(db.grid, 1):
         for dest, src in tile.aliases.items():
             addAlias(row, col, src, dest)
 
-ctx.setDelayScaling(0.05, 0.5)
+# too low numbers will result in slow routing iterations
+# too high numbers will result in more iterations
+ctx.setDelayScaling(0.1, 0.7)
 #code.interact(local=locals())
