@@ -24,19 +24,19 @@ In addition to the above, to run the fuzzers and build the ChipDB, the following
 
 Version 1.9.1.01 of the Gowin vendor tools. Newer versions may work, but have not been tested. A copy of the following Gowin files downloaded in `~/Documents/gowinsemi`:
 * `UG107-1.09E_GW1N-1 Pinout.xlsx`
-* `UG801-1.5E_GW1NR-9 Pinout.xlsx`
+* `UG114-1.4E_GW1N-9 Pinout.xlsx`
 
 Alternatively, you can use the `Dockerfile` to run the fuzzers in a container.
 
 ## Getting Started
 
-For the Trenz TEC0117, use GW1NR-9, for the Sipeed Tang Nano, use GW1N-1. Other devices are currently not supported. Read on to learn how to contribute other devices.
+For the Trenz TEC0117, use GW1N-9 (GW1NR-9 is the same as GW1N-9 with one IO bank dedicated to SDRAM), for the Sipeed Tang Nano, use GW1N-1. Other devices are currently not supported. Read on to learn how to contribute other devices.
 
 
 ```bash
 virtualenv env
 source env/bin/activate
-export DEVICE="GW1NR-9" # TEC0117
+export DEVICE="GW1N-9" # TEC0117
 export DEVICE="GW1N-1" # Tang Nano
 pip install numpy pandas pillow crcmod xlrd ipython
 ```
