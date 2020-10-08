@@ -33,11 +33,17 @@ if not device:
     raise Exception("DEVICE not set")
 
 params = {
-    "GW1NR-9": {
+    "GW1NR-9": { # Just a 9 with SiP SDRAM, should be deprecated
         "package": "QN881",
         "header": 1, # stupid note in excel
         "device": "GW1NR-9-QFN88-6",
         "partnumber": "GW1NR-LV9QN88C6/I5",
+    },
+    "GW1N-9": {
+        "package": "PG256",
+        "header": 0,
+        "device": "GW1N-9-PBGA256-6",
+        "partnumber": "GW1N-LV9PG256C6/I5",
     },
     "GW1N-1": {
         "package": "LQ144",
@@ -66,7 +72,7 @@ dffmap = {
     "DFFNC": "CLEAR",
 }
 def dff(locations):
-    for ttyp in range(12, 17): # for each tile type
+    for ttyp in range(12, 18): # for each tile type
         mod = codegen.Module()
         cst = codegen.Constraints()
         try:
