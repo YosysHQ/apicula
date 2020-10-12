@@ -14,7 +14,7 @@ device = os.getenv("DEVICE")
 if not device:
     raise Exception("DEVICE not set")
 
-def parse_tile_(tiledata, tile):
+def parse_tile_(tiledata, tile, default=True):
     bels = {}
     for name, bel in tiledata.bels.items():
         for flag, bits in bel.flags.items():
@@ -25,7 +25,7 @@ def parse_tile_(tiledata, tile):
                      for row, col in bel.mode_bits
                      if tile[row][col] == 1}
         for mode, bits in bel.modes.items():
-            if bits == mode_bits:
+            if bits == mode_bits and (default or bits):
                 bels.setdefault(name, set()).add(mode)
 
     pips = {}
@@ -35,7 +35,7 @@ def parse_tile_(tiledata, tile):
                      for row, col in pip_bits
                      if tile[row][col] == 1}
         for src, bits in srcs.items():
-            if bits == used_bits:
+            if bits == used_bits and (default or bits):
                 pips[dest] = src
 
     clock_pips = {}
