@@ -86,7 +86,7 @@ def center_muxes(side):
     ibufs = [ibuf(mod, cst, p) for p in true_pins]
     dffs = [dff(mod, cst, row, col) for row, col in dff_locs]
 
-    bs, hdr, ftr, posp, config = tiled_fuzzer.run_pnr(mod, cst, {})
+    bs, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
 
     gb_sources = {}
     gb_destinations = {}
@@ -106,7 +106,7 @@ def center_muxes(side):
     pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
 
     base = bs
-    for i, (bs_sweep, *rest) in enumerate(pnr_res):
+    for i, (bs_sweep, *_) in enumerate(pnr_res):
         pin = true_pins[i]
         new = base ^ bs_sweep
         base = bs_sweep
@@ -114,7 +114,7 @@ def center_muxes(side):
         
         try:
             db_tile = db.grid[ct[0]][ct[1]]
-            bels, pips, clk_pips = gowin_unpack.parse_tile_(db_tile, tiles[ct], default=False)
+            _, _, clk_pips = gowin_unpack.parse_tile_(db_tile, tiles[ct], default=False)
             dest = list(clk_pips.keys())[0]
             src = list(clk_pips.values())[0]
         except (KeyError, IndexError):
@@ -141,7 +141,7 @@ def taps():
                 offset += 1
             flop = dff(mod, cst, i+offset, j)
 
-    bs_base, hdr, ftr, posp, config = tiled_fuzzer.run_pnr(mod, cst, {})
+    bs_base, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
 
     modules = []
     constrs = []
@@ -170,7 +170,7 @@ def taps():
     offset = 0
     clks = {}
     complete_taps = set()
-    for idx, (sweep_bs, *rest) in enumerate(pnr_res):
+    for idx, (sweep_bs, *_) in enumerate(pnr_res):
         sweep_tiles = chipdb.tile_bitmap(db, sweep_bs^bs_base)
         
         dffs = set()
@@ -186,7 +186,7 @@ def taps():
         for loc, tile in sweep_tiles.items():
             row, col = loc
             dbtile = db.grid[row][col]
-            bels, pips, clk_pips = gowin_unpack.parse_tile_(dbtile, tile)
+            _, pips, clk_pips = gowin_unpack.parse_tile_(dbtile, tile)
             # print(row, idx//(width-2), clk_pips)
             #if row <= gclk: continue
             if row > gclk+offset and (pips['CLK0'].startswith("GB") or pips['CLK1'].startswith("GB")):
