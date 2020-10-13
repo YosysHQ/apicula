@@ -151,8 +151,8 @@ def dat_portmap(dat, dev):
                         bel.portmap['OE'] = oe
 
 def dat_aliases(dat, dev):
-    for idx, row in enumerate(dev.grid):
-        for jdx, td in enumerate(row):
+    for row in dev.grid:
+        for td in row:
             for dest, (src,) in zip(dat['X11s'], dat['X11Ins']):
                 td.aliases[wirenames[dest]] = wirenames[src]
 
@@ -173,7 +173,6 @@ def tile_bitmap(dev, bitmap, empty=False):
     return res
 
 def fuse_bitmap(db, bitmap):
-    tiles = db.grid
     res = np.zeros((db.height, db.width), dtype=np.uint8)
     y = 0
     for idx, row in enumerate(db.grid):
@@ -218,8 +217,7 @@ dirlut = {'N': (1, 0),
           'S': (-1, 0),
           'W': (0, 1)}
 def wire2global(row, col, db, wire):
-    if wire.startswith("G") or wire in {'VCC', 'VSS'}:
-        # global wire
+    if wire in {'VCC', 'VSS'}:
         return wire
 
     m = re.match(r"([NESW])([128]\d)(\d)", wire)

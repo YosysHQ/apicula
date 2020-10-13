@@ -11,6 +11,7 @@ from PIL import Image
 import numpy as np
 import pickle
 import json
+import re
 
 def dff(mod, cst, row, col, clk=None):
     "make a dff with optional clock"
@@ -62,13 +63,11 @@ def quadrants():
     ibuf(mod, cst, true_pins[2], clk="myclk")
     base_bs, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
 
-    width = len(db.grid[0])
-    height = len(db.grid)
     modules = []
     constrs = []
     idxes = []
-    for i in range(2, width):
-        for j in [2, height-3]: # avoid bram
+    for i in range(2, db.cols):
+        for j in [2, db.rows-3]: # avoid bram
             if "DFF0" not in db.grid[j-1][i-1].bels:
                 print(i, j)
                 continue
@@ -80,10 +79,10 @@ def quadrants():
 
             modules.append(mod)
             constrs.append(cst)
-            idxes.append((i, j))
+            idxes.append((j, i))
 
-    for i in [2, width-2]:
-        for j in range(2, height):
+    for i in [2, db.cols-2]:
+        for j in range(2, db.rows):
             if "DFF0" not in db.grid[j-1][i-1].bels:
                 print(i, j)
                 continue
@@ -95,17 +94,22 @@ def quadrants():
 
             modules.append(mod)
             constrs.append(cst)
-            idxes.append((i, j))
+            idxes.append((j, i))
 
     pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
 
     res = {}
     for (row, col), (mybs, *_) in zip(idxes, pnr_res):
         sweep_tiles = fuse_h4x.tile_bitmap(fse, mybs^base_bs)
+
+        # find which tap was used
+        taps = [r for (r, c, typ), t in sweep_tiles.items() if typ in {13, 14, 15, 16}]
+
+        # find which center tile was used
         t8x = [(r, c) for (r, c, typ), t in sweep_tiles.items() if typ >= 80 and typ < 90]
-        rows, cols = res.setdefault(t8x[0], (set(), set()))
-        rows.add(row)
-        cols.add(col)
+        rows, cols, _ = res.setdefault(t8x[0], (set(), set(), taps[0]))
+        rows.add(row-1)
+        cols.add(col-1)
 
     return res
 
@@ -113,7 +117,7 @@ def center_muxes(ct, rows, cols):
     "Find which mux drives which spine, and maps their inputs to clock pins"
 
     fr = min(rows)
-    dff_locs = [(c, fr) for c in cols][:len(true_pins)]
+    dff_locs = [(fr+1, c+1) for c in cols][:len(true_pins)]
 
     mod = codegen.Module()
     cst = codegen.Constraints()
@@ -156,14 +160,13 @@ def center_muxes(ct, rows, cols):
             # it seems this uses a dynamically configurable mux routed to VCC/VSS
             continue
         print(i, pin, src, dest)
-        gb_destinations[f"SPINE_{ct[1]}_{i}"] = dest
+        gb_destinations[(ct[1], i)] = dest
         gb_sources[src] = pin
 
     return gb_sources, gb_destinations
 
 def taps():
     "Find which colunm is driven by which tap"
-    width = len(db.grid[0])
     mod = codegen.Module()
     cst = codegen.Constraints()
 
@@ -171,7 +174,7 @@ def taps():
 
     offset = 2
     for i in range(len(true_pins)):
-        for j in range(2, width):
+        for j in range(2, db.cols):
             while "DFF0" not in db.grid[i-1+offset][j-1].bels:
                 offset += 1
             flop = dff(mod, cst, i+offset, j)
@@ -181,14 +184,14 @@ def taps():
     modules = []
     constrs = []
     for pin_nr in range(len(true_pins)):
-        for col in range(2, width):
+        for col in range(2, db.cols):
             mod = codegen.Module()
             cst = codegen.Constraints()
 
             clks = [ibuf(mod, cst, p) for p in true_pins]
             offset = 2
             for i, clk in enumerate(clks):
-                for j in range(2, width):
+                for j in range(2, db.cols):
                     while "DFF0" not in db.grid[i-1+offset][j-1].bels:
                         offset += 1
                     flop = dff(mod, cst, i+offset, j)
@@ -210,8 +213,8 @@ def taps():
 
         dffs = set()
         tap = None
-        gclk = idx//(width-2)
-        if idx and idx%(width-2)==0:
+        gclk = idx//(db.cols-2)
+        if idx and idx%(db.cols-2)==0:
             complete_taps.update(clks[gclk-1].keys())
         if gclk == 4: # secondary taps
             complete_taps = set()
@@ -222,7 +225,7 @@ def taps():
             row, col = loc
             dbtile = db.grid[row][col]
             _, pips, clk_pips = gowin_unpack.parse_tile_(dbtile, tile)
-            # print(row, idx//(width-2), clk_pips)
+            # print(row, idx//(db.cols-2), clk_pips)
             #if row <= gclk: continue
             if row > gclk+offset and (pips['CLK0'].startswith("GB") or pips['CLK1'].startswith("GB")):
                 # print("branch", col)
@@ -238,12 +241,76 @@ def taps():
 
     return clks
 
+pin_re = re.compile(r"IO([TBRL])(\d+)([A-Z])")
+banks = {'T': [(0, n) for n in range(db.cols)],
+         'B': [(db.rows-1, n) for n in range(db.cols)],
+         'L': [(n, 0) for n in range(db.rows)],
+         'R': [(n, db.cols-1) for n in range(db.rows)]}
+def pin2loc(name):
+    side, num, pin = pin_re.match(name).groups()
+    return banks[side][int(num)-1], "IOB"+pin
+
+def pin_aliases(quads, srcs):
+    aliases = {}
+    for ct in quads.keys():
+        for mux, pin in srcs.items():
+            (row, col), bel = pin2loc(pin)
+            iob = db.grid[row][col].bels[bel]
+            iob_out = iob.portmap['O']
+            src_name = f"R{row+1}C{col+1}_{iob_out}"
+            dest_name = f"R{ct[0]+1}C{ct[1]+1}_{mux}"
+            aliases[dest_name] = src_name
+    return aliases
+
+def spine_aliases(quads, dests, clks):
+    aliases = {}
+    for ct, (_, _, spine_row) in quads.items():
+        for clk, taps in clks.items():
+            for tap in taps.keys():
+                try:
+                    dest = dests[ct[1], clk]
+                except KeyError:
+                    continue
+                dest_name = f"R{spine_row+1}C{tap+1}_{dest}"
+                src_name = f"R{ct[0]+1}C{ct[1]+1}_{dest}"
+                aliases[dest_name] = src_name
+    return aliases
+
+def tap_aliases(quads):
+    aliases = {}
+    for _, (rows, cols, spine_row) in quads.items():
+        for col in cols:
+            for row in rows:
+                for src in ["GT00", "GT10"]:
+                    src_name = f"R{spine_row+1}C{col+1}_{src}"
+                    dest_name = f"R{row+1}C{col+1}_{src}"
+                    aliases[dest_name] = src_name
+
+    return aliases
+
+def branch_aliases(quads, clks):
+    aliases = {}
+    rows = [row for rows, _, _ in quads.values() for row in rows]
+    for clk, taps in clks.items():
+        if clk < 4:
+            src = "GBO0"
+        else:
+            src = "GBO1"
+        for tap, branch_cols in taps.items():
+            for row in rows:
+                for col in branch_cols:
+                    src_name = f"R{row+1}C{tap+1}_{src}"
+                    dest_name = f"R{row+1}C{col+1}_GB{clk}0"
+                    aliases[dest_name] = src_name
+
+    return aliases
+
 if __name__ == "__main__":
     quads = quadrants()
 
     srcs = {}
     dests = {}
-    for ct, (rows, cols) in quads.items():
+    for ct, (rows, cols, _) in quads.items():
         # I reverse the pins here because
         # the 8th mux is not fuzzed presently
         true_pins.reverse()
@@ -253,7 +320,17 @@ if __name__ == "__main__":
 
     clks = taps()
 
-    print(quads)
-    print(srcs)
-    print(dests)
-    print(clks)
+    print("    quads =", quads)
+    print("    srcs =", srcs)
+    print("    dests =", dests)
+    print("    clks =", clks)
+
+    pa = pin_aliases(quads, srcs)
+    sa = spine_aliases(quads, dests, clks)
+    ta = tap_aliases(quads)
+    ba = branch_aliases(quads, clks)
+
+    print(pa)
+    print(sa)
+    print(ta)
+    print(ba)

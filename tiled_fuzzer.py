@@ -172,7 +172,7 @@ def iob(locations, corners):
             cnt[ttyp] += 1
     # insert dummie in the corners to detect the bank enable bits
     runs = cnt.most_common(1)[0][1]
-    for n in range(runs):
+    for _ in range(runs):
         for ttyp in corners:
             mod = codegen.Module()
             cst = codegen.Constraints()
