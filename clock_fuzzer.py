@@ -44,7 +44,7 @@ with open(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{til
 with open(f"{tiled_fuzzer.device}.json") as f:
     dat = json.load(f)
 
-with open(f"{tiled_fuzzer.device}.pickle", 'rb') as f:
+with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
     db = pickle.load(f)
 
 
@@ -264,9 +264,10 @@ def pin_aliases(quads, srcs):
 
 def spine_aliases(quads, dests, clks):
     aliases = {}
-    for ct, (_, _, spine_row) in quads.items():
+    for ct, (_, cols, spine_row) in quads.items():
         for clk, taps in clks.items():
-            for tap in taps.keys():
+            quad_cols = cols.intersection(taps.keys())
+            for tap in quad_cols:
                 try:
                     dest = dests[ct[1], clk]
                 except KeyError:
@@ -330,7 +331,10 @@ if __name__ == "__main__":
     ta = tap_aliases(quads)
     ba = branch_aliases(quads, clks)
 
-    print(pa)
-    print(sa)
-    print(ta)
-    print(ba)
+    db.aliases.update(pa)
+    db.aliases.update(sa)
+    db.aliases.update(ta)
+    db.aliases.update(ba)
+
+    with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
+        pickle.dump(db, f)

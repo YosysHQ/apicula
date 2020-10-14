@@ -16,7 +16,6 @@ COPY . .
 ENV GOWINHOME /usr/src/gowin
 ENV ARTIFACTS /artifacts
 
-CMD python dat19_h4x.py && \
-    python tiled_fuzzer.py && \
+CMD make && \
     mkdir -p ${ARTIFACTS} && \
     cp ${DEVICE}.pickle ${ARTIFACTS}

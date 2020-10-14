@@ -34,7 +34,6 @@ class Tile:
     pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     # always-connected dest, src aliases
-    # should this be on the tile? Always the same...
     aliases: Dict[str, str] = field(default_factory=dict)
     # a mapping from bel type to bel
     bels: Dict[str, Bel] = field(default_factory=dict)
@@ -47,6 +46,8 @@ class Device:
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)
     template: np.ndarray = None
+    # always-connected dest, src aliases
+    aliases: Dict[str, str] = field(default_factory=dict)
 
     @property
     def rows(self):

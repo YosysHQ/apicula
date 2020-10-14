@@ -433,5 +433,5 @@ if __name__ == "__main__":
         db.template[loc] = 0
 
     #TODO proper serialization format
-    with open(f"{device}.pickle", 'wb') as f:
+    with open(f"{device}_stage1.pickle", 'wb') as f:
         pickle.dump(db, f)
