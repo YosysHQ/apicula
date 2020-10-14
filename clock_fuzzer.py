@@ -321,6 +321,11 @@ if __name__ == "__main__":
 
     clks = taps()
 
+    for _, cols, _ in quads.values():
+        # col 0 contains a tap, but not a dff
+        if 1 in cols:
+            cols.add(0)
+            
     print("    quads =", quads)
     print("    srcs =", srcs)
     print("    dests =", dests)
