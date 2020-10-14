@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple, Union, ByteString
 import fuse_h4x as fuse
-from wirenames import wirenames
+from wirenames import wirenames, clknames
 import re
 import numpy as np
 
@@ -71,7 +71,7 @@ def unpad(fuses, pad=-1):
     except ValueError:
         return fuses
 
-def fse_pips(fse, ttyp, table=2):
+def fse_pips(fse, ttyp, table=2, wn=wirenames):
     pips = {}
     if table in fse[ttyp]['wire']:
         for srcid, destid, *fuses in fse[ttyp]['wire'][table]:
@@ -83,8 +83,8 @@ def fse_pips(fse, ttyp, table=2):
                 srcid -= 1000 # what does it mean?
             if destid >= 1000:
                 destid -= 1000 # what does it mean?
-            src = wirenames.get(srcid, srcid)
-            dest = wirenames.get(destid, destid)
+            src = wn.get(srcid, srcid)
+            dest = wn.get(destid, destid)
             pips.setdefault(dest, {})[src] = fuses
 
     return pips
@@ -120,8 +120,8 @@ def from_fse(fse):
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
         tile = Tile(w, h)
-        tile.pips = fse_pips(fse, ttyp)
-        tile.clock_pips = fse_pips(fse, ttyp, 38)
+        tile.pips = fse_pips(fse, ttyp, 2, wirenames)
+        tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
         tile.bels = fse_luts(fse, ttyp)
         tiles[ttyp] = tile
 

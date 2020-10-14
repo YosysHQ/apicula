@@ -31,7 +31,11 @@ belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG)(\w*)")
 for row, rowdata in enumerate(db.grid, 1):
     for col, tile in enumerate(rowdata, 1):
         # add wires
-        wires = set(chain(tile.pips.keys(), *tile.pips.values()))
+        wires = set(chain(
+            tile.pips.keys(),
+            tile.clock_pips.keys(),
+            *tile.pips.values(),
+            *tile.clock_pips.values()))
         for wire in wires:
             addWire(row, col, wire)
         # add aliasses
@@ -107,9 +111,9 @@ def addAlias(row, col, srcname, destname):
     pipname = f"R{row}C{col}_{srcname}_{destname}"
     #print("alias", pipname)
     #I don't think these are physical wires with extra delay
-    ctx.addAlias(
-        name=pipname, type=destname, srcWire=gsrcname, dstWire=gdestname,
-        delay=ctx.getDelayFromNS(0.01))
+    ctx.addPip(
+        name=pipname+"_ALIAS", type=destname, srcWire=gsrcname, dstWire=gdestname,
+        delay=ctx.getDelayFromNS(0), loc=Loc(col, row, 0))
 
 
 for row, rowdata in enumerate(db.grid, 1):
@@ -117,10 +121,22 @@ for row, rowdata in enumerate(db.grid, 1):
         for dest, srcs in tile.pips.items():
             for src in srcs.keys():
                 addPip(row, col, src, dest)
+        for dest, srcs in tile.clock_pips.items():
+            for src in srcs.keys():
+                addPip(row, col, src, dest)
         for dest, src in tile.aliases.items():
             addAlias(row, col, src, dest)
+
+locre = re.compile(r"R(\d+)C(\d+)_(\w+)")
+for dest, src in db.aliases.items():
+    row, col, pip = locre.match(dest).groups()
+    name = f"{src}_{dest}_ALIAS"
+    ctx.addPip(
+        name=name, type=dest, srcWire=src, dstWire=dest,
+        delay=ctx.getDelayFromNS(0.01), loc=Loc(int(row), int(col), 0))
 
 # too low numbers will result in slow routing iterations
 # too high numbers will result in more iterations
 ctx.setDelayScaling(0.1, 0.7)
+
 #code.interact(local=locals())

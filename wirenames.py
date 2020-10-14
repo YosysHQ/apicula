@@ -25,3 +25,7 @@ wirenames = { 0: "A0", 1: "B0", 2: "C0", 3: "D0", 4: "A1", 5: "B1", 6: "C1", 7: 
 303: "CIN0", 304: "CIN1", 305: "CIN2", 306: "CIN3", 307: "CIN4", 308: "CIN5", 309: "COUT0", 310: "COUT1", 311: "COUT2", 312: "COUT3", 313: "COUT4", 314: "COUT5"}
 
 wirenumbers = {v: k for k, v in wirenames.items()}
+
+clknames = wirenames.copy()
+clknames.update({n: f"SPINE{n}" for n in range(32)})
+clknames.update({n: f"UNK{n}" for n in range(32, 261)})
