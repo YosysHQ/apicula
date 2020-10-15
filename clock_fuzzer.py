@@ -152,8 +152,7 @@ def center_muxes(ct, rows, cols):
         tiles = chipdb.tile_bitmap(db, new)
 
         try:
-            db_tile = db.grid[ct[0]][ct[1]]
-            _, _, clk_pips = gowin_unpack.parse_tile_(db_tile, tiles[ct], default=False)
+            _, _, clk_pips = gowin_unpack.parse_tile_(db, ct[0], ct[1], tiles[ct], noalias=True)
             dest = list(clk_pips.keys())[0]
             src = list(clk_pips.values())[0]
         except (KeyError, IndexError):
@@ -223,8 +222,7 @@ def taps():
         # print("#"*80)
         for loc, tile in sweep_tiles.items():
             row, col = loc
-            dbtile = db.grid[row][col]
-            _, pips, clk_pips = gowin_unpack.parse_tile_(dbtile, tile)
+            _, pips, clk_pips = gowin_unpack.parse_tile_(db, row, col, tile, noalias=True)
             # print(row, idx//(db.cols-2), clk_pips)
             #if row <= gclk: continue
             if row > gclk+offset and (pips['CLK0'].startswith("GB") or pips['CLK1'].startswith("GB")):

@@ -20,12 +20,15 @@ def get_bels(data):
         yield (cell['type'], int(row), int(col), num, cell['parameters'])
 
 def get_pips(data):
-    pipre = re.compile(r"R(\d+)C(\d+)_(\w+)_(\w+);")
+    pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
     for net in data['modules']['top']['netnames'].values():
         routing = net['attributes']['ROUTING']
-        pips = pipre.findall(routing)
-        for row, col, src, dest in pips:
-            yield int(row), int(col), src, dest
+        pips = routing.split(';')[1::3]
+        for pip in pips:
+            res = pipre.fullmatch(pip) # ignore alias
+            if res:
+                row, col, src, dest = res.groups()
+                yield int(row), int(col), src, dest
 
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
@@ -64,19 +67,15 @@ def place(db, tilemap, bels):
 
             #bank enable
             if row == 1: # top bank
-                bank = 0
                 brow = 0
                 bcol = 0
             elif row == db.rows: # bottom bank
-                bank = 2
                 brow = db.rows-1
                 bcol = db.cols-1
             elif col == 1: # left bank
-                bank = 3
                 brow = db.rows-1
                 bcol = 0
             elif col == db.cols: # right bank
-                bank = 1
                 brow = 0
                 bcol = db.cols-1
             tiledata = db.grid[brow][bcol]
@@ -92,7 +91,10 @@ def route(db, tilemap, pips):
         tile = tilemap[(row-1, col-1)]
 
         try:
-            bits = tiledata.pips[dest][src]
+            if dest in tiledata.clock_pips:
+                bits = tiledata.clock_pips[dest][src]
+            else:
+                bits = tiledata.pips[dest][src]
         except KeyError:
             print(src, dest, "not found in tile", row, col)
             breakpoint()

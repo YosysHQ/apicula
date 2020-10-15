@@ -14,7 +14,7 @@ device = os.getenv("DEVICE")
 if not device:
     raise Exception("DEVICE not set")
 
-def parse_tile_(db, row, col, tile, default=True):
+def parse_tile_(db, row, col, tile, default=True, noalias=False):
     tiledata = db.grid[row][col]
     bels = {}
     for name, bel in tiledata.bels.items():
@@ -48,7 +48,7 @@ def parse_tile_(db, row, col, tile, default=True):
                      if tile[row][col] == 1}
         for src, bits in srcs.items():
             # only report connection aliased to by a spine
-            if bits == used_bits and f"R{row+1}C{col+1}_{src}" in db.aliases:
+            if bits == used_bits and (noalias or f"R{row+1}C{col+1}_{src}" in db.aliases):
                 clock_pips[dest] = src
 
     return bels, pips, clock_pips
