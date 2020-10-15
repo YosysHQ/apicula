@@ -14,7 +14,8 @@ device = os.getenv("DEVICE")
 if not device:
     raise Exception("DEVICE not set")
 
-def parse_tile_(tiledata, tile, default=True):
+def parse_tile_(db, row, col, tile, default=True):
+    tiledata = db.grid[row][col]
     bels = {}
     for name, bel in tiledata.bels.items():
         for flag, bits in bel.flags.items():
@@ -35,6 +36,7 @@ def parse_tile_(tiledata, tile, default=True):
                      for row, col in pip_bits
                      if tile[row][col] == 1}
         for src, bits in srcs.items():
+            # optionally ignore the defautl set() state
             if bits == used_bits and (default or bits):
                 pips[dest] = src
 
@@ -45,7 +47,8 @@ def parse_tile_(tiledata, tile, default=True):
                      for row, col in pip_bits
                      if tile[row][col] == 1}
         for src, bits in srcs.items():
-            if bits == used_bits:
+            # only report connection aliased to by a spine
+            if bits == used_bits and f"R{row+1}C{col+1}_{src}" in db.aliases:
                 clock_pips[dest] = src
 
     return bels, pips, clock_pips
@@ -67,12 +70,12 @@ iobmap = {
     "OBUF": {"wires": ["I"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
-def tile2verilog(dbrow, dbcol, bels, pips, mod, db):
+def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, db):
     # db is 0-based, floorplanner is 1-based
     row = dbrow+1
     col = dbcol+1
     aliases = db.grid[dbrow][dbcol].aliases
-    for dest, src in chain(pips.items(), aliases.items()):
+    for dest, src in chain(pips.items(), aliases.items(), clock_pips.items()):
         srcg = chipdb.wire2global(row, col, db, src)
         destg = chipdb.wire2global(row, col, db, dest)
         mod.wires.update({srcg, destg})
@@ -152,9 +155,14 @@ if __name__ == "__main__":
     bitmap = read_bitstream(sys.argv[1])[0]
     bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
+    aliases = db.aliases
+
+    for dest, src in aliases.items():
+        mod.wires.update({src, dest})
+        mod.assigns.append((dest, src))
+
     for idx, t in bm.items():
         row, col = idx
-        dbtile = db.grid[row][col]
         print(idx)
         #for bitrow in t:
         #    print(*bitrow, sep='')
@@ -162,11 +170,11 @@ if __name__ == "__main__":
         #    from fuse_h4x import *
         #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
         #    breakpoint()
-        bels, pips, clock_pips = parse_tile_(dbtile, t)
+        bels, pips, clock_pips = parse_tile_(db, row, col, t)
         print(bels)
         #print(pips)
         print(clock_pips)
-        tile2verilog(row, col, bels, pips, mod, db)
+        tile2verilog(row, col, bels, pips, clock_pips, mod, db)
     with open("unpack.v", 'w') as f:
         mod.write(f)
 

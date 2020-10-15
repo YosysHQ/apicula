@@ -78,11 +78,22 @@ for row, rowdata in enumerate(db.grid, 1):
 wlens = {0: 'X0', 1: 'FX1', 2: 'X2', 8: 'X8'}
 def wiredelay(wire):
     m = re.match(r"[NESWX]+([0128])", wire)
-    if not m: # no known delay
+    if m:
+        wlen = int(m.groups()[0])
+        name = wlens.get(wlen)
+        return ctx.getDelayFromNS(max(timing['wire'][name]))
+    elif wire.startswith("UNK"):
+        return ctx.getDelayFromNS(max(timing['glbsrc']['PIO_CENT_PCLK']))
+    elif wire.startswith("SPINE"):
+        return ctx.getDelayFromNS(max(timing['glbsrc']['CENT_SPINE_PCLK']))
+    elif wire.startswith("GT"):
+        return ctx.getDelayFromNS(max(timing['glbsrc']['SPINE_TAP_PCLK']))
+    elif wire.startswith("GBO"):
+        return ctx.getDelayFromNS(max(timing['glbsrc']['TAP_BRANCH_PCLK']))
+    elif wire.startswith("GB"):
+        return ctx.getDelayFromNS(max(timing['glbsrc']['BRANCH_PCLK']))
+    else: # no known delay
         return ctx.getDelayFromNS(0)
-    wlen = int(m.groups()[0])
-    name = wlens.get(wlen)
-    return ctx.getDelayFromNS(max(timing['wire'][name]))
 
 
 
@@ -110,7 +121,6 @@ def addAlias(row, col, srcname, destname):
 
     pipname = f"R{row}C{col}_{srcname}_{destname}"
     #print("alias", pipname)
-    #I don't think these are physical wires with extra delay
     ctx.addPip(
         name=pipname+"_ALIAS", type=destname, srcWire=gsrcname, dstWire=gdestname,
         delay=ctx.getDelayFromNS(0), loc=Loc(col, row, 0))
@@ -133,7 +143,7 @@ for dest, src in db.aliases.items():
     name = f"{src}_{dest}_ALIAS"
     ctx.addPip(
         name=name, type=dest, srcWire=src, dstWire=dest,
-        delay=ctx.getDelayFromNS(0.01), loc=Loc(int(row), int(col), 0))
+        delay=ctx.getDelayFromNS(0), loc=Loc(int(row), int(col), 0))
 
 # too low numbers will result in slow routing iterations
 # too high numbers will result in more iterations
