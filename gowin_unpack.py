@@ -155,9 +155,8 @@ if __name__ == "__main__":
     bitmap = read_bitstream(sys.argv[1])[0]
     bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
-    aliases = db.aliases
 
-    for dest, src in aliases.items():
+    for dest, src in db.aliases.items():
         mod.wires.update({src, dest})
         mod.assigns.append((dest, src))
 

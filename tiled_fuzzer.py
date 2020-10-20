@@ -424,6 +424,9 @@ if __name__ == "__main__":
     chipdb.dat_aliases(dat, db)
     chipdb.shared2flag(db)
 
+    db.grid[0][0].bels['CFG'].flags['UNK0'] = {(3, 1)}
+    db.grid[0][0].bels['CFG'].flags['UNK1'] = {(3, 2)}
+
     # set template dual-mode pins to HW mode
     for pin in dualmode_pins:
         try:

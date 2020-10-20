@@ -164,77 +164,70 @@ def center_muxes(ct, rows, cols):
 
     return gb_sources, gb_destinations
 
-def taps():
+def taps(rows, cols):
     "Find which colunm is driven by which tap"
     mod = codegen.Module()
     cst = codegen.Constraints()
 
     clks = [ibuf(mod, cst, p) for p in true_pins]
 
-    offset = 2
-    for i in range(len(true_pins)):
-        for j in range(2, db.cols):
-            while "DFF0" not in db.grid[i-1+offset][j-1].bels:
-                offset += 1
-            flop = dff(mod, cst, i+offset, j)
+    # conver to sorted list of 1-indexed vendor constraints
+    rows = [row+1 for row in sorted(rows)]
+    cols = [col+1 for col in sorted(cols)]
+    for row in rows[:len(true_pins)]:
+        for col in cols:
+            flop = dff(mod, cst, row, col)
 
     bs_base, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
 
     modules = []
     constrs = []
-    for pin_nr in range(len(true_pins)):
-        for col in range(2, db.cols):
+    locs = []
+    for gclk, row in enumerate(rows[:len(true_pins)]):
+        for col in cols:
             mod = codegen.Module()
             cst = codegen.Constraints()
 
             clks = [ibuf(mod, cst, p) for p in true_pins]
-            offset = 2
-            for i, clk in enumerate(clks):
-                for j in range(2, db.cols):
-                    while "DFF0" not in db.grid[i-1+offset][j-1].bels:
-                        offset += 1
-                    flop = dff(mod, cst, i+offset, j)
-                    if i < pin_nr:
+            for i, clk in zip(rows, clks):
+                for j in cols:
+                    flop = dff(mod, cst, i, j)
+                    if i < row:
                         mod.assigns.append((flop, clk))
-                    elif i == pin_nr and j == col:
+                    elif i == row and j == col:
                         mod.assigns.append((flop, clk))
 
             modules.append(mod)
             constrs.append(cst)
+            locs.append((gclk, col-1))
 
-    pnr_res = pool.imap(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
+    pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
 
-    offset = 0
     clks = {}
     complete_taps = set()
-    for idx, (sweep_bs, *_) in enumerate(pnr_res):
+    last_gclk = None
+    for (gclk, dff_col), (sweep_bs, *_) in zip(locs, pnr_res):
         sweep_tiles = chipdb.tile_bitmap(db, sweep_bs^bs_base)
 
-        dffs = set()
         tap = None
-        gclk = idx//(db.cols-2)
-        if idx and idx%(db.cols-2)==0:
-            complete_taps.update(clks[gclk-1].keys())
+        if last_gclk != None and gclk != last_gclk:
+            complete_taps.update(clks[last_gclk].keys())
+        last_gclk = gclk
         if gclk == 4: # secondary taps
             complete_taps = set()
-        while "DFF0" not in db.grid[gclk+1+offset][2].bels:
-            offset += 1
         # print("#"*80)
+        # print("gclk", gclk, "dff_col", dff_col)
         for loc, tile in sweep_tiles.items():
             row, col = loc
-            _, pips, clk_pips = gowin_unpack.parse_tile_(db, row, col, tile, noalias=True)
-            # print(row, idx//(db.cols-2), clk_pips)
-            #if row <= gclk: continue
-            if row > gclk+offset and (pips['CLK0'].startswith("GB") or pips['CLK1'].startswith("GB")):
-                # print("branch", col)
-                dffs.add(col)
+            _, _, clk_pips = gowin_unpack.parse_tile_(db, row, col, tile, noalias=True)
+            # print("loc", row, col, "pips", clk_pips)
             if ("GT00" in clk_pips and gclk < 4) or \
-            ("GT10" in clk_pips and gclk >= 4):
+               ("GT10" in clk_pips and gclk >= 4):
                 # print("tap", col)
                 if col not in complete_taps:
                     tap = col
-        clks.setdefault(gclk, {}).setdefault(tap, set()).update(dffs)
-        #print(complete_taps, clks)
+        clks.setdefault(gclk, {}).setdefault(tap, set()).add(dff_col)
+        # print(complete_taps, clks)
         #if not tap: break
 
     return clks
@@ -262,10 +255,9 @@ def pin_aliases(quads, srcs):
 
 def spine_aliases(quads, dests, clks):
     aliases = {}
-    for ct, (_, cols, spine_row) in quads.items():
-        for clk, taps in clks.items():
-            quad_cols = cols.intersection(taps.keys())
-            for tap in quad_cols:
+    for ct, (_, _, spine_row) in quads.items():
+        for clk, taps in clks[ct].items():
+            for tap in taps.keys():
                 try:
                     dest = dests[ct[1], clk]
                 except KeyError:
@@ -283,24 +275,25 @@ def tap_aliases(quads):
                 for src in ["GT00", "GT10"]:
                     src_name = f"R{spine_row+1}C{col+1}_{src}"
                     dest_name = f"R{row+1}C{col+1}_{src}"
-                    aliases[dest_name] = src_name
+                    if src_name != dest_name:
+                        aliases[dest_name] = src_name
 
     return aliases
 
 def branch_aliases(quads, clks):
     aliases = {}
-    rows = [row for rows, _, _ in quads.values() for row in rows]
-    for clk, taps in clks.items():
-        if clk < 4:
-            src = "GBO0"
-        else:
-            src = "GBO1"
-        for tap, branch_cols in taps.items():
-            for row in rows:
-                for col in branch_cols:
-                    src_name = f"R{row+1}C{tap+1}_{src}"
-                    dest_name = f"R{row+1}C{col+1}_GB{clk}0"
-                    aliases[dest_name] = src_name
+    for ct, (rows, _, _) in quads.items():
+        for clk, taps in clks[ct].items():
+            if clk < 4:
+                src = "GBO0"
+            else:
+                src = "GBO1"
+            for tap, branch_cols in taps.items():
+                for row in rows:
+                    for col in branch_cols:
+                        src_name = f"R{row+1}C{tap+1}_{src}"
+                        dest_name = f"R{row+1}C{col+1}_GB{clk}0"
+                        aliases[dest_name] = src_name
 
     return aliases
 
@@ -309,6 +302,7 @@ if __name__ == "__main__":
 
     srcs = {}
     dests = {}
+    clks = {}
     for ct, (rows, cols, _) in quads.items():
         # I reverse the pins here because
         # the 8th mux is not fuzzed presently
@@ -317,7 +311,7 @@ if __name__ == "__main__":
         srcs.update(qsrcs)
         dests.update(qdests)
 
-    clks = taps()
+        clks[ct] = taps(rows, cols)
 
     for _, cols, _ in quads.values():
         # col 0 contains a tap, but not a dff
@@ -328,11 +322,16 @@ if __name__ == "__main__":
     print("    srcs =", srcs)
     print("    dests =", dests)
     print("    clks =", clks)
-
+    
     pa = pin_aliases(quads, srcs)
     sa = spine_aliases(quads, dests, clks)
     ta = tap_aliases(quads)
     ba = branch_aliases(quads, clks)
+
+    # print(pa)
+    # print(sa)
+    # print(ta)
+    # print(ba)
 
     db.aliases.update(pa)
     db.aliases.update(sa)

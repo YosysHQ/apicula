@@ -116,7 +116,7 @@ def header_footer(db, bs):
 
     res = int(bb[0::2].sum() * pow(2,8) + bb[1::2].sum())
     checksum = res & 0xffff
-    db.cmd_hdr[0] = bytearray.fromhex(f"{checksum:x}")
+    db.cmd_hdr[0] = bytearray.fromhex(f"{checksum:04x}")
 
     # same task for line 2 in footer
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
@@ -131,6 +131,7 @@ if __name__ == '__main__':
     place(db, tilemap, bels)
     pips = get_pips(pnr)
     route(db, tilemap, pips)
+
     res = chipdb.fuse_bitmap(db, tilemap)
     header_footer(db, res)
     bslib.display('pack.png', res)

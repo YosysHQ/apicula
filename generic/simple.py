@@ -35,7 +35,8 @@ for row, rowdata in enumerate(db.grid, 1):
             tile.pips.keys(),
             tile.clock_pips.keys(),
             *tile.pips.values(),
-            *tile.clock_pips.values()))
+            *tile.clock_pips.values(),
+            ))
         for wire in wires:
             addWire(row, col, wire)
         # add aliasses
