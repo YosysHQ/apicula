@@ -264,7 +264,8 @@ def spine_aliases(quads, dests, clks):
                     continue
                 dest_name = f"R{spine_row+1}C{tap+1}_{dest}"
                 src_name = f"R{ct[0]+1}C{ct[1]+1}_{dest}"
-                aliases[dest_name] = src_name
+                if 'UNK' not in src_name: # these have an unknown function
+                    aliases[dest_name] = src_name
     return aliases
 
 def tap_aliases(quads):
