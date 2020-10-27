@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple, Union, ByteString
-import fuse_h4x as fuse
-from wirenames import wirenames, clknames
 import re
 import numpy as np
+import apycula.fuse_h4x as fuse
+from apycula.wirenames import wirenames, clknames
 
 # represents a row, column coordinate
 # can be either tiles or bits within tiles

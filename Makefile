@@ -1,25 +1,23 @@
-ifndef DEVICE
-$(error DEVICE is not set. Must be either GW1N-9 or GW1N-1)
-endif
 ifndef GOWINHOME
 $(error GOWINHOME is not set. Must be location of Gowin EDA Tools)
 endif
 
+.SECONDARY:
 .PHONY: all clean
-all: ${DEVICE}.pickle
+all: GW1N-1.pickle GW1N-9.pickle
 
-${DEVICE}.json: dat19_h4x.py
-	python3 dat19_h4x.py
+%.json: apycula/dat19_h4x.py
+	python3 -m apycula.dat19_h4x $*
 
-${DEVICE}_stage1.pickle: tiled_fuzzer.py ${DEVICE}.json
-	python3 tiled_fuzzer.py
+%_stage1.pickle: apycula/tiled_fuzzer.py %.json
+	python3 -m apycula.tiled_fuzzer $*
 
-${DEVICE}_stage2.pickle: clock_fuzzer.py ${DEVICE}_stage1.pickle
-	python3 clock_fuzzer.py
+%_stage2.pickle: apycula/clock_fuzzer.py %_stage1.pickle
+	python3 -m apycula.clock_fuzzer $*
 
-${DEVICE}.pickle: ${DEVICE}_stage2.pickle
-	cp ${DEVICE}_stage2.pickle ${DEVICE}.pickle
+%.pickle: %_stage2.pickle
+	cp $< $@
 
 clean:
-	rm ${DEVICE}.json
-	rm ${DEVICE}*.pickle
+	rm *.json
+	rm *.pickle

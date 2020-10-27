@@ -1,17 +1,17 @@
-import tiled_fuzzer
-import codegen
-import pindef
-import bslib
-import chipdb
-import fuse_h4x
-import gowin_unpack
-from wirenames import wirenames
 from multiprocessing.dummy import Pool
 from PIL import Image
 import numpy as np
 import pickle
 import json
 import re
+from apycula import tiled_fuzzer
+from apycula import codegen
+from apycula import pindef
+from apycula import bslib
+from apycula import chipdb
+from apycula import fuse_h4x
+from apycula import gowin_unpack
+from apycula.wirenames import wirenames
 
 def dff(mod, cst, row, col, clk=None):
     "make a dff with optional clock"

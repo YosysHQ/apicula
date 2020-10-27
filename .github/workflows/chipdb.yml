@@ -13,8 +13,7 @@ jobs:
     - name: Build chipdb
       run: |
         docker build . --file Dockerfile --tag apicula-chipdb
-        docker run --env DEVICE=GW1N-1  -v $(pwd)/apicula-chipdb:/artifacts --rm apicula-chipdb:latest
-        docker run --env DEVICE=GW1N-9 -v $(pwd)/apicula-chipdb:/artifacts --rm apicula-chipdb:latest
+        docker run -v $(pwd)/apicula-chipdb:/artifacts --rm apicula-chipdb:latest
     - name: Archive artifact
       uses: actions/upload-artifact@v2
       with:

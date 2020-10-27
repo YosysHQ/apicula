@@ -6,9 +6,7 @@ gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise Exception("GOWINHOME not set")
 
-device = os.getenv("DEVICE")
-if not device:
-    raise Exception("DEVICE not set")
+device = sys.argv[1]
 
 with open(f"{gowinhome}/IDE/share/device/{device}/{device}.dat", 'rb') as f:
     d = f.read()

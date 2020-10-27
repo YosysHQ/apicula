@@ -4,9 +4,9 @@ import re
 import pickle
 import numpy as np
 import json
-import chipdb
-import bslib
-from wirenames import wirenames, wirenumbers
+from apycula import chipdb
+from apycula import bslib
+from apycula.wirenames import wirenames, wirenumbers
 
 device = os.getenv("DEVICE")
 if not device:

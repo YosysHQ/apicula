@@ -2,7 +2,6 @@ import sys
 import numpy as np
 from PIL import Image
 import random
-import pdb
 
 def rint(f, w):
     val = int.from_bytes(f.read(w), 'little', signed=True)

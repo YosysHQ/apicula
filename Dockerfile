@@ -18,4 +18,4 @@ ENV ARTIFACTS /artifacts
 
 CMD make && \
     mkdir -p ${ARTIFACTS} && \
-    cp ${DEVICE}.pickle ${ARTIFACTS}
+    cp GW1N-1.pickle GW1N-9.pickle ${ARTIFACTS}

@@ -1,5 +1,6 @@
 import re
 import os
+import sys
 import tempfile
 import subprocess
 from collections import deque, Counter
@@ -11,26 +12,22 @@ from math import factorial
 import numpy as np
 from multiprocessing.dummy import Pool
 import pickle
-
-import codegen
-import bslib
-import pindef
-import fuse_h4x
-#TODO proper API
-#import dat19_h4x
-import tm_h4x
 import json
-import chipdb
 
-import sys, pdb
+from apycula import codegen
+from apycula import bslib
+from apycula import pindef
+from apycula import fuse_h4x
+#TODO proper API
+#from apycula import dat19_h4x
+from apycula import tm_h4x
+from apycula import chipdb
 
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise Exception("GOWINHOME not set")
 
-device = os.getenv("DEVICE")
-if not device:
-    raise Exception("DEVICE not set")
+device = sys.argv[1]
 
 params = {
     "GW1NR-9": { # Just a 9 with SiP SDRAM, should be deprecated
@@ -267,7 +264,7 @@ if __name__ == "__main__":
         dat = json.load(f)
 
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
-        tm = tm_h4x.read_tm(f)
+        tm = tm_h4x.read_tm(f, device)
 
     db = chipdb.from_fse(fse)
     db.timing = tm

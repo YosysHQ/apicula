@@ -5,10 +5,10 @@ import random
 import numpy as np
 from itertools import chain, count
 import pickle
-import codegen
-import chipdb
-from bslib import read_bitstream
-from wirenames import wirenames
+from apycula import codegen
+from apycula import chipdb
+from apycula.bslib import read_bitstream
+from apycula.wirenames import wirenames
 
 device = os.getenv("DEVICE")
 if not device:

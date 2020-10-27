@@ -3,14 +3,6 @@ import sys
 import json
 import struct
 
-gowinhome = os.getenv("GOWINHOME")
-if not gowinhome:
-    raise Exception("GOWINHOME not set")
-
-device = os.getenv("DEVICE")
-if not device:
-    raise Exception("DEVICE not set")
-
 tc = 8 # number of timing classes
 chunklen = 0x3ab8 # length of each class
 
@@ -284,33 +276,32 @@ def parse_chunk(chunk):
         yield parser.__name__[6:], parser(chunk[off:])
 
 
-if device.lower().startswith("gw1n"):
-    chunk_order = [
-        "C5/I4",
-        "C5/I42_LV",
-        "C6/I5",
-        "C6/I5_LV",
-        "ES",
-        "ES_LV",
-        "A4",
-        "A4_LV",
-    ]
-elif device.lower().startswith("gw2a"):
-    chunk_order = [
-        "C8/I7",
-        "C8/I7_LV",
-        "C7/I6",
-        "C7/I6_LV",
-        "A6",
-        "A6_LV",
-        "C9/I8",
-        "C9/I8_LV",
-    ]
-else:
-    chunk_order = []
+def read_tm(f, device):
+    if device.lower().startswith("gw1n"):
+        chunk_order = [
+            "C5/I4",
+            "C5/I42_LV",
+            "C6/I5",
+            "C6/I5_LV",
+            "ES",
+            "ES_LV",
+            "A4",
+            "A4_LV",
+        ]
+    elif device.lower().startswith("gw2a"):
+        chunk_order = [
+            "C8/I7",
+            "C8/I7_LV",
+            "C7/I6",
+            "C7/I6_LV",
+            "A6",
+            "A6_LV",
+            "C9/I8",
+            "C9/I8_LV",
+        ]
+    else:
+        raise Exception("unknown family")
 
-
-def read_tm(f):
     tmdat = {}
     for i, chunk in enumerate(iter(lambda: f.read(chunklen), b'')):
         try:
@@ -324,14 +315,3 @@ def read_tm(f):
             if tm:
                 tmdat[speed_class][name] = tm
     return tmdat
-
-if __name__ == "__main__":
-    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
-        for chunk in iter(lambda: f.read(chunklen), b''):
-            assert len(chunk) == chunklen
-            res = parse_chunk(chunk)
-            for name, tm in res:
-                if tm:
-                    print(name)
-                    print(tm)
-
