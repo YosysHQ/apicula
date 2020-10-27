@@ -8,10 +8,6 @@ from apycula import chipdb
 from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
 
-device = os.getenv("DEVICE")
-if not device:
-    raise Exception("DEVICE not set")
-
 def get_bels(data):
     belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB)(\w)")
     for cell in data['modules']['top']['cells'].values():
@@ -122,9 +118,19 @@ def header_footer(db, bs):
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
 if __name__ == '__main__':
-    with open(f"{device}.pickle", 'rb') as f:
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
+    parser.add_argument('netlist')
+    parser.add_argument('-d', '--device', required=True)
+    parser.add_argument('-o', '--output', default='pack.fs')
+    parser.add_argument('--png')
+
+    args = parser.parse_args()
+
+    with open(f"{args.device}.pickle", 'rb') as f:
         db = pickle.load(f)
-    with open(sys.argv[1]) as f:
+    with open(args.netlist) as f:
         pnr = json.load(f)
     tilemap = chipdb.tile_bitmap(db, db.template, empty=True)
     bels = get_bels(pnr)
@@ -134,5 +140,6 @@ if __name__ == '__main__':
 
     res = chipdb.fuse_bitmap(db, tilemap)
     header_footer(db, res)
-    bslib.display('pack.png', res)
-    bslib.write_bitstream('pack.fs', res, db.cmd_hdr, db.cmd_ftr)
+    if args.png:
+        bslib.display(args.png, res)
+    bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr)

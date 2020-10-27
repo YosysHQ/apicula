@@ -10,10 +10,6 @@ from apycula import chipdb
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
-device = os.getenv("DEVICE")
-if not device:
-    raise Exception("DEVICE not set")
-
 def parse_tile_(db, row, col, tile, default=True, noalias=False):
     tiledata = db.grid[row][col]
     bels = {}
@@ -150,9 +146,18 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, db):
 
 
 if __name__ == "__main__":
-    with open(f"{device}.pickle", 'rb') as f:
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
+    parser.add_argument('bitstream')
+    parser.add_argument('-d', '--device', required=True)
+    parser.add_argument('-o', '--output', default='unpack.v')
+
+    args = parser.parse_args()
+
+    with open(f"{args.device}.pickle", 'rb') as f:
         db = pickle.load(f)
-    bitmap = read_bitstream(sys.argv[1])[0]
+    bitmap = read_bitstream(args.bitstream)[0]
     bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
 
@@ -174,6 +179,6 @@ if __name__ == "__main__":
         #print(pips)
         print(clock_pips)
         tile2verilog(row, col, bels, pips, clock_pips, mod, db)
-    with open("unpack.v", 'w') as f:
+    with open(args.output, 'w') as f:
         mod.write(f)
 
