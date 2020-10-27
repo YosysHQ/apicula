@@ -5,6 +5,8 @@ import random
 import numpy as np
 from itertools import chain, count
 import pickle
+import argparse
+import importlib.resources
 from apycula import codegen
 from apycula import chipdb
 from apycula.bslib import read_bitstream
@@ -144,10 +146,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, db):
     vcc.portmap["V"] = "VCC"
     mod.primitives["myvcc"] = vcc
 
-
-if __name__ == "__main__":
-    import argparse
-
+def main():
     parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
     parser.add_argument('bitstream')
     parser.add_argument('-d', '--device', required=True)
@@ -155,7 +154,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    with open(f"{args.device}.pickle", 'rb') as f:
+    with importlib.resources.open_binary("apycula", f"{args.device}.pickle") as f:
         db = pickle.load(f)
     bitmap = read_bitstream(args.bitstream)[0]
     bm = chipdb.tile_bitmap(db, bitmap)
@@ -182,3 +181,6 @@ if __name__ == "__main__":
     with open(args.output, 'w') as f:
         mod.write(f)
 
+
+if __name__ == "__main__":
+    main()

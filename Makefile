@@ -4,7 +4,7 @@ endif
 
 .SECONDARY:
 .PHONY: all clean
-all: GW1N-1.pickle GW1N-9.pickle
+all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle
 
 %.json: apycula/dat19_h4x.py
 	python3 -m apycula.dat19_h4x $*
@@ -15,9 +15,10 @@ all: GW1N-1.pickle GW1N-9.pickle
 %_stage2.pickle: apycula/clock_fuzzer.py %_stage1.pickle
 	python3 -m apycula.clock_fuzzer $*
 
-%.pickle: %_stage2.pickle
+apycula/%.pickle: %_stage2.pickle
 	cp $< $@
 
 clean:
 	rm *.json
 	rm *.pickle
+	rm apycula/*.pickle

@@ -4,6 +4,8 @@ import re
 import pickle
 import numpy as np
 import json
+import argparse
+import importlib.resources
 from apycula import chipdb
 from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
@@ -117,9 +119,7 @@ def header_footer(db, bs):
     # same task for line 2 in footer
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
-if __name__ == '__main__':
-    import argparse
-
+def main():
     parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
     parser.add_argument('netlist')
     parser.add_argument('-d', '--device', required=True)
@@ -128,7 +128,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    with open(f"{args.device}.pickle", 'rb') as f:
+    with importlib.resources.open_binary("apycula", f"{args.device}.pickle") as f:
         db = pickle.load(f)
     with open(args.netlist) as f:
         pnr = json.load(f)
@@ -143,3 +143,7 @@ if __name__ == '__main__':
     if args.png:
         bslib.display(args.png, res)
     bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr)
+
+
+if __name__ == '__main__':
+    main()
