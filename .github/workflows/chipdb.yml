@@ -1,21 +1,63 @@
 name: Chipdb builder
 
-on:
-  push:
-    branches:
-        - master
+on: push
 
 jobs:
-  build:
+  gw1n1:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Build chipdb
+    - name: Build gw1n-1 chipdb
       run: |
-        docker build . --file Dockerfile --tag apicula-chipdb
-        docker run -v $(pwd)/apicula-chipdb:/artifacts --rm apicula-chipdb:latest
+        docker pull pepijndevos/apicula:latest
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:latest make apycula/GW1N-1.pickle
     - name: Archive artifact
       uses: actions/upload-artifact@v2
       with:
-          name: apicula-chipdb
-          path: apicula-chipdb
+          name: gw1n-1-chipdb
+          path: apycula/GW1N-1.pickle
+  gw1n9:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build gw1n-9 chipdb
+      run: |
+        docker pull pepijndevos/apicula:latest
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:latest make apycula/GW1N-9.pickle
+    - name: Archive artifact
+      uses: actions/upload-artifact@v2
+      with:
+          name: gw1n-9-chipdb
+          path: apycula/GW1N-9.pickle
+  pypi:
+    runs-on: ubuntu-latest
+    needs: [gw1n9, gw1n1]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Download gw1n-1 chipdb
+      uses: actions/download-artifact@v2
+      with:
+        name: gw1n-1-chipdb
+        path: apycula
+    - name: Download gw1n-9 chipdb
+      uses: actions/download-artifact@v2
+      with:
+        name: gw1n-9-chipdb
+        path: apycula
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install setuptools wheel twine
+    - name: Build and publish
+      if: startsWith(github.ref, 'refs/tags')
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      run: |
+        python setup.py --version
+        python setup.py sdist bdist_wheel
+        twine upload dist/*
