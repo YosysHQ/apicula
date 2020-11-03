@@ -3,16 +3,17 @@ import os
 from itertools import chain
 import re
 import code
-sys.path.append(os.path.join(sys.path[0], '..'))
-from wirenames import wirenames
 import pickle
-import chipdb
+import importlib.resources
+sys.path.append(os.path.join(sys.path[0], '..'))
+from apycula import chipdb
+from apycula.wirenames import wirenames
 
 device = os.getenv("DEVICE")
 if not device:
     raise Exception("DEVICE not set")
 
-with open(f"../{device}.pickle", 'rb') as f:
+with importlib.resources.open_binary("apycula", f"{device}.pickle") as f:
     db = pickle.load(f)
 
 timing_class = "C6/I5" # TODO parameterize

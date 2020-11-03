@@ -1,7 +1,6 @@
 from write_fasm import *
 import re
-sys.path.append(os.path.join(sys.path[0], '..'))
-import codegen
+from apycula import codegen
 
 # Need to tell FASM generator how to write parameters
 # (celltype, parameter) -> ParameterConfig

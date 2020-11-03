@@ -1,6 +1,6 @@
 import os
 import pickle
-import chipdb
+from apycula import chipdb
 
 device = os.getenv("DEVICE")
 if not device:
@@ -8,7 +8,7 @@ if not device:
 
 timing_class = "C6/I5" # TODO parameterize
 
-with open(f"../{device}.pickle", 'rb') as f:
+with importlib.resources.open_binary("apycula", f"{device}.pickle") as f:
     db = pickle.load(f)
 
 timing = db.timing[timing_class]
