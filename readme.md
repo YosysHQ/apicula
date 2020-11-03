@@ -59,9 +59,8 @@ bash simple.sh nanolcd/*.v # Tang Nano
 # open blinky.vm and blinky.posp in Gowin Floorplanner
 # look at blinky.il and blinky.png
 cd ..
-python gowin_pack.py generic/pnrblinky.json
-# look at pack.png and pack.fs
-python gowin_unpack.py pack.fs
+gowin_pack -d $DEVICE -o pack.fs generic/pnrblinky.json
+gowin_unpack -d $DEVICE -o unpack.v pack.fs
 yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
 openFPGALoader -b littleBee pack.fs # TEC0117
 openFPGALoader -b tangnano pack.fs # Tang Nano
