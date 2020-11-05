@@ -26,6 +26,14 @@ Write a design as FASM
     f:        output file
 """
 def write_fasm(ctx, paramCfg, f):
+    """
+    Writes network tomodels
+
+    Args:
+        ctx: (todo): write your description
+        paramCfg: (todo): write your description
+        f: (todo): write your description
+    """
 	for nname, net in sorted(ctx.nets, key=lambda x: str(x[1].name)):
 		print("# Net %s" % nname, file=f)
 		for wire, pip in sorted(net.wires, key=lambda x: str(x[1])):

@@ -20,6 +20,12 @@ def bitarr(frame, pad):
 
 
 def read_bitstream(fname):
+    """
+    Reads a bitstream from a file.
+
+    Args:
+        fname: (str): write your description
+    """
     bitmap = []
     hdr = []
     ftr = []
@@ -62,6 +68,15 @@ def read_bitstream(fname):
 
 
 def write_bitstream(fname, bs, hdr, ftr):
+    """
+    Write a bitstream to a png file.
+
+    Args:
+        fname: (str): write your description
+        bs: (todo): write your description
+        hdr: (todo): write your description
+        ftr: (todo): write your description
+    """
     bs = np.fliplr(bs)
     padlen = bs.shape[1] % 8
     pad = np.ones((bs.shape[0], padlen), dtype=np.uint8)
@@ -93,6 +108,13 @@ def write_bitstream(fname, bs, hdr, ftr):
 
 
 def display(fname, data):
+    """
+    Display antsimage to a numpy array.
+
+    Args:
+        fname: (str): write your description
+        data: (array): write your description
+    """
     im = Image.frombytes(
             mode='1',
             size=data.shape[::-1],

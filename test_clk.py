@@ -17,6 +17,14 @@ with open(f"{device}.pickle", 'rb') as f:
 locre = re.compile(r"R(\d+)C(\d+)_(\w+)")
 
 def route(row, col, gb):
+    """
+    This function tomodified table to the database.
+
+    Args:
+        row: (todo): write your description
+        col: (todo): write your description
+        gb: (todo): write your description
+    """
     loc = f"R{row}C{col}_{gb}"
     if loc not in db.aliases: return
     print(loc)

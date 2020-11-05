@@ -52,6 +52,13 @@ params = {
 
 name_idx = 0
 def make_name(bel, typ):
+    """
+    Make name of bel name
+
+    Args:
+        bel: (str): write your description
+        typ: (str): write your description
+    """
     global name_idx
     name_idx += 1
     return f"inst{name_idx}_{bel}_{typ}"
@@ -69,6 +76,12 @@ dffmap = {
     "DFFNC": "CLEAR",
 }
 def dff(locations):
+    """
+    Generator for dff.
+
+    Args:
+        locations: (list): write your description
+    """
     for ttyp in range(12, 18): # for each tile type
         mod = codegen.Module()
         cst = codegen.Constraints()
@@ -124,6 +137,13 @@ iobmap = {
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
 def iob(locations, corners):
+    """
+    Generator which tiles.
+
+    Args:
+        locations: (dict): write your description
+        corners: (todo): write your description
+    """
     cnt = Counter() # keep track of how many runs are needed
     for ttyp, tiles in locations.items(): # for each tile of this type
         mod = codegen.Module()
@@ -178,6 +198,12 @@ def iob(locations, corners):
 
 dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'mode'}
 def dualmode(ttyp):
+    """
+    A context manager mode for every pin.
+
+    Args:
+        ttyp: (todo): write your description
+    """
     for pin in dualmode_pins:
         mod = codegen.Module()
         cst = codegen.Constraints()
@@ -185,6 +211,12 @@ def dualmode(ttyp):
         yield ttyp, mod, cst, cfg
 
 def read_posp(fname):
+    """
+    Reads the line from the file.
+
+    Args:
+        fname: (str): write your description
+    """
     cst_parser = re.compile(r"(\w+) (?:PLACE|CST)_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
     place_parser = re.compile(r"(\w+) (?:PLACE|CST)_IO([TBLR])(\d+)\[([A-Z])\]")
     with open(fname, 'r') as f:
@@ -202,6 +234,14 @@ def read_posp(fname):
 
 
 def run_pnr(mod, constr, config):
+    """
+    Run a modbus config
+
+    Args:
+        mod: (todo): write your description
+        constr: (todo): write your description
+        config: (dict): write your description
+    """
     cfg = codegen.DeviceConfig({
         "JTAG regular_io": config.get('jtag', "true"),
         "SSPI regular_io": config.get('sspi', "true"),

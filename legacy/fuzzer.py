@@ -25,11 +25,23 @@ if not gowinhome:
     raise Exception("GOWINHOME not set")
 
 def np_to_vector(array):
+    """
+    Convert a vector to a nd array.
+
+    Args:
+        array: (array): write your description
+    """
     return "{}'b{}".format(
             len(array),
             ''.join(str(int(n)) for n in array))
 
 def popcnt(x):
+    """
+    Popcnt.
+
+    Args:
+        x: (todo): write your description
+    """
     res = 0
     while x:
         if x & 1:
@@ -38,9 +50,21 @@ def popcnt(x):
     return res
 
 def get_cb_size(n):
+    """
+    Returns the size of the factorial.
+
+    Args:
+        n: (str): write your description
+    """
     return factorial(n) // factorial(n // 2) // factorial((n + 1) // 2)
 
 def gen_cb(n):
+    """
+    Generate a callback function.
+
+    Args:
+        n: (array): write your description
+    """
     res = []
     for i in range(1, 2**n):
         if popcnt(i) == (n + 1) // 2:
@@ -49,6 +73,12 @@ def gen_cb(n):
     return res
 
 def get_codes(n):
+    """
+    Returns the size of the n.
+
+    Args:
+        n: (todo): write your description
+    """
     bits = n.bit_length()
     while get_cb_size(bits) < n:
         bits += 1
@@ -77,6 +107,12 @@ def configcodes(stack):
     return sequences
 
 def find_bits(stack):
+    """
+    Find the indices of sequences in - memory sequences.
+
+    Args:
+        stack: (list): write your description
+    """
     sequences = configcodes(stack)
     indices = np.where((sequences>0) & (sequences<sequences.max()))
     return indices, sequences[indices]
@@ -95,17 +131,43 @@ class Fuzzer:
 
     @property
     def cfg_bits(self):
+        """
+        Returns the number of bits in bytes.
+
+        Args:
+            self: (todo): write your description
+        """
         return len(self.locations)*self.loc_bits
 
     @property
     def se_bits(self):
+        """
+        Return an array of the segment bits.
+
+        Args:
+            self: (todo): write your description
+        """
         # this is dumb and potentially slow
         return self.side_effects(np.zeros((0, self.cfg_bits), dtype=np.uint8)).shape[1]
 
     def location_to_name(self, location):
+        """
+        Return the name of the location to a prefix.
+
+        Args:
+            self: (todo): write your description
+            location: (str): write your description
+        """
         return self.prefix + re.sub("\[([0-4AB])\]", "_\\1", location)
 
     def location_chunks(self, bits):
+        """
+        Return a list of chunks.
+
+        Args:
+            self: (todo): write your description
+            bits: (int): write your description
+        """
         return zip(self.locations, bslib.chunks(bits, self.loc_bits))
 
     def primitives(self, mod, bits):
@@ -163,6 +225,15 @@ class CluFuzzer(Fuzzer):
     ncls = 4 # 3 for REG
 
     def __init__(self, rows, cols, exclude):
+        """
+        Initialize a list of tables.
+
+        Args:
+            self: (todo): write your description
+            rows: (int): write your description
+            cols: (int): write your description
+            exclude: (todo): write your description
+        """
         self.locations = []
         if self.scope == "CLU":
             for row in range(2, rows):
@@ -273,6 +344,14 @@ class DffFuzzer(CluFuzzer):
                 mod.primitives[name_b_dff] = dff
 
     def constraints(self, constr, bits):
+        """
+        Constraints to be used location.
+
+        Args:
+            self: (todo): write your description
+            constr: (array): write your description
+            bits: (int): write your description
+        """
         for loc, bits in self.location_chunks(bits):
             if bits[0]:
                 name = self.location_to_name(loc+"[A]_LUT")
@@ -340,6 +419,13 @@ class OneHopWireFuzzer(CluFuzzer):
     prefix = "LUT"
 
     def neighbours(self, location):
+        """
+        Finds all coordinates of the given location.
+
+        Args:
+            self: (array): write your description
+            location: (str): write your description
+        """
         for r, c in [(1,0), (0, 1), (-1, 0), (0, -1)]:
             yield re.sub(
                 "R(\\d+)C(\\d+)",
@@ -367,6 +453,14 @@ class OneHopWireFuzzer(CluFuzzer):
 
 class PinFuzzer(Fuzzer):
     def __init__(self, series, package):
+        """
+        Initialize the bank.
+
+        Args:
+            self: (todo): write your description
+            series: (list): write your description
+            package: (str): write your description
+        """
         self.locations = []
         self.banks = pindef.get_pins(series, package)
         self.se_loc = self.banks.keys()
@@ -405,6 +499,15 @@ class IobFuzzer(PinFuzzer):
     }
 
     def __init__(self, kind, pins, exclude):
+        """
+        Initialize a new kind.
+
+        Args:
+            self: (todo): write your description
+            kind: (int): write your description
+            pins: (int): write your description
+            exclude: (todo): write your description
+        """
         super().__init__(pins, exclude)
         self.kind = kind
         self.ports = self.kindmap[kind]
@@ -424,6 +527,14 @@ class IobFuzzer(PinFuzzer):
                 mod.primitives[name] = dff
 
     def constraints(self, constr, bits):
+        """
+        Constraints.
+
+        Args:
+            self: (todo): write your description
+            constr: (array): write your description
+            bits: (int): write your description
+        """
         for loc, bits in self.location_chunks(bits):
             if bits[0]:
                 name = "IOB{}".format(loc)
@@ -446,6 +557,13 @@ class IobFuzzer(PinFuzzer):
         return np.vstack(cfglist)
 
 def run_pnr(fuzzers, bits):
+    """
+    This function that runs.
+
+    Args:
+        fuzzers: (todo): write your description
+        bits: (int): write your description
+    """
     #TODO generalize/parameterize
     mod = codegen.Module()
     constr = codegen.Constraints()
@@ -545,6 +663,12 @@ def get_extra_codes(fuzzers, bits):
         return []
 
 def run_batch(fuzzers):
+    """
+    Runs a batch.
+
+    Args:
+        fuzzers: (todo): write your description
+    """
     nrofbits = sum([f.cfg_bits for f in fuzzers])
     codelen, codes = get_codes(nrofbits)
     shuffle(codes)

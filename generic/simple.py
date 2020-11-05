@@ -20,6 +20,14 @@ timing_class = "C6/I5" # TODO parameterize
 timing = db.timing[timing_class]
 
 def addWire(row, col, wire):
+    """
+    Add a wiredb record.
+
+    Args:
+        row: (int): write your description
+        col: (int): write your description
+        wire: (str): write your description
+    """
     gname = chipdb.wire2global(row, col, db, wire)
     #print("wire", gname)
     try:
@@ -79,6 +87,12 @@ for row, rowdata in enumerate(db.grid, 1):
 
 wlens = {0: 'X0', 1: 'FX1', 2: 'X2', 8: 'X8'}
 def wiredelay(wire):
+    """
+    Gets the wire.
+
+    Args:
+        wire: (str): write your description
+    """
     m = re.match(r"[NESWX]+([0128])", wire)
     if m:
         wlen = int(m.groups()[0])
@@ -100,6 +114,15 @@ def wiredelay(wire):
 
 
 def addPip(row, col, srcname, destname):
+    """
+    Add a new ip address.
+
+    Args:
+        row: (int): write your description
+        col: (int): write your description
+        srcname: (str): write your description
+        destname: (str): write your description
+    """
     gsrcname = chipdb.wire2global(row, col, db, srcname)
     gdestname = chipdb.wire2global(row, col, db, destname)
 
@@ -118,6 +141,15 @@ def addPip(row, col, srcname, destname):
         #print("Wire already exists", gsrcname, gdestname)
 
 def addAlias(row, col, srcname, destname):
+    """
+    Add a new wire.
+
+    Args:
+        row: (int): write your description
+        col: (todo): write your description
+        srcname: (str): write your description
+        destname: (str): write your description
+    """
     gsrcname = chipdb.wire2global(row, col, db, srcname)
     gdestname = chipdb.wire2global(row, col, db, destname)
 

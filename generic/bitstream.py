@@ -17,6 +17,12 @@ param_map = {
 #gen_7_ PLACE_IOT8[B] //IBUF
 #gen_4_ PLACE_R13C6[0][A]
 def write_posp(f):
+    """
+    Writes a posp file
+
+    Args:
+        f: (todo): write your description
+    """
     belre = re.compile(r"R(\d+)C(\d+)_(SLICE|IOB)(\w)")
     namere = re.compile(r"\W+")
     for name, cell in ctx.cells:

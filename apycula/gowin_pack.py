@@ -11,6 +11,12 @@ from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
 
 def get_bels(data):
+    """
+    Extract bels
+
+    Args:
+        data: (todo): write your description
+    """
     belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB)(\w)")
     for cell in data['modules']['top']['cells'].values():
         bel = cell['attributes']['NEXTPNR_BEL']
@@ -18,6 +24,12 @@ def get_bels(data):
         yield (cell['type'], int(row), int(col), num, cell['parameters'])
 
 def get_pips(data):
+    """
+    Parse pips.
+
+    Args:
+        data: (todo): write your description
+    """
     pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
     for net in data['modules']['top']['netnames'].values():
         routing = net['attributes']['ROUTING']
@@ -29,9 +41,24 @@ def get_pips(data):
                 yield int(row), int(col), src, dest
 
 def infovaluemap(infovalue, start=2):
+    """
+    Return the infovaluemap infoval.
+
+    Args:
+        infovalue: (todo): write your description
+        start: (todo): write your description
+    """
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
 
 def place(db, tilemap, bels):
+    """
+    Place tiles on - place.
+
+    Args:
+        db: (array): write your description
+        tilemap: (todo): write your description
+        bels: (array): write your description
+    """
     for typ, row, col, num, attr in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
@@ -84,6 +111,14 @@ def place(db, tilemap, bels):
 
 
 def route(db, tilemap, pips):
+    """
+    Route srcmap from srcmap.
+
+    Args:
+        db: (todo): write your description
+        tilemap: (todo): write your description
+        pips: (todo): write your description
+    """
     for row, col, src, dest in pips:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
@@ -120,6 +155,11 @@ def header_footer(db, bs):
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
 def main():
+    """
+    Main function.
+
+    Args:
+    """
     parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
     parser.add_argument('netlist')
     parser.add_argument('-d', '--device', required=True)

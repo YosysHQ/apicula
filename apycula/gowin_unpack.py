@@ -13,6 +13,17 @@ from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
 def parse_tile_(db, row, col, tile, default=True, noalias=False):
+    """
+    Parse a tile.
+
+    Args:
+        db: (todo): write your description
+        row: (todo): write your description
+        col: (int): write your description
+        tile: (str): write your description
+        default: (todo): write your description
+        noalias: (str): write your description
+    """
     tiledata = db.grid[row][col]
     bels = {}
     for name, bel in tiledata.bels.items():
@@ -69,6 +80,18 @@ iobmap = {
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, db):
+    """
+    Writes : dffmap
+
+    Args:
+        dbrow: (int): write your description
+        dbcol: (array): write your description
+        bels: (dict): write your description
+        pips: (dict): write your description
+        clock_pips: (dict): write your description
+        mod: (todo): write your description
+        db: (array): write your description
+    """
     # db is 0-based, floorplanner is 1-based
     row = dbrow+1
     col = dbcol+1
@@ -147,6 +170,11 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, db):
     mod.primitives["myvcc"] = vcc
 
 def main():
+    """
+    Main function.
+
+    Args:
+    """
     parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
     parser.add_argument('bitstream')
     parser.add_argument('-d', '--device', required=True)

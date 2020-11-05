@@ -4,10 +4,23 @@ from PIL import Image
 import random
 
 def rint(f, w):
+    """
+    Returns a byte string of bytes.
+
+    Args:
+        f: (todo): write your description
+        w: (float): write your description
+    """
     val = int.from_bytes(f.read(w), 'little', signed=True)
     return val
 
 def readFse(f):
+    """
+    Reads a tiles
+
+    Args:
+        f: (todo): write your description
+    """
     print("check", rint(f, 4))
     tiles = {}
     ttyp = rint(f, 4)
@@ -20,10 +33,26 @@ def readFse(f):
     return tiles
 
 def readTable(f, size1, size2, w=2):
+    """
+    Read a list of the rows in - memory file.
+
+    Args:
+        f: (str): write your description
+        size1: (int): write your description
+        size2: (int): write your description
+        w: (str): write your description
+    """
     return [[rint(f, w) for j in range(size2)]
                         for i in range(size1)]
 
 def readOneFile(f, fuselength):
+    """
+    Reads the list of the - style.
+
+    Args:
+        f: (todo): write your description
+        fuselength: (int): write your description
+    """
     tmap = {"height": rint(f, 4),
             "width": rint(f, 4)}
     tables = rint(f, 4)
@@ -73,6 +102,13 @@ def readOneFile(f, fuselength):
     return tmap
 
 def render_tile(d, ttyp):
+    """
+    Render a tile.
+
+    Args:
+        d: (str): write your description
+        ttyp: (str): write your description
+    """
     w = d[ttyp]['width']
     h = d[ttyp]['height']
     tile = np.zeros((h, w), np.uint8)#+(255-ttyp)
@@ -102,6 +138,12 @@ def render_tile(d, ttyp):
 
 
 def render_bitmap(d):
+    """
+    Render a bitmap.
+
+    Args:
+        d: (todo): write your description
+    """
     tiles = d['header']['grid'][61]
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
@@ -122,6 +164,13 @@ def render_bitmap(d):
     return bitmap
 
 def display(fname, data):
+    """
+    Displays a random image.
+
+    Args:
+        fname: (str): write your description
+        data: (array): write your description
+    """
     im = Image.frombytes(
             mode='P',
             size=data.shape[::-1],
@@ -133,6 +182,14 @@ def display(fname, data):
     return im
 
 def fuse_lookup(d, ttyp, fuse):
+    """
+    Fuse a lookup function.
+
+    Args:
+        d: (todo): write your description
+        ttyp: (todo): write your description
+        fuse: (todo): write your description
+    """
     if fuse >= 0:
         num = d['header']['fuse'][1][fuse][ttyp]
         row = num // 100
@@ -140,6 +197,14 @@ def fuse_lookup(d, ttyp, fuse):
         return row, col
 
 def tile_bitmap(d, bitmap, empty=False):
+    """
+    Return a dict of tile tiles
+
+    Args:
+        d: (array): write your description
+        bitmap: (int): write your description
+        empty: (str): write your description
+    """
     tiles = d['header']['grid'][61]
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
@@ -161,6 +226,13 @@ def tile_bitmap(d, bitmap, empty=False):
     return res
 
 def fuse_bitmap(d, bitmap):
+    """
+    Fuse a bitmap to bitmap.
+
+    Args:
+        d: (todo): write your description
+        bitmap: (todo): write your description
+    """
     tiles = d['header']['grid'][61]
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
@@ -179,6 +251,14 @@ def fuse_bitmap(d, bitmap):
     return res
 
 def parse_tile(d, ttyp, tile):
+    """
+    Parse a tile
+
+    Args:
+        d: (todo): write your description
+        ttyp: (str): write your description
+        tile: (str): write your description
+    """
     w = d[ttyp]['width']
     h = d[ttyp]['height']
     res = {}
@@ -204,6 +284,14 @@ def parse_tile(d, ttyp, tile):
     return res
 
 def scan_fuses(d, ttyp, tile):
+    """
+    Scan the scan of scan.
+
+    Args:
+        d: (todo): write your description
+        ttyp: (todo): write your description
+        tile: (str): write your description
+    """
     w = d[ttyp]['width']
     h = d[ttyp]['height']
     fuses = []
@@ -219,6 +307,14 @@ def scan_fuses(d, ttyp, tile):
     return set(fuses)
 
 def scan_tables(d, tiletyp, fuses):
+    """
+    Scan a list of tables
+
+    Args:
+        d: (todo): write your description
+        tiletyp: (str): write your description
+        fuses: (todo): write your description
+    """
     res = []
     for tname, tables in d[tiletyp].items():
         if tname in {"width", "height"}: continue
@@ -231,6 +327,15 @@ def scan_tables(d, tiletyp, fuses):
     return res
 
 def reduce_rows(rows, fuses, start=16, tries=1000):
+    """
+    Reduce rows in a list of rows.
+
+    Args:
+        rows: (todo): write your description
+        fuses: (todo): write your description
+        start: (todo): write your description
+        tries: (list): write your description
+    """
     rowmap = {frozenset(iv[:iv.index(0)]): frozenset(iv[start:(list(iv)+[-1]).index(-1)]) for iv in rows}
     features = {i for s in rowmap.keys() for i in s}
     for _ in range(tries):

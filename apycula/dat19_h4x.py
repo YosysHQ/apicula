@@ -14,6 +14,13 @@ with open(f"{gowinhome}/IDE/share/device/{device}/{device}.dat", 'rb') as f:
 data = {}
 
 def insap(path, val):
+    """
+    Convert a value in - place value.
+
+    Args:
+        path: (str): write your description
+        val: (float): write your description
+    """
     ref = data
     for seg in path[:-1]:
         ref = ref.setdefault(seg, {})
@@ -27,18 +34,39 @@ def insap(path, val):
         ref[path[-1]] = val
 
 def print_u8(name, pos):
+    """
+    Print a v8 integer value
+
+    Args:
+        name: (str): write your description
+        pos: (int): write your description
+    """
     v = d[pos]
     insap(name, v)
     print(f'{name} [0x{pos:06x}]: {v} [0x{v:02x}]')
     return pos + 1
 
 def print_u16(name, pos):
+    """
+    Print a 32 - bit integer value.
+
+    Args:
+        name: (str): write your description
+        pos: (int): write your description
+    """
     v = int.from_bytes(d[pos:pos+2], 'little')
     insap(name, v)
     print(f'{name} [0x{pos:06x}]: {v} [0x{v:04x}]')
     return pos + 2
 
 def print_u64(name, pos):
+    """
+    Prints a 64 - bit field.
+
+    Args:
+        name: (str): write your description
+        pos: (int): write your description
+    """
     v = int.from_bytes(d[pos:pos+8], 'little')
     insap(name, v)
     print(f'{name} [0x{pos:06x}]: {v} [0x{v:016x}]')
@@ -109,6 +137,15 @@ for y in range(150):
 print()
 
 def print_arr8(name, pos, num, used):
+    """
+    Prints a 4 bits.
+
+    Args:
+        name: (str): write your description
+        pos: (int): write your description
+        num: (int): write your description
+        used: (todo): write your description
+    """
     arr = list(d[pos:pos+num])
     print(name, hex(pos), arr[:used])
     insap(name, tuple(arr[:used]))
@@ -117,6 +154,15 @@ def print_arr8(name, pos, num, used):
     return pos + num
 
 def print_arr16(name, pos, num, used=None):
+    """
+    Prints a 4 bytes.
+
+    Args:
+        name: (str): write your description
+        pos: (int): write your description
+        num: (int): write your description
+        used: (todo): write your description
+    """
     if used is None:
         used = num
     arr = [int.from_bytes(d[pos+i*2:pos+i*2+2], 'little', signed=True) for i in range(num)]
@@ -127,6 +173,15 @@ def print_arr16(name, pos, num, used=None):
     return pos + num * 2
 
 def print_arr32(name, pos, num, used=None):
+    """
+    Print a 4 bytes as a 32 - bit integer.
+
+    Args:
+        name: (str): write your description
+        pos: (int): write your description
+        num: (int): write your description
+        used: (todo): write your description
+    """
     if used is None:
         used = num
     arr = [int.from_bytes(d[pos+i*4:pos+i*4+4], 'little', signed=True) for i in range(num)]
@@ -295,6 +350,14 @@ print()
 #print(d[pos:][:0x200].hex())
 
 def print_outs(name, pos, num):
+    """
+    Prints num num num num
+
+    Args:
+        name: (str): write your description
+        pos: (int): write your description
+        num: (int): write your description
+    """
     print(f'{name} 0x{pos:06x} [{num}]')
     for i in range(num):
         a = int.from_bytes(d[pos:pos+2], 'little', signed=True)
@@ -307,6 +370,14 @@ def print_outs(name, pos, num):
     return pos
 
 def print_mult(name, pos, num):
+    """
+    Print a multidimensional multidimensional d.
+
+    Args:
+        name: (str): write your description
+        pos: (dict): write your description
+        num: (int): write your description
+    """
     print(f'{name} 0x{pos:06x} [{num}]')
     for i in range(num):
         a = int.from_bytes(d[pos:pos+2], 'little', signed=True)
@@ -320,6 +391,14 @@ def print_mult(name, pos, num):
     return pos
 
 def print_clkins(name, pos, num):
+    """
+    Prints a list of integers.
+
+    Args:
+        name: (str): write your description
+        pos: (int): write your description
+        num: (int): write your description
+    """
     print(f'{name} 0x{pos:06x} [{num}]')
     for i in range(num):
         a = int.from_bytes(d[pos:pos+2], 'little', signed=True)

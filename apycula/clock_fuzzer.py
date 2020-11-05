@@ -58,6 +58,11 @@ true_pins = [p[0] for p in clock_pins if "GCLKT" in p[1]]
 pool = Pool()
 
 def quadrants():
+    """
+    Generate quadrants.
+
+    Args:
+    """
     mod = codegen.Module()
     cst = codegen.Constraints()
     ibuf(mod, cst, true_pins[2], clk="myclk")
@@ -238,10 +243,23 @@ banks = {'T': [(0, n) for n in range(db.cols)],
          'L': [(n, 0) for n in range(db.rows)],
          'R': [(n, db.cols-1) for n in range(db.rows)]}
 def pin2loc(name):
+    """
+    Convert a pin name to a pin.
+
+    Args:
+        name: (str): write your description
+    """
     side, num, pin = pin_re.match(name).groups()
     return banks[side][int(num)-1], "IOB"+pin
 
 def pin_aliases(quads, srcs):
+    """
+    Pin pin aliases to srcs
+
+    Args:
+        quads: (todo): write your description
+        srcs: (dict): write your description
+    """
     aliases = {}
     for ct in quads.keys():
         for mux, pin in srcs.items():
@@ -254,6 +272,14 @@ def pin_aliases(quads, srcs):
     return aliases
 
 def spine_aliases(quads, dests, clks):
+    """
+    Spine aliases. : parameter dict.
+
+    Args:
+        quads: (dict): write your description
+        dests: (todo): write your description
+        clks: (todo): write your description
+    """
     aliases = {}
     for ct, (_, _, spine_row) in quads.items():
         for clk, taps in clks[ct].items():
@@ -269,6 +295,12 @@ def spine_aliases(quads, dests, clks):
     return aliases
 
 def tap_aliases(quads):
+    """
+    Return dictionary mapping aliases : return :
+
+    Args:
+        quads: (dict): write your description
+    """
     aliases = {}
     for _, (rows, cols, spine_row) in quads.items():
         for col in cols:
@@ -282,6 +314,13 @@ def tap_aliases(quads):
     return aliases
 
 def branch_aliases(quads, clks):
+    """
+    Return a dictionary of aliases in - placeable aliases.
+
+    Args:
+        quads: (dict): write your description
+        clks: (todo): write your description
+    """
     aliases = {}
     for ct, (rows, _, _) in quads.items():
         for clk, taps in clks[ct].items():

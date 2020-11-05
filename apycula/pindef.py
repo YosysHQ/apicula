@@ -6,6 +6,15 @@ docdir = expanduser("~/Documents/gowinsemi/")
 files = glob(docdir+"*Pinout.xlsx")
 
 def get_package(series, package, special_pins, header):
+    """
+    Get a package.
+
+    Args:
+        series: (todo): write your description
+        package: (str): write your description
+        special_pins: (str): write your description
+        header: (str): write your description
+    """
     fname = None
     for f in files:
         if "%s Pinout" % series in f:
@@ -24,15 +33,41 @@ def get_package(series, package, special_pins, header):
     return df
 
 def get_pins(series, package, special_pins=False, header=0):
+    """
+    Return a pandas dataframe.
+
+    Args:
+        series: (todo): write your description
+        package: (str): write your description
+        special_pins: (todo): write your description
+        header: (str): write your description
+    """
     df = get_package(series, package, special_pins, header)
     df = df[["BANK", package]].astype("int32")
     return df.groupby("BANK")[package].apply(list).to_dict()
 
 def get_locs(series, package, special_pins=False, header=0):
+    """
+    Get locus from a series.
+
+    Args:
+        series: (todo): write your description
+        package: (str): write your description
+        special_pins: (todo): write your description
+        header: (str): write your description
+    """
     df = get_package(series, package, special_pins, header)
     return {p.split('/')[0] for p in df["Pin Name"]}
 
 def get_clock_locs(series, package, header=0):
+    """
+    Get locs locus.
+
+    Args:
+        series: (todo): write your description
+        package: (str): write your description
+        header: (str): write your description
+    """
     df = get_package(series, package, True, header)
     df = df[df["Configuration Function"].str.startswith("GCLK", na=False)]
     return {tuple(p.split('/')) for p in df["Pin Name"]}
