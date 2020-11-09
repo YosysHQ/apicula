@@ -248,9 +248,7 @@ def pin_aliases(quads, srcs):
             (row, col), bel = pin2loc(pin)
             iob = db.grid[row][col].bels[bel]
             iob_out = iob.portmap['O']
-            src_name = f"R{row+1}C{col+1}_{iob_out}"
-            dest_name = f"R{ct[0]+1}C{ct[1]+1}_{mux}"
-            aliases[dest_name] = src_name
+            aliases[ct[0], ct[1], mux] = row, col, iob_out
     return aliases
 
 def spine_aliases(quads, dests, clks):
@@ -262,10 +260,8 @@ def spine_aliases(quads, dests, clks):
                     dest = dests[ct[1], clk]
                 except KeyError:
                     continue
-                dest_name = f"R{spine_row+1}C{tap+1}_{dest}"
-                src_name = f"R{ct[0]+1}C{ct[1]+1}_{dest}"
-                if 'UNK' not in src_name: # these have an unknown function
-                    aliases[dest_name] = src_name
+                if 'UNK' not in dest: # these have an unknown function
+                    aliases[spine_row, tap, dest] = ct[0], ct[1], dest
     return aliases
 
 def tap_aliases(quads):
@@ -274,10 +270,8 @@ def tap_aliases(quads):
         for col in cols:
             for row in rows:
                 for src in ["GT00", "GT10"]:
-                    src_name = f"R{spine_row+1}C{col+1}_{src}"
-                    dest_name = f"R{row+1}C{col+1}_{src}"
-                    if src_name != dest_name:
-                        aliases[dest_name] = src_name
+                    if row != spine_row:
+                        aliases[row, col, src] = spine_row, col, src
 
     return aliases
 
@@ -292,9 +286,7 @@ def branch_aliases(quads, clks):
             for tap, branch_cols in taps.items():
                 for row in rows:
                     for col in branch_cols:
-                        src_name = f"R{row+1}C{tap+1}_{src}"
-                        dest_name = f"R{row+1}C{col+1}_GB{clk}0"
-                        aliases[dest_name] = src_name
+                        aliases[row, col, f"GB{clk}0"] = row, tap, src
 
     return aliases
 

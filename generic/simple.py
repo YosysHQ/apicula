@@ -139,13 +139,13 @@ for row, rowdata in enumerate(db.grid, 1):
         for dest, src in tile.aliases.items():
             addAlias(row, col, src, dest)
 
-locre = re.compile(r"R(\d+)C(\d+)_(\w+)")
-for dest, src in db.aliases.items():
-    row, col, pip = locre.match(dest).groups()
+for (row, col, pip), (srow, scol, spip) in db.aliases.items():
+    dest = f"R{row+1}C{col+1}_{pip}"
+    src = f"R{srow+1}C{scol+1}_{spip}"
     name = f"{src}_{dest}_ALIAS"
     ctx.addPip(
         name=name, type=dest, srcWire=src, dstWire=dest,
-        delay=ctx.getDelayFromNS(0), loc=Loc(int(row), int(col), 0))
+        delay=ctx.getDelayFromNS(0), loc=Loc(row+1, col+1, 0))
 
 # too low numbers will result in slow routing iterations
 # too high numbers will result in more iterations

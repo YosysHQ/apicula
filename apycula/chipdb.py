@@ -47,7 +47,7 @@ class Device:
     cmd_ftr: List[ByteString] = field(default_factory=list)
     template: np.ndarray = None
     # always-connected dest, src aliases
-    aliases: Dict[str, str] = field(default_factory=dict)
+    aliases: Dict[Tuple[int, int, str], Tuple[int, int, str]] = field(default_factory=dict)
 
     @property
     def rows(self):
@@ -229,6 +229,7 @@ def wire2global(row, col, db, wire):
     rootrow = row + dirlut[direction][0]*int(segment)
     rootcol = col + dirlut[direction][1]*int(segment)
     # wires wrap around the edges
+    # assumes 1-based indexes
     if rootrow < 1:
         rootrow = 1 - rootrow
         direction = uturnlut[direction]
