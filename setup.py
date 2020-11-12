@@ -32,6 +32,7 @@ setuptools.setup(
         'console_scripts': [
             'gowin_pack=apycula.gowin_pack:main',
             'gowin_unpack=apycula.gowin_unpack:main',
+            'gowin_bba=apycula.gowin_bba:main',
         ],
     },
     use_scm_version=True,

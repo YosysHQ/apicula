@@ -1,0 +1,144 @@
+import sys
+import importlib.resources
+import pickle
+import argparse
+from contextlib import contextmanager
+from collections import Counter
+from apycula import chipdb
+
+class Bba(object):
+    
+    def __init__(self, file):
+        self.file = file
+        self.block_idx = Counter()
+
+    def __getattr__(self, attr):
+        def write_value(val):
+            self.file.write(f"{attr} {val}\n")
+        return write_value
+
+    def str(self, val, sep="|"):
+        self.file.write(f"str {sep}{val}{sep}\n")
+    
+    @contextmanager
+    def block(self, prefix="block"):
+        idx = self.block_idx[prefix]
+        self.block_idx.update([prefix])
+        name = f"{prefix}_{idx}"
+        self.push(name)
+        self.label(name)
+        try:
+            yield name
+        finally:
+            self.pop(name)
+
+ids = []
+def id_string(s):
+    try:
+        return ids.index(s)
+    except ValueError:
+        ids.append(s)
+        return len(ids)-1
+
+def id_strings(b):
+    with b.block('idstrings') as  blk:
+        for s in ids:
+            b.str(s)
+    b.u32(len(ids))
+    b.ref(blk)
+
+def write_pips(b, pips):
+    num = 0
+    with b.block("pips") as blk:
+        for dest, srcs in pips.items():
+            for src in srcs:
+                num += 1
+                b.u16(id_string(dest))
+                b.u16(id_string(src))
+    b.u32(num)
+    b.ref(blk)
+
+def write_bels(b, bels):
+    with b.block("bels") as blk:
+        for typ, bel in bels.items():
+            b.u16(id_string(typ))
+            with b.block("portmap") as port_blk:
+                for dest, src in bel.portmap.items():
+                    b.u16(id_string(dest))
+                    b.u16(id_string(src))
+            b.u16(len(bel.portmap))
+            b.ref(port_blk)
+
+
+    b.u32(len(bels))
+    b.ref(blk)
+
+def write_aliases(b, aliases):
+    with b.block('aliases') as blk:
+        for dest, src in aliases.items():
+            b.u16(id_string(dest))
+            b.u16(id_string(src))
+    b.u32(len(aliases))
+    b.ref(blk)
+
+def write_tile(b, tile):
+    with b.block('tile') as blk:
+        write_bels(b, tile.bels)
+        write_pips(b, tile.pips)
+        write_pips(b, tile.clock_pips)
+        write_aliases(b, tile.aliases)
+        return blk
+
+def write_grid(b, grid):
+    tiles = {}
+    with b.block('grid') as grid_block:
+        for row in grid:
+            for tile in row:
+                if id(tile) in tiles:
+                    b.ref(tiles[id(tile)])
+                else:
+                    blk = write_tile(b, tile)
+                    tiles[id(tile)] = blk
+                    b.ref(blk)
+    b.ref(grid_block)
+
+
+def write_global_aliases(b, db):
+    with b.block('aliases') as blk:
+        for (drow, dcol, dest), (srow, scol, src) in db.aliases.items():
+            b.u16(drow)
+            b.u16(dcol)
+            b.u16(id_string(dest))
+            b.u16(srow)
+            b.u16(scol)
+            b.u16(id_string(src))
+    b.u32(len(db.aliases))
+    b.ref(blk)
+
+def write_chipdb(db, f, device):
+    cdev=device.replace('-', '_')
+    b = Bba(f)
+    b.pre('#include "nextpnr.h"')
+    b.pre('#include "embed.h"')
+    b.pre('NEXTPNR_NAMESPACE_BEGIN')
+    with b.block(f'chipdb_{cdev}') as blk:
+        b.u16(db.rows)
+        b.u16(db.cols)
+        write_grid(b, db.grid)
+        write_global_aliases(b, db)
+        id_strings(b)
+    b.post(f'EmbeddedFile chipdb_file_{cdev}("gowin/chipdb-{device}.bin", {blk});')
+    b.post('NEXTPNR_NAMESPACE_END')
+
+def main():
+    parser = argparse.ArgumentParser(description='Make Gowin BBA')
+    parser.add_argument('-d', '--device', required=True)
+    parser.add_argument('-o', '--output', type=argparse.FileType('w'), default=sys.stdout)
+
+    args = parser.parse_args()
+    with importlib.resources.open_binary("apycula", f"{args.device}.pickle") as f:
+        db = pickle.load(f)
+    write_chipdb(db, args.output, args.device)
+
+if __name__ == "__main__":
+    main()
