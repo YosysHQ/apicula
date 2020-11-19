@@ -2,6 +2,7 @@ import sys
 import importlib.resources
 import pickle
 import argparse
+import re
 from contextlib import contextmanager
 from collections import Counter
 from apycula import chipdb
@@ -32,19 +33,25 @@ class Bba(object):
         finally:
             self.pop(name)
 
+constids = ['']
 ids = []
 def id_string(s):
     try:
-        return ids.index(s)
+        return constids.index(s)
+    except ValueError:
+        pass
+    try:
+        return len(constids)+ids.index(s)
     except ValueError:
         ids.append(s)
-        return len(ids)-1
+        return len(constids)+len(ids)-1
 
 def id_strings(b):
     with b.block('idstrings') as  blk:
         for s in ids:
             b.str(s)
-    b.u32(len(ids))
+    b.u16(len(constids))
+    b.u16(len(ids))
     b.ref(blk)
 
 def write_pips(b, pips):
@@ -122,6 +129,8 @@ def write_chipdb(db, f, device):
     b.pre('#include "embed.h"')
     b.pre('NEXTPNR_NAMESPACE_BEGIN')
     with b.block(f'chipdb_{cdev}') as blk:
+        b.str(device)
+        b.u32(0) # version
         b.u16(db.rows)
         b.u16(db.cols)
         write_grid(b, db.grid)
@@ -130,12 +139,23 @@ def write_chipdb(db, f, device):
     b.post(f'EmbeddedFile chipdb_file_{cdev}("gowin/chipdb-{device}.bin", {blk});')
     b.post('NEXTPNR_NAMESPACE_END')
 
+def read_constids(f):
+    xre = re.compile(r"X\((.*)\)")
+    for line in f:
+        m = xre.match(line)
+        if m:
+            constids.append(m.group(1))
+    return ids
+
+
 def main():
     parser = argparse.ArgumentParser(description='Make Gowin BBA')
     parser.add_argument('-d', '--device', required=True)
+    parser.add_argument('-i', '--constids', type=argparse.FileType('r'), default=sys.stdin)
     parser.add_argument('-o', '--output', type=argparse.FileType('w'), default=sys.stdout)
 
     args = parser.parse_args()
+    read_constids(args.constids)
     with importlib.resources.open_binary("apycula", f"{args.device}.pickle") as f:
         db = pickle.load(f)
     write_chipdb(db, args.output, args.device)
