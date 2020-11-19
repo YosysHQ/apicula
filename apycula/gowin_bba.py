@@ -112,7 +112,9 @@ def write_grid(b, grid):
 
 def write_global_aliases(b, db):
     with b.block('aliases') as blk:
-        for (drow, dcol, dest), (srow, scol, src) in db.aliases.items():
+        aliases = sorted(db.aliases.items(),
+            key=lambda i: (i[0][0], i[0][1], id_string(i[0][2])))
+        for (drow, dcol, dest), (srow, scol, src) in aliases:
             b.u16(drow)
             b.u16(dcol)
             b.u16(id_string(dest))
