@@ -280,7 +280,7 @@ def read_tm(f, device):
     if device.lower().startswith("gw1n"):
         chunk_order = [
             "C5/I4",
-            "C5/I42_LV",
+            "C5/I4_LV",
             "C6/I5",
             "C6/I5_LV",
             "ES",

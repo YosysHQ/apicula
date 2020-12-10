@@ -124,6 +124,30 @@ def write_global_aliases(b, db):
     b.u32(len(db.aliases))
     b.ref(blk)
 
+def write_timing(b, timing):
+    with b.block('timing') as blk:
+        for speed, groups in timing.items():
+            b.u32(id_string(speed))
+            with b.block('timing_group') as tg:
+                for group, types in groups.items():
+                    b.u32(id_string(group))
+                    with b.block('timing_types') as tt:
+                        for name, items in types.items():
+                            try:
+                                items[0] # QUACKING THE DUCK
+                                b.u32(id_string(name))
+                                for item in items:
+                                    b.u32(int(item*1000))
+                            except TypeError:
+                                pass
+                    b.u32(len(types))
+                    b.ref(tt)
+            b.u32(len(groups))
+            b.ref(tg)
+    b.u32(len(timing))
+    b.ref(blk)
+
+
 def write_chipdb(db, f, device):
     cdev=device.replace('-', '_')
     b = Bba(f)
@@ -137,6 +161,7 @@ def write_chipdb(db, f, device):
         b.u16(db.cols)
         write_grid(b, db.grid)
         write_global_aliases(b, db)
+        write_timing(b, db.timing)
         id_strings(b)
     b.post(f'EmbeddedFile chipdb_file_{cdev}("gowin/chipdb-{device}.bin", {blk});')
     b.post('NEXTPNR_NAMESPACE_END')
