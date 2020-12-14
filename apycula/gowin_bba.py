@@ -6,6 +6,23 @@ import re
 from contextlib import contextmanager
 from collections import Counter
 from apycula import chipdb
+from apycula import pindef
+
+def get_pins(device):
+    if device == "GW1N-1":
+        header = 1
+        start = 5
+    elif device == "GW1N-9":
+        header = 0
+        start = 7
+    else:
+        raise Exception("unsupported device")
+    pkgs = pindef.all_packages(device, start, header)
+    res = {}
+    for pkg in pkgs:
+        res[pkg] = pindef.get_pin_locs(device, pkg, True, header)
+    return res
+
 
 class Bba(object):
     
@@ -147,6 +164,29 @@ def write_timing(b, timing):
     b.u32(len(timing))
     b.ref(blk)
 
+pin_re = re.compile(r"IO([TBRL])(\d+)([A-Z])")
+def iob2bel(db, name):
+    banks = {'T': [(1, n) for n in range(1, db.cols)],
+            'B': [(db.rows, n) for n in range(1, db.cols)],
+            'L': [(n, 1) for n in range(1, db.rows)],
+            'R': [(n, db.cols) for n in range(1, db.rows)]}
+    side, num, pin = pin_re.match(name).groups()
+    row, col = banks[side][int(num)-1]
+    return f"R{row}C{col}_IOB{pin}"
+
+def write_pinout(b, device, db):
+    pkgs = get_pins(device)
+    with b.block("packages") as blk:
+        for pkg, pins in pkgs.items():
+            b.u32(id_string(pkg))
+            with b.block("pins") as pinblk:
+                for num, loc in pins.items():
+                    b.u16(id_string(num))
+                    b.u16(id_string(iob2bel(db, loc)))
+            b.u32(len(pins))
+            b.ref(pinblk)
+    b.u32(len(pkgs))
+    b.ref(blk)
 
 def write_chipdb(db, f, device):
     cdev=device.replace('-', '_')
@@ -162,6 +202,7 @@ def write_chipdb(db, f, device):
         write_grid(b, db.grid)
         write_global_aliases(b, db)
         write_timing(b, db.timing)
+        write_pinout(b, device, db)
         id_strings(b)
     b.post(f'EmbeddedFile chipdb_file_{cdev}("gowin/chipdb-{device}.bin", {blk});')
     b.post('NEXTPNR_NAMESPACE_END')

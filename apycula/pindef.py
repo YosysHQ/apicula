@@ -17,11 +17,14 @@ def get_package(series, package, special_pins, header):
     df = df.dropna(subset=[package])
     df = df[df['Function']=="I/O"]
     df = df[df["Configuration Function"] != "RECONFIG_N"] # can't be output
-    df = df[df["Configuration Function"] != "JTAGSEL_N"] # dedicated pin
-    df = df[df["Configuration Function"] != "JTAGSEL_N/LPLL_T_in"] # whack-a-mole
+    df = df[~df["Configuration Function"].str.startswith("JTAGSEL_N", na=False)] # dedicated pin
     if not special_pins:
         df = df[df["Configuration Function"].isna()]
     return df
+
+def all_packages(series, start, header):
+    df = get_package(series, "Pin Name", True, header)
+    return list(df.columns[start:])
 
 def get_pins(series, package, special_pins=False, header=0):
     df = get_package(series, package, special_pins, header)
@@ -31,6 +34,16 @@ def get_pins(series, package, special_pins=False, header=0):
 def get_locs(series, package, special_pins=False, header=0):
     df = get_package(series, package, special_pins, header)
     return {p.split('/')[0] for p in df["Pin Name"]}
+
+def get_pin_locs(series, package, special_pins=False, header=0):
+    def tryint(n):
+        try:
+            return int(n)
+        except:
+            return n
+
+    df = get_package(series, package, special_pins, header)
+    return {tryint(num): p.split('/')[0] for _, num, p in df[[package, "Pin Name"]].itertuples()}
 
 def get_clock_locs(series, package, header=0):
     df = get_package(series, package, True, header)
