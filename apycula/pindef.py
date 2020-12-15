@@ -13,7 +13,7 @@ def get_package(series, package, special_pins, header):
             break
     assert fname, "No file found for {}".format(series)
 
-    df = pd.read_excel(fname, sheet_name="Pin List", header=header)
+    df = pd.read_excel(fname, sheet_name="Pin List", header=header, engine='openpyxl')
     df = df.dropna(subset=[package])
     df = df[df['Function']=="I/O"]
     df = df[df["Configuration Function"] != "RECONFIG_N"] # can't be output

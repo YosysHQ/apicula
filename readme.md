@@ -15,7 +15,7 @@ Python 3.6+:
 * Pandas
 * Pillow
 * crcmod
-* xlrd
+* openpyxl
 * dataclasses (Python 3.6 only)
 
 ### Developer dependencies
@@ -38,7 +38,7 @@ virtualenv env
 source env/bin/activate
 export DEVICE="GW1N-9" # TEC0117
 export DEVICE="GW1N-1" # Tang Nano
-pip install numpy pandas pillow crcmod xlrd ipython
+pip install numpy pandas pillow crcmod openpyxl ipython
 ```
 
 Developers should generate the ChipDB first. Users can skip this step and download the latest ChipDB from the build artefact in the "Actions" tab. The pickle file should be placed in the Apicula directory.

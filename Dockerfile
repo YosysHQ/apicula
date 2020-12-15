@@ -11,7 +11,7 @@ RUN curl -so gowin.tgz "http://cdn.gowinsemi.com.cn/Gowin_V1.9.3.01Beta_linux.ta
     tar -xf gowin.tgz && \
     rm gowin.tgz
 
-RUN pip install --no-cache-dir numpy pandas pillow crcmod xlrd
+RUN pip install --no-cache-dir numpy pandas pillow crcmod openpyxl
 
 WORKDIR /usr/src/apicula
 
