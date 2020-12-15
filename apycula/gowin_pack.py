@@ -35,7 +35,7 @@ def place(db, tilemap, bels):
     for typ, row, col, num, attr in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
-        if typ == "GENERIC_SLICE":
+        if typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
             init = str(attr['INIT'])
             init = init*(16//len(init))
@@ -46,12 +46,12 @@ def place(db, tilemap, bels):
                         tile[row][col] = 1
 
             #if attr["FF_USED"]: # Maybe it *always* needs the DFF
-            if True:
+            if int(num) < 6:
                 dffbits = tiledata.bels[f'DFF{num}'].modes['DFF']
                 for row, col in dffbits:
                     tile[row][col] = 1
 
-        elif typ == "GENERIC_IOB":
+        elif typ == "IOB":
             assert sum([int(v, 2) for v in attr.values()]) <= 1, "Complex IOB unsuported"
             iob = tiledata.bels[f'IOB{num}']
             if int(attr["INPUT_USED"], 2):

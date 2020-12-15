@@ -268,6 +268,7 @@ if __name__ == "__main__":
 
     db = chipdb.from_fse(fse)
     db.timing = tm
+    db.pinout = chipdb.xls_pinout(device)
 
     locations = {}
     for row, row_dat in enumerate(fse['header']['grid'][61]):

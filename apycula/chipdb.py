@@ -4,6 +4,7 @@ import re
 import numpy as np
 import apycula.fuse_h4x as fuse
 from apycula.wirenames import wirenames, clknames
+from apycula import pindef
 
 # represents a row, column coordinate
 # can be either tiles or bits within tiles
@@ -43,6 +44,7 @@ class Device:
     # a grid of tiles
     grid: List[List[Tile]] = field(default_factory=list)
     timing: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
+    pinout: Dict[str, Dict[str, Dict[str, str]]] = field(default_factory=dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)
     template: np.ndarray = None
@@ -127,6 +129,38 @@ def from_fse(fse):
 
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     return dev
+
+def get_pins(device):
+    if device == "GW1N-1":
+        header = 1
+        start = 5
+    elif device == "GW1N-9":
+        header = 0
+        start = 7
+    elif device == "GW1NR-9":
+        header = 1
+        start = 7
+    else:
+        raise Exception("unsupported device")
+    pkgs = pindef.all_packages(device, start, header)
+    res = {}
+    for pkg in pkgs:
+        res[pkg] = pindef.get_pin_locs(device, pkg, True, header)
+    return res
+
+def xls_pinout(family):
+    if family == "GW1N-1":
+        return {
+            "GW1N-1": get_pins("GW1N-1"),
+        }
+    elif family == "GW1N-9":
+        return {
+            "GW1N-9": get_pins("GW1N-9"),
+            "GW1NR-9": get_pins("GW1NR-9"),
+        }
+    else:
+        raise Exception("unsupported device")
+
 
 def dat_portmap(dat, dev):
     for row in dev.grid:
