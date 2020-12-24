@@ -27,6 +27,8 @@ def get_pips(data):
             if res:
                 row, col, src, dest = res.groups()
                 yield int(row), int(col), src, dest
+            elif pip:
+                print("Invalid pip:", pip)
 
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
@@ -45,7 +47,6 @@ def place(db, tilemap, bels):
                     for row, col in fuses:
                         tile[row][col] = 1
 
-            #if attr["FF_USED"]: # Maybe it *always* needs the DFF
             if int(num) < 6:
                 dffbits = tiledata.bels[f'DFF{num}'].modes['DFF']
                 for row, col in dffbits:

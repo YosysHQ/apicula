@@ -46,7 +46,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False):
                      if tile[row][col] == 1}
         for src, bits in srcs.items():
             # only report connection aliased to by a spine
-            if bits == used_bits and (noalias or f"R{row+1}C{col+1}_{src}" in db.aliases):
+            if bits == used_bits and (noalias or (row, col, src) in db.aliases):
                 clock_pips[dest] = src
 
     return bels, pips, clock_pips
@@ -160,7 +160,9 @@ def main():
     bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
 
-    for dest, src in db.aliases.items():
+    for (drow, dcol, dname), (srow, scol, sname) in db.aliases.items():
+        src = f"R{srow+1}C{scol+1}_{sname}"
+        dest = f"R{drow+1}C{dcol+1}_{dname}"
         mod.wires.update({src, dest})
         mod.assigns.append((dest, src))
 
@@ -174,9 +176,9 @@ def main():
         #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
         #    breakpoint()
         bels, pips, clock_pips = parse_tile_(db, row, col, t)
-        print(bels)
-        #print(pips)
-        print(clock_pips)
+        # print(bels)
+        # print(pips)
+        # print(clock_pips)
         tile2verilog(row, col, bels, pips, clock_pips, mod, db)
     with open(args.output, 'w') as f:
         mod.write(f)
