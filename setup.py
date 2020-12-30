@@ -22,7 +22,7 @@ setuptools.setup(
         'pandas',
         'pillow',
         'crcmod',
-        'xlrd',
+        'openpyxl',
     ],
     python_requires='>=3.6',
     package_data={
