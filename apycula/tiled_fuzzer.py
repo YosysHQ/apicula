@@ -30,17 +30,17 @@ if not gowinhome:
 device = sys.argv[1]
 
 params = {
-    "GW1NR-9": { # Just a 9 with SiP SDRAM, should be deprecated
-        "package": "QN881",
-        "header": 1, # stupid note in excel
-        "device": "GW1NR-9-QFN88-6",
-        "partnumber": "GW1NR-LV9QN88C6/I5",
-    },
     "GW1N-9": {
         "package": "PG256",
         "header": 0,
         "device": "GW1N-9-PBGA256-6",
         "partnumber": "GW1N-LV9PG256C6/I5",
+    },
+    "GW1N-4": {
+        "package": "PG256",
+        "header": 0,
+        "device": "GW1N-4-PBGA256-6",
+        "partnumber": "GW1N-LV4PG256C6/I5",
     },
     "GW1N-1": {
         "package": "LQ144",
@@ -246,7 +246,7 @@ def run_pnr(mod, constr, config):
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
         subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
-        #print(tmpdir); input()
+        # print(tmpdir); input()
         try:
             return (*bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
                    list(read_posp(tmpdir+"/impl/pnr/top.posp")), \

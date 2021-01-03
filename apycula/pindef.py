@@ -5,6 +5,8 @@ from glob import glob
 docdir = expanduser("~/Documents/gowinsemi/")
 files = glob(docdir+"*Pinout.xlsx")
 
+VeryTrue = 2
+
 def get_package(series, package, special_pins, header):
     fname = None
     for f in files:
@@ -16,8 +18,9 @@ def get_package(series, package, special_pins, header):
     df = pd.read_excel(fname, sheet_name="Pin List", header=header, engine='openpyxl')
     df = df.dropna(subset=[package])
     df = df[df['Function']=="I/O"]
-    df = df[df["Configuration Function"] != "RECONFIG_N"] # can't be output
-    df = df[~df["Configuration Function"].str.startswith("JTAGSEL_N", na=False)] # dedicated pin
+    if special_pins != VeryTrue:
+        df = df[df["Configuration Function"] != "RECONFIG_N"] # can't be output
+        df = df[~df["Configuration Function"].str.startswith("JTAGSEL_N", na=False)] # dedicated pin
     if not special_pins:
         df = df[df["Configuration Function"].isna()]
     return df
