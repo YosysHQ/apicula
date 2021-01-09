@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 import os
 import re
@@ -5,7 +6,7 @@ import pickle
 import numpy as np
 import json
 import argparse
-import importlib.resources
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
 from apycula import chipdb
 from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
@@ -27,6 +28,8 @@ def get_pips(data):
             if res:
                 row, col, src, dest = res.groups()
                 yield int(row), int(col), src, dest
+            elif "ALIAS" in pip:
+                print("Ignoring alias:", pip)
             elif pip:
                 print("Invalid pip:", pip)
 
@@ -108,7 +111,7 @@ def header_footer(db, bs):
     CRC_check and security_bit_enable set
     """
     bs = np.fliplr(bs)
-    bs=np.packbits(bs, axis=1)
+    bs = np.packbits(bs)
     # configuration data checksum is computed on all
     # data in 16bit format
     bb = np.array(bs.flat)
@@ -129,7 +132,7 @@ def main():
 
     args = parser.parse_args()
 
-    with importlib.resources.open_binary("apycula", f"{args.device}.pickle") as f:
+    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), f"{args.device}.pickle"), "rb") as f:
         db = pickle.load(f)
     with open(args.netlist) as f:
         pnr = json.load(f)

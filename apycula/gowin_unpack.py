@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 import os
 import re
@@ -7,6 +8,7 @@ from itertools import chain, count
 import pickle
 import argparse
 import importlib.resources
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), '..'))
 from apycula import codegen
 from apycula import chipdb
 from apycula.bslib import read_bitstream
