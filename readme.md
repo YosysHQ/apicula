@@ -19,15 +19,15 @@ Then install the tools with pip:
 pip install apycula
 ```
 
-From there, the ChipDB can be used to compile an example program.
+From there, compile a blinky.
 
 ```bash
 cd examples
 yosys -p "synth_gowin -json blinky.json" blinky.v
 nextpnr-gowin --json blinky.json \
               --write pnrblinky.json \
-              --device GW1N-UV4LQ144C6/I5 \
-              --cst runber.cst
+              --device GW1NR-UV9QN881C6/I5 \
+              --cst tec0117.cst
 gowin_pack -d GW1N-9 -o pack.fs pnrblinky.json
 # gowin_unpack -d GW1N-9 -o unpack.v pack.fs
 # yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
