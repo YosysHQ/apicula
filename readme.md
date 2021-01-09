@@ -43,6 +43,7 @@ In addition to the above, to run the fuzzers and build the ChipDB, the following
 Version 1.9.3.01 of the Gowin vendor tools. Newer versions may work, but have not been tested. A copy of the following Gowin files downloaded in `~/Documents/gowinsemi`:
 * `UG107-1.09E_GW1N-1 Pinout.xlsx`
 * `UG114-1.4E_GW1N-9 Pinout.xlsx`
+* `UG801-1.5E_GW1NR-9 Pinout.xlsx`
 * `UG105-1.6E_GW1N-4 Pinout.xlsx`
 
 Alternatively, you can use the `Dockerfile` to run the fuzzers in a container.
