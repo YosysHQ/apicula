@@ -13,10 +13,19 @@ Currently supported boards are
  * Sipeed Tang Nano: GW1N-LV1QN48C6/I5
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
 
-Then install the tools with pip:
+Install the tools with pip.
 
 ```bash
 pip install apycula
+```
+
+Note that on some systems the installed binaries might not be on the path. Either add the binaries to the path, or use the path of the _installed binary_ directly. (running the source files will lead to import errors)
+
+```bash
+which gowin_bba # check if binaries are on the path
+python -m site --user-base # find the site packages base directory
+ls /home/pepijn/.local/bin # confirm the binaries are installed in this folder
+export PATH="/home/pepijn/.local/bin:$PATH" # add binaries to the path
 ```
 
 From there, compile a blinky.
