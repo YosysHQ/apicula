@@ -108,10 +108,10 @@ def header_footer(db, bs):
     CRC_check and security_bit_enable set
     """
     bs = np.fliplr(bs)
-    bs=np.packbits(bs, axis=1)
+    bs=np.packbits(bs)
     # configuration data checksum is computed on all
     # data in 16bit format
-    bb = np.array(bs.flat)
+    bb = np.array(bs)
 
     res = int(bb[0::2].sum() * pow(2,8) + bb[1::2].sum())
     checksum = res & 0xffff
