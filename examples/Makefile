@@ -25,10 +25,10 @@ attosoc.json: attosoc/attosoc.v attosoc/picorv32.v
 	yosys -p "synth_gowin -json $@" $^
 
 %-tec0117-prog: %-tec0117.fs
-	openFPGALoader -b littleBee $^
+	openFPGALoader -b tec0117 $^
 
 %-runber-prog: %-runber.fs
-	openFPGALoader -b littleBee -c ft232 $^
+	openFPGALoader -b runber $^
 
 %-tangnano-prog: %-tangnano.fs
 	openFPGALoader -b tangnano $^
