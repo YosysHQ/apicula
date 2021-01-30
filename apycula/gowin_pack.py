@@ -129,7 +129,14 @@ def main():
 
     args = parser.parse_args()
 
-    with importlib.resources.open_binary("apycula", f"{args.device}.pickle") as f:
+    device = args.device
+    # For tool integration it is allowed to pass a full part number
+    m = re.match("GW1N([A-Z]*)-(LV|UV)([0-9])([A-Z]{2}[0-9]+)(C[0-9]/I[0-9])", device)
+    if m:
+        luts = m.group(3)
+        device = f"GW1N-{luts}"
+
+    with importlib.resources.open_binary("apycula", f"{device}.pickle") as f:
         db = pickle.load(f)
     with open(args.netlist) as f:
         pnr = json.load(f)
