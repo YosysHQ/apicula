@@ -40,8 +40,8 @@ nextpnr-gowin --json blinky.json \
 gowin_pack -d GW1N-9 -o pack.fs pnrblinky.json
 # gowin_unpack -d GW1N-9 -o unpack.v pack.fs
 # yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
-openFPGALoader -b littleBee pack.fs # TEC0117
-openFPGALoader -b littleBee -c ft232 pack.fs # RUNBER
+openFPGALoader -b tec0117 pack.fs # TEC0117
+openFPGALoader -b runber pack.fs # RUNBER
 openFPGALoader -b tangnano pack.fs # Tang Nano
 ```
 
