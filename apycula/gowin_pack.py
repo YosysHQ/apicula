@@ -101,7 +101,7 @@ def route(db, tilemap, pips):
         for row, col in bits:
             tile[row][col] = 1
 
-def header_footer(db, bs):
+def header_footer(db, bs, compress):
     """
     Generate fs header and footer
     Currently limited to checksum with
@@ -117,6 +117,12 @@ def header_footer(db, bs):
     checksum = res & 0xffff
     db.cmd_hdr[0] = bytearray.fromhex(f"{checksum:04x}")
 
+    if compress:
+        # update line 0x10 with compress enable bit
+        # rest (keys) is done in bslib.write_bitstream
+        hdr10 = int.from_bytes(db.cmd_hdr[4], 'big') | (1 << 13)
+        db.cmd_hdr[4] = bytearray.fromhex(f"{hdr10:016x}")
+
     # same task for line 2 in footer
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
@@ -125,6 +131,7 @@ def main():
     parser.add_argument('netlist')
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-o', '--output', default='pack.fs')
+    parser.add_argument('-c', '--compress', default=False, action='store_true')
     parser.add_argument('--png')
 
     args = parser.parse_args()
@@ -147,10 +154,10 @@ def main():
     route(db, tilemap, pips)
 
     res = chipdb.fuse_bitmap(db, tilemap)
-    header_footer(db, res)
+    header_footer(db, res, args.compress)
     if args.png:
         bslib.display(args.png, res)
-    bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr)
+    bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+from math import ceil
 import numpy as np
 from PIL import Image
 from crcmod.predefined import mkPredefinedCrcFun
@@ -62,14 +63,34 @@ def read_bitstream(fname):
 
     return np.fliplr(np.array(bitmap)), hdr, ftr
 
+def compressLine(line, key8Z, key4Z, key2Z):
+    newline = []
+    for i in range(0, len(line), 8):
+        val = line[i:i+8].tobytes().replace(8 * b'\x00', bytes([key8Z]))
+        val = val.replace(4 * b'\x00', bytes([key4Z]))
+        newline += val.replace(2 * b'\x00', bytes([key2Z]))
+    return newline
 
-def write_bitstream(fname, bs, hdr, ftr):
+def write_bitstream(fname, bs, hdr, ftr, compress):
     bs = np.fliplr(bs)
-    padlen = bs.shape[1] % 8
+    if compress:
+        padlen = (ceil(bs.shape[1] / 64) * 64) - bs.shape[1]
+    else:
+        padlen = bs.shape[1] % 8
     pad = np.ones((bs.shape[0], padlen), dtype=np.uint8)
     bs = np.hstack([pad, bs])
     assert bs.shape[1] % 8 == 0
     bs=np.packbits(bs, axis=1)
+
+    if compress:
+        # search for smallest values not used in the bitstream
+        lst, _ = np.histogram(bs, bins=[i for i in range(256)])
+        [key8Z, key4Z, key2Z] = [i for i,val in enumerate(lst) if val==0][0:3]
+
+        # update line 0x51 with keys
+        hdr51 = int.from_bytes(hdr[5], 'big') & ~0xffffff
+        hdr51 = hdr51 | (key8Z << 16) | (key4Z << 8) | (key2Z)
+        hdr[5] = bytearray.fromhex(f"{hdr51:016x}")
 
     crcdat = bytearray()
     preamble = 3
@@ -81,6 +102,8 @@ def write_bitstream(fname, bs, hdr, ftr):
             f.write(''.join(f"{b:08b}" for b in ba))
             f.write('\n')
         for ba in bs:
+            if compress:
+                ba = compressLine(ba, key8Z, key4Z, key2Z)
             f.write(''.join(f"{b:08b}" for b in ba))
             crcdat.extend(ba)
             crc = crc16arc(crcdat)
