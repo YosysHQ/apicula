@@ -6,6 +6,7 @@
 //Created Time: Sun Dec 15 11:40:09 2019
 
 IO_LOC "clk" 35;
+IO_LOC "rst" 77;
 IO_LOC "led[0]" 86;
 IO_LOC "led[1]" 85;
 IO_LOC "led[2]" 84;
@@ -14,4 +15,3 @@ IO_LOC "led[4]" 82;
 IO_LOC "led[5]" 81;
 IO_LOC "led[6]" 80;
 IO_LOC "led[7]" 79;
-fooo bar

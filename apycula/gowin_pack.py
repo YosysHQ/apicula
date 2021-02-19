@@ -48,7 +48,8 @@ def place(db, tilemap, bels):
                         tile[row][col] = 1
 
             if int(num) < 6:
-                dffbits = tiledata.bels[f'DFF{num}'].modes['DFF']
+                mode = str(attr['FF_TYPE']).strip('E')
+                dffbits = tiledata.bels[f'DFF{num}'].modes[mode]
                 for row, col in dffbits:
                     tile[row][col] = 1
 
