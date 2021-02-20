@@ -21,6 +21,9 @@ all: attosoc-tec0117.fs blinky-tec0117.fs blinky-runber.fs blinky-tangnano.fs
 attosoc.json: attosoc/attosoc.v attosoc/picorv32.v
 	yosys -p "synth_gowin -json $@" $^
 
+nanolcd.json: nanolcd/TOP.v nanolcd/VGAMod.v
+	yosys -p "synth_gowin -json $@" $^
+
 %.json: %.v
 	yosys -p "synth_gowin -json $@" $^
 
