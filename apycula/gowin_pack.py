@@ -44,14 +44,14 @@ def place(db, tilemap, bels):
             for bitnum, lutbit in enumerate(init[::-1]):
                 if lutbit == '0':
                     fuses = lutmap[bitnum]
-                    for row, col in fuses:
-                        tile[row][col] = 1
+                    for brow, bcol in fuses:
+                        tile[brow][bcol] = 1
 
             if int(num) < 6:
                 mode = str(attr['FF_TYPE']).strip('E')
                 dffbits = tiledata.bels[f'DFF{num}'].modes[mode]
-                for row, col in dffbits:
-                    tile[row][col] = 1
+                for brow, bcol in dffbits:
+                    tile[brow][bcol] = 1
 
         elif typ == "IOB":
             assert sum([int(v, 2) for v in attr.values()]) <= 1, "Complex IOB unsuported"

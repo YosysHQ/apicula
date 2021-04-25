@@ -23,7 +23,9 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False):
         mode_bits = {(row, col)
                      for row, col in bel.mode_bits
                      if tile[row][col] == 1}
+        print(name, mode_bits)
         for mode, bits in bel.modes.items():
+            print(mode, bits)
             if bits == mode_bits and (default or bits):
                 bels.setdefault(name, set()).add(mode)
 
@@ -139,12 +141,14 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, db):
 
             mod.primitives[name] = iob
 
-    gnd = codegen.Primitive("GND", "mygnd")
-    gnd.portmap["G"] = "VSS"
-    mod.primitives["mygnd"] = gnd
-    vcc = codegen.Primitive("VCC", "myvcc")
-    vcc.portmap["V"] = "VCC"
-    mod.primitives["myvcc"] = vcc
+    # gnd = codegen.Primitive("GND", "mygnd")
+    # gnd.portmap["G"] = "VSS"
+    # mod.primitives["mygnd"] = gnd
+    # vcc = codegen.Primitive("VCC", "myvcc")
+    # vcc.portmap["V"] = "VCC"
+    # mod.primitives["myvcc"] = vcc
+    mod.assigns.append(("VCC", "1"))
+    mod.assigns.append(("GND", "0"))
 
 def main():
     parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')

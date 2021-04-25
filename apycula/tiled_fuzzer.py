@@ -27,6 +27,7 @@ gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise Exception("GOWINHOME not set")
 
+# device = os.getenv("DEVICE")
 device = sys.argv[1]
 
 params = {
@@ -80,41 +81,42 @@ def dff(locations):
             continue
 
         for cls in range(3): # for each cls
-            for typ, port in dffmap.items(): # for each bel type
-                try:
-                    loc = next(locs) # get the next unused tile
-                except StopIteration:
-                    yield ttyp, mod, cst, {}
-                    locs = iter(locations[ttyp])
-                    loc = next(locs)
-                    mod = codegen.Module()
-                    cst = codegen.Constraints()
+            for side in ["A", "B"]:
+                for typ, port in dffmap.items(): # for each bel type
+                    try:
+                        loc = next(locs) # get the next unused tile
+                    except StopIteration:
+                        yield ttyp, mod, cst, {}
+                        locs = iter(locations[ttyp])
+                        loc = next(locs)
+                        mod = codegen.Module()
+                        cst = codegen.Constraints()
 
-                lutname = make_name("DUMMY", "LUT4")
-                lut = codegen.Primitive("LUT4", lutname)
-                lut.params["INIT"] = "16'hffff"
-                lut.portmap['F'] = lutname+"_F"
-                lut.portmap['I0'] = lutname+"_I0"
-                lut.portmap['I1'] = lutname+"_I1"
-                lut.portmap['I2'] = lutname+"_I2"
-                lut.portmap['I3'] = lutname+"_I3"
+                    lutname = make_name("DUMMY", "LUT4")
+                    lut = codegen.Primitive("LUT4", lutname)
+                    lut.params["INIT"] = "16'hffff"
+                    lut.portmap['F'] = lutname+"_F"
+                    lut.portmap['I0'] = lutname+"_I0"
+                    lut.portmap['I1'] = lutname+"_I1"
+                    lut.portmap['I2'] = lutname+"_I2"
+                    lut.portmap['I3'] = lutname+"_I3"
 
-                mod.wires.update(lut.portmap.values())
-                mod.primitives[lutname] = lut
-                name = make_name("DFF", typ)
-                dff = codegen.Primitive(typ, name)
-                dff.portmap['CLK'] = name+"_CLK"
-                dff.portmap['D'] = lutname+"_F"
-                dff.portmap['Q'] = name+"_Q"
-                if port:
-                    dff.portmap[port] = name+"_"+port
-                mod.wires.update(dff.portmap.values())
-                mod.primitives[name] = dff
+                    mod.wires.update(lut.portmap.values())
+                    mod.primitives[lutname] = lut
+                    name = make_name("DFF", typ)
+                    dff = codegen.Primitive(typ, name)
+                    dff.portmap['CLK'] = name+"_CLK"
+                    dff.portmap['D'] = lutname+"_F"
+                    dff.portmap['Q'] = name+"_Q"
+                    if port:
+                        dff.portmap[port] = name+"_"+port
+                    mod.wires.update(dff.portmap.values())
+                    mod.primitives[name] = dff
 
-                row = loc[0]+1
-                col = loc[1]+1
-                cst.cells[lutname] = f"R{row}C{col}[{cls}]"
-                cst.cells[name] = f"R{row}C{col}[{cls}]"
+                    row = loc[0]+1
+                    col = loc[1]+1
+                    cst.cells[lutname] = f"R{row}C{col}[{cls}][{side}]"
+                    cst.cells[name] = f"R{row}C{col}[{cls}][{side}]"
         yield ttyp, mod, cst, {}
 
 iobmap = {
@@ -185,8 +187,8 @@ def dualmode(ttyp):
         yield ttyp, mod, cst, cfg
 
 def read_posp(fname):
-    cst_parser = re.compile(r"(\w+) (?:PLACE|CST)_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
-    place_parser = re.compile(r"(\w+) (?:PLACE|CST)_IO([TBLR])(\d+)\[([A-Z])\]")
+    cst_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
+    place_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_IO([TBLR])(\d+)\[([A-Z])\]")
     with open(fname, 'r') as f:
         for line in f:
             cst = cst_parser.match(line)
@@ -373,16 +375,16 @@ if __name__ == "__main__":
             if bel_type == "DUMMY":
                 continue
             elif bel_type == "DFF":
-                for i in range(2): # 2 DFF per CLS
-                    bel = db.grid[row][col].bels.setdefault(f"DFF{cls*2+i}", chipdb.Bel())
-                    bel.modes[cell_type] = loc
-                    bel.portmap = {
-                        # D inputs hardwired to LUT F
-                        'Q': f"Q{cls*2+i}",
-                        'CLK': f"CLK{cls}",
-                        'LSR': f"LSR{cls}", # set/reset
-                        'CE': f"CE{cls}", # clock enable
-                    }
+                i = ord(lut)-ord("A")
+                bel = db.grid[row][col].bels.setdefault(f"DFF{cls*2+i}", chipdb.Bel())
+                bel.modes[cell_type] = loc
+                bel.portmap = {
+                    # D inputs hardwired to LUT F
+                    'Q': f"Q{cls*2+i}",
+                    'CLK': f"CLK{cls}",
+                    'LSR': f"LSR{cls}", # set/reset
+                    'CE': f"CE{cls}", # clock enable
+                }
             elif bel_type == "IOB":
                     bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
                     bel.modes[cell_type] = loc
