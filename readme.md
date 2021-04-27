@@ -39,7 +39,7 @@ nextpnr-gowin --json blinky.json \
               --write pnrblinky.json \
               --device GW1NR-UV9QN881C6/I5 \
               --cst tec0117.cst
-gowin_pack -d GW1N-9 -o pack.fs pnrblinky.json # You may need to change GW1N-9 as well, runber seems to use GW1N-4
+gowin_pack -d GW1N-9 -o pack.fs pnrblinky.json # You may need to change GW1N-9 as well, runber uses GW1N-4
 # gowin_unpack -d GW1N-9 -o unpack.v pack.fs
 # yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
 openFPGALoader -b tec0117 pack.fs
