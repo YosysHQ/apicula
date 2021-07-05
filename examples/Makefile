@@ -1,4 +1,4 @@
-honeycomb=3
+honeycomb_leds=3
 runber_leds=8
 tangnano_leds=3
 tec0117_leds=8
