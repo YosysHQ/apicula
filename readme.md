@@ -30,19 +30,20 @@ export PATH="/home/pepijn/.local/bin:$PATH" # add binaries to the path
 
 From there, compile a blinky.
 
+The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber` or `tangnano` accordingly.
+You can also use the Makefile in the examples folder to build the examples.
+
 ```bash
 cd examples
 yosys -p "synth_gowin -json blinky.json" blinky.v
 nextpnr-gowin --json blinky.json \
               --write pnrblinky.json \
-              --device GW1NR-UV9QN881C6/I5 \
-              --cst tec0117.cst
-gowin_pack -d GW1N-9 -o pack.fs pnrblinky.json
-# gowin_unpack -d GW1N-9 -o unpack.v pack.fs
+              --device GW1NR-UV9QN881C6/I5 \ # change to your device
+              --cst tec0117.cst # change to the constraint file for your board
+gowin_pack -d GW1NR-UV9QN881C6/I5 -o pack.fs pnrblinky.json # chango to your device
+# gowin_unpack -d GW1NR-UV9QN881C6/I5 -o unpack.v pack.fs
 # yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
-openFPGALoader -b tec0117 pack.fs # TEC0117
-openFPGALoader -b runber pack.fs # RUNBER
-openFPGALoader -b tangnano pack.fs # Tang Nano
+openFPGALoader -b tec0117 pack.fs # change to your board
 ```
 
 ## Getting started for contributors
