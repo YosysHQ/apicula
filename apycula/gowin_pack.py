@@ -80,9 +80,10 @@ def place(db, tilemap, bels):
                 bcol = db.cols-1
             tiledata = db.grid[brow][bcol]
             tile = tilemap[(brow, bcol)]
-            bits = tiledata.bels['BANK'].modes['DEFAULT']
-            for row, col in bits:
-                tile[row][col] = 1
+            if not len(tiledata.bels) == 0:
+                bits = tiledata.bels['BANK'].modes['DEFAULT']
+                for row, col in bits:
+                    tile[row][col] = 1
 
 
 def route(db, tilemap, pips):
