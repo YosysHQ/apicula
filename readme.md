@@ -12,6 +12,7 @@ Currently supported boards are
  * Trenz TEC0117: GW1NR-UV9QN881C6/I5
  * Sipeed Tang Nano: GW1N-LV1QN48C6/I5
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
+ * @Disasm honeycomb: GW1NS-UX2CQN48C5/I4
 
 Install the tools with pip.
 
@@ -30,7 +31,7 @@ export PATH="/home/pepijn/.local/bin:$PATH" # add binaries to the path
 
 From there, compile a blinky.
 
-The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber` or `tangnano` accordingly.
+The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber`, `tangnano` or `honeycomb` accordingly.
 You can also use the Makefile in the examples folder to build the examples.
 
 ```bash
@@ -55,6 +56,7 @@ Version 1.9.3.01 of the Gowin vendor tools. Newer versions may work, but have no
 * `UG114-1.4E_GW1N-9 Pinout.xlsx`
 * `UG801-1.5E_GW1NR-9 Pinout.xlsx`
 * `UG105-1.6E_GW1N-4 Pinout.xlsx`
+* `UG825-1.2.1E_GW1NS-2C Pinout.xlsx`
 
 Alternatively, you can use the `Dockerfile` to run the fuzzers in a container.
 
