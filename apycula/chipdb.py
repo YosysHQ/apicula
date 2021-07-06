@@ -143,6 +143,12 @@ def get_pins(device):
     elif device == "GW1NR-9":
         header = 1
         start = 7
+    elif device == "GW1NS-2":
+        header = 0
+        start = 7
+    elif device == "GW1NS-2C":
+        header = 0
+        start = 7
     else:
         raise Exception("unsupported device")
     pkgs = pindef.all_packages(device, start, header)
@@ -164,6 +170,11 @@ def xls_pinout(family):
     elif family == "GW1N-4":
         return {
             "GW1N-4": get_pins("GW1N-4"),
+        }
+    elif family == "GW1NS-2":
+        return {
+            "GW1NS-2": get_pins("GW1NS-2"),
+            "GW1NS-2C": get_pins("GW1NS-2C"),
         }
     else:
         raise Exception("unsupported device")

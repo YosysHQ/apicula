@@ -80,9 +80,10 @@ def place(db, tilemap, bels):
                 bcol = db.cols-1
             tiledata = db.grid[brow][bcol]
             tile = tilemap[(brow, bcol)]
-            bits = tiledata.bels['BANK'].modes['DEFAULT']
-            for row, col in bits:
-                tile[row][col] = 1
+            if not len(tiledata.bels) == 0:
+                bits = tiledata.bels['BANK'].modes['DEFAULT']
+                for row, col in bits:
+                    tile[row][col] = 1
 
 
 def route(db, tilemap, pips):
@@ -139,7 +140,7 @@ def main():
 
     device = args.device
     # For tool integration it is allowed to pass a full part number
-    m = re.match("GW1N([A-Z]*)-(LV|UV)([0-9])([A-Z]{2}[0-9]+)(C[0-9]/I[0-9])", device)
+    m = re.match("GW1N([A-Z]*)-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+)(C[0-9]/I[0-9])", device)
     if m:
         luts = m.group(3)
         device = f"GW1N-{luts}"
