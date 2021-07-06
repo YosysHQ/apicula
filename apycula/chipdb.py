@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple, Union, ByteString
+import copy
 import re
 import numpy as np
 import apycula.fuse_h4x as fuse
@@ -9,6 +10,8 @@ from apycula import pindef
 # represents a row, column coordinate
 # can be either tiles or bits within tiles
 Coord = Tuple[int, int]
+
+mode_attr_separator = '&'
 
 @dataclass
 class Bel:
@@ -249,9 +252,45 @@ def shared2flag(dev):
                             if mode_cb:
                                 belb.flags[mode+"C"] = mode_cb
                                 bits -= mode_cb
-                        print(bela)
-                        print(belb)
 
+def diff2flag(dev):
+    """Fold modes with names MODE&attr=value, create default MODE with common bits
+     and create flags with MODE&attr=value with diff bits"""
+    for idx, row in enumerate(dev.grid):
+        for jdx, td in enumerate(row):
+            for name, bel in td.bels.items():
+                if not name.startswith("IOB"):
+                    continue
+                # find common mode bits: this is unmodified mode
+                # although this mode isn't default
+                bel_modes = {}
+                for mode, bits in bel.modes.items():
+                    # extract mode name
+                    mode_attr = mode.split(mode_attr_separator)
+                    if len(mode_attr) < 2:
+                        continue
+                    mode_name = mode_attr[0]
+                    # common bits
+                    if bel_modes.get(mode_name) != None:
+                        bel_modes[mode_name] &= bits
+                    else:
+                        bel_modes[mode_name] = copy.deepcopy(bits)
+                # convert all modes to the flags
+                modes_to_del = list(bel.modes.keys())
+                for mode in modes_to_del:
+                    mode_attr = mode.split(mode_attr_separator)
+                    if len(mode_attr) < 2:
+                        continue
+                    mode_name = mode_attr[0]
+                    # diff bits
+                    flag_bits = bel_modes[mode_name] ^ bel.modes[mode]
+                    # add flag & delete mode
+                    bel.flags[mode] = flag_bits
+                    del(bel.modes[mode])
+                # create clean mode
+                bel.modes.update(bel_modes)
+                print(f"{idx} {jdx} {name} flags:{bel.flags}")
+                print(f"{idx} {jdx} {name} modes:{bel.modes}")
 
 uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 dirlut = {'N': (1, 0),

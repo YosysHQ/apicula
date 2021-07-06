@@ -125,6 +125,9 @@ iobmap = {
     #"TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
+iobattrs = {
+    "PULL_MODE": ["NONE", "UP", "DOWN", "KEEPER"],
+}
 def iob(locations, corners):
     cnt = Counter() # keep track of how many runs are needed
     for ttyp, tiles in locations.items(): # for each tile of this type
@@ -134,41 +137,45 @@ def iob(locations, corners):
         bels = {name[-1] for loc in tiles.values() for name in loc}
         locs = tiles.copy()
         for pin in bels: # [A, B, C, D, ...]
-            for typ, conn in iobmap.items():
-                # find the next location that has pin
-                # or make a new module
-                for tile, names in locs.items():
-                    name = tile+pin
-                    if name in names:
-                        del locs[tile]
-                        loc = name
-                        break
-                else: # no usable tiles
+            for attr, attr_values in iobattrs.items(): # for each possible port attribute
+                for attr_val in attr_values:     # for values of the attribute
+                    for typ, conn in iobmap.items():
+                        # find the next location that has pin
+                        # or make a new module
+                        for tile, names in locs.items():
+                            name = tile+pin
+                            if name in names:
+                                del locs[tile]
+                                loc = name
+                                break
+                        else: # no usable tiles
+                            yield ttyp, mod, cst, {}
+                            cnt[ttyp] += 1
+                            locs = tiles.copy()
+                            mod = codegen.Module()
+                            cst = codegen.Constraints()
+                            for tile, names in locs.items():
+                                name = tile+pin
+                                if name in names:
+                                    del locs[tile]
+                                    loc = name
+                                    break
+
+                        name = make_name("IOB", typ)
+                        iob = codegen.Primitive(typ, name)
+                        for port in chain.from_iterable(conn.values()):
+                            iob.portmap[port] = name+"_"+port
+
+                        for direction, wires in conn.items():
+                            wnames = [name+"_"+w for w in wires]
+                            getattr(mod, direction).update(wnames)
+                        mod.primitives[name] = iob
+                        cst.ports[name] = loc
+                        # port attribute value
+                        cst.attrs[name] = {attr: attr_val};
+
                     yield ttyp, mod, cst, {}
                     cnt[ttyp] += 1
-                    locs = tiles.copy()
-                    mod = codegen.Module()
-                    cst = codegen.Constraints()
-                    for tile, names in locs.items():
-                        name = tile+pin
-                        if name in names:
-                            del locs[tile]
-                            loc = name
-                            break
-
-                name = make_name("IOB", typ)
-                iob = codegen.Primitive(typ, name)
-                for port in chain.from_iterable(conn.values()):
-                    iob.portmap[port] = name+"_"+port
-
-                for direction, wires in conn.items():
-                    wnames = [name+"_"+w for w in wires]
-                    getattr(mod, direction).update(wnames)
-                mod.primitives[name] = iob
-                cst.ports[name] = loc
-
-            yield ttyp, mod, cst, {}
-            cnt[ttyp] += 1
     # insert dummie in the corners to detect the bank enable bits
     runs = cnt.most_common(1)[0][1]
     for _ in range(runs):
@@ -223,7 +230,7 @@ def run_pnr(mod, constr, config):
         "background_programming": "false",
         "secure_mode": "false"})
 
-    opt = codegen.PnrOptions(["posp", "warning_all"])
+    opt = codegen.PnrOptions(["posp", "warning_all", "oc", "ibs"])
             #"sdf", "oc", "ibs", "posp", "o",
             #"warning_all", "timing", "reg_not_in_iob"])
 
@@ -247,12 +254,14 @@ def run_pnr(mod, constr, config):
         pnr.opt = tmpdir+"/pnr.cfg"
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
+
         subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
-        # print(tmpdir); input()
+        #print(tmpdir); input()
         try:
+            attrs = constr.attrs;
             return (*bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
                    list(read_posp(tmpdir+"/impl/pnr/top.posp")), \
-                   config)
+                   config, attrs)
         except FileNotFoundError:
             print(tmpdir)
             input()
@@ -318,14 +327,14 @@ if __name__ == "__main__":
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
-    empty, hdr, ftr, posp, config = run_pnr(codegen.Module(), codegen.Constraints(), {})
+    empty, hdr, ftr, posp, config, _ = run_pnr(codegen.Module(), codegen.Constraints(), {})
     db.cmd_hdr = hdr
     db.cmd_ftr = ftr
     db.template = empty
     p = Pool()
     pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs, configs))
 
-    for bitmap, hdr, ftr, posp, config in pnr_res:
+    for bitmap, hdr, ftr, posp, config, attrs in pnr_res:
         seen = {}
         diff = bitmap ^ empty
         bm = fuse_h4x.tile_bitmap(fse, diff)
@@ -387,8 +396,12 @@ if __name__ == "__main__":
                 }
             elif bel_type == "IOB":
                     bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
-                    bel.modes[cell_type] = loc
+                    #bel.modes[cell_type] = loc
+                    mod_attr = list(attrs[name])[0]
+                    mod_attr_val = attrs[name][mod_attr]
+                    bel.modes["{}&{}={}".format(cell_type, mod_attr, mod_attr_val)] = loc;
                     # portmap is set from dat file
+
             else:
                 raise ValueError(f"Type {bel_type} not handled")
 
@@ -422,6 +435,7 @@ if __name__ == "__main__":
 
     chipdb.dat_portmap(dat, db)
     chipdb.dat_aliases(dat, db)
+    chipdb.diff2flag(db)
     chipdb.shared2flag(db)
 
     db.grid[0][0].bels['CFG'].flags['UNK0'] = {(3, 1)}
