@@ -143,6 +143,9 @@ def get_pins(device):
     elif device == "GW1NR-9":
         header = 1
         start = 7
+    elif device == "GW1NS-2":
+        header = 0
+        start = 7
     elif device == "GW1NS-2C":
         header = 0
         start = 7
@@ -170,6 +173,7 @@ def xls_pinout(family):
         }
     elif family == "GW1NS-2":
         return {
+            "GW1NS-2": get_pins("GW1NS-2"),
             "GW1NS-2C": get_pins("GW1NS-2C"),
         }
     else:
