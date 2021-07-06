@@ -1,6 +1,6 @@
 module top (
 	input clk,
-	output reg [7:0] led
+	output [`LEDS_NR-1:0] led
 );
 
 reg [25:0] ctr_q;
@@ -12,6 +12,6 @@ always @(posedge clk)
 
 // Combinational code (boolean logic)
 assign ctr_d = ctr_q + 1'b1;
-assign led = ctr_q[25:18];
+assign led = ctr_q[25:25-`LEDS_NR];
 
 endmodule

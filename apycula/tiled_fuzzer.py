@@ -31,6 +31,12 @@ if not gowinhome:
 device = sys.argv[1]
 
 params = {
+    "GW1NS-2": {
+        "package": "LQ144",
+        "header": 0,
+        "device": "GW1NS-2C-LQ144-5",
+        "partnumber": "GW1NS-UX2CLQ144C5/I4",
+    },
     "GW1N-9": {
         "package": "PG256",
         "header": 0,
