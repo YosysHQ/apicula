@@ -57,23 +57,21 @@ def place(db, tilemap, bels):
             assert sum([int(v, 2) for v in parms.values()]) <= 1, "Complex IOB unsuported"
             iob = tiledata.bels[f'IOB{num}']
             if int(parms["INPUT_USED"], 2):
-                flag_bits = {}
+                flag_bits = set()
                 for flag in attrs.keys():
                     if flag[0] != chipdb.mode_attr_separator:
                         continue
-                    flag_name = 'IBUF'+ chipdb.mode_attr_separator + flag
+                    flag_name = 'IBUF' + flag
                     flag_bits |= iob.flags.get(flag_name, set())
                 bits = iob.modes['IBUF'] | iob.flags.get('IBUFC', set()) | flag_bits
             elif int(parms["OUTPUT_USED"], 2):
-                flag_bits = {}
+                flag_bits = set()
                 for flag in attrs.keys():
                     if flag[0] != chipdb.mode_attr_separator:
                         continue
-                    flag_name = 'OBUF'+ chipdb.mode_parms_separator + flag
+                    flag_name = 'OBUF'+ flag
                     flag_bits |= iob.flags.get(flag_name, set())
-                    print(flag_name)
-                    print(flag_bits)
-                bits = iob.modes['OBUF'] | iob.flags.get('OBUFC', set())
+                bits = iob.modes['OBUF'] | iob.flags.get('OBUFC', set()) | flag_bits
             else:
                 raise ValueError("IOB has no in or output")
             for r, c in bits:
