@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import re
 import os
 import sys
@@ -132,7 +133,9 @@ iobmap = {
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
 iobattrs = {
+    "HYSTERESIS" : ["NONE", "H2L", "L2H", "HIGH"],
     "PULL_MODE": ["NONE", "UP", "DOWN", "KEEPER"],
+    "SLEW_RATE" : ["SLOW", "FAST"],
 }
 def iob(locations, corners):
     cnt = Counter() # keep track of how many runs are needed
@@ -215,6 +218,36 @@ def read_posp(fname):
             elif line.strip() and not line.startswith('//'):
                 raise Exception(line)
 
+# Read the packer vendor log to identify problem with primitives/attributes
+@dataclass
+class LogLine:
+    "One line of error log with contains primitive name like inst1_IOB_IBUF"
+    # line type: Info, Warning, Error
+    line_type: str
+    # error/message code like (CT1108)
+    code: str
+    # name of primitive
+    prim_name: str
+    # full text of the line
+    text: str
+
+# check if the primitive caused the warning/error
+def primitive_caused_err(name, err_code, log):
+    return len(list(filter(lambda el: el.prim_name == name and el.code == err_code, log))) != 0
+
+def read_err_log(fname):
+    err_parser = re.compile("(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
+    errs = list()
+    with open(fname, 'r') as f:
+        for line in f:
+            res = err_parser.match(line)
+            if res:
+                line_type, code, prim_name = res.groups()
+                text = res.group(0)
+                ll = LogLine(line_type, code, prim_name, text)
+                errs.append(ll)
+    return errs
+
 
 def run_pnr(mod, constr, config):
     cfg = codegen.DeviceConfig({
@@ -267,11 +300,12 @@ def run_pnr(mod, constr, config):
             attrs = constr.attrs;
             return (*bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
                    list(read_posp(tmpdir+"/impl/pnr/top.posp")), \
-                   config, attrs)
+                   config, attrs, \
+                   read_err_log(tmpdir+"/impl/pnr/top.log"))
         except FileNotFoundError:
             print(tmpdir)
             input()
-            return None, None, None, None, None
+            return None, None, None, None, None, None
 
 if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
@@ -333,19 +367,22 @@ if __name__ == "__main__":
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
-    empty, hdr, ftr, posp, config, _ = run_pnr(codegen.Module(), codegen.Constraints(), {})
+    empty, hdr, ftr, posp, config, _, _ = run_pnr(codegen.Module(), codegen.Constraints(), {})
     db.cmd_hdr = hdr
     db.cmd_ftr = ftr
     db.template = empty
     p = Pool()
     pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs, configs))
 
-    for bitmap, hdr, ftr, posp, config, attrs in pnr_res:
+    for bitmap, hdr, ftr, posp, config, attrs, errs in pnr_res:
         seen = {}
         diff = bitmap ^ empty
         bm = fuse_h4x.tile_bitmap(fse, diff)
         for cst_type, name, *info in posp:
             bel_type, cell_type = type_re.match(name).groups()
+            if primitive_caused_err(name, "CT1108", errs): # skip bad primitives
+                print(f"skip: {name} {info}")
+                continue
             if cst_type == "cst":
                 row, col, cls, lut = info
                 print(name, row, col, cls, lut)
@@ -402,7 +439,6 @@ if __name__ == "__main__":
                 }
             elif bel_type == "IOB":
                     bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
-                    #bel.modes[cell_type] = loc
                     mod_attr = list(attrs[name])[0]
                     mod_attr_val = attrs[name][mod_attr]
                     bel.modes["{}&{}={}".format(cell_type, mod_attr, mod_attr_val)] = loc;

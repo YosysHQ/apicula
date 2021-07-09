@@ -300,8 +300,32 @@ def diff2flag(dev):
                     del(bel.modes[mode])
                 # create clean mode
                 bel.modes.update(bel_modes)
-                print(f"{idx} {jdx} {name} flags:{bel.flags}")
-                print(f"{idx} {jdx} {name} modes:{bel.modes}")
+
+                # If for a given mode all possible values of one flag
+                # contain some bit, then this bit is "noise" --- this bit
+                # belongs to the default value of another flag. Remove.
+                #
+                noise_bits = {}
+                for flag, bits in bel.flags.items():
+                    # MODE&ATTR=YYY
+                    flag_value = flag.split("=")
+                    if len(flag_value) < 2:
+                        continue
+                    flag_name = flag_value[0]
+                    if noise_bits.get(flag_name) != None:
+                        noise_bits[flag_name] &= bits
+                    else:
+                        noise_bits[flag_name] = copy.deepcopy(bits)
+                # remove noise
+                for flag, bits in bel.flags.items():
+                    flag_value = flag.split("=")
+                    if len(flag_value) < 2:
+                        continue
+                    flag_name = flag_value[0]
+                    bits ^= noise_bits[flag_name]
+                # XXX debug
+                print(f">{idx} {jdx} {name} flags:{bel.flags}")
+                print(f">{idx} {jdx} {name} modes:{bel.modes}")
 
 uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 dirlut = {'N': (1, 0),

@@ -61,7 +61,7 @@ def quadrants():
     mod = codegen.Module()
     cst = codegen.Constraints()
     ibuf(mod, cst, true_pins[2], clk="myclk")
-    base_bs, _, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
+    base_bs, _, _, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
 
     modules = []
     constrs = []
@@ -125,7 +125,7 @@ def center_muxes(ct, rows, cols):
     ibufs = [ibuf(mod, cst, p) for p in true_pins]
     dffs = [dff(mod, cst, row, col) for row, col in dff_locs]
 
-    bs, _, _, _, _,_ = tiled_fuzzer.run_pnr(mod, cst, {})
+    bs, _, _, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
 
     gb_sources = {}
     gb_destinations = {}
@@ -178,7 +178,7 @@ def taps(rows, cols):
         for col in cols:
             flop = dff(mod, cst, row, col)
 
-    bs_base, _, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
+    bs_base, _, _, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
 
     modules = []
     constrs = []
@@ -310,12 +310,12 @@ if __name__ == "__main__":
         # col 0 contains a tap, but not a dff
         if 1 in cols:
             cols.add(0)
-            
+
     print("    quads =", quads)
     print("    srcs =", srcs)
     print("    dests =", dests)
     print("    clks =", clks)
-    
+
     pa = pin_aliases(quads, srcs)
     sa = spine_aliases(quads, dests, clks)
     ta = tap_aliases(quads)
