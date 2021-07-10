@@ -324,8 +324,8 @@ def diff2flag(dev):
                     flag_name = flag_value[0]
                     bits ^= noise_bits[flag_name]
                 # XXX debug
-                print(f">{idx} {jdx} {name} flags:{bel.flags}")
-                print(f">{idx} {jdx} {name} modes:{bel.modes}")
+                print(f"{idx} {jdx} {name} flags:{bel.flags}")
+                print(f"{idx} {jdx} {name} modes:{bel.modes}")
 
 uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 dirlut = {'N': (1, 0),

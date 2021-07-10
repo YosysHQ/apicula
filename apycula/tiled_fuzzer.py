@@ -4,7 +4,7 @@ import os
 import sys
 import tempfile
 import subprocess
-from collections import deque, Counter
+from collections import deque, Counter, namedtuple
 from itertools import chain, count, zip_longest
 from functools import reduce
 from random import shuffle, seed
@@ -132,10 +132,17 @@ iobmap = {
     #"TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
+
+AttrValues = namedtuple('ModeAttr', [
+    'allowed_modes',    # allowed modes for the attribute
+    'values'            # values of the attribute
+    ])
+
 iobattrs = {
-    "HYSTERESIS" : ["NONE", "H2L", "L2H", "HIGH"],
-    "PULL_MODE": ["NONE", "UP", "DOWN", "KEEPER"],
-    "SLEW_RATE" : ["SLOW", "FAST"],
+    "HYSTERESIS" : AttrValues(["IBUF", "IOBUF"],                 ["NONE", "H2L", "L2H", "HIGH"]),
+    "PULL_MODE"  : AttrValues(["IBUF", "OBUF", "IOBUF", "TBUF"], ["NONE", "UP", "DOWN", "KEEPER"]),
+    "SLEW_RATE"  : AttrValues(["OBUF", "IOBUF", "TBUF"],         ["SLOW", "FAST"]),
+    "OPEN_DRAIN" : AttrValues(["OBUF", "IOBUF", "TBUF"],         ["ON", "OFF"]),
 }
 def iob(locations, corners):
     cnt = Counter() # keep track of how many runs are needed
@@ -146,9 +153,13 @@ def iob(locations, corners):
         bels = {name[-1] for loc in tiles.values() for name in loc}
         locs = tiles.copy()
         for pin in bels: # [A, B, C, D, ...]
-            for attr, attr_values in iobattrs.items(): # for each possible port attribute
-                for attr_val in attr_values:     # for values of the attribute
+            for attr, attr_values in iobattrs.items():  # each port attribute
+                for attr_val in attr_values.values:    # each value of the attribute
                     for typ, conn in iobmap.items():
+                        # skip illegal atributes
+                        if typ not in attr_values.allowed_modes:
+                            continue
+
                         # find the next location that has pin
                         # or make a new module
                         for tile, names in locs.items():
@@ -219,21 +230,18 @@ def read_posp(fname):
                 raise Exception(line)
 
 # Read the packer vendor log to identify problem with primitives/attributes
-@dataclass
-class LogLine:
-    "One line of error log with contains primitive name like inst1_IOB_IBUF"
-    # line type: Info, Warning, Error
-    line_type: str
-    # error/message code like (CT1108)
-    code: str
-    # name of primitive
-    prim_name: str
-    # full text of the line
-    text: str
+# One line of error log with contains primitive name like inst1_IOB_IBUF
+LogLine = namedtuple('LogLine', [
+    'line_type',    # line type: Info, Warning, Error
+    'code',         # error/message code like (CT1108)
+    'prim_name',    # name of primitive
+    'text'          # full text of the line
+    ])
 
 # check if the primitive caused the warning/error
 def primitive_caused_err(name, err_code, log):
-    return len(list(filter(lambda el: el.prim_name == name and el.code == err_code, log))) != 0
+    flt = filter(lambda el: el.prim_name == name and el.code == err_code, log)
+    return next(flt, None) != None
 
 def read_err_log(fname):
     err_parser = re.compile("(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
@@ -248,6 +256,14 @@ def read_err_log(fname):
                 errs.append(ll)
     return errs
 
+# Result of the vendor router-packer run
+PnrResult = namedtuple('PnrResult', [
+    'bitmap', 'hdr', 'ftr',
+    'posp',           # parsed Post-Place file
+    'config',         # device config
+    'attrs',          # port attributes
+    'errs'            # parsed log file
+    ])
 
 def run_pnr(mod, constr, config):
     cfg = codegen.DeviceConfig({
@@ -297,15 +313,15 @@ def run_pnr(mod, constr, config):
         subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
         #print(tmpdir); input()
         try:
-            attrs = constr.attrs;
-            return (*bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"), \
-                   list(read_posp(tmpdir+"/impl/pnr/top.posp")), \
-                   config, attrs, \
-                   read_err_log(tmpdir+"/impl/pnr/top.log"))
+            return PnrResult(
+                    *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
+                    list(read_posp(tmpdir+"/impl/pnr/top.posp")),
+                    config, constr.attrs,
+                    read_err_log(tmpdir+"/impl/pnr/top.log"))
         except FileNotFoundError:
             print(tmpdir)
             input()
-            return None, None, None, None, None, None
+            return None
 
 if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
@@ -367,22 +383,19 @@ if __name__ == "__main__":
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
-    empty, hdr, ftr, posp, config, _, _ = run_pnr(codegen.Module(), codegen.Constraints(), {})
-    db.cmd_hdr = hdr
-    db.cmd_ftr = ftr
-    db.template = empty
+    pnr_empty = run_pnr(codegen.Module(), codegen.Constraints(), {})
+    db.cmd_hdr = pnr_empty.hdr
+    db.cmd_ftr = pnr_empty.ftr
+    db.template = pnr_empty.bitmap
     p = Pool()
     pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs, configs))
 
-    for bitmap, hdr, ftr, posp, config, attrs, errs in pnr_res:
+    for pnr in pnr_res:
         seen = {}
-        diff = bitmap ^ empty
+        diff = pnr.bitmap ^ pnr_empty.bitmap
         bm = fuse_h4x.tile_bitmap(fse, diff)
-        for cst_type, name, *info in posp:
+        for cst_type, name, *info in pnr.posp:
             bel_type, cell_type = type_re.match(name).groups()
-            if primitive_caused_err(name, "CT1108", errs): # skip bad primitives
-                print(f"skip: {name} {info}")
-                continue
             if cst_type == "cst":
                 row, col, cls, lut = info
                 print(name, row, col, cls, lut)
@@ -438,11 +451,14 @@ if __name__ == "__main__":
                     'CE': f"CE{cls}", # clock enable
                 }
             elif bel_type == "IOB":
-                    bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
-                    mod_attr = list(attrs[name])[0]
-                    mod_attr_val = attrs[name][mod_attr]
-                    bel.modes["{}&{}={}".format(cell_type, mod_attr, mod_attr_val)] = loc;
-                    # portmap is set from dat file
+                if primitive_caused_err(name, "CT1108", pnr.errs): # skip bad primitives
+                    raise Exception(f"Bad attribute (CT1108):{name}")
+
+                bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
+                mod_attr = list(pnr.attrs[name])[0]
+                mod_attr_val = pnr.attrs[name][mod_attr]
+                bel.modes["{}&{}={}".format(cell_type, mod_attr, mod_attr_val)] = loc;
+                # portmap is set from dat file
 
             else:
                 raise ValueError(f"Type {bel_type} not handled")
@@ -466,7 +482,7 @@ if __name__ == "__main__":
             loc = set(zip(rows, cols))
             print(idx, loc)
             try:
-                flag, = dualmode_pins.intersection(config)
+                flag, = dualmode_pins.intersection(pnr.config)
                 bel = db.grid[row][col].bels.setdefault("CFG", chipdb.Bel())
                 bel.flags.setdefault(flag.upper(), set()).update(loc)
             except ValueError:
