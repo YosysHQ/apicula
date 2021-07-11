@@ -1,4 +1,4 @@
-all: attosoc-tec0117.fs blinky-tec0117.fs blinky-runber.fs blinky-tangnano.fs blinky-honeycomb.fs
+all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs shift-tangnano.fs shift-honeycomb.fs
 
 %-tec0117.fs: %-tec0117.json
 	gowin_pack -d GW1N-9 -o $@ $^
@@ -27,7 +27,7 @@ all: attosoc-tec0117.fs blinky-tec0117.fs blinky-runber.fs blinky-tangnano.fs bl
 attosoc-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	yosys -p "synth_gowin -json $@" $^
 
-nanolcd-tangano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
+nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 	yosys -p "synth_gowin -json $@" $^
 
 %-tec0117-synth.json: %.v
