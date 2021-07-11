@@ -15,7 +15,7 @@ def get_bels(data):
     for cell in data['modules']['top']['cells'].values():
         bel = cell['attributes']['NEXTPNR_BEL']
         row, col, num = belre.match(bel).groups() 
-        yield (cell['type'], int(row), int(col), num, cell['parameters'])
+        yield (cell['type'], int(row), int(col), num, cell['parameters'], cell['attributes'])
 
 def get_pips(data):
     pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
@@ -34,12 +34,12 @@ def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
 
 def place(db, tilemap, bels):
-    for typ, row, col, num, attr in bels:
+    for typ, row, col, num, parms, attrs in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
         if typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
-            init = str(attr['INIT'])
+            init = str(parms['INIT'])
             init = init*(16//len(init))
             for bitnum, lutbit in enumerate(init[::-1]):
                 if lutbit == '0':
@@ -48,18 +48,30 @@ def place(db, tilemap, bels):
                         tile[brow][bcol] = 1
 
             if int(num) < 6:
-                mode = str(attr['FF_TYPE']).strip('E')
+                mode = str(parms['FF_TYPE']).strip('E')
                 dffbits = tiledata.bels[f'DFF{num}'].modes[mode]
                 for brow, bcol in dffbits:
                     tile[brow][bcol] = 1
 
         elif typ == "IOB":
-            assert sum([int(v, 2) for v in attr.values()]) <= 1, "Complex IOB unsuported"
+            assert sum([int(v, 2) for v in parms.values()]) <= 1, "Complex IOB unsuported"
             iob = tiledata.bels[f'IOB{num}']
-            if int(attr["INPUT_USED"], 2):
-                bits = iob.modes['IBUF'] | iob.flags.get('IBUFC', set())
-            elif int(attr["OUTPUT_USED"], 2):
-                bits = iob.modes['OBUF'] | iob.flags.get('OBUFC', set())
+            if int(parms["INPUT_USED"], 2):
+                flag_bits = set()
+                for flag in attrs.keys():
+                    if flag[0] != chipdb.mode_attr_separator:
+                        continue
+                    flag_name = 'IBUF' + flag
+                    flag_bits |= iob.flags.get(flag_name, set())
+                bits = iob.modes['IBUF'] | iob.flags.get('IBUFC', set()) | flag_bits
+            elif int(parms["OUTPUT_USED"], 2):
+                flag_bits = set()
+                for flag in attrs.keys():
+                    if flag[0] != chipdb.mode_attr_separator:
+                        continue
+                    flag_name = 'OBUF'+ flag
+                    flag_bits |= iob.flags.get(flag_name, set())
+                bits = iob.modes['OBUF'] | iob.flags.get('OBUFC', set()) | flag_bits
             else:
                 raise ValueError("IOB has no in or output")
             for r, c in bits:

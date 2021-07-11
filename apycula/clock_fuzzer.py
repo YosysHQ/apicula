@@ -61,7 +61,7 @@ def quadrants():
     mod = codegen.Module()
     cst = codegen.Constraints()
     ibuf(mod, cst, true_pins[2], clk="myclk")
-    base_bs, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
+    pnr = tiled_fuzzer.run_pnr(mod, cst, {})
 
     modules = []
     constrs = []
@@ -100,7 +100,7 @@ def quadrants():
 
     res = {}
     for (row, col), (mybs, *_) in zip(idxes, pnr_res):
-        sweep_tiles = fuse_h4x.tile_bitmap(fse, mybs^base_bs)
+        sweep_tiles = fuse_h4x.tile_bitmap(fse, mybs^pnr.bitmap)
 
         # find which tap was used
         taps = [r for (r, c, typ), t in sweep_tiles.items() if typ in {13, 14, 15, 16}]
@@ -125,7 +125,7 @@ def center_muxes(ct, rows, cols):
     ibufs = [ibuf(mod, cst, p) for p in true_pins]
     dffs = [dff(mod, cst, row, col) for row, col in dff_locs]
 
-    bs, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
+    pnr = tiled_fuzzer.run_pnr(mod, cst, {})
 
     gb_sources = {}
     gb_destinations = {}
@@ -144,7 +144,7 @@ def center_muxes(ct, rows, cols):
 
     pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
 
-    base = bs
+    base = pnr.bitmap
     for i, (bs_sweep, *_) in enumerate(pnr_res):
         pin = true_pins[i]
         new = base ^ bs_sweep
@@ -178,7 +178,7 @@ def taps(rows, cols):
         for col in cols:
             flop = dff(mod, cst, row, col)
 
-    bs_base, _, _, _, _ = tiled_fuzzer.run_pnr(mod, cst, {})
+    pnr = tiled_fuzzer.run_pnr(mod, cst, {})
 
     modules = []
     constrs = []
@@ -207,7 +207,7 @@ def taps(rows, cols):
     complete_taps = set()
     last_gclk = None
     for (gclk, dff_col), (sweep_bs, *_) in zip(locs, pnr_res):
-        sweep_tiles = chipdb.tile_bitmap(db, sweep_bs^bs_base)
+        sweep_tiles = chipdb.tile_bitmap(db, sweep_bs^pnr.bitmap)
 
         tap = None
         if last_gclk != None and gclk != last_gclk:
@@ -310,12 +310,12 @@ if __name__ == "__main__":
         # col 0 contains a tap, but not a dff
         if 1 in cols:
             cols.add(0)
-            
+
     print("    quads =", quads)
     print("    srcs =", srcs)
     print("    dests =", dests)
     print("    clks =", clks)
-    
+
     pa = pin_aliases(quads, srcs)
     sa = spine_aliases(quads, dests, clks)
     ta = tap_aliases(quads)
