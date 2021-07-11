@@ -1,8 +1,3 @@
-honeycomb_leds=3
-runber_leds=8
-tangnano_leds=3
-tec0117_leds=8
-
 all: attosoc-tec0117.fs blinky-tec0117.fs blinky-runber.fs blinky-tangnano.fs blinky-honeycomb.fs
 
 %-tec0117.fs: %-tec0117.json
@@ -35,9 +30,17 @@ attosoc-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 nanolcd-tangano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 	yosys -p "synth_gowin -json $@" $^
 
-%-synth.json: blinky.v
-	yosys -D LEDS_NR=$($(shell echo $(@) | cut -d\- -f 2)_leds) \
-		-p "synth_gowin -json $@" $^
+%-tec0117-synth.json: %.v
+	yosys -D LEDS_NR=8 -p "synth_gowin -json $@" $^
+
+%-runber-synth.json: %.v
+	yosys -D LEDS_NR=8 -p "synth_gowin -json $@" $^
+
+%-tangnano-synth.json: %.v
+	yosys -D LEDS_NR=3 -p "synth_gowin -json $@" $^
+
+%-honeycomb-synth.json: %.v
+	yosys -D LEDS_NR=3 -p "synth_gowin -json $@" $^
 
 %-honeycomb-prog: %-honeycomb.fs
 	openFPGALoader -b honeycomb $^
