@@ -1,6 +1,6 @@
 name: Chipdb builder
 
-on: push
+on: [push, pull_request]
 
 jobs:
   gw1n1:
