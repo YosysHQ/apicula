@@ -141,7 +141,7 @@ def header_footer(db, bs, compress):
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
+    parser = argparse.ArgumentParser(description='Pack Gowin bitstream')
     parser.add_argument('netlist')
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-o', '--output', default='pack.fs')
