@@ -1,7 +1,6 @@
 name: Build examples using YoWASP
 
 on:
-  push:
   schedule:
     - cron: '0 0 * * 0'
 

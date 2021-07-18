@@ -1,6 +1,8 @@
 YOSYS ?= yosys
 NEXTPNR ?= nextpnr-gowin
 
+.PHONY: all clean
+
 all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs shift-tangnano.fs shift-honeycomb.fs
 
 %-tec0117.fs: %-tec0117.json
@@ -59,5 +61,3 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 
 clean:
 	rm -f *.json *.fs
-
-.PHONY: %-tangnano-prog clean all
