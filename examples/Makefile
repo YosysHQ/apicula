@@ -24,7 +24,7 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs b
 %-honeycomb.fs: %-honeycomb.json
 	gowin_pack -d GW1NS-2 -o $@ $<
 
-%-honeycomb.json: %-honeycomb-synth.json heneycomb.cst
+%-honeycomb.json: %-honeycomb-synth.json honeycomb.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NS-UX2CQN48C5/I4 --cst honeycomb.cst
 
 attosoc-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
