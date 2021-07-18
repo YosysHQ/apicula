@@ -24,7 +24,7 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	$(NEXTPNR) --json $< --write $@ --device GW1N-LV1QN48C6/I5 --cst tangnano.cst
 
 %-default-flags-tangnano.json: %-tangnano-synth.json
-	nextpnr-gowin --json $^ --write $@ --device GW1N-LV1QN48C6/I5 \
+	$(NEXTPNR) --json $^ --write $@ --device GW1N-LV1QN48C6/I5 \
 		--cst iob/tangnano-default.cst
 
 %-honeycomb.fs: %-honeycomb.json
