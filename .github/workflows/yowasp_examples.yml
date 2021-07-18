@@ -1,0 +1,24 @@
+name: Build examples using YoWASP
+
+on:
+  push
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  gw1n1:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: install packages
+      run: |
+        pip3 install yowasp-yosys yowasp-nextpnr-gowin
+    - name: build examples
+      run: |
+        cd examples
+        YOSYS=yowasp-yosys NEXTPNR=yowasp-nextpnr-gowin make all
+    - name: Archive artifact
+      uses: actions/upload-artifact@v2
+      with:
+          name: bitstreams
+          path: examples/*.fs
