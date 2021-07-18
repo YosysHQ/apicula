@@ -16,6 +16,8 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: install packages
       run: |
+        python --version
+        pip --version
         pip install yowasp-yosys yowasp-nextpnr-gowin
     - name: build examples
       run: |
