@@ -128,7 +128,7 @@ jobs:
         make -j$(nproc)
         make install
         cd ../nextpnr
-        cmake . -DARCH=gowin -DGOWIN_BBA_EXECUTABLE=path
+        cmake . -DARCH=gowin
         make -j$(nproc)
         make install
         cd ../examples
