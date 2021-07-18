@@ -6,13 +6,17 @@ on:
     - cron: '0 0 * * 0'
 
 jobs:
-  gw1n1:
+  examples:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
     - name: install packages
       run: |
-        pip3 install yowasp-yosys yowasp-nextpnr-gowin
+        pip install yowasp-yosys yowasp-nextpnr-gowin
     - name: build examples
       run: |
         cd examples
