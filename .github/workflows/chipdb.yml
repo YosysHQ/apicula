@@ -102,3 +102,45 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       run: |
         twine upload dist/*
+
+  example:
+    runs-on: ubuntu-latest
+    # needs: [pypi]
+    steps:
+    - uses: actions/checkout@v2
+    # - name: Download python package
+    #   uses: actions/download-artifact@v2
+    #   with:
+    #     name: python-dist
+    #     path: dist
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+    - name: Install and build
+      run: |
+        # pip install dist/*.whl
+        pip install apycula
+        git clone https://github.com/YosysHQ/yosys.git
+        git clone https://github.com/YosysHQ/nextpnr.git
+        sudo apt-get install build-essential clang bison flex \
+          libreadline-dev gawk tcl-dev libffi-dev git \
+          graphviz xdot pkg-config python3 libboost-system-dev \
+          libboost-python-dev libboost-filesystem-dev zlib1g-dev \
+          libboost-thread-dev libboost-program-options-dev libboost-iostreams-dev libboost-dev \
+          libeigen3-dev
+        cd yosys
+        make config-gcc
+        make -j$(nproc)
+        sudo make install
+        cd ../nextpnr
+        cmake . -DARCH=gowin
+        make -j$(nproc)
+        sudo make install
+        cd ../examples
+        make all
+    - name: Archive artifact
+      uses: actions/upload-artifact@v2
+      with:
+          name: examples
+          path: examples

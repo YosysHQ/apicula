@@ -1,0 +1,34 @@
+name: Build examples using YoWASP
+
+on:
+  push:
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  examples:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+      - name: install packages
+        run: |
+          python --version
+          pip --version
+          pip install yowasp-yosys yowasp-nextpnr-gowin
+      - name: build examples
+        run: |
+          cd examples
+          YOSYS=yowasp-yosys NEXTPNR=yowasp-nextpnr-gowin make all
+      - name: Archive artifact
+        uses: actions/upload-artifact@v2
+        with:
+            name: bitstreams
+            path: examples/*.fs
