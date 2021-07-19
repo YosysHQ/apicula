@@ -4,6 +4,9 @@ NEXTPNR ?= nextpnr-gowin
 all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs iob-tangnano.fs iob-default-flags-tangnano.fs
+.PHONY: all clean
+
+all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs shift-tangnano.fs shift-honeycomb.fs
 
 %-tec0117.fs: %-tec0117.json
 	gowin_pack -d GW1N-9 -o $@ $<
@@ -65,5 +68,3 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 
 clean:
 	rm -f *.json *.fs
-
-.PHONY: %-tangnano-prog clean all
