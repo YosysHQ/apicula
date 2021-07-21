@@ -427,7 +427,7 @@ if __name__ == "__main__":
     db.cmd_ftr = pnr_empty.ftr
     db.template = pnr_empty.bitmap
     p = Pool()
-    pnr_res = p.map(lambda param: run_pnr(*param), zip(modules, constrs, configs))
+    pnr_res = p.imap_unordered(lambda param: run_pnr(*param), zip(modules, constrs, configs), 5)
 
     for pnr in pnr_res:
         seen = {}
