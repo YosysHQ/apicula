@@ -450,8 +450,8 @@ if __name__ == "__main__":
     db.cmd_ftr = pnr_empty.ftr
     db.template = pnr_empty.bitmap
     p = Pool()
-    # chunks == 5 results in ~ 900M RAM on 4 core CPU
-    pnr_res = p.imap_unordered(lambda param: run_pnr(*param), zip(modules, constrs, configs), 5)
+    # chunks == 10 results in ~ 1G RAM on 4 core CPU
+    pnr_res = p.imap_unordered(lambda param: run_pnr(*param), zip(modules, constrs, configs), 10)
 
     for pnr in pnr_res:
         seen = {}
