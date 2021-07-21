@@ -141,7 +141,9 @@ iobmap = {
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
 
-iostandards = ["", "LVCMOS33", "LVCMOS18"]
+iostandards = ["", "LVTTL33", "LVCMOS33", "LVCMOS25", "LVCMOS18", "LVCMOS15", "LVCMOS12",
+               "SSTL25_I", "SSTL25_II", "SSTL33_I", "SSTL33_II", "SSTL18_I", "SSTL18_II",
+               "SSTL15", "HSTL18_I", "HSTL18_II", "HSTL15_I", "PCI33"]
 
 AttrValues = namedtuple('ModeAttr', [
     'bank_dependent',   # attribute dependent of bank flags/standards
