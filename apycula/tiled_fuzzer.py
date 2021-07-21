@@ -152,14 +152,37 @@ AttrValues = namedtuple('ModeAttr', [
     ])
 
 iobattrs = {
- "HYSTERESIS" : AttrValues(False, ["IBUF", "IOBUF"],                ["NONE", "H2L", "L2H", "HIGH"]),
- "PULL_MODE"  : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"],["NONE", "UP", "DOWN", "KEEPER"]),
- "SLEW_RATE"  : AttrValues(False, ["OBUF", "IOBUF", "TBUF"],        ["SLOW", "FAST"]),
- "OPEN_DRAIN" : AttrValues(False, ["OBUF", "IOBUF", "TBUF"],        ["ON", "OFF"]),
+ "HYSTERESIS" : AttrValues(False, ["IBUF", "IOBUF"],
+     { "": ["NONE", "H2L", "L2H", "HIGH"]}),
+ "PULL_MODE"  : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"],
+     { "": ["NONE", "UP", "DOWN", "KEEPER"]}),
+ "SLEW_RATE"  : AttrValues(False, ["OBUF", "IOBUF", "TBUF"],
+     { "": ["SLOW", "FAST"]}),
+ "OPEN_DRAIN" : AttrValues(False, ["OBUF", "IOBUF", "TBUF"],
+     { "": ["ON", "OFF"]}),
  # bank-dependent
- "DRIVE"      : AttrValues(True, ["OBUF", "IOBUF", "TBUF"],        ["4", "8", "12", "16", "24"]),
+ "DRIVE"      : AttrValues(True, ["OBUF", "IOBUF", "TBUF"],
+     {  ""  : ["4", "8", "12", "16", "24"],
+        "LVTTL33"  : ["4", "8", "12", "16", "24"],
+        "LVCMOS33" : ["4", "8", "12", "16", "24"],
+        "LVCMOS25" : ["4", "8", "12", "16"],
+        "LVCMOS18" : ["4", "8", "12"],
+        "LVCMOS15" : ["4", "8"],
+        "LVCMOS12" : ["4", "8"],
+        "SSTL25_I" : ["8"],
+        "SSTL25_II": ["8"],
+        "SSTL33_I" : ["8"],
+        "SSTL33_II": ["8"],
+        "SSTL18_I" : ["8"],
+        "SSTL18_II": ["8"],
+        "SSTL15"   : ["8"],
+        "HSTL18_I" : ["8"],
+        "HSTL18_II": ["8"],
+        "HSTL15_I" : ["8"],
+        "PCI33"    : [],
+         }),
  # no attributes, default mode
- "NULL"       : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"], [""]),
+ "NULL"       : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"], {"": [""]}),
 }
 
 def find_next_loc(pin, locs):
@@ -191,7 +214,7 @@ def iob(locations, corners):
                         if (iostd != "") ^ attr_values.bank_dependent:
                                 continue
 
-                        for attr_val in attr_values.values:         # each value of the attribute
+                        for attr_val in attr_values.values[iostd]:   # each value of the attribute
                             # find the next location that has pin
                             # or make a new module
                             loc = find_next_loc(pin, locs)
@@ -427,6 +450,7 @@ if __name__ == "__main__":
     db.cmd_ftr = pnr_empty.ftr
     db.template = pnr_empty.bitmap
     p = Pool()
+    # chunks == 5 results in ~ 900M RAM on 4 core CPU
     pnr_res = p.imap_unordered(lambda param: run_pnr(*param), zip(modules, constrs, configs), 5)
 
     for pnr in pnr_res:
@@ -490,9 +514,7 @@ if __name__ == "__main__":
                 }
             elif bel_type == "IOB":
                 if primitive_caused_err(name, "CT1108", pnr.errs): # skip bad primitives
-                    continue
-                    #input("Bad attribute ex")
-                    #raise Exception(f"Bad attribute (CT1108):{name}")
+                    raise Exception(f"Bad attribute (CT1108):{name}")
 
                 bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
                 pnr_attrs = pnr.attrs.get(name)
