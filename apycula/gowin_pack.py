@@ -44,7 +44,7 @@ def get_flag_bits(iostd, mode, flag, bel):
     val = bel.flags.get(mode + flag)
     if val != None:
         return val
-    raise Exception(f"Incorrect flag for port:{flag}")
+    raise Exception("Incorrect attribute {}".format(flag[1:]))
 
 def place(db, tilemap, bels):
     for typ, row, col, num, parms, attrs in bels:
