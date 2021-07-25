@@ -14,7 +14,7 @@ def get_bels(data):
     belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB)(\w)")
     for cell in data['modules']['top']['cells'].values():
         bel = cell['attributes']['NEXTPNR_BEL']
-        row, col, num = belre.match(bel).groups() 
+        row, col, num = belre.match(bel).groups()
         yield (cell['type'], int(row), int(col), num, cell['parameters'], cell['attributes'])
 
 def get_pips(data):
@@ -32,6 +32,19 @@ def get_pips(data):
 
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
+
+# get flag bits
+def get_flag_bits(iostd, mode, flag, bel):
+    # first check mode IOSTD flag
+    val = bel.flags.get(mode + chipdb.mode_attr_sep + iostd
+            + chipdb.bank_attr_sep + flag[1:])
+    if val != None:
+        return val
+    # check if just mode flag
+    val = bel.flags.get(mode + flag)
+    if val != None:
+        return val
+    raise Exception("Incorrect attribute {}".format(flag[1:]))
 
 def place(db, tilemap, bels):
     for typ, row, col, num, parms, attrs in bels:
@@ -56,24 +69,46 @@ def place(db, tilemap, bels):
         elif typ == "IOB":
             assert sum([int(v, 2) for v in parms.values()]) <= 1, "Complex IOB unsuported"
             iob = tiledata.bels[f'IOB{num}']
+
             if int(parms["INPUT_USED"], 2):
-                flag_bits = set()
-                for flag in attrs.keys():
-                    if flag[0] != chipdb.mode_attr_separator:
-                        continue
-                    flag_name = 'IBUF' + flag
-                    flag_bits |= iob.flags.get(flag_name, set())
-                bits = iob.modes['IBUF'] | iob.flags.get('IBUFC', set()) | flag_bits
+                mode = "IBUF"
             elif int(parms["OUTPUT_USED"], 2):
-                flag_bits = set()
-                for flag in attrs.keys():
-                    if flag[0] != chipdb.mode_attr_separator:
-                        continue
-                    flag_name = 'OBUF'+ flag
-                    flag_bits |= iob.flags.get(flag_name, set())
-                bits = iob.modes['OBUF'] | iob.flags.get('OBUFC', set()) | flag_bits
+                mode = "OBUF"
             else:
                 raise ValueError("IOB has no in or output")
+
+            # start with default mode
+            bits = iob.modes[mode + "_DEFAULT"]
+            # find io standard
+            iostd = None
+            for flag in attrs.keys():
+                flag_name_val = flag.split("=")
+                if len(flag_name_val) < 2:
+                    continue
+                if flag[0] != chipdb.mode_attr_sep:
+                    continue
+                if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
+                    if iostd and iostd != flag_name_val:
+                        raise Exception("Different I/O modes for the same port were specified.")
+                    iostd = flag_name_val[1]
+
+            # XXX default io type is board-dependent!
+            if not iostd:
+                iostd = "LVCMOS18"
+
+            # collect flag bits
+            for flag in attrs.keys():
+                flag_name_val = flag.split("=")
+                if len(flag_name_val) < 2:
+                    continue
+                if flag[0] != chipdb.mode_attr_sep:
+                    continue
+                if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
+                    continue
+                # clear by mask
+                bits -= get_flag_bits(iostd, mode, flag_name_val[0] + "_mask", iob)
+                # set flag
+                bits |= get_flag_bits(iostd, mode, flag, iob)
             for r, c in bits:
                 tile[r][c] = 1
 
@@ -93,7 +128,12 @@ def place(db, tilemap, bels):
             tiledata = db.grid[brow][bcol]
             tile = tilemap[(brow, bcol)]
             if not len(tiledata.bels) == 0:
-                bits = tiledata.bels['BANK'].modes['DEFAULT']
+                bank_bel = tiledata.bels['BANK']
+                bits = bank_bel.modes['DEFAULT']
+                # iostd mask
+                bits -= get_flag_bits("", "BANK", chipdb.mode_attr_sep + "IO_TYPE_mask", bank_bel)
+                # iostd flag
+                bits |= get_flag_bits("", "BANK", chipdb.mode_attr_sep + "IO_TYPE=" + iostd, bank_bel)
                 for row, col in bits:
                     tile[row][col] = 1
 

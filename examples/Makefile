@@ -1,9 +1,10 @@
 YOSYS ?= yosys
 NEXTPNR ?= nextpnr-gowin
 
+all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
+	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
+	shift-tangnano.fs shift-honeycomb.fs iob-tangnano.fs iob-default-flags-tangnano.fs
 .PHONY: all clean
-
-all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs shift-tangnano.fs shift-honeycomb.fs
 
 %-tec0117.fs: %-tec0117.json
 	gowin_pack -d GW1N-9 -o $@ $<
@@ -22,6 +23,10 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs b
 
 %-tangnano.json: %-tangnano-synth.json tangnano.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1N-LV1QN48C6/I5 --cst tangnano.cst
+
+%-default-flags-tangnano.json: %-tangnano-synth.json
+	$(NEXTPNR) --json $^ --write $@ --device GW1N-LV1QN48C6/I5 \
+		--cst iob/tangnano-default.cst
 
 %-honeycomb.fs: %-honeycomb.json
 	gowin_pack -d GW1NS-2 -o $@ $<

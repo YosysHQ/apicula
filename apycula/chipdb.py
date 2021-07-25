@@ -11,7 +11,8 @@ from apycula import pindef
 # can be either tiles or bits within tiles
 Coord = Tuple[int, int]
 
-mode_attr_separator = '&'
+mode_attr_sep = '&'
+bank_attr_sep = '!'
 
 @dataclass
 class Bel:
@@ -265,47 +266,37 @@ def shared2flag(dev):
                                 bits -= mode_cb
 
 def diff2flag(dev):
-    """Fold modes with names MODE&attr=value, create default MODE with common bits
-     and create flags with MODE&attr=value with diff bits"""
+    """Fold modes with names MODE&attr=value, create flags with MODE&attr=value with diff bits
+       and create flag mask with bits to zero MODE&attr_mask """
     for idx, row in enumerate(dev.grid):
         for jdx, td in enumerate(row):
             for name, bel in td.bels.items():
-                if not name.startswith("IOB"):
+                if not name.startswith("IOB") and not name.startswith("BANK"):
                     continue
-                # find common mode bits: this is unmodified mode
-                # although this mode isn't default
-                bel_modes = {}
+                # convert all modes to the flags
+                modes_to_del = list()
                 for mode, bits in bel.modes.items():
                     # extract mode name
-                    mode_attr = mode.split(mode_attr_separator)
+                    mode_attr = mode.split(mode_attr_sep)
                     if len(mode_attr) < 2:
                         continue
-                    mode_name = mode_attr[0]
-                    # common bits
-                    if bel_modes.get(mode_name) != None:
-                        bel_modes[mode_name] &= bits
-                    else:
-                        bel_modes[mode_name] = copy.deepcopy(bits)
-                # convert all modes to the flags
-                modes_to_del = list(bel.modes.keys())
+                    bel.flags[mode] = bits
+                    modes_to_del.append(mode)
+
+                # if already done
+                if not modes_to_del:
+                    continue
+
+                # clean modes
                 for mode in modes_to_del:
-                    mode_attr = mode.split(mode_attr_separator)
-                    if len(mode_attr) < 2:
-                        continue
-                    mode_name = mode_attr[0]
-                    # diff bits
-                    flag_bits = bel_modes[mode_name] ^ bel.modes[mode]
-                    # add flag & delete mode
-                    bel.flags[mode] = flag_bits
                     del(bel.modes[mode])
-                # create clean mode
-                bel.modes.update(bel_modes)
 
                 # If for a given mode all possible values of one flag
                 # contain some bit, then this bit is "noise" --- this bit
                 # belongs to the default value of another flag. Remove.
                 #
                 noise_bits = {}
+                masks = {}
                 for flag, bits in bel.flags.items():
                     # MODE&ATTR=YYY
                     flag_value = flag.split("=")
@@ -316,6 +307,7 @@ def diff2flag(dev):
                         noise_bits[flag_name] &= bits
                     else:
                         noise_bits[flag_name] = copy.deepcopy(bits)
+                        masks[flag_name + "_mask"] = set()
                 # remove noise
                 for flag, bits in bel.flags.items():
                     flag_value = flag.split("=")
@@ -323,6 +315,10 @@ def diff2flag(dev):
                         continue
                     flag_name = flag_value[0]
                     bits ^= noise_bits[flag_name]
+                    masks[flag_name + "_mask"] |= bits
+                # masks to flags
+                for flag_name, value in masks.items():
+                    bel.flags[flag_name] = value
                 # XXX debug
                 print(f"{idx} {jdx} {name} flags:{bel.flags}")
                 print(f"{idx} {jdx} {name} modes:{bel.modes}")

@@ -73,13 +73,15 @@ class Constraints:
     def __init__(self):
         self.cells = {}
         self.ports = {}
-        self.attrs = {}
+        self.attrs = {}         # per pin attributes
+        self.bank_attrs = {}    # per bank attributes
 
     def __add__(self, other):
         cst = Constraints()
         cst.cells = {**self.cells, **other.cells}
         cst.ports = {**self.ports, **other.ports}
         cst.attrs = {**self.attrs, **other.attrs}
+        cst.bank_attrs = {**self.bank_attrs, **other.bank_attrs}
         return cst
 
     def write(self, f):
@@ -89,7 +91,8 @@ class Constraints:
             f.write("IO_LOC \"{}\" {};\n".format(key, val))
         for key, val in self.attrs.items():
             f.write("IO_PORT \"{}\" ".format(key))
-            for attr, attr_value in val.items():
+            bank_attr_items = self.bank_attrs.get(key, {}).items()
+            for attr, attr_value in chain(bank_attr_items, val.items()):
                 f.write("{}={} ".format(attr, attr_value))
             f.write(";\n");
 
