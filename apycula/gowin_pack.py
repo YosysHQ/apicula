@@ -78,7 +78,7 @@ def place(db, tilemap, bels):
                 raise ValueError("IOB has no in or output")
 
             # start with default mode
-            bits = iob.modes[mode + "_DEFAULT"]
+            bits = iob.modes[mode]
             # find io standard
             iostd = None
             for flag in attrs.keys():
