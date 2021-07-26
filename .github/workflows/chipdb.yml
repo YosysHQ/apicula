@@ -144,3 +144,9 @@ jobs:
       with:
           name: examples
           path: examples
+    - name: Do sanity check
+      run: |
+        make unpacked
+        for f in *-unpacked.v; do
+          yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:LUT*; select -assert-any t:*BUF;" $f;
+        done
