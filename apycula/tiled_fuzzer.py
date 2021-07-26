@@ -525,7 +525,7 @@ if __name__ == "__main__":
                         mod_attr = pnr.bank_attrs[name]["IO_TYPE"] + chipdb.bank_attr_sep + mod_attr
                     bel.modes[f"{cell_type}&{mod_attr}={mod_attr_val}"] = loc;
                 else:
-                    bel.modes[f"{cell_type}_DEFAULT"] = loc;
+                    bel.modes[f"{cell_type}"] = loc;
                 # portmap is set from dat file
 
             else:
