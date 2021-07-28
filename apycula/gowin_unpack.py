@@ -24,6 +24,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False):
                      for row, col in bel.mode_bits
                      if tile[row][col] == 1}
         print(name, mode_bits)
+
         for mode, bits in bel.modes.items():
             print(mode, bits)
             if bits == mode_bits and (default or bits):
@@ -68,8 +69,15 @@ dffmap = {
 iobmap = {
     "IBUF": {"wires": ["O"], "inputs": ["I"]},
     "OBUF": {"wires": ["I"], "outputs": ["O"]},
-    "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
+    "IOBUF": {"wires": ["I", "O", "OE"], "inouts": ["IO"]},
 }
+
+# OE -> OEN
+def portname(n):
+    if n == "OE":
+        return "OEN"
+    return n
+
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, db):
     # db is 0-based, floorplanner is 1-based
     row = dbrow+1
@@ -126,18 +134,16 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, db):
 
             for port in wires:
                 wname = portmap[port]
-                iob.portmap[port] = f"R{row}C{col}_{wname}"
+                iob.portmap[portname(port)] = f"R{row}C{col}_{wname}"
 
             for port in ports:
                 iob.portmap[port] = f"R{row}C{col}_{port}{idx}"
 
-            for wires in iobmap[kind]['wires']:
-                wnames = [f"R{row}C{col}_{portmap[w]}" for w in wires]
-                mod.wires.update(wnames)
+            wnames = [f"R{row}C{col}_{portmap[w]}" for w in iobmap[kind]['wires']]
+            mod.wires.update(wnames)
             for direction in ['inputs', 'outputs', 'inouts']:
-                for wires in iobmap[kind].get(direction, []):
-                    wnames = [f"R{row}C{col}_{w}{idx}" for w in wires]
-                    getattr(mod, direction).update(wnames)
+                wnames = [f"R{row}C{col}_{w}{idx}" for w in iobmap[kind].get(direction, [])]
+                getattr(mod, direction).update(wnames)
 
             mod.primitives[name] = iob
 
