@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import re
 import os
 import sys
@@ -23,6 +22,7 @@ from apycula import fuse_h4x
 #from apycula import dat19_h4x
 from apycula import tm_h4x
 from apycula import chipdb
+from apycula import log_parsers
 
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
@@ -266,49 +266,6 @@ def dualmode(ttyp):
         cfg = {pin: 'false'}
         yield Fuzzer(ttyp, mod, cst, cfg, '')
 
-def read_posp(fname):
-    cst_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
-    place_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_IO([TBLR])(\d+)\[([A-Z])\]")
-    with open(fname, 'r') as f:
-        for line in f:
-            cst = cst_parser.match(line)
-            place = place_parser.match(line)
-            if cst:
-                name, row, col, cls, lut = cst.groups()
-                yield "cst", name, int(row), int(col), int(cls), lut
-            elif place:
-                name, side, num, pin = place.groups()
-                yield "place", name, side, int(num), pin
-            elif line.strip() and not line.startswith('//'):
-                raise Exception(line)
-
-# Read the packer vendor log to identify problem with primitives/attributes
-# One line of error log with contains primitive name like inst1_IOB_IBUF
-LogLine = namedtuple('LogLine', [
-    'line_type',    # line type: Info, Warning, Error
-    'code',         # error/message code like (CT1108)
-    'prim_name',    # name of primitive
-    'text'          # full text of the line
-    ])
-
-# check if the primitive caused the warning/error
-def primitive_caused_err(name, err_code, log):
-    flt = filter(lambda el: el.prim_name == name and el.code == err_code, log)
-    return next(flt, None) != None
-
-def read_err_log(fname):
-    err_parser = re.compile("(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
-    errs = list()
-    with open(fname, 'r') as f:
-        for line in f:
-            res = err_parser.match(line)
-            if res:
-                line_type, code, prim_name = res.groups()
-                text = res.group(0)
-                ll = LogLine(line_type, code, prim_name, text)
-                errs.append(ll)
-    return errs
-
 # Result of the vendor router-packer run
 PnrResult = namedtuple('PnrResult', [
     'bitmap', 'hdr', 'ftr',
@@ -369,9 +326,9 @@ def run_pnr(mod, constr, config):
         try:
             return PnrResult(
                     *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
-                    list(read_posp(tmpdir+"/impl/pnr/top.posp")),
+                    list(log_parsers.read_posp(tmpdir+"/impl/pnr/top.posp")),
                     config, constr.attrs, constr.bank_attrs,
-                    read_err_log(tmpdir+"/impl/pnr/top.log"))
+                    log_parsers.read_err_log(tmpdir+"/impl/pnr/top.log"))
         except FileNotFoundError:
             print(tmpdir)
             input()
@@ -513,7 +470,7 @@ if __name__ == "__main__":
                     'CE': f"CE{cls}", # clock enable
                 }
             elif bel_type == "IOB":
-                if primitive_caused_err(name, "CT1108", pnr.errs): # skip bad primitives
+                if log_parsers.primitive_caused_err(name, "CT1108", pnr.errs): # skip bad primitives
                     raise Exception(f"Bad attribute (CT1108):{name}")
 
                 bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
