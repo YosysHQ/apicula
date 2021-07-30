@@ -22,7 +22,6 @@ from apycula import fuse_h4x
 #from apycula import dat19_h4x
 from apycula import tm_h4x
 from apycula import chipdb
-from apycula import log_parsers
 
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
@@ -70,7 +69,6 @@ Fuzzer = namedtuple('Fuzzer', [
     'mod',
     'cst',      # constraints
     'cfg',      # device config
-    'iostd',    # io standard
     ])
 
 dffmap = {
@@ -101,7 +99,7 @@ def dff(locations):
                     try:
                         loc = next(locs) # get the next unused tile
                     except StopIteration:
-                        yield Fuzzer(ttyp, mod, cst, {}, '')
+                        yield Fuzzer(ttyp, mod, cst, {})
                         locs = iter(locations[ttyp])
                         loc = next(locs)
                         mod = codegen.Module()
@@ -132,131 +130,7 @@ def dff(locations):
                     col = loc[1]+1
                     cst.cells[lutname] = f"R{row}C{col}[{cls}][{side}]"
                     cst.cells[name] = f"R{row}C{col}[{cls}][{side}]"
-        yield Fuzzer(ttyp, mod, cst, {}, '')
-
-iobmap = {
-    "IBUF": {"wires": ["O"], "inputs": ["I"]},
-    "OBUF": {"wires": ["I"], "outputs": ["O"]},
-    #"TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
-    "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
-}
-
-iostandards = ["", "LVTTL33", "LVCMOS33", "LVCMOS25", "LVCMOS18", "LVCMOS15", "LVCMOS12",
-               "SSTL25_I", "SSTL25_II", "SSTL33_I", "SSTL33_II", "SSTL18_I", "SSTL18_II",
-               "SSTL15", "HSTL18_I", "HSTL18_II", "HSTL15_I", "PCI33"]
-
-AttrValues = namedtuple('ModeAttr', [
-    'bank_dependent',   # attribute dependent of bank flags/standards
-    'allowed_modes',    # allowed modes for the attribute
-    'values'            # values of the attribute
-    ])
-
-iobattrs = {
- "HYSTERESIS" : AttrValues(False, ["IBUF", "IOBUF"],
-     { "": ["NONE", "H2L", "L2H", "HIGH"]}),
- "PULL_MODE"  : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"],
-     { "": ["NONE", "UP", "DOWN", "KEEPER"]}),
- "SLEW_RATE"  : AttrValues(False, ["OBUF", "IOBUF", "TBUF"],
-     { "": ["SLOW", "FAST"]}),
- "OPEN_DRAIN" : AttrValues(False, ["OBUF", "IOBUF", "TBUF"],
-     { "": ["ON", "OFF"]}),
- # bank-dependent
- "DRIVE"      : AttrValues(True, ["OBUF", "IOBUF", "TBUF"],
-     {  ""  : ["4", "8", "12", "16", "24"],
-        "LVTTL33"  : ["4", "8", "12", "16", "24"],
-        "LVCMOS33" : ["4", "8", "12", "16", "24"],
-        "LVCMOS25" : ["4", "8", "12", "16"],
-        "LVCMOS18" : ["4", "8", "12"],
-        "LVCMOS15" : ["4", "8"],
-        "LVCMOS12" : ["4", "8"],
-        "SSTL25_I" : ["8"],
-        "SSTL25_II": ["8"],
-        "SSTL33_I" : ["8"],
-        "SSTL33_II": ["8"],
-        "SSTL18_I" : ["8"],
-        "SSTL18_II": ["8"],
-        "SSTL15"   : ["8"],
-        "HSTL18_I" : ["8"],
-        "HSTL18_II": ["8"],
-        "HSTL15_I" : ["8"],
-        "PCI33"    : [],
-         }),
- # no attributes, default mode
- "NULL"       : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"], {"": [""]}),
-}
-
-def find_next_loc(pin, locs):
-    # find the next location that has pin
-    # or make a new module
-    for tile, names in locs.items():
-        name = tile+pin
-        if name in names:
-            del locs[tile]
-            return name
-    return None
-
-def iob(locations, corners):
-    cnt = Counter() # keep track of how many runs are needed
-    for iostd in iostandards:
-        for ttyp, tiles in locations.items(): # for each tile of this type
-            mod = codegen.Module()
-            cst = codegen.Constraints()
-            # get bels in this ttyp
-            bels = {name[-1] for loc in tiles.values() for name in loc}
-            locs = tiles.copy()
-            for pin in bels: # [A, B, C, D, ...]
-                for typ, conn in iobmap.items():
-                    for attr, attr_values in iobattrs.items():  # each port attribute
-                        # skip illegal atributes
-                        if typ not in attr_values.allowed_modes:
-                            continue
-                        # skip bank independent values: they are generated only for empty iostd
-                        if (iostd != "") ^ attr_values.bank_dependent:
-                                continue
-
-                        for attr_val in attr_values.values[iostd]:   # each value of the attribute
-                            # find the next location that has pin
-                            # or make a new module
-                            loc = find_next_loc(pin, locs)
-                            if (loc == None):
-                                # no usable tiles
-                                yield Fuzzer(ttyp, mod, cst, {}, iostd)
-                                if iostd == "":
-                                    cnt[ttyp] += 1
-                                locs = tiles.copy()
-                                mod = codegen.Module()
-                                cst = codegen.Constraints()
-                                loc = find_next_loc(pin, locs)
-
-                            name = make_name("IOB", typ)
-                            iob = codegen.Primitive(typ, name)
-                            for port in chain.from_iterable(conn.values()):
-                                iob.portmap[port] = name+"_"+port
-
-                            for direction, wires in conn.items():
-                                wnames = [name+"_"+w for w in wires]
-                                getattr(mod, direction).update(wnames)
-                            mod.primitives[name] = iob
-                            cst.ports[name] = loc
-                            if attr != "NULL":
-                                # port attribute value
-                                cst.attrs[name] = {attr: attr_val}
-                                # bank attribute
-                                if iostd != "":
-                                    cst.bank_attrs[name] = {"IO_TYPE": iostd}
-
-            yield Fuzzer(ttyp, mod, cst, {}, iostd)
-            if iostd == "":
-                cnt[ttyp] += 1
-
-    # insert dummie in the corners to detect the bank enable bits
-    runs = cnt.most_common(1)[0][1]
-    for _ in range(runs):
-        for ttyp in corners:
-            mod = codegen.Module()
-            cst = codegen.Constraints()
-            cfg = {}
-            yield Fuzzer(ttyp, mod, cst, cfg, '')
+        yield Fuzzer(ttyp, mod, cst, {})
 
 dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'mode'}
 def dualmode(ttyp):
@@ -264,7 +138,51 @@ def dualmode(ttyp):
         mod = codegen.Module()
         cst = codegen.Constraints()
         cfg = {pin: 'false'}
-        yield Fuzzer(ttyp, mod, cst, cfg, '')
+        yield Fuzzer(ttyp, mod, cst, cfg)
+
+# read vendor .posp log
+_cst_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
+_place_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_IO([TBLR])(\d+)\[([A-Z])\]")
+def read_posp(fname):
+    with open(fname, 'r') as f:
+        for line in f:
+            cst = _cst_parser.match(line)
+            place = _place_parser.match(line)
+            if cst:
+                name, row, col, cls, lut = cst.groups()
+                yield "cst", name, int(row), int(col), int(cls), lut
+            elif place:
+                name, side, num, pin = place.groups()
+                yield "place", name, side, int(num), pin
+            elif line.strip() and not line.startswith('//'):
+                raise Exception(line)
+
+# Read the packer vendor log to identify problem with primitives/attributes
+# One line of error log with contains primitive name like inst1_IOB_IBUF
+LogLine = namedtuple('LogLine', [
+    'line_type',    # line type: Info, Warning, Error
+    'code',         # error/message code like (CT1108)
+    'prim_name',    # name of primitive
+    'text'          # full text of the line
+    ])
+
+_err_parser = re.compile("(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
+def read_err_log(fname):
+    errs = list()
+    with open(fname, 'r') as f:
+        for line in f:
+            res = _err_parser.match(line)
+            if res:
+                line_type, code, prim_name = res.groups()
+                text = res.group(0)
+                ll = LogLine(line_type, code, prim_name, text)
+                errs.append(ll)
+    return errs
+
+# check if the primitive caused the warning/error
+def primitive_caused_err(name, err_code, log):
+    flt = filter(lambda el: el.prim_name == name and el.code == err_code, log)
+    return next(flt, None) != None
 
 # Result of the vendor router-packer run
 PnrResult = namedtuple('PnrResult', [
@@ -326,9 +244,9 @@ def run_pnr(mod, constr, config):
         try:
             return PnrResult(
                     *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
-                    list(log_parsers.read_posp(tmpdir+"/impl/pnr/top.posp")),
+                    list(read_posp(tmpdir+"/impl/pnr/top.posp")),
                     config, constr.attrs, constr.bank_attrs,
-                    log_parsers.read_err_log(tmpdir+"/impl/pnr/top.log"))
+                    read_err_log(tmpdir+"/impl/pnr/top.log"))
         except FileNotFoundError:
             print(tmpdir)
             input()
@@ -371,34 +289,24 @@ if __name__ == "__main__":
 
     # Add fuzzers here
     fuzzers = chain(
-        iob(pin_locations, [
-            fse['header']['grid'][61][0][0],
-            fse['header']['grid'][61][-1][0],
-            fse['header']['grid'][61][0][-1],
-            fse['header']['grid'][61][-1][-1],
-        ]),
         dff(locations),
         dualmode(fse['header']['grid'][61][0][0]),
     )
 
-    # Only combine modules with the same IO standard
-    pnr_data = {}
-    for fuzzer in fuzzers:
-        pnr_data.setdefault(fuzzer.iostd, DataForPnr({}, {}, {}))
-        pnr_data[fuzzer.iostd].modmap.setdefault(fuzzer.ttyp, []).append(fuzzer.mod)
-        pnr_data[fuzzer.iostd].cstmap.setdefault(fuzzer.ttyp, []).append(fuzzer.cst)
-        pnr_data[fuzzer.iostd].cfgmap.setdefault(fuzzer.ttyp, []).append(fuzzer.cfg)
+    modmap = {}
+    cstmap = {}
+    cfgmap = {}
+    for ttyp, mod, cst, cfg in fuzzers:
+        modmap.setdefault(ttyp, []).append(mod)
+        cstmap.setdefault(ttyp, []).append(cst)
+        cfgmap.setdefault(ttyp, []).append(cfg)
 
-    modules = []
-    constrs = []
-    configs = []
-    for data in pnr_data.values():
-        modules += [reduce(lambda a, b: a+b, m, codegen.Module())
-                    for m in zip_longest(*data.modmap.values(), fillvalue=codegen.Module())]
-        constrs += [reduce(lambda a, b: a+b, c, codegen.Constraints())
-                    for c in zip_longest(*data.cstmap.values(), fillvalue=codegen.Constraints())]
-        configs += [reduce(lambda a, b: {**a, **b}, c, {})
-                    for c in zip_longest(*data.cfgmap.values(), fillvalue={})]
+    modules = [reduce(lambda a, b: a+b, m, codegen.Module())
+               for m in zip_longest(*modmap.values(), fillvalue=codegen.Module())]
+    constrs = [reduce(lambda a, b: a+b, c, codegen.Constraints())
+               for c in zip_longest(*cstmap.values(), fillvalue=codegen.Constraints())]
+    configs = [reduce(lambda a, b: {**a, **b}, c, {})
+               for c in zip_longest(*cfgmap.values(), fillvalue={})]
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
@@ -407,8 +315,7 @@ if __name__ == "__main__":
     db.cmd_ftr = pnr_empty.ftr
     db.template = pnr_empty.bitmap
     p = Pool()
-    # chunks == 10 results in ~ 1G RAM on 4 core CPU
-    pnr_res = p.imap_unordered(lambda param: run_pnr(*param), zip(modules, constrs, configs), 10)
+    pnr_res = p.imap_unordered(lambda param: run_pnr(*param), zip(modules, constrs, configs), 5)
 
     for pnr in pnr_res:
         seen = {}
@@ -469,22 +376,6 @@ if __name__ == "__main__":
                     'LSR': f"LSR{cls}", # set/reset
                     'CE': f"CE{cls}", # clock enable
                 }
-            elif bel_type == "IOB":
-                if log_parsers.primitive_caused_err(name, "CT1108", pnr.errs): # skip bad primitives
-                    raise Exception(f"Bad attribute (CT1108):{name}")
-
-                bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
-                pnr_attrs = pnr.attrs.get(name)
-                if pnr_attrs != None:
-                    mod_attr = list(pnr_attrs)[0]
-                    mod_attr_val = pnr_attrs[mod_attr]
-                    if list(pnr.bank_attrs): # all bank attrs are equal
-                        mod_attr = pnr.bank_attrs[name]["IO_TYPE"] + chipdb.bank_attr_sep + mod_attr
-                    bel.modes[f"{cell_type}&{mod_attr}={mod_attr_val}"] = loc;
-                else:
-                    bel.modes[f"{cell_type}"] = loc;
-                # portmap is set from dat file
-
             else:
                 raise ValueError(f"Type {bel_type} not handled")
 
@@ -516,16 +407,6 @@ if __name__ == "__main__":
                 bel = db.grid[row][col].bels.setdefault("BANK", chipdb.Bel())
                 bel.modes.setdefault(mode, set()).update(loc)
 
-            # fuzz bank modes
-            bank_attrs = list(pnr.bank_attrs.values())
-            if bank_attrs:
-                for mod_attr, mod_attr_val in bank_attrs[0].items():
-                    bel.modes["BANK&{}={}".format(mod_attr, mod_attr_val)] = loc;
-
-    chipdb.dat_portmap(dat, db)
-    chipdb.dat_aliases(dat, db)
-    chipdb.diff2flag(db)
-    chipdb.shared2flag(db)
 
     db.grid[0][0].bels['CFG'].flags['UNK0'] = {(3, 1)}
     db.grid[0][0].bels['CFG'].flags['UNK1'] = {(3, 2)}
