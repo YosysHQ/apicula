@@ -214,7 +214,10 @@ def run_pnr(mod, constr, config):
         "background_programming": "false",
         "secure_mode": "false"})
 
-    opt = codegen.PnrOptions(["posp", "warning_all", "oc", "ibs"])
+    # additional options are taken from the config, I hope
+    # the pnr_options key will not conflict with the pin names
+    opt = codegen.PnrOptions(["posp", "warning_all", "oc", "ibs"]
+            + config.get("pnr_options", []))
             #"sdf", "oc", "ibs", "posp", "o",
             #"warning_all", "timing", "reg_not_in_iob"])
 

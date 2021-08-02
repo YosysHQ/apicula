@@ -5,7 +5,7 @@ import tempfile
 import subprocess
 from collections import deque, Counter, namedtuple
 from itertools import chain, count, zip_longest
-from functools import reduce
+from functools import reduce, lru_cache
 from random import shuffle, seed
 from warnings import warn
 from math import factorial
@@ -24,6 +24,18 @@ from apycula import tm_h4x
 from apycula import chipdb
 from apycula import tiled_fuzzer
 
+def dff(mod, cst, qwire, dwire, clock):
+    "make a dff"
+    name = tiled_fuzzer.make_name("DUMMY", "DFF")
+    dff = codegen.Primitive("DFF", name)
+    dff.portmap['CLK'] = clock
+    dff.portmap['Q'] = qwire
+    if dwire == None:
+        dwire = name + "_D"
+    dff.portmap['D'] = dwire
+    mod.wires.update(dff.portmap.values())
+    mod.primitives[name] = dff
+
 Fuzzer = namedtuple('Fuzzer', [
     'ttyp',
     'mod',
@@ -35,11 +47,13 @@ Fuzzer = namedtuple('Fuzzer', [
 iobmap = {
     "IBUF": {"wires": ["O"], "inputs": ["I"]},
     "OBUF": {"wires": ["I"], "outputs": ["O"]},
-    #"TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
+    "TBUF": {"wires": ["I", "OEN"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
 
-iostandards = [""]
+iostandards = ["", "LVTTL33", "LVCMOS33", "LVCMOS25", "LVCMOS18", "LVCMOS15", "LVCMOS12",
+               "SSTL25_I", "SSTL25_II", "SSTL33_I", "SSTL33_II", "SSTL18_I", "SSTL18_II",
+               "SSTL15", "HSTL18_I", "HSTL18_II", "HSTL15_I", "PCI33"]
 
 AttrValues = namedtuple('ModeAttr', [
     'bank_dependent',   # attribute dependent of bank flags/standards
@@ -48,6 +62,9 @@ AttrValues = namedtuple('ModeAttr', [
     ])
 
 iobattrs = {
+ # no attributes, default mode
+ "NULL"       : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"], {"": [""]}),
+ #
  "HYSTERESIS" : AttrValues(False, ["IBUF", "IOBUF"],
      { "": ["NONE", "H2L", "L2H", "HIGH"]}),
  "PULL_MODE"  : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"],
@@ -77,8 +94,6 @@ iobattrs = {
         "HSTL15_I" : ["8"],
         "PCI33"    : [],
          }),
- # no attributes, default mode
- "NULL"       : AttrValues(False, ["IBUF", "OBUF", "IOBUF", "TBUF"], {"": [""]}),
 }
 
 def find_next_loc(pin, locs):
@@ -91,6 +106,7 @@ def find_next_loc(pin, locs):
             return name
     return None
 
+_pnr_options = ["reg_not_in_iob"]
 def iob(locations, corners):
     cnt = Counter() # keep track of how many runs are needed
     for iostd in iostandards:
@@ -116,7 +132,7 @@ def iob(locations, corners):
                             loc = find_next_loc(pin, locs)
                             if (loc == None):
                                 # no usable tiles
-                                yield Fuzzer(ttyp, mod, cst, {}, iostd)
+                                yield Fuzzer(ttyp, mod, cst, {"pnr_options": _pnr_options}, iostd)
                                 if iostd == "":
                                     cnt[ttyp] += 1
                                 locs = tiles.copy()
@@ -134,6 +150,13 @@ def iob(locations, corners):
                                 getattr(mod, direction).update(wnames)
                             mod.primitives[name] = iob
                             cst.ports[name] = loc
+                            # complex iob. connect OEN and O in various ways
+                            if typ == "IOBUF":
+                                iob.portmap["OEN"] = name + "_O"
+                            elif typ == "TBUF":
+                                # TBUF doesn't like clockless triggers
+                                dff(mod, cst, name + "_OEN", None, "FAKE_CLK")
+                                mod.inputs.add("FAKE_CLK")
                             if attr != "NULL":
                                 # port attribute value
                                 cst.attrs[name] = {attr: attr_val}
@@ -141,7 +164,7 @@ def iob(locations, corners):
                                 if iostd != "":
                                     cst.bank_attrs[name] = {"IO_TYPE": iostd}
 
-            yield Fuzzer(ttyp, mod, cst, {}, iostd)
+            yield Fuzzer(ttyp, mod, cst, {"pnr_options": _pnr_options}, iostd)
             if iostd == "":
                 cnt[ttyp] += 1
 
@@ -151,8 +174,22 @@ def iob(locations, corners):
         for ttyp in corners:
             mod = codegen.Module()
             cst = codegen.Constraints()
-            cfg = {}
+            cfg = {"pnr_options": _pnr_options}
             yield Fuzzer(ttyp, mod, cst, cfg, '')
+
+# collect all routing and clock bits fo tile
+_route_mem = {}
+def route_bits(db, row, col):
+    mem = _route_mem.get((row, col), None)
+    if mem != None:
+        return mem
+
+    bits = set()
+    for w in db.grid[row][col].pips.values():
+        for v in w.values():
+            bits.update(v)
+    _route_mem.setdefault((row, col), bits)
+    return bits
 
 # module + constraints + config
 DataForPnr = namedtuple('DataForPnr', ['modmap', 'cstmap', 'cfgmap'])
@@ -177,6 +214,8 @@ if __name__ == "__main__":
 
     pin_names = pindef.get_locs(tiled_fuzzer.device, tiled_fuzzer.params['package'],
                                 True, tiled_fuzzer.params['header'])
+    #pin_names = ["IOL6B", "IOR6B"]
+    #pin_names = ["IOB7A"]
     banks = {'T': fse['header']['grid'][61][0],
              'B': fse['header']['grid'][61][-1],
              'L': [row[0] for row in fse['header']['grid'][61]],
@@ -220,7 +259,8 @@ if __name__ == "__main__":
 
     type_re = re.compile(r"inst\d+_([A-Z]+)_([A-Z]+)")
 
-    pnr_empty = tiled_fuzzer.run_pnr(codegen.Module(), codegen.Constraints(), {})
+    pnr_empty = tiled_fuzzer.run_pnr(codegen.Module(), codegen.Constraints(),
+                                     {"pnr_options": _pnr_options})
     db.cmd_hdr = pnr_empty.hdr
     db.cmd_ftr = pnr_empty.ftr
     db.template = pnr_empty.bitmap
@@ -281,6 +321,8 @@ if __name__ == "__main__":
                     raise Exception(f"Bad attribute (CT1108):{name}")
 
                 bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
+                if cell_type in ["IOBUF", "TBUF"]:
+                    loc -= route_bits(db, row, col)
                 pnr_attrs = pnr.attrs.get(name)
                 if pnr_attrs != None:
                     mod_attr = list(pnr_attrs)[0]
