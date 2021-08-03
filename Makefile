@@ -12,13 +12,10 @@ all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle apycula/G
 %_stage1.pickle: apycula/tiled_fuzzer.py %.json
 	python3 -m apycula.tiled_fuzzer $*
 
-%_stage2.pickle: apycula/iob_fuzzer.py %_stage1.pickle
-	python3 -m apycula.iob_fuzzer $*
-
-%_stage3.pickle: apycula/clock_fuzzer.py %_stage2.pickle
+%_stage2.pickle: apycula/clock_fuzzer.py %_stage1.pickle
 	python3 -m apycula.clock_fuzzer $*
 
-apycula/%.pickle: %_stage3.pickle
+apycula/%.pickle: %_stage2.pickle
 	cp $< $@
 
 clean:

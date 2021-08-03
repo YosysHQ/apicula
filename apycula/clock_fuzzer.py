@@ -44,7 +44,7 @@ with open(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{til
 with open(f"{tiled_fuzzer.device}.json") as f:
     dat = json.load(f)
 
-with open(f"{tiled_fuzzer.device}_stage2.pickle", 'rb') as f:
+with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
     db = pickle.load(f)
 
 
@@ -331,5 +331,5 @@ if __name__ == "__main__":
     db.aliases.update(ta)
     db.aliases.update(ba)
 
-    with open(f"{tiled_fuzzer.device}_stage3.pickle", 'wb') as f:
+    with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)
