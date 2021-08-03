@@ -67,10 +67,11 @@ def place(db, tilemap, bels):
                     tile[brow][bcol] = 1
 
         elif typ == "IOB":
-            assert sum([int(v, 2) for v in parms.values()]) <= 1, "Complex IOB unsuported"
             iob = tiledata.bels[f'IOB{num}']
-
-            if int(parms["INPUT_USED"], 2):
+            if int(parms["ENABLE_USED"], 2) and int(parms["OUTPUT_USED"], 2):
+                # TBUF = IOBUF - O
+                mode = "IOBUF"
+            elif int(parms["INPUT_USED"], 2):
                 mode = "IBUF"
             elif int(parms["OUTPUT_USED"], 2):
                 mode = "OBUF"
