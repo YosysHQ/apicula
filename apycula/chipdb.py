@@ -267,11 +267,11 @@ def shared2flag(dev):
 
 def diff2flag(dev):
     """Fold modes with names MODE&attr=value, create flags with MODE&attr=value with diff bits
-       and create flag mask with bits to zero MODE&attr_mask """
+       and create mask flag with bits to zeroing (MODE&attr_mask) """
     for idx, row in enumerate(dev.grid):
         for jdx, td in enumerate(row):
             for name, bel in td.bels.items():
-                if not name.startswith("IOB") and not name.startswith("BANK"):
+                if name[0:3] != "IOB" and name != "BANK":
                     continue
                 # convert all modes to the flags
                 modes_to_del = list()

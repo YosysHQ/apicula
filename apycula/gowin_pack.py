@@ -44,7 +44,7 @@ def get_flag_bits(iostd, mode, flag, bel):
     val = bel.flags.get(mode + flag)
     if val != None:
         return val
-    raise Exception("Incorrect attribute {}".format(flag[1:]))
+    raise Exception("Incorrect attribute {} (iostd:{}, mode:{})".format(flag[1:], iostd, mode))
 
 def place(db, tilemap, bels):
     for typ, row, col, num, parms, attrs in bels:
@@ -93,7 +93,7 @@ def place(db, tilemap, bels):
                         raise Exception("Different I/O modes for the same port were specified.")
                     iostd = flag_name_val[1]
 
-            # XXX default io type is board-dependent!
+            # XXX default io type may be board-dependent!
             if not iostd:
                 iostd = "LVCMOS18"
 
@@ -130,7 +130,7 @@ def place(db, tilemap, bels):
             tile = tilemap[(brow, bcol)]
             if not len(tiledata.bels) == 0:
                 bank_bel = tiledata.bels['BANK']
-                bits = bank_bel.modes['DEFAULT']
+                bits = bank_bel.modes['ENABLE']
                 # iostd mask
                 bits -= get_flag_bits("", "BANK", chipdb.mode_attr_sep + "IO_TYPE_mask", bank_bel)
                 # iostd flag

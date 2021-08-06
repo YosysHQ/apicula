@@ -140,7 +140,7 @@ iobmap = {
     "IOBUF": {"wires": ["I", "O", "OEN"], "inouts": ["IO"]},
 }
 
-iostandards = ["", "LVTTL33", "LVCMOS33", "LVCMOS25", "LVCMOS18", "LVCMOS15", "LVCMOS12",
+iostandards = ["", "LVCMOS18", "LVCMOS33", "LVTTL33", "LVCMOS25", "LVCMOS15", "LVCMOS12",
                "SSTL25_I", "SSTL25_II", "SSTL33_I", "SSTL33_II", "SSTL18_I", "SSTL18_II",
                "SSTL15", "HSTL18_I", "HSTL18_II", "HSTL15_I", "PCI33"]
 
@@ -196,8 +196,7 @@ def find_next_loc(pin, locs):
     return None
 
 
-def iob(locations, corners):
-    cnt = Counter() # keep track of how many runs are needed
+def iob(locations):
     for iostd in iostandards:
         for ttyp, tiles in locations.items(): # for each tile of this type
             mod = codegen.Module()
@@ -222,8 +221,6 @@ def iob(locations, corners):
                             if (loc == None):
                                 # no usable tiles
                                 yield Fuzzer(ttyp, mod, cst, {}, iostd)
-                                if iostd == "":
-                                    cnt[ttyp] += 1
                                 locs = tiles.copy()
                                 mod = codegen.Module()
                                 cst = codegen.Constraints()
@@ -250,18 +247,6 @@ def iob(locations, corners):
                                     cst.bank_attrs[name] = {"IO_TYPE": iostd}
 
             yield Fuzzer(ttyp, mod, cst, {}, iostd)
-            if iostd == "":
-                cnt[ttyp] += 1
-
-    # insert dummie in the corners to detect the bank enable bits
-    runs = cnt.most_common(1)[0][1]
-    for _ in range(runs):
-        for ttyp in corners:
-            mod = codegen.Module()
-            cst = codegen.Constraints()
-            cfg = {}
-            yield Fuzzer(ttyp, mod, cst, cfg, '')
-
 
 # collect all routing bits of the tile
 _route_mem = {}
@@ -420,6 +405,13 @@ if __name__ == "__main__":
     db.timing = tm
     db.pinout = chipdb.xls_pinout(device)
 
+    corners = [
+        (0, 0, fse['header']['grid'][61][0][0]),
+        (0, db.cols-1, fse['header']['grid'][61][0][-1]),
+        (db.rows-1, 0, fse['header']['grid'][61][-1][0]),
+        (db.rows-1, db.cols-1, fse['header']['grid'][61][-1][-1]),
+    ]
+
     locations = {}
     for row, row_dat in enumerate(fse['header']['grid'][61]):
         for col, typ in enumerate(row_dat):
@@ -440,12 +432,7 @@ if __name__ == "__main__":
 
     # Add fuzzers here
     fuzzers = chain(
-        iob(pin_locations, [
-            fse['header']['grid'][61][0][0],
-            fse['header']['grid'][61][-1][0],
-            fse['header']['grid'][61][0][-1],
-            fse['header']['grid'][61][-1][-1],
-        ]),
+        iob(pin_locations),
         dff(locations),
         dualmode(fse['header']['grid'][61][0][0]),
     )
@@ -541,6 +528,10 @@ if __name__ == "__main__":
             elif bel_type == "IOB":
                 if primitive_caused_err(name, "CT1108", pnr.errs):
                     raise Exception(f"Bad attribute (CT1108):{name}")
+                if primitive_caused_err(name, "PR2016", pnr.errs) or \
+                    primitive_caused_err(name, "PR2017", pnr.errs) or \
+                    primitive_caused_err(name, "PR2013", pnr.errs):
+                    raise Exception(f"Placement conflict (PR201[367]):{name}")
 
                 bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
                 if cell_type == "IOBUF":
@@ -560,13 +551,6 @@ if __name__ == "__main__":
 
         # corner tiles for bank enable
         print("### CORNER TILES ###")
-        # TODO
-        corners = [
-            (0, 0, fse['header']['grid'][61][0][0]),
-            (0, db.cols-1, fse['header']['grid'][61][0][-1]),
-            (db.rows-1, 0, fse['header']['grid'][61][-1][0]),
-            (db.rows-1, db.cols-1, fse['header']['grid'][61][-1][-1]),
-        ]
         for idx in corners:
             row, col, typ = idx
             try:
@@ -582,20 +566,19 @@ if __name__ == "__main__":
                 bel = db.grid[row][col].bels.setdefault("CFG", chipdb.Bel())
                 bel.flags.setdefault(flag.upper(), set()).update(loc)
             except ValueError:
-                mode = "DEFAULT"
                 bel = db.grid[row][col].bels.setdefault("BANK", chipdb.Bel())
-                bel.modes.setdefault(mode, set()).update(loc)
-            # fuzz bank modes
-            bank_attrs = list(pnr.bank_attrs.values())
-            if bank_attrs:
-                for mod_attr, mod_attr_val in bank_attrs[0].items():
-                    bel.modes["BANK&{}={}".format(mod_attr, mod_attr_val)] = loc;
+                bank_attrs = list(pnr.bank_attrs.values())
+                if bank_attrs:
+                    for mod_attr, mod_attr_val in bank_attrs[0].items():
+                        bel.modes["BANK&{}={}".format(mod_attr, mod_attr_val)] = loc;
+                else:
+                    bel.modes["ENABLE"] = loc
 
     chipdb.dat_portmap(dat, db)
     chipdb.dat_aliases(dat, db)
     chipdb.diff2flag(db)
-    chipdb.shared2flag(db)
-
+    # XXX
+    #chipdb.shared2flag(db)
 
     db.grid[0][0].bels['CFG'].flags['UNK0'] = {(3, 1)}
     db.grid[0][0].bels['CFG'].flags['UNK1'] = {(3, 2)}
