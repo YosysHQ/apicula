@@ -46,6 +46,7 @@ def get_flag_bits(iostd, mode, flag, bel):
         return val
     raise Exception("Incorrect attribute {} (iostd:{}, mode:{})".format(flag[1:], iostd, mode))
 
+_banks = {}
 def place(db, tilemap, bels):
     for typ, row, col, num, parms, attrs in bels:
         tiledata = db.grid[row-1][col-1]
@@ -78,10 +79,25 @@ def place(db, tilemap, bels):
             else:
                 raise ValueError("IOB has no in or output")
 
+            # which bank
+            if row == 1: # top bank
+                brow = 0
+                bcol = 0
+            elif row == db.rows: # bottom bank
+                brow = db.rows-1
+                bcol = db.cols-1
+            elif col == 1: # left bank
+                brow = db.rows-1
+                bcol = 0
+            elif col == db.cols: # right bank
+                brow = 0
+                bcol = db.cols-1
+            iostd = _banks.setdefault((brow, bcol), None)
+
             # start with default mode
             bits = iob.modes[mode]
+
             # find io standard
-            iostd = None
             for flag in attrs.keys():
                 flag_name_val = flag.split("=")
                 if len(flag_name_val) < 2:
@@ -89,13 +105,17 @@ def place(db, tilemap, bels):
                 if flag[0] != chipdb.mode_attr_sep:
                     continue
                 if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
-                    if iostd and iostd != flag_name_val:
-                        raise Exception("Different I/O modes for the same port were specified.")
+                    if iostd and iostd != flag_name_val[1]:
+                        raise Exception("Different I/O modes for the same bank were specified: " +
+                                f"{iostd} and {flag_name_val[1]}")
                     iostd = flag_name_val[1]
 
+            # first used pin sets bank's iostd
             # XXX default io type may be board-dependent!
             if not iostd:
                 iostd = "LVCMOS18"
+            _banks[(brow, bcol)] = iostd
+
 
             # collect flag bits
             for flag in attrs.keys():
@@ -114,18 +134,6 @@ def place(db, tilemap, bels):
                 tile[r][c] = 1
 
             #bank enable
-            if row == 1: # top bank
-                brow = 0
-                bcol = 0
-            elif row == db.rows: # bottom bank
-                brow = db.rows-1
-                bcol = db.cols-1
-            elif col == 1: # left bank
-                brow = db.rows-1
-                bcol = 0
-            elif col == db.cols: # right bank
-                brow = 0
-                bcol = db.cols-1
             tiledata = db.grid[brow][bcol]
             tile = tilemap[(brow, bcol)]
             if not len(tiledata.bels) == 0:
