@@ -314,7 +314,7 @@ def diff2flag(dev):
                     if len(flag_value) < 2:
                         continue
                     flag_name = flag_value[0]
-                    bits ^= noise_bits[flag_name]
+                    bits -= noise_bits[flag_name]
                     masks[flag_name + "_mask"] |= bits
                 # masks to flags
                 for flag_name, value in masks.items():
