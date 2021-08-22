@@ -34,6 +34,15 @@ def get_pins(series, package, special_pins=False, header=0):
     df = df[["BANK", package]].astype("int32")
     return df.groupby("BANK")[package].apply(list).to_dict()
 
+def get_bank_pins(series, header = 0):
+    df = get_package(series, "Pin Name", VeryTrue, header)
+    # bad table for GW1N-1
+    if series == "GW1N-1":
+        df.loc[df['Pin Name'] == 'IOB2B', ['BANK']] = 2
+    dpins = list(map(lambda x:x.split('/')[0], df['Pin Name'].to_list()))
+    dbanks = df['BANK'].astype("int32").to_list()
+    return dict(zip(dpins, dbanks))
+
 def get_locs(series, package, special_pins=False, header=0):
     df = get_package(series, package, special_pins, header)
     return {p.split('/')[0] for p in df["Pin Name"]}
@@ -52,5 +61,5 @@ def get_clock_locs(series, package, header=0):
     df = get_package(series, package, True, header)
     df = df[df["Configuration Function"].str.startswith("GCLK", na=False)]
     return {tuple(p.split('/')) for p in df["Pin Name"]}
-    
+
 

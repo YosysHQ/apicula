@@ -33,19 +33,6 @@ def get_pips(data):
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
 
-# get flag bits
-def get_flag_bits(iostd, mode, flag, bel):
-    # first check mode IOSTD flag
-    val = bel.flags.get(mode + chipdb.mode_attr_sep + iostd
-            + chipdb.bank_attr_sep + flag[1:])
-    if val != None:
-        return val
-    # check if just mode flag
-    val = bel.flags.get(mode + flag)
-    if val != None:
-        return val
-    raise Exception("Incorrect attribute {} (iostd:{}, mode:{})".format(flag[1:], iostd, mode))
-
 _banks = {}
 def place(db, tilemap, bels):
     for typ, row, col, num, parms, attrs in bels:
@@ -79,23 +66,8 @@ def place(db, tilemap, bels):
             else:
                 raise ValueError("IOB has no in or output")
 
-            # which bank
-            if row == 1: # top bank
-                brow = 0
-                bcol = 0
-            elif row == db.rows: # bottom bank
-                brow = db.rows-1
-                bcol = db.cols-1
-            elif col == 1: # left bank
-                brow = db.rows-1
-                bcol = 0
-            elif col == db.cols: # right bank
-                brow = 0
-                bcol = db.cols-1
-            iostd = _banks.setdefault((brow, bcol), None)
-
-            # start with default mode
-            bits = iob.modes[mode]
+            bank = chipdb.loc2bank(db, row - 1, col - 1)
+            iostd = _banks.setdefault(bank, None)
 
             # find io standard
             for flag in attrs.keys():
@@ -111,13 +83,13 @@ def place(db, tilemap, bels):
                     iostd = flag_name_val[1]
 
             # first used pin sets bank's iostd
-            # XXX default io type may be board-dependent!
+            # XXX default io standard may be board-dependent!
             if not iostd:
                 iostd = "LVCMOS18"
-            _banks[(brow, bcol)] = iostd
-
+            _banks[bank] = iostd
 
             # collect flag bits
+            bits = iob.iob_flags[iostd][mode].encode_bits
             for flag in attrs.keys():
                 flag_name_val = flag.split("=")
                 if len(flag_name_val) < 2:
@@ -126,23 +98,32 @@ def place(db, tilemap, bels):
                     continue
                 if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
                     continue
-                # clear by mask
-                bits -= get_flag_bits(iostd, mode, flag_name_val[0] + "_mask", iob)
                 # set flag
-                bits |= get_flag_bits(iostd, mode, flag, iob)
+                mode_desc = iob.iob_flags[iostd][mode]
+                try:
+                   flag_desc = mode_desc.flags[flag_name_val[0][1:]]
+                   flag_bits = flag_desc.options[flag_name_val[1]]
+                except KeyError:
+                    raise Exception(
+                            f"Incorrect attribute {flag[1:]} (iostd:\"{iostd}\", mode:{mode})")
+                bits -= flag_desc.mask
+                bits.update(flag_bits)
             for r, c in bits:
                 tile[r][c] = 1
 
             #bank enable
+            for pos, bnum in db.corners.items():
+                if bnum == bank:
+                    break
+            brow, bcol = pos
             tiledata = db.grid[brow][bcol]
             tile = tilemap[(brow, bcol)]
             if not len(tiledata.bels) == 0:
                 bank_bel = tiledata.bels['BANK']
+
                 bits = bank_bel.modes['ENABLE']
-                # iostd mask
-                bits -= get_flag_bits("", "BANK", chipdb.mode_attr_sep + "IO_TYPE_mask", bank_bel)
                 # iostd flag
-                bits |= get_flag_bits("", "BANK", chipdb.mode_attr_sep + "IO_TYPE=" + iostd, bank_bel)
+                bits |= bank_bel.bank_flags[iostd]
                 for row, col in bits:
                     tile[row][col] = 1
 
