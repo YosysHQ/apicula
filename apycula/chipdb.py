@@ -1,18 +1,35 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple, Union, ByteString
-import copy
 import re
+from functools import reduce
+from collections import namedtuple
 import numpy as np
 import apycula.fuse_h4x as fuse
 from apycula.wirenames import wirenames, clknames
 from apycula import pindef
 
+# the character that marks the I/O attributes that come from the nextpnr
+mode_attr_sep = '&'
+
 # represents a row, column coordinate
 # can be either tiles or bits within tiles
 Coord = Tuple[int, int]
 
-mode_attr_sep = '&'
-bank_attr_sep = '!'
+# IOB flag descriptor
+# bitmask and possible values
+@dataclass
+class IOBFlag:
+    mask: Set[Coord] = field(default_factory = set)
+    options: Dict[str, Set[Coord]] = field(default_factory = dict)
+
+# IOB mode descriptor
+# bits and flags
+# encode bits include all default flag values
+@dataclass
+class IOBMode:
+    encode_bits: Set[Coord] = field(default_factory = set)
+    decode_bits: Set[Coord] = field(default_factory = set)
+    flags: Dict[str, IOBFlag] = field(default_factory = dict)
 
 @dataclass
 class Bel:
@@ -21,6 +38,11 @@ class Bel:
     and the specified portmap"""
     # there can be zero or more flags
     flags: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
+    # { iostd: { mode : IOBMode}}
+    iob_flags: Dict[str, Dict[str, IOBMode]] = field(default_factory=dict)
+    # banks
+    bank_mask: Set[Coord] = field(default_factory=set)
+    bank_flags: Dict[str, Set[Coord]] = field(default_factory=dict)
     # there can be only one mode, modes are exclusive
     modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     portmap: Dict[str, str] = field(default_factory=dict)
@@ -49,6 +71,7 @@ class Device:
     grid: List[List[Tile]] = field(default_factory=list)
     timing: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
     pinout: Dict[str, Dict[str, Dict[str, str]]] = field(default_factory=dict)
+    pin_bank: Dict[str, int] = field(default_factory = dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)
     template: np.ndarray = None
@@ -70,6 +93,15 @@ class Device:
     @property
     def width(self):
         return sum(tile.width for tile in self.grid[0])
+
+    @property
+    def corners(self):
+        # { (row, col) : bank# }
+        return {
+            (0, 0) : 0,
+            (0, self.cols - 1) : 1,
+            (self.rows - 1, self.cols - 1) : 2,
+            (self.rows - 1, 0) : 3}
 
 def unpad(fuses, pad=-1):
     try:
@@ -266,62 +298,50 @@ def shared2flag(dev):
                                 bits -= mode_cb
 
 def diff2flag(dev):
-    """Fold modes with names MODE&attr=value, create flags with MODE&attr=value with diff bits
-       and create flag mask with bits to zero MODE&attr_mask """
+    """ Minimize bits for flag values and calc flag bitmask"""
+    seen_bels = []
     for idx, row in enumerate(dev.grid):
         for jdx, td in enumerate(row):
             for name, bel in td.bels.items():
-                if not name.startswith("IOB") and not name.startswith("BANK"):
+                if name[0:3] == "IOB":
+                    if not bel.iob_flags or bel in seen_bels:
+                        continue
+                    seen_bels.append(bel)
+                    # If for a given mode all possible values of one flag
+                    # contain some bit, then this bit is "noise" --- this bit
+                    # belongs to the default value of another flag. Remove.
+                    for iostd, iostd_rec in bel.iob_flags.items():
+                        for mode, mode_rec in iostd_rec.items():
+                            mode_rec.decode_bits = mode_rec.encode_bits.copy()
+                            for flag, flag_rec in mode_rec.flags.items():
+                                noise_bits = set()
+                                for bits in flag_rec.options.values():
+                                    if noise_bits:
+                                        noise_bits &= bits
+                                    else:
+                                        noise_bits = bits.copy()
+                                # remove noise
+                                for bits in flag_rec.options.values():
+                                    bits -= noise_bits
+                                    flag_rec.mask |= bits
+                            # decode bits don't include flags
+                            for _, flag_rec in mode_rec.flags.items():
+                                mode_rec.decode_bits -= flag_rec.mask
+                elif name == "BANK":
+                    noise_bits = set()
+                    for bits in bel.bank_flags.values():
+                        if noise_bits:
+                            noise_bits &= bits
+                        else:
+                            noise_bits = bits.copy()
+                    mask = set()
+                    for bits in bel.bank_flags.values():
+                        bits -= noise_bits
+                        mask |= bits
+                    bel.bank_mask = mask
+                    bel.modes['ENABLE'] -= mask
+                else:
                     continue
-                # convert all modes to the flags
-                modes_to_del = list()
-                for mode, bits in bel.modes.items():
-                    # extract mode name
-                    mode_attr = mode.split(mode_attr_sep)
-                    if len(mode_attr) < 2:
-                        continue
-                    bel.flags[mode] = bits
-                    modes_to_del.append(mode)
-
-                # if already done
-                if not modes_to_del:
-                    continue
-
-                # clean modes
-                for mode in modes_to_del:
-                    del(bel.modes[mode])
-
-                # If for a given mode all possible values of one flag
-                # contain some bit, then this bit is "noise" --- this bit
-                # belongs to the default value of another flag. Remove.
-                #
-                noise_bits = {}
-                masks = {}
-                for flag, bits in bel.flags.items():
-                    # MODE&ATTR=YYY
-                    flag_value = flag.split("=")
-                    if len(flag_value) < 2:
-                        continue
-                    flag_name = flag_value[0]
-                    if noise_bits.get(flag_name) != None:
-                        noise_bits[flag_name] &= bits
-                    else:
-                        noise_bits[flag_name] = copy.deepcopy(bits)
-                        masks[flag_name + "_mask"] = set()
-                # remove noise
-                for flag, bits in bel.flags.items():
-                    flag_value = flag.split("=")
-                    if len(flag_value) < 2:
-                        continue
-                    flag_name = flag_value[0]
-                    bits ^= noise_bits[flag_name]
-                    masks[flag_name + "_mask"] |= bits
-                # masks to flags
-                for flag_name, value in masks.items():
-                    bel.flags[flag_name] = value
-                # XXX debug
-                print(f"{idx} {jdx} {name} flags:{bel.flags}")
-                print(f"{idx} {jdx} {name} modes:{bel.modes}")
 
 uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 dirlut = {'N': (1, 0),
@@ -356,3 +376,30 @@ def wire2global(row, col, db, wire):
     # map cross wires to their origin
     #name = diaglut.get(direction+num, direction+num)
     return f"R{rootrow}C{rootcol}_{direction}{num}"
+
+def loc2pin_name(db, row, col):
+    """ returns name like "IOB3" without [A,B,C...]
+    """
+    if row == 0:
+        side = 'T'
+        idx = col + 1
+    elif row == db.rows - 1:
+        side = 'B'
+        idx =  col + 1
+    elif col == 0:
+        side = 'L'
+        idx =  row + 1
+    else:
+        side = 'R'
+        idx = row + 1
+    return f"IO{side}{idx}"
+
+def loc2bank(db, row, col):
+    """ returns bank index 0...n
+    """
+    bank =  db.corners.get((row, col))
+    if bank == None:
+        # XXX do something with this 'A'
+        bank = db.pin_bank[loc2pin_name(db, row, col) + 'A']
+    return bank
+
