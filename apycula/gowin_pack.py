@@ -33,6 +33,15 @@ def get_pips(data):
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
 
+iostd_alias = {
+        "HSTL18_II"  : "HSTL18_I",
+        "SSTL18_I"   : "HSTL18_I",
+        "SSTL18_II"  : "HSTL18_I",
+        "HSTL15_I"   : "SSTL15",
+        "SSTL25_II"  : "SSTL25_I",
+        "SSTL33_II"  : "SSTL33_I",
+        "LVTTL33"    : "LVCMOS33",
+        }
 _banks = {}
 def place(db, tilemap, bels):
     for typ, row, col, num, parms, attrs in bels:
@@ -80,7 +89,7 @@ def place(db, tilemap, bels):
                     if iostd and iostd != flag_name_val[1]:
                         raise Exception("Different I/O modes for the same bank were specified: " +
                                 f"{iostd} and {flag_name_val[1]}")
-                    iostd = flag_name_val[1]
+                    iostd = iostd_alias.get(flag_name_val[1], flag_name_val[1])
 
             # first used pin sets bank's iostd
             # XXX default io standard may be board-dependent!

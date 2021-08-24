@@ -234,15 +234,6 @@ iostd_pull_mode = {
             "PCI33"       : [],
         }
 
-iostd_alias = {
-        "HSTL18_II"  : "HSTL18_I",
-        "SSTL18_I"   : "HSTL18_I",
-        "SSTL18_II"  : "HSTL18_I",
-        "HSTL15_I"   : "SSTL15",
-        "SSTL25_II"  : "SSTL25_I",
-        "SSTL33_II"  : "SSTL33_I",
-        "LVTTL33"    : "LVCMOS33",
-        }
 iostandards = ["", "LVCMOS33", "LVCMOS18", "LVCMOS25", "LVCMOS15", "LVCMOS12",
       "SSTL25_I", "SSTL33_I", "SSTL15", "HSTL18_I", "PCI33"]
 
@@ -275,21 +266,21 @@ def find_next_loc(pin, locs):
 
 def iob(locations):
     for iostd in iostandards:
-        for attr, attr_values in iobattrs.items():  # each IOB attribute
-            if iostd == "PCI33" and attr == "SINGLE_RESISTOR":
-                continue
-            attr_vals = attr_values.values
-            # drive is special
-            if attr_vals == None:
-                attr_vals = attr_values.table[iostd]
-            for attr_val in attr_vals:   # each value of the attribute
-                for ttyp, tiles in locations.items(): # for each tile of this type
-                    locs = tiles.copy()
-                    mod = codegen.Module()
-                    cst = codegen.Constraints()
-                    # get bels in this ttyp
-                    bels = {name[-1] for loc in tiles.values() for name in loc}
-                    for pin in bels: # [A, B, C, D, ...]
+        for ttyp, tiles in locations.items(): # for each tile of this type
+            locs = tiles.copy()
+            mod = codegen.Module()
+            cst = codegen.Constraints()
+            # get bels in this ttyp
+            bels = {name[-1] for loc in tiles.values() for name in loc}
+            for pin in bels: # [A, B, C, D, ...]
+                for attr, attr_values in iobattrs.items():  # each IOB attribute
+                    if iostd == "PCI33" and attr == "SINGLE_RESISTOR":
+                        continue
+                    attr_vals = attr_values.values
+                    # drive is special
+                    if attr_vals == None:
+                        attr_vals = attr_values.table[iostd]
+                    for attr_val in attr_vals:   # each value of the attribute
                         for typ, conn in iobmap.items():
                             # skip illegal atributesa for mode
                             if typ not in attr_values.allowed_modes:
@@ -325,7 +316,7 @@ def iob(locations):
                                 cst.attrs[name] = {attr: attr_val}
                             if iostd:
                                 cst.attrs.setdefault(name, {}).update({"IO_TYPE": iostd})
-                    yield Fuzzer(ttyp, mod, cst, {}, iostd)
+            yield Fuzzer(ttyp, mod, cst, {}, iostd)
 
 # collect all routing bits of the tile
 _route_mem = {}
@@ -536,7 +527,7 @@ if __name__ == "__main__":
     db.template = pnr_empty.bitmap
 
     p = Pool()
-    pnr_res = p.imap_unordered(lambda param: run_pnr(*param), zip(modules, constrs, configs), 5)
+    pnr_res = p.imap_unordered(lambda param: run_pnr(*param), zip(modules, constrs, configs))
     for pnr in pnr_res:
         seen = {}
         diff = pnr.bitmap ^ pnr_empty.bitmap
@@ -676,7 +667,7 @@ if __name__ == "__main__":
     chipdb.dat_portmap(dat, db)
     chipdb.dat_aliases(dat, db)
     chipdb.diff2flag(db)
-    # XXX
+    # XXX not used for IOB but...
     #chipdb.shared2flag(db)
 
     db.grid[0][0].bels['CFG'].flags['UNK0'] = {(3, 1)}

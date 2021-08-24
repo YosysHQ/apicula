@@ -13,7 +13,7 @@ from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
 # bank iostandards
-# XXX
+# XXX default io standard may be board-dependent!
 _banks = {0: "LVCMOS33", 1: "LVCMOS18", 2: "LVCMOS18", 3: "LVCMOS18"}
 
 # noiostd --- this is the case when the function is called
