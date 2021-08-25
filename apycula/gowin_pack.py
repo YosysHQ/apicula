@@ -61,9 +61,6 @@ def place(db, tilemap, bels, cst):
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
         if typ == "SLICE":
-            # XXX skip power
-            if not cellname.startswith('\$PACKER'):
-                cst.cells[cellname] = f"R{row}C{col}[{int(num) % 4}][{_sides[int(num)]}]"
             lutmap = tiledata.bels[f'LUT{num}'].flags
             init = str(parms['INIT'])
             init = init*(16//len(init))
@@ -78,6 +75,13 @@ def place(db, tilemap, bels, cst):
                 dffbits = tiledata.bels[f'DFF{num}'].modes[mode]
                 for brow, bcol in dffbits:
                     tile[brow][bcol] = 1
+                # XXX skip power
+                if not cellname.startswith('\$PACKER'):
+                    cst.cells[cellname] = f"R{row}C{col}[{int(num) % 3}][{_sides[int(num) + 1]}]"
+            else:
+                # XXX skip power
+                if not cellname.startswith('\$PACKER'):
+                    cst.cells[cellname] = f"R{row}C{col}[{int(num) % 4}][{_sides[int(num)]}]"
 
         elif typ == "IOB":
             edge = 'T'

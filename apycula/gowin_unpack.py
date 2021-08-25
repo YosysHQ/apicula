@@ -129,6 +129,7 @@ def portname(n):
         return "OEN"
     return n
 
+_sides = "AAAABBBB"
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
     # db is 0-based, floorplanner is 1-based
     row = dbrow+1
@@ -156,6 +157,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
             lut.portmap['I3'] = f"R{row}C{col}_D{idx}"
             mod.wires.update(lut.portmap.values())
             mod.primitives[name] = lut
+            cst.cells[name] = f"R{row}C{col}[{int(idx) % 4}][{_sides[int(idx)]}]"
         elif typ == "DFF":
             kind, = flags # DFF only have one flag
             idx = int(idx)
@@ -170,6 +172,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
                 dff.portmap[port] = f"R{row}C{col}_LSR{idx//2}"
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
+            cst.cells[name] = f"R{row}C{col}[{int(idx) % 3}][{_sides[int(idx) + 1]}]"
 
         elif typ == "IOB":
             try:
