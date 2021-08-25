@@ -214,7 +214,7 @@ def main():
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-o', '--output', default='pack.fs')
     parser.add_argument('-c', '--compress', default=False, action='store_true')
-    parser.add_argument('-s', '--cst', default='pack.cst')
+    parser.add_argument('-s', '--cst', default=None)
     parser.add_argument('--png')
 
     args = parser.parse_args()
@@ -242,8 +242,9 @@ def main():
     if args.png:
         bslib.display(args.png, res)
     bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress)
-    with open(args.cst, "w") as f:
-            cst.write(f)
+    if args.cst:
+        with open(args.cst, "w") as f:
+                cst.write(f)
 
 if __name__ == '__main__':
     main()
