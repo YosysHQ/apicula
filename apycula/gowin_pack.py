@@ -6,16 +6,28 @@ import numpy as np
 import json
 import argparse
 import importlib.resources
+from apycula import codegen
 from apycula import chipdb
 from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
 
+def sanitize_name(name):
+    retname = name
+    if name[-3:] == '_LC':
+        retname = name[:-3]
+    elif name[-6:] == '_DFFLC':
+        retname = name[:-6]
+    elif name[-4:] == '$iob':
+        return name[:-4]
+    return f"\{retname} "
+
 def get_bels(data):
     belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB)(\w)")
-    for cell in data['modules']['top']['cells'].values():
+    for cellname, cell in data['modules']['top']['cells'].items():
         bel = cell['attributes']['NEXTPNR_BEL']
         row, col, num = belre.match(bel).groups()
-        yield (cell['type'], int(row), int(col), num, cell['parameters'], cell['attributes'])
+        yield (cell['type'], int(row), int(col), num,
+                cell['parameters'], cell['attributes'], sanitize_name(cellname))
 
 def get_pips(data):
     pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
@@ -43,11 +55,15 @@ iostd_alias = {
         "LVTTL33"    : "LVCMOS33",
         }
 _banks = {}
-def place(db, tilemap, bels):
-    for typ, row, col, num, parms, attrs in bels:
+_sides = "AAAABBBB"
+def place(db, tilemap, bels, cst):
+    for typ, row, col, num, parms, attrs, cellname in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
         if typ == "SLICE":
+            # XXX skip power
+            if not cellname.startswith('\$PACKER'):
+                cst.cells[cellname] = f"R{row}C{col}[{int(num) % 4}][{_sides[int(num)]}]"
             lutmap = tiledata.bels[f'LUT{num}'].flags
             init = str(parms['INIT'])
             init = init*(16//len(init))
@@ -64,6 +80,17 @@ def place(db, tilemap, bels):
                     tile[brow][bcol] = 1
 
         elif typ == "IOB":
+            edge = 'T'
+            idx = col;
+            if row == db.rows:
+                edge = 'B'
+            elif col == 1:
+                edge = 'L'
+                idx = row
+            elif col == db.cols:
+                edge = 'R'
+                idx = row
+            cst.ports[cellname] = f"IO{edge}{idx}{num}"
             iob = tiledata.bels[f'IOB{num}']
             if int(parms["ENABLE_USED"], 2) and int(parms["OUTPUT_USED"], 2):
                 # TBUF = IOBUF - O
@@ -97,6 +124,7 @@ def place(db, tilemap, bels):
                 iostd = "LVCMOS18"
             _banks[bank] = iostd
 
+            cst.attrs.setdefault(cellname, {}).update({"IO_TYPE": iostd})
             # collect flag bits
             bits = iob.iob_flags[iostd][mode].encode_bits
             for flag in attrs.keys():
@@ -117,6 +145,7 @@ def place(db, tilemap, bels):
                             f"Incorrect attribute {flag[1:]} (iostd:\"{iostd}\", mode:{mode})")
                 bits -= flag_desc.mask
                 bits.update(flag_bits)
+                cst.attrs[cellname].update({flag_name_val[0][1:] : flag_name_val[1]})
             for r, c in bits:
                 tile[r][c] = 1
 
@@ -185,6 +214,7 @@ def main():
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-o', '--output', default='pack.fs')
     parser.add_argument('-c', '--compress', default=False, action='store_true')
+    parser.add_argument('-s', '--cst', default='pack.cst')
     parser.add_argument('--png')
 
     args = parser.parse_args()
@@ -200,18 +230,20 @@ def main():
         db = pickle.load(f)
     with open(args.netlist) as f:
         pnr = json.load(f)
+
     tilemap = chipdb.tile_bitmap(db, db.template, empty=True)
+    cst = codegen.Constraints()
     bels = get_bels(pnr)
-    place(db, tilemap, bels)
+    place(db, tilemap, bels, cst)
     pips = get_pips(pnr)
     route(db, tilemap, pips)
-
     res = chipdb.fuse_bitmap(db, tilemap)
     header_footer(db, res, args.compress)
     if args.png:
         bslib.display(args.png, res)
     bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress)
-
+    with open(args.cst, "w") as f:
+            cst.write(f)
 
 if __name__ == '__main__':
     main()
