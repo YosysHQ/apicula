@@ -11,6 +11,7 @@ from apycula import chipdb
 from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
 
+_verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
 def sanitize_name(name):
     retname = name
     if name[-3:] == '_LC':
@@ -18,7 +19,9 @@ def sanitize_name(name):
     elif name[-6:] == '_DFFLC':
         retname = name[:-6]
     elif name[-4:] == '$iob':
-        return name[:-4]
+        retname = name[:-4]
+    if _verilog_name.fullmatch(retname):
+        return retname
     return f"\{retname} "
 
 def get_bels(data):
