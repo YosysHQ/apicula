@@ -58,7 +58,7 @@ iostd_alias = {
         "LVTTL33"    : "LVCMOS33",
         }
 _banks = {}
-_sides = "AAAABBBB"
+_sides = "AB"
 def place(db, tilemap, bels, cst):
     for typ, row, col, num, parms, attrs, cellname in bels:
         tiledata = db.grid[row-1][col-1]
@@ -78,13 +78,9 @@ def place(db, tilemap, bels, cst):
                 dffbits = tiledata.bels[f'DFF{num}'].modes[mode]
                 for brow, bcol in dffbits:
                     tile[brow][bcol] = 1
-                # XXX skip power
-                if not cellname.startswith('\$PACKER'):
-                    cst.cells[cellname] = f"R{row}C{col}[{int(num) % 3}][{_sides[int(num) + 1]}]"
-            else:
-                # XXX skip power
-                if not cellname.startswith('\$PACKER'):
-                    cst.cells[cellname] = f"R{row}C{col}[{int(num) % 4}][{_sides[int(num)]}]"
+            # XXX skip power
+            if not cellname.startswith('\$PACKER'):
+                cst.cells[cellname] = f"R{row}C{col}[{int(num) // 2}][{_sides[int(num) % 2]}]"
 
         elif typ == "IOB":
             edge = 'T'
