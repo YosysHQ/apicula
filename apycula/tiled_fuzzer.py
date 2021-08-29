@@ -28,8 +28,8 @@ gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise Exception("GOWINHOME not set")
 
-# device = os.getenv("DEVICE")
-device = sys.argv[1]
+device = os.getenv("DEVICE")
+# device = sys.argv[1]
 
 params = {
     "GW1NS-2": {
@@ -344,17 +344,23 @@ def dualmode(ttyp):
 # read vendor .posp log
 _cst_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_R(\d+)C(\d+)\[([0-3])\]\[([A-Z])\]")
 _place_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_IO([TBLR])(\d+)\[([A-Z])\]")
+# inst3_SDPB_SDPB CST_BSRAM_R6[0]
+_bram_parser = re.compile(r"([^ ]+) (?:PLACE|CST)_BSRAM_R(\d+)\[([0-3])\]")
 def read_posp(fname):
     with open(fname, 'r') as f:
         for line in f:
             cst = _cst_parser.match(line)
             place = _place_parser.match(line)
+            bram = _bram_parser.match(line)
             if cst:
                 name, row, col, cls, lut = cst.groups()
                 yield "cst", name, int(row), int(col), int(cls), lut
             elif place:
                 name, side, num, pin = place.groups()
                 yield "place", name, side, int(num), pin
+            elif bram:
+                name, row, idx = bram.groups()
+                yield "bram", name, int(row), int(idx)
             elif line.strip() and not line.startswith('//'):
                 raise Exception(line)
 

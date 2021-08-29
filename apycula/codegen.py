@@ -37,7 +37,11 @@ class Module:
             f.write("inout {};\n".format(port))
 
         for wire in self.wires:
-            f.write("wire {};\n".format(wire))
+            if isinstance(wire, tuple):
+                for w in wire:
+                    f.write("wire {};\n".format(w))
+            else:
+                f.write("wire {};\n".format(wire))
 
         # unique assignments or not
         #for dest, src in self.assigns:
@@ -63,7 +67,10 @@ class Primitive:
             if not first:
                 f.write(",")
             first = False
-            f.write("\n.{}({})".format(port, wire))
+            if isinstance(wire, tuple):
+                f.write("\n.{}({{{}}})".format(port, ", ".join(wire)))
+            else:
+                f.write("\n.{}({})".format(port, wire))
         f.write("\n);\n")
 
         for key, val in self.params.items():
