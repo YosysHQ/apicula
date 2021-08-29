@@ -28,8 +28,8 @@ gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise Exception("GOWINHOME not set")
 
-device = os.getenv("DEVICE")
-# device = sys.argv[1]
+# device = os.getenv("DEVICE")
+device = sys.argv[1]
 
 params = {
     "GW1NS-2": {
