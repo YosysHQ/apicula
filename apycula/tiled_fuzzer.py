@@ -75,6 +75,7 @@ Fuzzer = namedtuple('Fuzzer', [
 
 dffmap = {
     "DFF": None,
+    "DFFN": None,
     "DFFS": "SET",
     "DFFR": "RESET",
     "DFFP": "PRESET",
@@ -234,7 +235,7 @@ iostd_pull_mode = {
             "PCI33"       : [],
         }
 
-iostandards = ["", "LVCMOS33", "LVCMOS18", "LVCMOS25", "LVCMOS15", "LVCMOS12",
+iostandards = ["", "LVCMOS18", "LVCMOS33", "LVCMOS25", "LVCMOS15", "LVCMOS12",
       "SSTL25_I", "SSTL33_I", "SSTL15", "HSTL18_I", "PCI33"]
 
 AttrValues = namedtuple('ModeAttr', [
@@ -667,6 +668,7 @@ if __name__ == "__main__":
     chipdb.dat_portmap(dat, db)
     chipdb.dat_aliases(dat, db)
     chipdb.diff2flag(db)
+    chipdb.dff_clean(db)
     # XXX not used for IOB but...
     #chipdb.shared2flag(db)
 

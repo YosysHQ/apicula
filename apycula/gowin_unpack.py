@@ -108,6 +108,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
 
 dffmap = {
     "DFF": None,
+    "DFFN": None,
     "DFFS": "SET",
     "DFFR": "RESET",
     "DFFP": "PRESET",

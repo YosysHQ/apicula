@@ -297,6 +297,27 @@ def shared2flag(dev):
                                 belb.flags[mode+"C"] = mode_cb
                                 bits -= mode_cb
 
+def dff_clean(dev):
+    """ Clean DFF mode bits: fuzzer captures a bit of the neighboring trigger."""
+    seen_bels = []
+    for idx, row in enumerate(dev.grid):
+        for jdx, td in enumerate(row):
+            for name, bel in td.bels.items():
+                if name[0:3] == "DFF":
+                    if bel in seen_bels:
+                        continue
+                    seen_bels.append(bel)
+                    # find extra bit
+                    extra_bits = set()
+                    for bits in bel.modes.values():
+                        if extra_bits:
+                            extra_bits &= bits
+                        else:
+                            extra_bits = bits.copy()
+                    # remove it
+                    for mode, bits in bel.modes.items():
+                        bits -= extra_bits
+
 def diff2flag(dev):
     """ Minimize bits for flag values and calc flag bitmask"""
     seen_bels = []
