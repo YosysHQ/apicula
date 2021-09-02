@@ -6,7 +6,7 @@ Project Apicula uses a combination of fuzzing and parsing of the vendor data fil
 
 ## Getting Started
 
-Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr-gowin](https://github.com/YosysHQ/nextpnr#nextpnr-gowin), [openFPGALoader](https://github.com/trabucayre/openFPGALoader), and Python 3.6 or higher.
+Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr-gowin](https://github.com/YosysHQ/nextpnr#nextpnr-gowin), [openFPGALoader](https://github.com/trabucayre/openFPGALoader), and Python 3.6 or higher. [Yowasp](http://yowasp.org/) versions of Yosys and Nextpnr are also supported.
 
 Currently supported boards are
  * Trenz TEC0117: GW1NR-UV9QN881C6/I5
@@ -101,7 +101,6 @@ Things that could be fuzzed:
 
 * ALU modes
 * DRAM modes and bits
-* IOB logic levels and drive stengths, may require some refactoring to fuzz constraints.
 * BRAM modes and bits
 * IO logic (LVDS etc.), expected to be complex.
 * PLL settings
