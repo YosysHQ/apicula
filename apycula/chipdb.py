@@ -117,12 +117,8 @@ def fse_pips(fse, ttyp, table=2, wn=wirenames):
             if srcid < 0:
                 fuses = set()
                 srcid = -srcid
-            if srcid >= 1000:
-                srcid -= 1000 # what does it mean?
-            if destid >= 1000:
-                destid -= 1000 # what does it mean?
-            src = wn.get(srcid, srcid)
-            dest = wn.get(destid, destid)
+            src = wn.get(srcid, str(srcid))
+            dest = wn.get(destid, str(destid))
             pips.setdefault(dest, {})[src] = fuses
 
     return pips
