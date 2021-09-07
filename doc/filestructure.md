@@ -19,8 +19,8 @@ The vendor files use wire IDs that map to the following names. A full mapping is
 * 130-132 DFF clock-enable wires
 * 133-140 MUX selection wires
 * 141-148 X1 one-hop wires, destination segments
-* 149-112 X2 two-hop wires, destination segments
-* 113-244 X8 eight-hop wires, destination segments
+* 149-212 X2 two-hop wires, destination segments
+* 213-244 X8 eight-hop wires, destination segments
 * 245-260 X1 one-hop alias wires to SN/EW wires, going both ways
 * 261-268 unknown
 * 269-276 global wires
