@@ -31,12 +31,12 @@ export PATH="/home/pepijn/.local/bin:$PATH" # add binaries to the path
 
 From there, compile a blinky.
 
-The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber`, `tangnano` or `honeycomb` accordingly.
+The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber`, `tangnano` or `honeycomb` accordingly. Also note the number of LEDs on your board: 8 for tec0117 and runber, 3 for honeycomb and tangnano. 
 You can also use the Makefile in the examples folder to build the examples.
 
 ```bash
 cd examples
-yosys -p "synth_gowin -json blinky.json" blinky.v
+yosys -D LEDS_NR=8 -p "synth_gowin -json blinky.json" blinky.v
 nextpnr-gowin --json blinky.json \
               --write pnrblinky.json \
               --device GW1NR-UV9QN881C6/I5 \ # change to your device
