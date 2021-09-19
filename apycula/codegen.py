@@ -74,12 +74,14 @@ class Constraints:
         self.cells = {}
         self.ports = {}
         self.attrs = {}
+        self.clocks = {}
 
     def __add__(self, other):
         cst = Constraints()
         cst.cells = {**self.cells, **other.cells}
         cst.ports = {**self.ports, **other.ports}
         cst.attrs = {**self.attrs, **other.attrs}
+        cst.clocks = {**self.clocks, **other.clocks}
         return cst
 
     def write(self, f):
@@ -92,6 +94,8 @@ class Constraints:
             for attr, attr_value in val.items():
                 f.write("{}={} ".format(attr, attr_value))
             f.write(";\n");
+        for key, val in self.clocks.items():
+            f.write("CLOCK_LOC \"{}\" {};\n".format(key, val))
 
 class DeviceConfig:
     def __init__(self, settings):
