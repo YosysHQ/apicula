@@ -28,8 +28,8 @@ gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise Exception("GOWINHOME not set")
 
-# device = os.getenv("DEVICE")
-device = sys.argv[1]
+device = os.getenv("DEVICE")
+# device = sys.argv[1]
 
 params = {
     "GW1NS-2": {
@@ -438,7 +438,7 @@ def run_pnr(mod, constr, config):
             pnr.write(f)
 
         subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
-        #print(tmpdir); input()
+        # print(tmpdir); input()
         try:
             return PnrResult(
                     *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
