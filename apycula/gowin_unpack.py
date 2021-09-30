@@ -147,7 +147,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
         typ, idx = belre.match(bel).groups()
 
         if typ == "LUT":
-            val = sum(1<<f for f in flags)
+            val = 0xffff - sum(1<<f for f in flags)
             name = f"R{row}C{col}_LUT4_{idx}"
             lut = codegen.Primitive("LUT4", name)
             lut.params["INIT"] = f"16'b{val:016b}"
