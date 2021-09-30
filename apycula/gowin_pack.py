@@ -81,19 +81,6 @@ def place(db, tilemap, bels, cst):
             # XXX skip power
             if not cellname.startswith('\$PACKER'):
                 cst.cells[cellname] = f"R{row}C{col}[{int(num) // 2}][{_sides[int(num) % 2]}]"
-
-        if typ == "MUX2LUT5":
-            # place two LUTs
-            for n in range(2):
-                lutmap = tiledata.bels[f'LUT{(1 - n) + int(num) * 2}'].flags
-                init = str(parms[f'INIT{n}'])
-                init = init*(16//len(init))
-                for bitnum, lutbit in enumerate(init[::-1]):
-                    if lutbit == '0':
-                        fuses = lutmap[bitnum]
-                        for brow, bcol in fuses:
-                            tile[brow][bcol] = 1
-
         elif typ == "IOB":
             edge = 'T'
             idx = col;
