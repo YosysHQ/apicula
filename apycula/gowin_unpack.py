@@ -164,8 +164,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
                 mux_idx = int(idx)
                 name = f"R{row}C{col}_MUX2_{int(mux_idx / 2)}"
                 mux2 = codegen.Primitive("MUX2", name)
-                mux2.portmap['I1'] = f"R{row}C{col}_F{mux_idx}"
-                mux2.portmap['I0'] = f"R{row}C{col}_F{mux_idx + 1}"
+                mux2.portmap['I0'] = f"R{row}C{col}_F{mux_idx}"
+                mux2.portmap['I1'] = f"R{row}C{col}_F{mux_idx + 1}"
                 mux2.portmap['O']  = f"R{row}C{col}_OF{mux_idx}"
                 mux2.portmap['S0'] = f"R{row}C{col}_SEL{mux_idx}"
                 mod.wires.update(mux2.portmap.values())
