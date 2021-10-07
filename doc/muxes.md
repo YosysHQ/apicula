@@ -8,4 +8,4 @@ These fixed links impose restrictions on the possible placement of primitives:
   * LUT5, LUT6, MUX4, MUX8 can be placed in one CLS;
   * for LUT6, MUX8 CLS index must be even number;
   * LUT7, MUX16 can be placed in one cell;
-  * LUT8, MUX32 the cell column index must be even number.
+  * LUT8, MUX32 occupy two cells.
