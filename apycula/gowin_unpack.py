@@ -130,6 +130,54 @@ def portname(n):
         return "OEN"
     return n
 
+def make_muxes(row, col, idx, db, mod):
+    name = f"R{row}C{col}_MUX2_LUT50"
+    if name in mod.primitives.keys():
+        return
+
+    # one MUX8
+    if col < db.cols :
+        name = f"R{row}C{col}_MUX2_LUT80"
+        mux2 = codegen.Primitive("MUX2", name)
+        mux2.portmap['I0'] = f"R{row}C{col + 1}_OF3"
+        mux2.portmap['I1'] = f"R{row}C{col}_OF3"
+        mux2.portmap['O']  = f"R{row}C{col}_OF7"
+        mux2.portmap['S0'] = f"R{row}C{col}_SEL7"
+        mod.wires.update(mux2.portmap.values())
+        mod.primitives[name] = mux2
+
+    # one MUX7
+    name = f"R{row}C{col}_MUX2_LUT70"
+    mux2 = codegen.Primitive("MUX2", name)
+    mux2.portmap['I0'] = f"R{row}C{col}_OF1"
+    mux2.portmap['I1'] = f"R{row}C{col}_OF5"
+    mux2.portmap['O']  = f"R{row}C{col}_OF3"
+    mux2.portmap['S0'] = f"R{row}C{col}_SEL3"
+    mod.wires.update(mux2.portmap.values())
+    mod.primitives[name] = mux2
+
+    # two MUX6
+    for i in range(2):
+        name = f"R{row}C{col}_MUX2_LUT6{i}"
+        mux2 = codegen.Primitive("MUX2", name)
+        mux2.portmap['I0'] = f"R{row}C{col}_OF{i + 2}"
+        mux2.portmap['I1'] = f"R{row}C{col}_OF{i}"
+        mux2.portmap['O']  = f"R{row}C{col}_OF{i * 4 + 1}"
+        mux2.portmap['S0'] = f"R{row}C{col}_SEL{i * 4 + 1}"
+        mod.wires.update(mux2.portmap.values())
+        mod.primitives[name] = mux2
+
+    # four MUX5
+    for i in range(4):
+        name = f"R{row}C{col}_MUX2_LUT5{i}"
+        mux2 = codegen.Primitive("MUX2", name)
+        mux2.portmap['I0'] = f"R{row}C{col}_F{i * 2}"
+        mux2.portmap['I1'] = f"R{row}C{col}_F{i * 2  + 1}"
+        mux2.portmap['O']  = f"R{row}C{col}_OF{i * 2}"
+        mux2.portmap['S0'] = f"R{row}C{col}_SEL{i * 2}"
+        mod.wires.update(mux2.portmap.values())
+        mod.primitives[name] = mux2
+
 _sides = "AB"
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
     # db is 0-based, floorplanner is 1-based
@@ -159,49 +207,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
             mod.wires.update(lut.portmap.values())
             mod.primitives[name] = lut
             cst.cells[name] = f"R{row}C{col}[{int(idx) // 2}][{_sides[int(idx) % 2]}]"
-            # even LUT makes MUX
-            if (int(idx) % 2) == 0:
-                mux_idx = int(idx)
-                name = f"R{row}C{col}_MUX2_LUT5{int(mux_idx / 2)}"
-                mux2 = codegen.Primitive("MUX2", name)
-                mux2.portmap['I0'] = f"R{row}C{col}_F{mux_idx}"
-                mux2.portmap['I1'] = f"R{row}C{col}_F{mux_idx + 1}"
-                mux2.portmap['O']  = f"R{row}C{col}_OF{mux_idx}"
-                mux2.portmap['S0'] = f"R{row}C{col}_SEL{mux_idx}"
-                mod.wires.update(mux2.portmap.values())
-                mod.primitives[name] = mux2
-                mux5_idx = int(mux_idx / 2)
-                # even MUX make another MUX
-                if (mux5_idx % 2) == 0:
-                    mux6_idx = int(mux5_idx / 2)
-                    name = f"R{row}C{col}_MUX2_LUT6{mux6_idx}"
-                    mux2 = codegen.Primitive("MUX2", name)
-                    mux2.portmap['I0'] = f"R{row}C{col}_OF{mux_idx + 2}"
-                    mux2.portmap['I1'] = f"R{row}C{col}_OF{mux_idx}"
-                    mux2.portmap['O']  = f"R{row}C{col}_OF{mux_idx + 1}"
-                    mux2.portmap['S0'] = f"R{row}C{col}_SEL{mux_idx + 1}"
-                    mod.wires.update(mux2.portmap.values())
-                    mod.primitives[name] = mux2
-                # one MUX7
-                name = f"R{row}C{col}_MUX2_LUT70"
-                mux2 = codegen.Primitive("MUX2", name)
-                mux2.portmap['I0'] = f"R{row}C{col}_OF1"
-                mux2.portmap['I1'] = f"R{row}C{col}_OF5"
-                mux2.portmap['O']  = f"R{row}C{col}_OF3"
-                mux2.portmap['S0'] = f"R{row}C{col}_SEL3"
-                mod.wires.update(mux2.portmap.values())
-                mod.primitives[name] = mux2
-
-                # one MUX8
-                if col < db.cols :
-                    name = f"R{row}C{col}_MUX2_LUT80"
-                    mux2 = codegen.Primitive("MUX2", name)
-                    mux2.portmap['I0'] = f"R{row}C{col + 1}_OF3"
-                    mux2.portmap['I1'] = f"R{row}C{col}_OF3"
-                    mux2.portmap['O']  = f"R{row}C{col}_OF7"
-                    mux2.portmap['S0'] = f"R{row}C{col}_SEL7"
-                    mod.wires.update(mux2.portmap.values())
-                    mod.primitives[name] = mux2
+            make_muxes(row, col, idx, db, mod)
         elif typ == "DFF":
             kind, = flags # DFF only have one flag
             idx = int(idx)
