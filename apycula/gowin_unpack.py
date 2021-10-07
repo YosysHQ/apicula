@@ -149,8 +149,8 @@ def make_muxes(row, col, idx, db, mod):
     # one MUX7
     name = f"R{row}C{col}_MUX2_LUT70"
     mux2 = codegen.Primitive("MUX2", name)
-    mux2.portmap['I0'] = f"R{row}C{col}_OF1"
-    mux2.portmap['I1'] = f"R{row}C{col}_OF5"
+    mux2.portmap['I0'] = f"R{row}C{col}_OF5"
+    mux2.portmap['I1'] = f"R{row}C{col}_OF1"
     mux2.portmap['O']  = f"R{row}C{col}_OF3"
     mux2.portmap['S0'] = f"R{row}C{col}_SEL3"
     mod.wires.update(mux2.portmap.values())
@@ -160,8 +160,8 @@ def make_muxes(row, col, idx, db, mod):
     for i in range(2):
         name = f"R{row}C{col}_MUX2_LUT6{i}"
         mux2 = codegen.Primitive("MUX2", name)
-        mux2.portmap['I0'] = f"R{row}C{col}_OF{i + 2}"
-        mux2.portmap['I1'] = f"R{row}C{col}_OF{i}"
+        mux2.portmap['I0'] = f"R{row}C{col}_OF{i * 4 + 2}"
+        mux2.portmap['I1'] = f"R{row}C{col}_OF{i * 4}"
         mux2.portmap['O']  = f"R{row}C{col}_OF{i * 4 + 1}"
         mux2.portmap['S0'] = f"R{row}C{col}_SEL{i * 4 + 1}"
         mod.wires.update(mux2.portmap.values())
