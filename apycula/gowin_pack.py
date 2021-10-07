@@ -25,9 +25,12 @@ def sanitize_name(name):
     return f"\{retname} "
 
 def get_bels(data):
-    belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB|MUX2LUT5)(\w)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8)(\w)")
     for cellname, cell in data['modules']['top']['cells'].items():
         bel = cell['attributes']['NEXTPNR_BEL']
+        bels = belre.match(bel)
+        if not bels:
+            raise Exception(f"Unknown bel:{bel}")
         row, col, num = belre.match(bel).groups()
         yield (cell['type'], int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname))
