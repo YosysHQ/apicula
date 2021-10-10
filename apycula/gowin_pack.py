@@ -31,7 +31,7 @@ def get_bels(data):
         bels = belre.match(bel)
         if not bels:
             raise Exception(f"Unknown bel:{bel}")
-        row, col, num = belre.match(bel).groups()
+        row, col, num = bels.groups()
         yield (cell['type'], int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname))
 
