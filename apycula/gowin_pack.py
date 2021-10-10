@@ -45,7 +45,7 @@ def get_pips(data):
             if res:
                 row, col, src, dest = res.groups()
                 yield int(row), int(col), src, dest
-            elif pip:
+            elif pip and "DUMMY" not in pip:
                 print("Invalid pip:", pip)
 
 def infovaluemap(infovalue, start=2):
