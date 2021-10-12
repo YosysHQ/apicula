@@ -25,10 +25,13 @@ def sanitize_name(name):
     return f"\{retname} "
 
 def get_bels(data):
-    belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB)(\w)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8)(\w)")
     for cellname, cell in data['modules']['top']['cells'].items():
         bel = cell['attributes']['NEXTPNR_BEL']
-        row, col, num = belre.match(bel).groups()
+        bels = belre.match(bel)
+        if not bels:
+            raise Exception(f"Unknown bel:{bel}")
+        row, col, num = bels.groups()
         yield (cell['type'], int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname))
 
@@ -42,7 +45,7 @@ def get_pips(data):
             if res:
                 row, col, src, dest = res.groups()
                 yield int(row), int(col), src, dest
-            elif pip:
+            elif pip and "DUMMY" not in pip:
                 print("Invalid pip:", pip)
 
 def infovaluemap(infovalue, start=2):
@@ -81,7 +84,6 @@ def place(db, tilemap, bels, cst):
             # XXX skip power
             if not cellname.startswith('\$PACKER'):
                 cst.cells[cellname] = f"R{row}C{col}[{int(num) // 2}][{_sides[int(num) % 2]}]"
-
         elif typ == "IOB":
             edge = 'T'
             idx = col;
