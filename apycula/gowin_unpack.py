@@ -273,7 +273,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
     # vcc.portmap["V"] = "VCC"
     # mod.primitives["myvcc"] = vcc
     mod.assigns.append(("VCC", "1"))
-    mod.assigns.append(("GND", "0"))
+    mod.assigns.append(("VSS", "0"))
 
 def default_device_config():
     return {
