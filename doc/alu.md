@@ -45,4 +45,4 @@ It seems counterintuitive that the `LUT2` has an asymetric function, but it all 
 
 Armed with this knowledge, we can puzzle out what the total function of each `ALU` mode is. Most of them have obvious names with well known truth tables, but `MUL` is a strange one. When we find its total function analytically or experimentally, we find that it computes `A*B+CI`, in other words, an `AND` into a half adder. Our theory is that this could be used in implementing a Wallace tree or other long multiplication algorithm.
 
-As a challenge, I decided to try a full adder that computes `A*B+D+CI`. To implement this the `LUT4` function should be `(A AND B) XOR D` and the `LUT2` function `A AND B`, giving the total data `0111000010001000` which indeed works as expected.
+As a challenge, I decided to try a full adder that computes `A*B+D+CI`. To implement this the `LUT4` function should be `(A AND B) XOR D` and the `LUT2` function `A AND B`, giving the total data `0111000010001000` which indeed works as expected for `C=1`. This is compatible with the Gowin `MUL` if it were configured with `C=1` and `D=I3` instead of `C=0` and `D=1`.
