@@ -14,7 +14,21 @@ from apycula.wirenames import wirenames
 
 # bank iostandards
 # XXX default io standard may be board-dependent!
-_banks = {0: "LVCMOS33", 1: "LVCMOS18", 2: "LVCMOS18", 3: "LVCMOS18"}
+_banks = {0: "LVCMOS18", 1: "LVCMOS18", 2: "LVCMOS18", 3: "LVCMOS18"}
+
+# for a given mode returns a mask of zero bits
+def zero_bits(mode, all_modes):
+    res = set()
+    for m, m_rec in all_modes.items():
+        if m == mode:
+            continue
+        res.update(m_rec.decode_bits)
+        for flag in m_rec.flags.values():
+            res.update(flag.mask)
+    m_mask = set()
+    for flag in all_modes[mode].flags.values():
+        m_mask.update(flag.mask)
+    return res.difference(all_modes[mode].decode_bits).difference(m_mask)
 
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
@@ -29,10 +43,6 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 iostd = ''
             else:
                 iostd = _banks[chipdb.loc2bank(db, row, col)]
-            # modebits
-            modebits = set()
-            for _, mode_rec in bel.iob_flags[iostd].items():
-                modebits |= mode_rec.decode_bits
             # Here we don't use a mask common to all modes (it didn't work),
             # instead we try the longest bit sequence first.
             for mode, mode_rec in sorted(bel.iob_flags[iostd].items(),
@@ -43,9 +53,14 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                              if tile[row][col] == 1}
                 print("read", mode_bits)
                 if mode_rec.decode_bits == mode_bits:
-                    bels.setdefault(name, set()).add(mode)
-                    # mode found
-                    break
+                    zeros = zero_bits(mode, bel.iob_flags[iostd])
+                    print("zeros", zeros)
+                    used_bits = {tile[row][col] for row, col in zeros}
+                    if not any(used_bits):
+                        bels.setdefault(name, set()).add(mode)
+                        print(f"found: {mode}")
+                        # mode found
+                        break
 
             for flag, flag_parm in bel.iob_flags[iostd][mode].flags.items():
                 flag_bits = {(row, col)

@@ -163,7 +163,6 @@ def place(db, tilemap, bels, cst):
             tile = tilemap[(brow, bcol)]
             if not len(tiledata.bels) == 0:
                 bank_bel = tiledata.bels['BANK']
-
                 bits = bank_bel.modes['ENABLE']
                 # iostd flag
                 bits |= bank_bel.bank_flags[iostd]
