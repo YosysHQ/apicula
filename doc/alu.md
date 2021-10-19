@@ -6,9 +6,9 @@ ALU mode is available on the 3 CLS in each tile that have a flip-flop, and confi
 
 ![tile carry connections](fig/alu_tile.png)
 
-The ALU hard logic takes the shape of a full adder, where the carry chain is fully hard logic, and the first `XOR` gate is formed by the `LUT4`. But not all of the LUT4 is used, the lower 4 bits are used in an additional `LUT2` which mostly acts as an input selector between `A` and `B` in front of the carry `AND`. The `C` input is mostly wired to `1` so the main `LUT4` doesn't use the lower bits, but in one case `C=0` and `D=1` to much the same effect.
+The ALU hard logic takes the shape of a full adder, where the carry chain is fully hard logic, and the first `XOR` gate is formed by the `LUT4`. But the lower 4 bits are shared with an additional `LUT2` which mostly acts as an input selector between `A` and `B` in front of the carry `AND`. The `C` input is mostly wired to `1` so the main `LUT4` doesn't use the lower bits, but in one case `C=0` and `D=1` to much the same effect.
 
-![tile carry connections](fig/alu_logic.png)
+![ALU hard logic](fig/alu_logic.png)
 
 
 On the synthesis side, the ALU primitive supports 9 modes, wich correspond to a bit pattern stored in the LUT, as well as which ports are used, and which are set to constant values.
