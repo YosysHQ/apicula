@@ -73,10 +73,10 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             mode_bits = {(row, col)
                          for row, col in bel.mode_bits
                          if tile[row][col] == 1}
-            print(name, bel.mode_bits)
-            print("read", mode_bits)
+            #print(name, sorted(bel.mode_bits))
+            #print("read", sorted(mode_bits))
             for mode, bits in bel.modes.items():
-                print(mode, bits)
+                #print(mode, sorted(bits))
                 if bits == mode_bits and (default or bits):
                     bels.setdefault(name, set()).add(mode)
                     if name == "BANK":
@@ -193,6 +193,25 @@ def make_muxes(row, col, idx, db, mod):
         mod.wires.update(mux2.portmap.values())
         mod.primitives[name] = mux2
 
+_alu_re = re.compile(r"ALU(\w*)")
+def removeLUTs(bels):
+    bels_to_remove = []
+    for bel in bels:
+        match = _alu_re.match(bel)
+        if match:
+            bels_to_remove.append(f"LUT{match.group(1)}")
+    for bel in bels_to_remove:
+        bels.pop(bel, None)
+
+def removeALUs(bels):
+    bels_to_remove = []
+    for bel in bels:
+        match = _alu_re.match(bel)
+        if match:
+            bels_to_remove.append(match.group(0))
+    for bel in bels_to_remove:
+        bels.pop(bel, None)
+
 _sides = "AB"
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
     # db is 0-based, floorplanner is 1-based
@@ -205,25 +224,57 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU)(\w*)")
     for bel, flags in bels.items():
         typ, idx = belre.match(bel).groups()
 
         if typ == "LUT":
             val = 0xffff - sum(1<<f for f in flags)
-            name = f"R{row}C{col}_LUT4_{idx}"
-            lut = codegen.Primitive("LUT4", name)
-            lut.params["INIT"] = f"16'b{val:016b}"
-            lut.portmap['F'] = f"R{row}C{col}_F{idx}"
-            lut.portmap['I0'] = f"R{row}C{col}_A{idx}"
-            lut.portmap['I1'] = f"R{row}C{col}_B{idx}"
-            lut.portmap['I2'] = f"R{row}C{col}_C{idx}"
-            lut.portmap['I3'] = f"R{row}C{col}_D{idx}"
-            mod.wires.update(lut.portmap.values())
-            mod.primitives[name] = lut
-            cst.cells[name] = f"R{row}C{col}[{int(idx) // 2}][{_sides[int(idx) % 2]}]"
+            if val == 0:
+                mod.assigns.append((f"R{row}C{col}_F{idx}", "VSS"))
+            else:
+                name = f"R{row}C{col}_LUT4_{idx}"
+                lut = codegen.Primitive("LUT4", name)
+                lut.params["INIT"] = f"16'b{val:016b}"
+                lut.portmap['F'] = f"R{row}C{col}_F{idx}"
+                lut.portmap['I0'] = f"R{row}C{col}_A{idx}"
+                lut.portmap['I1'] = f"R{row}C{col}_B{idx}"
+                lut.portmap['I2'] = f"R{row}C{col}_C{idx}"
+                lut.portmap['I3'] = f"R{row}C{col}_D{idx}"
+                mod.wires.update(lut.portmap.values())
+                mod.primitives[name] = lut
+                cst.cells[name] = f"R{row}C{col}[{int(idx) // 2}][{_sides[int(idx) % 2]}]"
             make_muxes(row, col, idx, db, mod)
+        elif typ == "ALU":
+            print(flags)
+            kind, = flags # ALU only have one flag
+            idx = int(idx)
+            name = f"R{row}C{col}_ALU_{idx}"
+            if kind in "012346789": # main ALU
+                alu = codegen.Primitive("ALU", name)
+                alu.params["ALU_MODE"] = kind
+                alu.portmap['SUM'] = f"R{row}C{col}_F{idx}"
+                alu.portmap['CIN'] = f"R{row}C{col}_CIN{idx}"
+                if idx != 5:
+                    alu.portmap['COUT'] = f"R{row}C{col}_CIN{idx+1}"
+                else:
+                    alu.portmap['COUT'] = f"R{row}C{col + 1}_CIN{0}"
+                if kind in "2346789":
+                    alu.portmap['I0'] = f"R{row}C{col}_A{idx}"
+                    alu.portmap['I1'] = f"R{row}C{col}_B{idx}"
+                    if kind in "28":
+                        alu.portmap['I3'] = f"R{row}C{col}_D{idx}"
+                elif kind == "0":
+                    alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
+                    alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
+                else:
+                    alu.portmap['I0'] = f"R{row}C{col}_A{idx}"
+                    alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
+                mod.wires.update(alu.portmap.values())
+                mod.primitives[name] = alu
+
         elif typ == "DFF":
+            print(flags)
             kind, = flags # DFF only have one flag
             idx = int(idx)
             port = dffmap[kind]
@@ -317,6 +368,8 @@ def main():
     parser.add_argument('-o', '--output', default='unpack.v')
     parser.add_argument('-c', '--config', default=None)
     parser.add_argument('-s', '--cst', default=None)
+    parser.add_argument('--noalu', metavar='N', type = int,
+                        default = 0, help = '0 - detect the ALU')
 
     args = parser.parse_args()
 
@@ -360,6 +413,10 @@ def main():
         #print(bels)
         #print(pips)
         #print(clock_pips)
+        if args.noalu:
+            removeALUs(bels)
+        else:
+            removeLUTs(bels)
         tile2verilog(row, col, bels, pips, clock_pips, mod, cfg, cst, db)
 
     with open(args.output, 'w') as f:
