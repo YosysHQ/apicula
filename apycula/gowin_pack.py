@@ -69,19 +69,19 @@ def place(db, tilemap, bels, cst):
         if typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
 
-            try:
+            if 'ALU_MODE' in parms.keys():
                 alu_bel = tiledata.bels[f"ALU{num}"]
                 mode = str(parms['ALU_MODE'])
                 for r_c in lutmap.values():
                     for r, c in r_c:
                         tile[r][c] = 0
-                try:
+                if mode in alu_bel.modes.keys():
                     bits = alu_bel.modes[mode]
-                except KeyError:
+                else:
                     bits = alu_bel.modes[str(int(mode, 2))]
                 for r, c in bits:
                     tile[r][c] = 1
-            except KeyError:
+            else:
                 init = str(parms['INIT'])
                 init = init*(16//len(init))
                 for bitnum, lutbit in enumerate(init[::-1]):
