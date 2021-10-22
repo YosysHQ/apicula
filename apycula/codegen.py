@@ -99,45 +99,31 @@ class Constraints:
 
 class DeviceConfig:
     def __init__(self, settings):
-        self.settings = settings
-
-    def write(self, f):
-        for key, val in self.settings.items():
-            f.write("set {} = {}\n".format(key, val))
+        self.text = "".join(['-' + sett + ' ' for sett in settings])
 
 class PnrOptions:
     def __init__(self, options):
-        self.options = options
-
-    def write(self, f):
-        for opt in self.options:
-            f.write("-{}\n".format(opt))
+        self.text = "".join(['-' + op + ' ' for op in options])
 
 class Pnr:
     def __init__(self):
         self.cst = None
         self.netlist = None
         self.cfg = None
-        self.device = None
         self.partnumber = None
         self.opt = None
-        self.outdir = None
 
     def write(self, f):
         template = """
-            add_file -cst {cst}
-            add_file -vm {netlist}
-            add_file -cfg {cfg}
-            set_option -device {device}
-            set_option -pn {partnumber}
-            set_option -out_dir {outdir}
-            run_pnr -opt {opt}
+            add_file -type cst {cst}
+            add_file -type netlist {netlist}
+            set_device {partnumber}
+            set_option {opt}
+            run pnr
             """
         f.write(template.format(
             cst=self.cst,
             netlist=self.netlist,
-            cfg=self.cfg,
-            device=self.device,
             partnumber=self.partnumber,
-            opt=self.opt,
-            outdir=self.outdir))
+            opt=self.opt.text + ' ' + self.cfg.text))
+

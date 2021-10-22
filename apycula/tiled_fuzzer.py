@@ -391,51 +391,44 @@ PnrResult = namedtuple('PnrResult', [
     ])
 
 def run_pnr(mod, constr, config):
-    cfg = codegen.DeviceConfig({
-        "JTAG regular_io": config.get('jtag', "true"),
-        "SSPI regular_io": config.get('sspi', "true"),
-        "MSPI regular_io": config.get('mspi', "true"),
-        "READY regular_io": config.get('ready', "true"),
-        "DONE regular_io": config.get('done', "true"),
-        "RECONFIG_N regular_io": config.get('reconfig', "true"),
-        "MODE regular_io": config.get('mode', "true"),
-        "CRC_check": "true",
-        "compress": "false",
-        "encryption": "false",
-        "security_bit_enable": "true",
-        "bsram_init_fuse_print": "true",
-        "download_speed": "250/100",
-        "spi_flash_address": "0x00FFF000",
-        "format": "txt",
-        "background_programming": "false",
-        "secure_mode": "false"})
+    cfg = codegen.DeviceConfig([
+        f"use_jtag_as_gpio {config.get('jtag', 1)}",
+        f"use_sspi_as_gpio {config.get('sspi', 1)}",
+        f"use_mspi_as_gpio {config.get('mspi', 1)}",
+        f"use_ready_as_gpio {config.get('ready', 1)}",
+        f"use_done_as_gpio {config.get('done', 1)}",
+        f"use_reconfign_as_gpio {config.get('reconfig', 1)}",
+        f"use_mode_as_gpio {config.get('mode', 1)}",
+        "bit_crc_check 1",
+        "bit_compress 0",
+        "bit_encrypt 0",
+        "bit_security 1",
+        "bit_incl_bsram_init 0",
+        "loading_rate 250/100",
+        "spi_flash_addr 0x00FFF000",
+        "bit_format txt",
+        "bg_programming off",
+        "secure_mode 0"])
 
-    opt = codegen.PnrOptions(["posp", "warning_all", "oc", "ibs"])
-            #"sdf", "oc", "ibs", "posp", "o",
-            #"warning_all", "timing", "reg_not_in_iob"])
+    opt = codegen.PnrOptions(["gen_posp 1", "show_all_warn 1", "gen_io_cst 1", "gen_ibis 1",
+        "ireg_in_iob 0", "oreg_in_iob 0", "ioreg_in_iob 0"])
 
     pnr = codegen.Pnr()
-    pnr.device = params['device']
     pnr.partnumber = params['partnumber']
+    pnr.opt = opt
+    pnr.cfg = cfg
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        pnr.outdir = tmpdir
         with open(tmpdir+"/top.v", "w") as f:
             mod.write(f)
         pnr.netlist = tmpdir+"/top.v"
         with open(tmpdir+"/top.cst", "w") as f:
             constr.write(f)
         pnr.cst = tmpdir+"/top.cst"
-        with open(tmpdir+"/device.cfg", "w") as f:
-            cfg.write(f)
-        pnr.cfg = tmpdir+"/device.cfg"
-        with open(tmpdir+"/pnr.cfg", "w") as f:
-            opt.write(f)
-        pnr.opt = tmpdir+"/pnr.cfg"
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
 
-        subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
+        subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
         #print(tmpdir); input()
         try:
             return PnrResult(
@@ -459,11 +452,11 @@ if __name__ == "__main__":
     with open(f"{device}.json") as f:
         dat = json.load(f)
 
-    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
-        tm = tm_h4x.read_tm(f, device)
+    #with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
+    #    tm = tm_h4x.read_tm(f, device)
 
     db = chipdb.from_fse(fse)
-    db.timing = tm
+    #db.timing = tm
     db.pinout = chipdb.xls_pinout(device)
     # pin <-> bank
     db.pin_bank = pindef.get_bank_pins(device, params['header'])

@@ -30,7 +30,7 @@ def readOneFile(f, fuselength):
     for i in range(tables):
         typ = rint(f, 4)
         size = rint(f, 4)
-        #print("Table type", typ, "of size", size)
+        #print(hex(f.tell()), " Table type", typ, "of size", size)
         if typ == 61:
             size2 = rint(f, 4)
             typn = "grid"
@@ -54,7 +54,7 @@ def readOneFile(f, fuselength):
                      0x24, 0x32, 0x33, 0x38, 0x3c, 0x40, 0x42, 0x44,
                      0x47, 0x49, 0x4b, 0x4d}:
             typn = "shortval"
-            t = readTable(f, size, 8, 2)
+            t = readTable(f, size, 14, 2)
         elif typ in {6, 0x45}:
             typn = "alonenode"
             t = readTable(f, size, 15, 2)
@@ -63,7 +63,7 @@ def readOneFile(f, fuselength):
             t = readTable(f, size, 17, 2)
         elif typ in {0x17, 0x18, 0x25, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f}:
             typn = "longval"
-            t = readTable(f, size, 22, 2)
+            t = readTable(f, size, 28, 2)
         elif typ == 4:
             typn = "const"
             t = readTable(f, size, 1, 2)
