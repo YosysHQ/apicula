@@ -422,7 +422,6 @@ def run_pnr(mod, constr, config):
     pnr.cfg = cfg
 
     with tempfile.TemporaryDirectory() as tmpdir:
-    if True:
         with open(tmpdir+"/top.v", "w") as f:
             mod.write(f)
         pnr.netlist = tmpdir+"/top.v"
