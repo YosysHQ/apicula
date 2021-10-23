@@ -22,7 +22,7 @@ def dff(mod, cst, row, col, clk=None):
     dff.portmap['Q'] = name+"_Q"
     mod.wires.update(dff.portmap.values())
     mod.primitives[name] = dff
-    cst.cells[name] = f"R{row}C{col}"
+    cst.cells[name] = (row, col, 0, 'A') # f"R{row}C{col}"
     return dff.portmap['CLK']
 
 def ibuf(mod, cst, loc, clk=None):
@@ -333,3 +333,4 @@ if __name__ == "__main__":
 
     with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)
+

@@ -86,7 +86,8 @@ class Constraints:
 
     def write(self, f):
         for key, val in self.cells.items():
-            f.write("INS_LOC \"{}\" {};\n".format(key, val))
+            row, col, side, lut = val
+            f.write("INS_LOC \"{}\" R{}C{}[{}][{}];\n".format(key, row, col, side, lut))
         for key, val in self.ports.items():
             f.write("IO_LOC \"{}\" {};\n".format(key, val))
         for key, val in self.attrs.items():

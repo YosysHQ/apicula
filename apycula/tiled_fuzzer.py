@@ -131,8 +131,8 @@ def dff(locations):
 
                     row = loc[0]+1
                     col = loc[1]+1
-                    cst.cells[lutname] = f"R{row}C{col}[{cls}][{side}]"
-                    cst.cells[name] = f"R{row}C{col}[{cls}][{side}]"
+                    cst.cells[lutname] = (row, col, cls, side)
+                    cst.cells[name] = (row, col, cls, side)
         yield Fuzzer(ttyp, mod, cst, {}, '')
 
 # illegal pin-attr combination for device
@@ -156,87 +156,88 @@ iobmap = {
 
 iostd_drive = {
             ""            : ["4", "8", "12"],
-            "LVTTL33"     : ["4", "8", "12", "16", "24"],
+#            "LVTTL33"     : ["4", "8", "12", "16", "24"],
             "LVCMOS33"    : ["4", "8", "12", "16", "24"],
-            "LVCMOS25"    : ["4", "8", "12", "16"],
+#            "LVCMOS25"    : ["4", "8", "12", "16"],
             "LVCMOS18"    : ["4", "8", "12"],
-            "LVCMOS15"    : ["4", "8"],
-            "LVCMOS12"    : ["4", "8"],
-            "SSTL25_I"    : ["8"],
-            "SSTL25_II"   : ["8"],
-            "SSTL33_I"    : ["8"],
-            "SSTL33_II"   : ["8"],
-            "SSTL18_I"    : ["8"],
-            "SSTL18_II"   : ["8"],
-            "SSTL15"      : ["8"],
-            "HSTL18_I"    : ["8"],
-            "HSTL18_II"   : ["8"],
-            "HSTL15_I"    : ["8"],
-            "PCI33"       : [],
+#            "LVCMOS15"    : ["4", "8"],
+#            "LVCMOS12"    : ["4", "8"],
+#            "SSTL25_I"    : ["8"],
+#            "SSTL25_II"   : ["8"],
+#            "SSTL33_I"    : ["8"],
+#            "SSTL33_II"   : ["8"],
+#            "SSTL18_I"    : ["8"],
+#            "SSTL18_II"   : ["8"],
+#            "SSTL15"      : ["8"],
+#            "HSTL18_I"    : ["8"],
+#            "HSTL18_II"   : ["8"],
+#            "HSTL15_I"    : ["8"],
+#            "PCI33"       : [],
         }
 iostd_open_drain = {
             ""            : ["ON", "OFF"],
-            "LVTTL33"     : ["ON", "OFF"],
+#            "LVTTL33"     : ["ON", "OFF"],
             "LVCMOS33"    : ["ON", "OFF"],
-            "LVCMOS25"    : ["ON", "OFF"],
+#            "LVCMOS25"    : ["ON", "OFF"],
             "LVCMOS18"    : ["ON", "OFF"],
-            "LVCMOS15"    : ["ON", "OFF"],
-            "LVCMOS12"    : ["ON", "OFF"],
-            "SSTL25_I"    : [],
-            "SSTL25_II"   : [],
-            "SSTL33_I"    : [],
-            "SSTL33_II"   : [],
-            "SSTL18_I"    : [],
-            "SSTL18_II"   : [],
-            "SSTL15"      : [],
-            "HSTL18_I"    : [],
-            "HSTL18_II"   : [],
-            "HSTL15_I"    : [],
-            "PCI33"       : [],
+#            "LVCMOS15"    : ["ON", "OFF"],
+#            "LVCMOS12"    : ["ON", "OFF"],
+#            "SSTL25_I"    : [],
+#            "SSTL25_II"   : [],
+#            "SSTL33_I"    : [],
+#            "SSTL33_II"   : [],
+#            "SSTL18_I"    : [],
+#            "SSTL18_II"   : [],
+#            "SSTL15"      : [],
+#            "HSTL18_I"    : [],
+#            "HSTL18_II"   : [],
+#            "HSTL15_I"    : [],
+#            "PCI33"       : [],
         }
 iostd_histeresis = {
             ""            : ["NONE", "H2L", "L2H", "HIGH"],
-            "LVTTL33"     : ["NONE", "H2L", "L2H", "HIGH"],
+#            "LVTTL33"     : ["NONE", "H2L", "L2H", "HIGH"],
             "LVCMOS33"    : ["NONE", "H2L", "L2H", "HIGH"],
-            "LVCMOS25"    : ["NONE", "H2L", "L2H", "HIGH"],
+#            "LVCMOS25"    : ["NONE", "H2L", "L2H", "HIGH"],
             "LVCMOS18"    : ["NONE", "H2L", "L2H", "HIGH"],
-            "LVCMOS15"    : ["NONE", "H2L", "L2H", "HIGH"],
-            "LVCMOS12"    : ["NONE", "H2L", "L2H", "HIGH"],
-            "SSTL25_I"    : [],
-            "SSTL25_II"   : [],
-            "SSTL33_I"    : [],
-            "SSTL33_II"   : [],
-            "SSTL18_I"    : [],
-            "SSTL18_II"   : [],
-            "SSTL15"      : [],
-            "HSTL18_I"    : [],
-            "HSTL18_II"   : [],
-            "HSTL15_I"    : [],
-            "PCI33"       : ["NONE", "H2L", "L2H", "HIGH"],
+#            "LVCMOS15"    : ["NONE", "H2L", "L2H", "HIGH"],
+#            "LVCMOS12"    : ["NONE", "H2L", "L2H", "HIGH"],
+#            "SSTL25_I"    : [],
+#            "SSTL25_II"   : [],
+#            "SSTL33_I"    : [],
+#            "SSTL33_II"   : [],
+#            "SSTL18_I"    : [],
+#            "SSTL18_II"   : [],
+#            "SSTL15"      : [],
+#            "HSTL18_I"    : [],
+#            "HSTL18_II"   : [],
+#            "HSTL15_I"    : [],
+#            "PCI33"       : ["NONE", "H2L", "L2H", "HIGH"],
         }
 iostd_pull_mode = {
             ""            : ["NONE", "UP", "DOWN", "KEEPER"],
-            "LVTTL33"     : ["NONE", "UP", "DOWN", "KEEPER"],
+#            "LVTTL33"     : ["NONE", "UP", "DOWN", "KEEPER"],
             "LVCMOS33"    : ["NONE", "UP", "DOWN", "KEEPER"],
-            "LVCMOS25"    : ["NONE", "UP", "DOWN", "KEEPER"],
+#            "LVCMOS25"    : ["NONE", "UP", "DOWN", "KEEPER"],
             "LVCMOS18"    : ["NONE", "UP", "DOWN", "KEEPER"],
-            "LVCMOS15"    : ["NONE", "UP", "DOWN", "KEEPER"],
-            "LVCMOS12"    : ["NONE", "UP", "DOWN", "KEEPER"],
-            "SSTL25_I"    : [],
-            "SSTL25_II"   : [],
-            "SSTL33_I"    : [],
-            "SSTL33_II"   : [],
-            "SSTL18_I"    : [],
-            "SSTL18_II"   : [],
-            "SSTL15"      : [],
-            "HSTL18_I"    : [],
-            "HSTL18_II"   : [],
-            "HSTL15_I"    : [],
-            "PCI33"       : [],
+#            "LVCMOS15"    : ["NONE", "UP", "DOWN", "KEEPER"],
+#            "LVCMOS12"    : ["NONE", "UP", "DOWN", "KEEPER"],
+#            "SSTL25_I"    : [],
+#            "SSTL25_II"   : [],
+#            "SSTL33_I"    : [],
+#            "SSTL33_II"   : [],
+#            "SSTL18_I"    : [],
+#            "SSTL18_II"   : [],
+#            "SSTL15"      : [],
+#            "HSTL18_I"    : [],
+#            "HSTL18_II"   : [],
+#            "HSTL15_I"    : [],
+#            "PCI33"       : [],
         }
 
-iostandards = ["", "LVCMOS18", "LVCMOS33", "LVCMOS25", "LVCMOS15", "LVCMOS12",
-      "SSTL25_I", "SSTL33_I", "SSTL15", "HSTL18_I", "PCI33"]
+iostandards = ["", "LVCMOS18"]
+#iostandards = ["", "LVCMOS18", "LVCMOS33", "LVCMOS25", "LVCMOS15", "LVCMOS12",
+#      "SSTL25_I", "SSTL33_I", "SSTL15", "HSTL18_I", "PCI33"]
 
 AttrValues = namedtuple('ModeAttr', [
     'allowed_modes',    # allowed modes for the attribute
@@ -384,7 +385,7 @@ def primitive_caused_err(name, err_code, log):
 # Result of the vendor router-packer run
 PnrResult = namedtuple('PnrResult', [
     'bitmap', 'hdr', 'ftr',
-    'posp',           # parsed Post-Place file
+    'constrs',        # constraints
     'config',         # device config
     'attrs',          # port attributes
     'errs'            # parsed log file
@@ -410,8 +411,10 @@ def run_pnr(mod, constr, config):
         "bg_programming off",
         "secure_mode 0"])
 
-    opt = codegen.PnrOptions(["gen_posp 1", "show_all_warn 1", "gen_io_cst 1", "gen_ibis 1",
-        "ireg_in_iob 0", "oreg_in_iob 0", "ioreg_in_iob 0", "timing_driven 0"])
+    opt = codegen.PnrOptions(["gen_posp 1", "gen_io_cst 1", "gen_ibis 1",
+        "ireg_in_iob 0", "oreg_in_iob 0", "ioreg_in_iob 0", "timing_driven 0",
+        "cst_warn_to_error 0"])
+    #"show_all_warn 1",
 
     pnr = codegen.Pnr()
     pnr.partnumber = params['partnumber']
@@ -419,6 +422,7 @@ def run_pnr(mod, constr, config):
     pnr.cfg = cfg
 
     with tempfile.TemporaryDirectory() as tmpdir:
+    if True:
         with open(tmpdir+"/top.v", "w") as f:
             mod.write(f)
         pnr.netlist = tmpdir+"/top.v"
@@ -433,7 +437,7 @@ def run_pnr(mod, constr, config):
         try:
             return PnrResult(
                     *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
-                    list(read_posp(tmpdir+"/impl/pnr/top.posp")),
+                    constr,
                     config, constr.attrs,
                     read_err_log(tmpdir+"/impl/pnr/top.log"))
         except FileNotFoundError:
@@ -452,11 +456,11 @@ if __name__ == "__main__":
     with open(f"{device}.json") as f:
         dat = json.load(f)
 
-    #with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
-    #    tm = tm_h4x.read_tm(f, device)
+    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
+        tm = tm_h4x.read_tm(f, device)
 
     db = chipdb.from_fse(fse)
-    #db.timing = tm
+    db.timing = tm
     db.pinout = chipdb.xls_pinout(device)
     # pin <-> bank
     db.pin_bank = pindef.get_bank_pins(device, params['header'])
@@ -526,11 +530,17 @@ if __name__ == "__main__":
         seen = {}
         diff = pnr.bitmap ^ pnr_empty.bitmap
         bm = fuse_h4x.tile_bitmap(fse, diff)
-        for cst_type, name, *info in pnr.posp:
+        placement = chain(
+           [("cst", name, info) for name, info in pnr.constrs.cells.items()],
+           [("place", name, pin_re.match(info).groups()) for name, info in pnr.constrs.ports.items()]
+           )
+        for cst_type, name, info in placement:
+            print(info)
             if primitive_caused_err(name, "CT1108", pnr.errs) or \
                 primitive_caused_err(name, "CT1117", pnr.errs) or \
                 primitive_caused_err(name, "PR2016", pnr.errs) or \
-                primitive_caused_err(name, "PR2017", pnr.errs):
+                primitive_caused_err(name, "PR2017", pnr.errs) or \
+                primitive_caused_err(name, "CT1005", pnr.errs):
                   raise Exception(f"Placement conflict (PR201[67]):{name} or CT1108/CT1117")
 
             bel_type, cell_type = type_re.match(name).groups()
@@ -540,7 +550,8 @@ if __name__ == "__main__":
                 row = row-1
                 col = col-1
             elif cst_type == "place":
-                side, num, pin = info
+                side, numx, pin = info
+                num = int(numx)
                 if side == 'T':
                     row = 0
                     col = num-1
