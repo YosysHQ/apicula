@@ -338,7 +338,7 @@ def dualmode(ttyp):
     for pin in dualmode_pins:
         mod = codegen.Module()
         cst = codegen.Constraints()
-        cfg = {pin: 'false'}
+        cfg = {pin: 0}
         # modules with different ttyp can be combined, so in theory it could happen
         # that there is an IOB in the module, which claims the dual-purpose pin.
         # P&R will not be able to place it and the fuzzling result will be misleading.
@@ -411,7 +411,7 @@ def run_pnr(mod, constr, config):
         "secure_mode 0"])
 
     opt = codegen.PnrOptions(["gen_posp 1", "show_all_warn 1", "gen_io_cst 1", "gen_ibis 1",
-        "ireg_in_iob 0", "oreg_in_iob 0", "ioreg_in_iob 0"])
+        "ireg_in_iob 0", "oreg_in_iob 0", "ioreg_in_iob 0", "timing_driven 0"])
 
     pnr = codegen.Pnr()
     pnr.partnumber = params['partnumber']
