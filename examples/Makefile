@@ -83,3 +83,4 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 
 %-honeycomb-unpacked.v: %-honeycomb.fs
 	gowin_unpack -d GW1NS-2 -o $@ $<
+
