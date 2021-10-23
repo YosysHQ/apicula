@@ -4,7 +4,7 @@ import json
 import struct
 
 tc = 8 # number of timing classes
-chunklen = 0x3ab8 # length of each class
+chunklen = 15552 # length of each class
 
 def to_float(s):
     return struct.unpack('f', s)[0]
@@ -254,14 +254,14 @@ offsets = {
     0x7cc: parse_pll,
     0x81c: parse_dll,
     0x8bc: parse_bram,
-    0xc4c: parse_dsp,
-    0x3638: parse_fanout,
-    0x36d8: parse_glbsrc,
-    0x37e8: parse_hclk,
-    0x3548: parse_iodelay,
-    0x3098: parse_io,
-    0x2e8c: parse_iregoreg,
-    0x35b8: parse_wire,
+    0xc8c: parse_dsp,
+    0x381c: parse_fanout,
+    0x38bc: parse_glbsrc,
+    0x39cc: parse_hclk,
+    0x3728: parse_iodelay,
+    0x3278: parse_io,
+    0x306c: parse_iregoreg,
+    0x379c: parse_wire,
 }
 dspoffsets = {
     0x0: 'mult', #DSP
