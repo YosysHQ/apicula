@@ -423,6 +423,7 @@ def run_pnr(mod, constr, config):
     #"show_all_warn" : "1",
 
     pnr = codegen.Pnr()
+    pnr.device = device
     pnr.partnumber = params['partnumber']
     pnr.opt = opt
     pnr.cfg = cfg

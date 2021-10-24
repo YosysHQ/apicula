@@ -119,6 +119,7 @@ class Pnr:
         self.cst = None
         self.netlist = None
         self.cfg = None
+        self.device = None
         self.partnumber = None
         self.opt = None
 
@@ -126,13 +127,14 @@ class Pnr:
         template = """
             add_file -type cst {cst}
             add_file -type netlist {netlist}
-            set_device {partnumber}
+            set_device -name {device} {partnumber}
             set_option {opt}
             run pnr
             """
         f.write(template.format(
             cst=self.cst,
             netlist=self.netlist,
+            device=self.device,
             partnumber=self.partnumber,
             opt=self.opt.text + self.cfg.text))
 
