@@ -334,12 +334,12 @@ def route_bits(db, row, col):
     _route_mem.setdefault((row, col), bits)
     return bits
 
-dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'mode'}
+dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'mode', 'i2c'}
 def dualmode(ttyp):
     for pin in dualmode_pins:
         mod = codegen.Module()
         cst = codegen.Constraints()
-        cfg = {pin: 0}
+        cfg = {pin: "0"}
         # modules with different ttyp can be combined, so in theory it could happen
         # that there is an IOB in the module, which claims the dual-purpose pin.
         # P&R will not be able to place it and the fuzzling result will be misleading.
@@ -392,29 +392,35 @@ PnrResult = namedtuple('PnrResult', [
     ])
 
 def run_pnr(mod, constr, config):
-    cfg = codegen.DeviceConfig([
-        f"use_jtag_as_gpio {config.get('jtag', 1)}",
-        f"use_sspi_as_gpio {config.get('sspi', 1)}",
-        f"use_mspi_as_gpio {config.get('mspi', 1)}",
-        f"use_ready_as_gpio {config.get('ready', 1)}",
-        f"use_done_as_gpio {config.get('done', 1)}",
-        f"use_reconfign_as_gpio {config.get('reconfig', 1)}",
-        f"use_mode_as_gpio {config.get('mode', 1)}",
-        "bit_crc_check 1",
-        "bit_compress 0",
-        "bit_encrypt 0",
-        "bit_security 1",
-        "bit_incl_bsram_init 0",
-        "loading_rate 250/100",
-        "spi_flash_addr 0x00FFF000",
-        "bit_format txt",
-        "bg_programming off",
-        "secure_mode 0"])
+    cfg = codegen.DeviceConfig({
+        "use_jtag_as_gpio"      : config.get('jtag', "1"),
+        "use_sspi_as_gpio"      : config.get('sspi', "1"),
+        "use_mspi_as_gpio"      : config.get('mspi', "1"),
+        "use_ready_as_gpio"     : config.get('ready', "1"),
+        "use_done_as_gpio"      : config.get('done', "1"),
+        "use_reconfign_as_gpio" : config.get('reconfig', "1"),
+        "use_mode_as_gpio"      : config.get('mode', "1"),
+        "bit_crc_check"         : "1",
+        "bit_compress"          : "0",
+        "bit_encrypt"           : "0",
+        "bit_security"          : "1",
+        "bit_incl_bsram_init"   : "0",
+        "loading_rate"          : "250/100",
+        "spi_flash_addr"        : "0x00FFF000",
+        "bit_format"            : "txt",
+        "bg_programming"        : "off",
+        "secure_mode"           : "0"})
 
-    opt = codegen.PnrOptions(["gen_posp 1", "gen_io_cst 1", "gen_ibis 1",
-        "ireg_in_iob 0", "oreg_in_iob 0", "ioreg_in_iob 0", "timing_driven 0",
-        "cst_warn_to_error 0"])
-    #"show_all_warn 1",
+    opt = codegen.PnrOptions({
+        "gen_posp"          : "1",
+        "gen_io_cst"        : "1",
+        "gen_ibis"          : "1",
+        "ireg_in_iob"       : "0",
+        "oreg_in_iob"       : "0",
+        "ioreg_in_iob"      : "0",
+        "timing_driven"     : "0",
+        "cst_warn_to_error" : "0"})
+    #"show_all_warn" : "1",
 
     pnr = codegen.Pnr()
     pnr.partnumber = params['partnumber']
@@ -534,7 +540,6 @@ if __name__ == "__main__":
            [("place", name, pin_re.match(info).groups()) for name, info in pnr.constrs.ports.items()]
            )
         for cst_type, name, info in placement:
-            print(info)
             if primitive_caused_err(name, "CT1108", pnr.errs) or \
                 primitive_caused_err(name, "CT1117", pnr.errs) or \
                 primitive_caused_err(name, "PR2016", pnr.errs) or \

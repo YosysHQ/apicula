@@ -100,11 +100,19 @@ class Constraints:
 
 class DeviceConfig:
     def __init__(self, settings):
-        self.text = "".join(['-' + sett + ' ' for sett in settings])
+        self.settings = settings
+
+    @property
+    def text(self):
+        return "".join([' -' + name + ' ' + val for name, val in self.settings.items()])
 
 class PnrOptions:
     def __init__(self, options):
-        self.text = "".join(['-' + op + ' ' for op in options])
+        self.options = options
+
+    @property
+    def text(self):
+        return "".join([' -' + name + ' ' + val for name, val in self.options.items()])
 
 class Pnr:
     def __init__(self):
@@ -126,5 +134,5 @@ class Pnr:
             cst=self.cst,
             netlist=self.netlist,
             partnumber=self.partnumber,
-            opt=self.opt.text + ' ' + self.cfg.text))
+            opt=self.opt.text + self.cfg.text))
 

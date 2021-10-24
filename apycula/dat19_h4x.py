@@ -344,7 +344,8 @@ for _ in range(grid_h-2, 150):
     pos += 200
 print()
 
-assert pos == 0x4b6c4
+#assert pos == 0x4b6c4
+pos = 0x55d2c
 pos = print_u16(['IobufAIn'], pos)
 pos = print_u16(['IobufAOut'], pos)
 pos = print_u16(['IobufAOE'], pos)
