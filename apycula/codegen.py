@@ -133,8 +133,8 @@ class Pnr:
             """
 
         device_desc = self.partnumber
-        if self.device == 'GW1N-9':
-            device_desc = f'-name GW1N-9 {device_desc}'
+        if self.device in ['GW1N-9', 'GW1N-4']:
+            device_desc = f'-name {self.device} {device_desc}'
 
         f.write(template.format(
             cst=self.cst,
