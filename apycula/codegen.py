@@ -127,14 +127,19 @@ class Pnr:
         template = """
             add_file -type cst {cst}
             add_file -type netlist {netlist}
-            set_device -name {device} {partnumber}
+            set_device {device_desc}
             set_option {opt}
             run pnr
             """
+
+        device_desc = self.partnumber
+        if self.device == 'GW1N-9':
+            device_desc = f'-name GW1N-9 {device_desc}'
+
         f.write(template.format(
             cst=self.cst,
             netlist=self.netlist,
             device=self.device,
-            partnumber=self.partnumber,
+            device_desc=device_desc,
             opt=self.opt.text + self.cfg.text))
 
