@@ -9,8 +9,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build gw1n-1 chipdb
       run: |
-        docker pull yixiaobu/apicula:latest
-        docker run -v $(pwd):/usr/src/apicula yixiaobu/apicula:latest make apycula/GW1N-1.pickle
+        docker pull pepijndevos/apicula:1.9.8
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1N-1.pickle
     - name: Archive artifact
       uses: actions/upload-artifact@v2
       with:
@@ -27,8 +27,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build gw1n-9 chipdb
       run: |
-        docker pull yixiaobu/apicula:latest
-        docker run -v $(pwd):/usr/src/apicula yixiaobu/apicula:latest make apycula/GW1N-9.pickle
+        docker pull pepijndevos/apicula:1.9.8
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1N-9.pickle
     - name: Archive artifact
       uses: actions/upload-artifact@v2
       with:
@@ -45,8 +45,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build gw1n-4 chipdb
       run: |
-        docker pull yixiaobu/apicula:latest
-        docker run -v $(pwd):/usr/src/apicula yixiaobu/apicula:latest make apycula/GW1N-4.pickle
+        docker pull pepijndevos/apicula:1.9.8
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1N-4.pickle
     - name: Archive artifact
       uses: actions/upload-artifact@v2
       with:
@@ -63,8 +63,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build gw1ns-2 chipdb
       run: |
-        docker pull yixiaobu/apicula:latest
-        docker run -v $(pwd):/usr/src/apicula yixiaobu/apicula:latest make apycula/GW1NS-2.pickle
+        docker pull pepijndevos/apicula:1.9.8
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1NS-2.pickle
     - name: Archive artifact
       uses: actions/upload-artifact@v2
       with:
@@ -115,13 +115,13 @@ jobs:
       with:
           name: python-dist
           path: dist
-   #- name: Publish to Pypi
-   #   if: startsWith(github.ref, 'refs/tags')
-   #   env:
-   #     TWINE_USERNAME: __token__
-   #     TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-   #   run: |
-   #     twine upload dist/*
+    - name: Publish to Pypi
+       if: startsWith(github.ref, 'refs/tags')
+       env:
+         TWINE_USERNAME: __token__
+         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+       run: |
+         twine upload dist/*
 
   example:
     runs-on: ubuntu-latest
