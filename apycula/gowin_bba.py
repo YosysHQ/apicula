@@ -148,7 +148,6 @@ def write_timing(b, timing):
     b.ref(blk)
 
 def write_partnumber_packages(b, db):
-    import ipdb; ipdb.set_trace()
     with b.block("partnumber_packages") as blk:
         for partnumber, pkg_rec in db.packages.items():
             pkg, device = pkg_rec
