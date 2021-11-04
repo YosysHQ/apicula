@@ -47,11 +47,12 @@ with open(f"{tiled_fuzzer.device}.json") as f:
 with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
     db = pickle.load(f)
 
+# init pindef
+pindef.all_packages(tiled_fuzzer.device)
 
 clock_pins = pindef.get_clock_locs(
         tiled_fuzzer.device,
-        tiled_fuzzer.params['package'],
-        header=tiled_fuzzer.params['header'])
+        tiled_fuzzer.params['package'])
 # pins appear to be differential with T/C denoting true/complementary
 true_pins = [p[0] for p in clock_pins if "GCLKT" in p[1]]
 

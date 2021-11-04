@@ -8,7 +8,7 @@ from collections import Counter
 from apycula import chipdb
 
 class Bba(object):
-    
+
     def __init__(self, file):
         self.file = file
         self.block_idx = Counter()
@@ -20,7 +20,7 @@ class Bba(object):
 
     def str(self, val, sep="|"):
         self.file.write(f"str {sep}{val}{sep}\n")
-    
+
     @contextmanager
     def block(self, prefix="block"):
         idx = self.block_idx[prefix]
@@ -147,6 +147,17 @@ def write_timing(b, timing):
     b.u32(len(timing))
     b.ref(blk)
 
+def write_partnumber_packages(b, db):
+    import ipdb; ipdb.set_trace()
+    with b.block("partnumber_packages") as blk:
+        for partnumber, pkg_rec in db.packages.items():
+            pkg, device = pkg_rec
+            b.u32(id_string(partnumber))
+            b.u32(id_string(pkg))
+            b.u32(id_string(device))
+    b.u32(len(db.packages))
+    b.ref(blk)
+
 pin_re = re.compile(r"IO([TBRL])(\d+)([A-Z])")
 def iob2bel(db, name):
     banks = {'T': [(1, n) for n in range(1, db.cols)],
@@ -189,6 +200,7 @@ def write_chipdb(db, f, device):
         write_grid(b, db.grid)
         write_global_aliases(b, db)
         write_timing(b, db.timing)
+        write_partnumber_packages(b, db)
         write_pinout(b, db)
         id_strings(b)
     b.post(f'EmbeddedFile chipdb_file_{cdev}("gowin/chipdb-{device}.bin", {blk});')
