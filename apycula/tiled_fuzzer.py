@@ -49,7 +49,6 @@ params = {
     },
     "GW1N-1": {
         "package": "LQFP144",
-        "header": 1, # stupid note in excel
         "device": "GW1N-1-LQFP144-6",
         "partnumber": "GW1N-LV1LQ144C6/I5",
     },
@@ -461,7 +460,7 @@ if __name__ == "__main__":
 
     db = chipdb.from_fse(fse)
     db.timing = tm
-    db.packages, db.pinout, db.pin_bank = chipdb.xls_pinout(device)
+    db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
 
     corners = [
         (0, 0, fse['header']['grid'][61][0][0]),

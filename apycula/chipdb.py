@@ -249,7 +249,7 @@ def get_pins(device):
     return (pkgs, res, res_bank_pins)
 
 # returns ({partnumber: (package, device)}, {pins}, {bank_pins})
-def xls_pinout(device):
+def json_pinout(device):
     if device == "GW1N-1":
         pkgs, pins, bank_pins = get_pins("GW1N-1")
         return (pkgs, {
