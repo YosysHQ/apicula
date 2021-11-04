@@ -225,6 +225,26 @@ def header_footer(db, bs, compress):
     # same task for line 2 in footer
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
+def dualmode_pins(db, tilemap, args):
+    bits = set()
+    if args.jtag_as_gpio == 1:
+        bits.update(db.grid[0][0].bels['CFG'].flags['JTAG'])
+    if args.sspi_as_gpio == 1:
+        bits.update(db.grid[0][0].bels['CFG'].flags['SSPI'])
+    if args.mspi_as_gpio == 1:
+        bits.update(db.grid[0][0].bels['CFG'].flags['MSPI'])
+    if args.ready_as_gpio == 1:
+        bits.update(db.grid[0][0].bels['CFG'].flags['READY'])
+    if args.done_as_gpio == 1:
+        bits.update(db.grid[0][0].bels['CFG'].flags['DONE'])
+    if args.reconfign_as_gpio == 1:
+        bits.update(db.grid[0][0].bels['CFG'].flags['RECONFIG'])
+
+    if bits:
+        tile = tilemap[(0, 0)]
+        for row, col in bits:
+            tile[row][col] = 1
+
 def main():
     parser = argparse.ArgumentParser(description='Pack Gowin bitstream')
     parser.add_argument('netlist')
@@ -232,6 +252,12 @@ def main():
     parser.add_argument('-o', '--output', default='pack.fs')
     parser.add_argument('-c', '--compress', default=False, action='store_true')
     parser.add_argument('-s', '--cst', default=None)
+    parser.add_argument('--jtag_as_gpio', metavar = 'N', type = int, default = 0)
+    parser.add_argument('--sspi_as_gpio', metavar = 'N', type = int, default = 0)
+    parser.add_argument('--mspi_as_gpio', metavar = 'N', type = int, default = 0)
+    parser.add_argument('--ready_as_gpio', metavar = 'N', type = int, default = 0)
+    parser.add_argument('--done_as_gpio', metavar = 'N', type = int, default = 0)
+    parser.add_argument('--reconfign_as_gpio', metavar = 'N', type = int, default = 0)
     parser.add_argument('--png')
 
     args = parser.parse_args()
@@ -254,6 +280,7 @@ def main():
     place(db, tilemap, bels, cst)
     pips = get_pips(pnr)
     route(db, tilemap, pips)
+    dualmode_pins(db, tilemap, args)
     res = chipdb.fuse_bitmap(db, tilemap)
     header_footer(db, res, args.compress)
     if args.png:
