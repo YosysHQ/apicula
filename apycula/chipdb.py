@@ -70,7 +70,7 @@ class Device:
     # a grid of tiles
     grid: List[List[Tile]] = field(default_factory=list)
     timing: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
-    packages: Dict[str, Tuple[str, str]] = field(default_factory=dict)
+    packages: Dict[str, Tuple[str, str, str]] = field(default_factory=dict)
     pinout: Dict[str, Dict[str, Dict[str, str]]] = field(default_factory=dict)
     pin_bank: Dict[str, int] = field(default_factory = dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
@@ -248,7 +248,7 @@ def get_pins(device):
         res_bank_pins.update(pindef.get_bank_pins(device, pkg))
     return (pkgs, res, res_bank_pins)
 
-# returns ({partnumber: (package, device)}, {pins}, {bank_pins})
+# returns ({partnumber: (package, device, speed)}, {pins}, {bank_pins})
 def json_pinout(device):
     if device == "GW1N-1":
         pkgs, pins, bank_pins = get_pins("GW1N-1")

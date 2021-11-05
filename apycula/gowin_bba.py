@@ -150,10 +150,11 @@ def write_timing(b, timing):
 def write_partnumber_packages(b, db):
     with b.block("partnumber_packages") as blk:
         for partnumber, pkg_rec in db.packages.items():
-            pkg, device = pkg_rec
+            pkg, device, speed = pkg_rec
             b.u32(id_string(partnumber))
             b.u32(id_string(pkg))
             b.u32(id_string(device))
+            b.u32(id_string(speed))
     b.u32(len(db.packages))
     b.ref(blk)
 

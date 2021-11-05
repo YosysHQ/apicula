@@ -133,8 +133,7 @@ def place(db, tilemap, bels, cst):
                     continue
                 if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
                     if iostd and iostd != flag_name_val[1]:
-                        raise Exception("Different I/O modes for the same bank were specified: " +
-                                f"{iostd} and {flag_name_val[1]}")
+                        raise Exception(f"Different I/O modes for the same bank {bank} were specified: {iostd} and {flag_name_val[1]}")
                     iostd = iostd_alias.get(flag_name_val[1], flag_name_val[1])
 
             # first used pin sets bank's iostd

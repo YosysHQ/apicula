@@ -33,11 +33,20 @@ def get_package(device, package, special_pins):
         return [pin for pin in pins if 'CFG' not in pin.keys()]
     return pins
 
-# {partnumber : (pkg, device)}
+# {partnumber : (pkg, device, speed)}
 def all_packages(device):
     gowinhome = os.getenv("GOWINHOME")
     if not gowinhome:
         raise Exception("GOWINHOME not set")
+    # {package: speed} vendor file
+    speeds = {}
+    with open(f"{gowinhome}/IDE/data/device/device_info.csv", mode='r') as csv_file:
+        csv_reader = csv.DictReader(csv_file, fieldnames =
+            ["unused_id", "partnumber", "series", "device", "package", "voltage", "speed"])
+        for row in csv_reader:
+            if row['device'] != device:
+               continue
+            speeds.update({row['partnumber']: row['speed']})
     global _pindef_index
     _pindef_index = {}
     res = {}
@@ -47,7 +56,7 @@ def all_packages(device):
         for row in csv_reader:
             if row['device'] != device:
                continue
-            res[row['partnumber']] = (row['package'], device)
+            res[row['partnumber']] = (row['package'], device, speeds[row['partnumber']])
             _pindef_index[(row['device'], row['package'])] = \
                     f"{gowinhome}/IDE/data/device/{row['filename']}"
     return res
