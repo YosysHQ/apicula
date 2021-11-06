@@ -33,26 +33,22 @@ device = sys.argv[1]
 
 params = {
     "GW1NS-2": {
-        "package": "LQ144",
-        "header": 0,
+        "package": "LQFP144",
         "device": "GW1NS-2C-LQ144-5",
         "partnumber": "GW1NS-UX2CLQ144C5/I4",
     },
     "GW1N-9": {
-        "package": "PG256",
-        "header": 0,
+        "package": "PBGA256",
         "device": "GW1N-9-PBGA256-6",
         "partnumber": "GW1N-LV9PG256C6/I5",
     },
     "GW1N-4": {
-        "package": "PG256",
-        "header": 0,
+        "package": "PBGA256",
         "device": "GW1N-4-PBGA256-6",
         "partnumber": "GW1N-LV4PG256C6/I5",
     },
     "GW1N-1": {
-        "package": "LQ144",
-        "header": 1, # stupid note in excel
+        "package": "LQFP144",
         "device": "GW1N-1-LQFP144-6",
         "partnumber": "GW1N-LV1LQ144C6/I5",
     },
@@ -464,9 +460,7 @@ if __name__ == "__main__":
 
     db = chipdb.from_fse(fse)
     db.timing = tm
-    db.pinout = chipdb.xls_pinout(device)
-    # pin <-> bank
-    db.pin_bank = pindef.get_bank_pins(device, params['header'])
+    db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
 
     corners = [
         (0, 0, fse['header']['grid'][61][0][0]),
@@ -480,7 +474,7 @@ if __name__ == "__main__":
         for col, typ in enumerate(row_dat):
             locations.setdefault(typ, []).append((row, col))
 
-    pin_names = pindef.get_locs(device, params['package'], True, params['header'])
+    pin_names = pindef.get_locs(device, params['package'], True)
     edges = {'T': fse['header']['grid'][61][0],
              'B': fse['header']['grid'][61][-1],
              'L': [row[0] for row in fse['header']['grid'][61]],

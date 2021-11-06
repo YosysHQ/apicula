@@ -70,6 +70,7 @@ class Device:
     # a grid of tiles
     grid: List[List[Tile]] = field(default_factory=list)
     timing: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
+    packages: Dict[str, Tuple[str, str, str]] = field(default_factory=dict)
     pinout: Dict[str, Dict[str, Dict[str, str]]] = field(default_factory=dict)
     pin_bank: Dict[str, int] = field(default_factory = dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
@@ -234,51 +235,57 @@ def from_fse(fse):
     return dev
 
 def get_pins(device):
-    if device == "GW1N-1":
-        header = 1
-        start = 5
-    elif device == "GW1N-4":
-        header = 0
-        start = 7
-    elif device == "GW1N-9":
-        header = 0
-        start = 7
-    elif device == "GW1NR-9":
-        header = 1
-        start = 7
-    elif device == "GW1NS-2":
-        header = 0
-        start = 7
-    elif device == "GW1NS-2C":
-        header = 0
-        start = 7
-    else:
+    if device not in {"GW1N-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1NS-2", "GW1NS-2C"}:
         raise Exception("unsupported device")
-    pkgs = pindef.all_packages(device, start, header)
+    pkgs = pindef.all_packages(device)
     res = {}
-    for pkg in pkgs:
-        res[pkg] = pindef.get_pin_locs(device, pkg, pindef.VeryTrue, header)
-    return res
+    res_bank_pins = {}
+    for pkg_rec in pkgs.values():
+        pkg = pkg_rec[0]
+        if pkg in res:
+            continue
+        res[pkg] = pindef.get_pin_locs(device, pkg, pindef.VeryTrue)
+        res_bank_pins.update(pindef.get_bank_pins(device, pkg))
+    return (pkgs, res, res_bank_pins)
 
-def xls_pinout(family):
-    if family == "GW1N-1":
-        return {
-            "GW1N-1": get_pins("GW1N-1"),
-        }
-    elif family == "GW1N-9":
-        return {
-            "GW1N-9": get_pins("GW1N-9"),
-            "GW1NR-9": get_pins("GW1NR-9"),
-        }
-    elif family == "GW1N-4":
-        return {
-            "GW1N-4": get_pins("GW1N-4"),
-        }
-    elif family == "GW1NS-2":
-        return {
-            "GW1NS-2": get_pins("GW1NS-2"),
-            "GW1NS-2C": get_pins("GW1NS-2C"),
-        }
+# returns ({partnumber: (package, device, speed)}, {pins}, {bank_pins})
+def json_pinout(device):
+    if device == "GW1N-1":
+        pkgs, pins, bank_pins = get_pins("GW1N-1")
+        return (pkgs, {
+            "GW1N-1": pins
+        }, bank_pins)
+    elif device == "GW1N-4":
+        pkgs, pins, bank_pins = get_pins("GW1N-4")
+        return (pkgs, {
+            "GW1N-4": pins
+        }, bank_pins)
+    elif device == "GW1N-9":
+        pkgs, pins, bank_pins = get_pins("GW1N-9")
+        pkgs_r, pins_r, bank_pins_r = get_pins("GW1NR-9")
+        res = {}
+        res.update(pkgs)
+        res.update(pkgs_r)
+        res_bank_pins = {}
+        res_bank_pins.update(bank_pins)
+        res_bank_pins.update(bank_pins_r)
+        return (res, {
+            "GW1N-9": pins,
+            "GW1NR-9": pins_r
+        }, res_bank_pins)
+    elif device == "GW1NS-2":
+        pkgs, pins, bank_pins = get_pins("GW1NS-2")
+        pkgs_c, pins_c, bank_pins_c = get_pins("GW1NS-2C")
+        res = {}
+        res.update(pkgs)
+        res.update(pkgs_c)
+        res_bank_pins = {}
+        res_bank_pins.update(bank_pins)
+        res_bank_pins.update(bank_pins_c)
+        return (res, {
+            "GW1NS-2": pins,
+            "GW1NS-2C": pins_c
+        }, res_bank_pins)
     else:
         raise Exception("unsupported device")
 
@@ -487,7 +494,11 @@ def loc2bank(db, row, col):
     """
     bank =  db.corners.get((row, col))
     if bank == None:
-        # XXX do something with this 'A'
-        bank = db.pin_bank[loc2pin_name(db, row, col) + 'A']
+        name = loc2pin_name(db, row, col)
+        nameA = name + 'A'
+        if nameA in db.pin_bank:
+            bank = db.pin_bank[nameA]
+        else:
+            bank = db.pin_bank[name + 'B']
     return bank
 

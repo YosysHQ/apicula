@@ -18,7 +18,7 @@ clean:
 	gowin_pack -d GW1N-9 -o $@ $<
 
 %-tec0117.json: %-tec0117-synth.json tec0117.cst
-	$(NEXTPNR) --json $< --write $@ --device GW1NR-UV9QN881C6/I5 --cst tec0117.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --cst tec0117.cst
 
 %-runber.fs: %-runber.json
 	gowin_pack -d GW1N-4 -o $@ $<
