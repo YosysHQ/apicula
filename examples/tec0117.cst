@@ -5,13 +5,9 @@
 //Part Number: GW1N-LV1QN48C6/I5
 //Created Time: Sun Dec 15 11:40:09 2019
 
-IO_LOC "clk" 35;
-IO_LOC "rst" 77;
-IO_LOC "led[0]" 86;
-IO_LOC "led[1]" 85;
-IO_LOC "led[2]" 84;
-IO_LOC "led[3]" 83;
-IO_LOC "led[4]" 82;
-IO_LOC "led[5]" 81;
-IO_LOC "led[6]" 80;
-IO_LOC "led[7]" 79;
+IO_LOC "clk" 98;
+IO_LOC "rst" 27;
+IO_LOC "led[0]" 29;
+IO_LOC "led[1]" 30;
+IO_LOC "led[2]" 32;
+IO_LOC "led[3]" 34;

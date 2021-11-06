@@ -194,7 +194,7 @@ def write_chipdb(db, f, device):
     b.pre('NEXTPNR_NAMESPACE_BEGIN')
     with b.block(f'chipdb_{cdev}') as blk:
         b.str(device)
-        b.u32(0) # version
+        b.u32(1) # version
         b.u16(db.rows)
         b.u16(db.cols)
         write_grid(b, db.grid)
