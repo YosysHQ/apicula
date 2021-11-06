@@ -49,7 +49,7 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 	$(YOSYS) -p "synth_gowin -json $@" $^
 
 %-tec0117-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=4 -p "synth_gowin -json $@" $^
+	$(YOSYS) -D LEDS_NR=8 -p "synth_gowin -json $@" $^
 
 %-runber-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=8 -p "synth_gowin -json $@" $^
