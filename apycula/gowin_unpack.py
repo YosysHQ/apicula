@@ -14,7 +14,7 @@ from apycula.wirenames import wirenames
 
 # bank iostandards
 # XXX default io standard may be board-dependent!
-_banks = {0: "LVCMOS18", 1: "LVCMOS18", 2: "LVCMOS18", 3: "LVCMOS18"}
+_banks = {'0': "LVCMOS18", '1': "LVCMOS18", '2': "LVCMOS18", '3': "LVCMOS18"}
 
 # for a given mode returns a mask of zero bits
 def zero_bits(mode, all_modes):
