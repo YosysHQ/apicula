@@ -12,7 +12,7 @@ module TOP
 	output	[5:0]	LCD_G,
 	output	[4:0]	LCD_B,
 
-	output [7:5] led
+	output [2:0] led
 
 );
 
@@ -35,9 +35,9 @@ module TOP
 
 assign CLK_SYS = clk;
 assign CLK_PIX = clk;
-assign led[5] = LED_R;
-assign led[6] = LED_G;
-assign led[7] = LED_B;
+assign led[0] = LED_R;
+assign led[1] = LED_G;
+assign led[2] = LED_B;
 
 	VGAMod	D1
 	(
