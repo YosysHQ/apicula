@@ -127,9 +127,6 @@ def center_muxes(ct, rows, cols):
 
     pnr = tiled_fuzzer.run_pnr(mod, cst, {})
 
-    gb_sources = {}
-    gb_destinations = {}
-
     modules = []
     constrs = []
     for i, pin in enumerate(true_pins):
@@ -144,17 +141,23 @@ def center_muxes(ct, rows, cols):
 
     pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
 
+    gb_sources = {}
+    gb_destinations = {}
+    src_seen = set()
+    dst_seen = set()
+
     base = pnr.bitmap
     for i, (bs_sweep, *_) in enumerate(pnr_res):
         pin = true_pins[i]
         new = base ^ bs_sweep
-        base = bs_sweep
         tiles = chipdb.tile_bitmap(db, new)
 
         try:
             _, _, clk_pips = gowin_unpack.parse_tile_(db, ct[0], ct[1], tiles[ct], noalias=True)
-            dest = list(clk_pips.keys())[0]
-            src = list(clk_pips.values())[0]
+            dest, = set(clk_pips.keys()) - dst_seen
+            dst_seen.add(dest)
+            src, = set(clk_pips.values()) - src_seen
+            src_seen.add(src)
         except (KeyError, IndexError):
             # it seems this uses a dynamically configurable mux routed to VCC/VSS
             continue
