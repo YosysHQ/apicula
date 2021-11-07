@@ -42,7 +42,10 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             if noiostd:
                 iostd = ''
             else:
-                iostd = _banks[chipdb.loc2bank(db, row, col)]
+                try: # we can ask for invalid pin here because the IOBs share some stuff
+                    iostd = _banks[chipdb.loc2bank(db, row, col)]
+                except KeyError:
+                    iostd = ''
             # Here we don't use a mask common to all modes (it didn't work),
             # instead we try the longest bit sequence first.
             for mode, mode_rec in sorted(bel.iob_flags[iostd].items(),
