@@ -237,17 +237,17 @@ def header_footer(db, bs, compress):
 
 def dualmode_pins(db, tilemap, args):
     bits = set()
-    if args.jtag_as_gpio == 1:
+    if args.jtag_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['JTAG'])
-    if args.sspi_as_gpio == 1:
+    if args.sspi_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['SSPI'])
-    if args.mspi_as_gpio == 1:
+    if args.mspi_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['MSPI'])
-    if args.ready_as_gpio == 1:
+    if args.ready_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['READY'])
-    if args.done_as_gpio == 1:
+    if args.done_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['DONE'])
-    if args.reconfign_as_gpio == 1:
+    if args.reconfign_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['RECONFIG'])
 
     if bits:
@@ -262,13 +262,13 @@ def main():
     parser.add_argument('-o', '--output', default='pack.fs')
     parser.add_argument('-c', '--compress', default=False, action='store_true')
     parser.add_argument('-s', '--cst', default = None)
-    parser.add_argument('--allow_pinless_io', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--jtag_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--sspi_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--mspi_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--ready_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--done_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--reconfign_as_gpio', metavar = 'N', type = int, default = 0)
+    parser.add_argument('--allow_pinless_io', action = 'store_true')
+    parser.add_argument('--jtag_as_gpio', action = 'store_true')
+    parser.add_argument('--sspi_as_gpio', action = 'store_true')
+    parser.add_argument('--mspi_as_gpio', action = 'store_true')
+    parser.add_argument('--ready_as_gpio', action = 'store_true')
+    parser.add_argument('--done_as_gpio', action = 'store_true')
+    parser.add_argument('--reconfign_as_gpio', action = 'store_true')
     parser.add_argument('--png')
 
     args = parser.parse_args()
