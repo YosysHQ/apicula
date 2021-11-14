@@ -307,7 +307,7 @@ def read_tm(f, device):
         try:
             speed_class = chunk_order[i]
         except IndexError:
-            speed_class = i
+            speed_class = str(i)
         tmdat[speed_class] = {}
         assert len(chunk) == chunklen
         res = parse_chunk(chunk)

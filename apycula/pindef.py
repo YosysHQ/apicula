@@ -1,65 +1,97 @@
 import pandas as pd
 from os.path import expanduser
 from glob import glob
-
-docdir = expanduser("~/Documents/gowinsemi/")
-files = glob(docdir+"*Pinout.xlsx")
+import json
+import os
+import csv
 
 VeryTrue = 2
 
-def get_package(series, package, special_pins, header):
-    fname = None
-    for f in files:
-        if "%s Pinout" % series in f:
-            fname = f
-            break
-    assert fname, "No file found for {}".format(series)
+# caches
+# .CSV index of vendor files {(device, package) : file_name}
+_pindef_index = {}
+# (device, package) : pins
+_pindef_files = {}
 
-    df = pd.read_excel(fname, sheet_name="Pin List", header=header, engine='openpyxl')
-    df = df.dropna(subset=[package])
-    df = df[df['Function']=="I/O"]
+def get_package(device, package, special_pins):
+    global _pindef_files
+    if (device, package) not in _pindef_files:
+        gowinhome = os.getenv("GOWINHOME")
+        if not gowinhome:
+            raise Exception("GOWINHOME not set")
+        with open(_pindef_index[(device, package)]) as f:
+            pins = json.load(f)
+        _pindef_files[(device, package)] = [d for d in pins['PIN_DATA'] if d['TYPE'] == 'I/O']
+
     if special_pins != VeryTrue:
-        df = df[df["Configuration Function"] != "RECONFIG_N"] # can't be output
-        df = df[~df["Configuration Function"].str.startswith("JTAGSEL_N", na=False)] # dedicated pin
+        pins = [pin for pin in _pindef_files[(device, package)]
+                if 'CFG' not in pin.keys() or (
+                    pin['CFG'] != 'RECONFIG_N' and not pin['CFG'].startswith('JTAGSEL_N'))]
+    else:
+        pins = _pindef_files[(device, package)]
     if not special_pins:
-        df = df[df["Configuration Function"].isna()]
-    return df
+        return [pin for pin in pins if 'CFG' not in pin.keys()]
+    return pins
 
-def all_packages(series, start, header):
-    df = get_package(series, "Pin Name", True, header)
-    return list(df.columns[start:])
+# {partnumber : (pkg, device, speed)}
+def all_packages(device):
+    gowinhome = os.getenv("GOWINHOME")
+    if not gowinhome:
+        raise Exception("GOWINHOME not set")
+    # {package: speed} vendor file
+    speeds = {}
+    with open(f"{gowinhome}/IDE/data/device/device_info.csv", mode='r') as csv_file:
+        csv_reader = csv.DictReader(csv_file, fieldnames =
+            ["unused_id", "partnumber", "series", "device", "package", "voltage", "speed"])
+        for row in csv_reader:
+            if row['device'] != device:
+               continue
+            speeds.update({row['partnumber']: row['speed']})
+    global _pindef_index
+    _pindef_index = {}
+    res = {}
+    with open(f"{gowinhome}/IDE/data/device/device_package.csv", mode='r') as csv_file:
+        csv_reader = csv.DictReader(csv_file, fieldnames =
+            ["unused_id", "partnumber", "series", "device", "package", "filename"])
+        for row in csv_reader:
+            if row['device'] != device:
+               continue
+            res[row['partnumber']] = (row['package'], device, speeds[row['partnumber']])
+            _pindef_index[(row['device'], row['package'])] = \
+                    f"{gowinhome}/IDE/data/device/{row['filename']}"
+    return res
 
-def get_pins(series, package, special_pins=False, header=0):
-    df = get_package(series, package, special_pins, header)
-    df = df[["BANK", package]].astype("int32")
-    return df.groupby("BANK")[package].apply(list).to_dict()
+def get_pins(device, package, special_pins=False):
+    df = get_package(device, package, special_pins)
+    res = {}
+    for pin in df:
+        res.setdefault(str(pin['BANK']), []).append(str(pin['INDEX']))
+    return res
 
-def get_bank_pins(series, header = 0):
-    df = get_package(series, "Pin Name", VeryTrue, header)
-    # bad table for GW1N-1
-    if series == "GW1N-1":
-        df.loc[df['Pin Name'] == 'IOB2B', ['BANK']] = 2
-    dpins = list(map(lambda x:x.split('/')[0], df['Pin Name'].to_list()))
-    dbanks = df['BANK'].astype("int32").to_list()
-    return dict(zip(dpins, dbanks))
+def get_bank_pins(device, package):
+    df = get_package(device, package, VeryTrue)
+    res = {}
+    for pin in df:
+        res[pin['NAME']] = str(pin['BANK'])
+    return res
 
-def get_locs(series, package, special_pins=False, header=0):
-    df = get_package(series, package, special_pins, header)
-    return {p.split('/')[0] for p in df["Pin Name"]}
+def get_locs(device, package, special_pins=False):
+    df = get_package(device, package, special_pins)
+    res = set()
+    for pin in df:
+        res.update({pin['NAME']})
+    return res
 
-def get_pin_locs(series, package, special_pins=False, header=0):
-    def tryint(n):
-        try:
-            return int(n)
-        except:
-            return n
+def get_pin_locs(device, package, special_pins=False):
+    df = get_package(device, package, special_pins)
+    res = {}
+    for pin in df:
+        res[str(pin['INDEX'])] = pin['NAME']
+    return res
 
-    df = get_package(series, package, special_pins, header)
-    return {tryint(num): p.split('/')[0] for _, num, p in df[[package, "Pin Name"]].itertuples()}
-
-def get_clock_locs(series, package, header=0):
-    df = get_package(series, package, True, header)
-    df = df[df["Configuration Function"].str.startswith("GCLK", na=False)]
-    return {tuple(p.split('/')) for p in df["Pin Name"]}
+def get_clock_locs(device, package):
+    df = get_package(device, package, True)
+    return [(pin['NAME'], *pin['CFG'].split('/')) for pin in df
+            if 'CFG' in pin.keys() and pin['CFG'].startswith("GCLK")]
 
 

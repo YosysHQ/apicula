@@ -78,7 +78,7 @@ My presentations at [FPT2020](https://www.youtube.com/watch?v=kyQLtBh6h0U) and [
 
 I did a few [livestreams on twitch](https://www.twitch.tv/pepijnthefox) working on this project, which are collected [on this playlist](https://www.youtube.com/playlist?list=PLIYslVBAlKZad3tjr5Y4gqBV3QKQ5_tPw) I've also started to write Jupyter notebooks of my explorations that are more condensed than a video.
 
-You can also come chat on Freenode in #apicula
+You can also come chat on [Matrix](https://matrix.to/#/#apicula:matrix.org) or [IRC](https://web.libera.chat/#yosys-apicula)
 
 ## What remains to be done / how can I help?
 

@@ -14,7 +14,7 @@ from apycula.wirenames import wirenames
 
 # bank iostandards
 # XXX default io standard may be board-dependent!
-_banks = {0: "LVCMOS18", 1: "LVCMOS18", 2: "LVCMOS18", 3: "LVCMOS18"}
+_banks = {'0': "LVCMOS18", '1': "LVCMOS18", '2': "LVCMOS18", '3': "LVCMOS18"}
 
 # for a given mode returns a mask of zero bits
 def zero_bits(mode, all_modes):
@@ -42,7 +42,10 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             if noiostd:
                 iostd = ''
             else:
-                iostd = _banks[chipdb.loc2bank(db, row, col)]
+                try: # we can ask for invalid pin here because the IOBs share some stuff
+                    iostd = _banks[chipdb.loc2bank(db, row, col)]
+                except KeyError:
+                    iostd = ''
             # Here we don't use a mask common to all modes (it didn't work),
             # instead we try the longest bit sequence first.
             for mode, mode_rec in sorted(bel.iob_flags[iostd].items(),
@@ -373,7 +376,14 @@ def main():
 
     args = parser.parse_args()
 
-    with importlib.resources.open_binary("apycula", f"{args.device}.pickle") as f:
+    device = args.device
+    # For tool integration it is allowed to pass a full part number
+    m = re.match("GW1N([A-Z]*)-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+)(C[0-9]/I[0-9])", device)
+    if m:
+        luts = m.group(3)
+        device = f"GW1N-{luts}"
+
+    with importlib.resources.open_binary("apycula", f"{device}.pickle") as f:
         db = pickle.load(f)
 
     bitmap = read_bitstream(args.bitstream)[0]
