@@ -1,7 +1,7 @@
 module top (
 	input clk,
 	input rst,
-	output [7:0] led
+	output [`LEDS_NR-1:0] led
 );
 
 wire rst_s;
@@ -23,20 +23,20 @@ always @(posedge clk) begin
 end
 
 
-reg [7:0] ctr_q;
-wire [7:0] ctr_d;
+reg [`LEDS_NR-1:0] ctr_q;
+wire [`LEDS_NR-1:0] ctr_d;
 
 // Sequential code (flip-flop)
 always @(posedge clk or posedge rst_s) begin
 	if (rst_s) begin
-		ctr_q <= 8'd1;
+		ctr_q <= 'd1;
 	end else if (tick_hz) begin
 		ctr_q <= ctr_d;
 	end
 end
 
 // Combinational code (boolean logic)
-assign ctr_d = {ctr_q[0], ctr_q[7:1]};
+assign ctr_d = {ctr_q[0], ctr_q[`LEDS_NR-1:1]};
 assign led = ctr_q;
 assign tick_hz = (hertz_cpt == 0);
 assign rst_s = !rst;

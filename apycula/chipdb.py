@@ -166,7 +166,6 @@ def fse_luts(fse, ttyp):
         for i in range(2):
             alu_idx = cls * 2 + i
             bel = luts.setdefault(f"ALU{alu_idx}", Bel())
-            #mode = bel.modes.setdefault("ALU", set())
             mode = set()
             for key0, key1, *fuses in data:
                 if key0 == 1 and key1 == 0:
@@ -382,9 +381,9 @@ def dff_clean(dev):
                         continue
                     seen_bels.append(bel)
                     # find extra bit
-                    extra_bits = set()
+                    extra_bits = None
                     for bits in bel.modes.values():
-                        if extra_bits:
+                        if extra_bits != None:
                             extra_bits &= bits
                         else:
                             extra_bits = bits.copy()
@@ -409,9 +408,9 @@ def diff2flag(dev):
                         for mode, mode_rec in iostd_rec.items():
                             mode_rec.decode_bits = mode_rec.encode_bits.copy()
                             for flag, flag_rec in mode_rec.flags.items():
-                                noise_bits = set()
+                                noise_bits = None
                                 for bits in flag_rec.options.values():
-                                    if noise_bits:
+                                    if noise_bits != None:
                                         noise_bits &= bits
                                     else:
                                         noise_bits = bits.copy()
@@ -423,9 +422,9 @@ def diff2flag(dev):
                             for _, flag_rec in mode_rec.flags.items():
                                 mode_rec.decode_bits -= flag_rec.mask
                 elif name == "BANK":
-                    noise_bits = set()
+                    noise_bits = None
                     for bits in bel.bank_flags.values():
-                        if noise_bits:
+                        if noise_bits != None:
                             noise_bits &= bits
                         else:
                             noise_bits = bits.copy()

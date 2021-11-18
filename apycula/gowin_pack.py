@@ -62,7 +62,7 @@ iostd_alias = {
         }
 _banks = {}
 _sides = "AB"
-def place(db, tilemap, bels, cst):
+def place(db, tilemap, bels, cst, args):
     for typ, row, col, num, parms, attrs, cellname in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
@@ -121,8 +121,15 @@ def place(db, tilemap, bels, cst):
             else:
                 raise ValueError("IOB has no in or output")
 
-            bank = chipdb.loc2bank(db, row - 1, col - 1)
-            iostd = _banks.setdefault(bank, None)
+            pinless_io = False
+            try:
+                bank = chipdb.loc2bank(db, row - 1, col - 1)
+                iostd = _banks.setdefault(bank, None)
+            except KeyError:
+                if not args.allow_pinless_io:
+                    raise Exception(f"IO{edge}{idx}{num} is not allowed for a given package")
+                pinless_io = True
+                iostd = None
 
             # find io standard
             for flag in attrs.keys():
@@ -140,7 +147,8 @@ def place(db, tilemap, bels, cst):
             # XXX default io standard may be board-dependent!
             if not iostd:
                 iostd = "LVCMOS18"
-            _banks[bank] = iostd
+            if not pinless_io:
+                _banks[bank] = iostd
 
             cst.attrs.setdefault(cellname, {}).update({"IO_TYPE": iostd})
             # collect flag bits
@@ -167,6 +175,8 @@ def place(db, tilemap, bels, cst):
             for r, c in bits:
                 tile[r][c] = 1
 
+            if pinless_io:
+                return
             #bank enable
             for pos, bnum in db.corners.items():
                 if bnum == bank:
@@ -227,17 +237,17 @@ def header_footer(db, bs, compress):
 
 def dualmode_pins(db, tilemap, args):
     bits = set()
-    if args.jtag_as_gpio == 1:
+    if args.jtag_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['JTAG'])
-    if args.sspi_as_gpio == 1:
+    if args.sspi_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['SSPI'])
-    if args.mspi_as_gpio == 1:
+    if args.mspi_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['MSPI'])
-    if args.ready_as_gpio == 1:
+    if args.ready_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['READY'])
-    if args.done_as_gpio == 1:
+    if args.done_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['DONE'])
-    if args.reconfign_as_gpio == 1:
+    if args.reconfign_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['RECONFIG'])
 
     if bits:
@@ -251,17 +261,17 @@ def main():
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-o', '--output', default='pack.fs')
     parser.add_argument('-c', '--compress', default=False, action='store_true')
-    parser.add_argument('-s', '--cst', default=None)
-    parser.add_argument('--jtag_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--sspi_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--mspi_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--ready_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--done_as_gpio', metavar = 'N', type = int, default = 0)
-    parser.add_argument('--reconfign_as_gpio', metavar = 'N', type = int, default = 0)
+    parser.add_argument('-s', '--cst', default = None)
+    parser.add_argument('--allow_pinless_io', action = 'store_true')
+    parser.add_argument('--jtag_as_gpio', action = 'store_true')
+    parser.add_argument('--sspi_as_gpio', action = 'store_true')
+    parser.add_argument('--mspi_as_gpio', action = 'store_true')
+    parser.add_argument('--ready_as_gpio', action = 'store_true')
+    parser.add_argument('--done_as_gpio', action = 'store_true')
+    parser.add_argument('--reconfign_as_gpio', action = 'store_true')
     parser.add_argument('--png')
 
     args = parser.parse_args()
-
     device = args.device
     # For tool integration it is allowed to pass a full part number
     m = re.match("GW1N([A-Z]*)-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+)(C[0-9]/I[0-9])", device)
@@ -277,7 +287,7 @@ def main():
     tilemap = chipdb.tile_bitmap(db, db.template, empty=True)
     cst = codegen.Constraints()
     bels = get_bels(pnr)
-    place(db, tilemap, bels, cst)
+    place(db, tilemap, bels, cst, args)
     pips = get_pips(pnr)
     route(db, tilemap, pips)
     dualmode_pins(db, tilemap, args)
