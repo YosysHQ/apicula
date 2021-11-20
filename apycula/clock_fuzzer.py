@@ -170,36 +170,27 @@ def center_muxes(ct, rows, cols):
 
 def taps(rows, cols):
     "Find which colunm is driven by which tap"
-    mod = codegen.Module()
-    cst = codegen.Constraints()
-
-    clks = [ibuf(mod, cst, p) for p in true_pins]
-
     # conver to sorted list of 1-indexed vendor constraints
     rows = [row+1 for row in sorted(rows)]
     cols = [col+1 for col in sorted(cols)]
-    for row in rows[:len(true_pins)]:
-        for col in cols:
-            flop = dff(mod, cst, row, col)
-
-    pnr = tiled_fuzzer.run_pnr(mod, cst, {})
 
     modules = []
     constrs = []
     locs = []
-    for gclk, row in enumerate(rows[:len(true_pins)]):
-        for col in cols:
+
+    # use a different row for each clock
+    # row by row, column by column, hook up the clock to the dff
+    # in the old IDE row 1 always used clock 1 and so forth
+    for col in cols:
+        for gclk, row in enumerate(rows[:len(true_pins)]):
             mod = codegen.Module()
             cst = codegen.Constraints()
 
             clks = [ibuf(mod, cst, p) for p in true_pins]
             for i, clk in zip(rows, clks):
-                for j in cols:
-                    flop = dff(mod, cst, i, j)
-                    if i < row:
-                        mod.assigns.append((flop, clk))
-                    elif i == row and j == col:
-                        mod.assigns.append((flop, clk))
+                flop = dff(mod, cst, i, col)
+                if i < row:
+                    mod.assigns.append((flop, clk))
 
             modules.append(mod)
             constrs.append(cst)
@@ -207,32 +198,33 @@ def taps(rows, cols):
 
     pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
 
+    last_dffcol = None
+    seen_taps = set()
+    seen_spines = set()
     clks = {}
-    complete_taps = set()
-    last_gclk = None
     for (gclk, dff_col), (sweep_bs, *_) in zip(locs, pnr_res):
-        sweep_tiles = chipdb.tile_bitmap(db, sweep_bs^pnr.bitmap)
+        sweep_tiles = chipdb.tile_bitmap(db, sweep_bs)
+        if dff_col != last_dffcol:
+            seen_taps = set()
+            seen_spines = set()
+            last_dffcol = dff_col
 
         tap = None
-        if last_gclk != None and gclk != last_gclk:
-            complete_taps.update(clks[last_gclk].keys())
-        last_gclk = gclk
-        if gclk == 4: # secondary taps
-            complete_taps = set()
-        # print("#"*80)
-        # print("gclk", gclk, "dff_col", dff_col)
+        print("#"*80)
+        print("gclk", gclk, "dff_col", dff_col)
         for loc, tile in sweep_tiles.items():
             row, col = loc
             _, _, clk_pips = gowin_unpack.parse_tile_(db, row, col, tile, noalias=True)
-            # print("loc", row, col, "pips", clk_pips)
-            if ("GT00" in clk_pips and gclk < 4) or \
-               ("GT10" in clk_pips and gclk >= 4):
-                # print("tap", col)
-                if col not in complete_taps:
-                    tap = col
+            spines   = set(s for s in clk_pips.keys() if s.startswith("SPINE"))
+            new_spines = spines - seen_spines
+            seen_spines.update(spines)
+            if ("GT00" in clk_pips or "GT01" in clk_pips) and col not in seen_taps:
+                tap = col
+                seen_taps.add(col)
+            print("loc", row, col, "tap", tap, "new spines", new_spines)
         clks.setdefault(gclk, {}).setdefault(tap, set()).add(dff_col)
-        # print(complete_taps, clks)
-        #if not tap: break
+        print(clks)
+    #if not tap: break
 
     return clks
 
