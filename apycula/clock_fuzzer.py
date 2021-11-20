@@ -159,7 +159,7 @@ def center_muxes(ct, rows, cols):
             dst_seen.add(dest)
             src, = set(clk_pips.values()) - src_seen
             src_seen.add(src)
-        except (KeyError, IndexError):
+        except ValueError:
             # it seems this uses a dynamically configurable mux routed to VCC/VSS
             continue
         print(i, pin, src, dest)
