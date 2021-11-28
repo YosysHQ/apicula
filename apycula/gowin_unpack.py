@@ -34,7 +34,7 @@ def zero_bits(mode, all_modes):
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowun_unpack io standard is determined first and it is known.
 def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True):
-    print((row, col))
+    # print((row, col))
     tiledata = db.grid[row][col]
     bels = {}
     for name, bel in tiledata.bels.items():
@@ -50,18 +50,18 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             # instead we try the longest bit sequence first.
             for mode, mode_rec in sorted(bel.iob_flags[iostd].items(),
                     key = lambda m: len(m[1].decode_bits), reverse = True):
-                print(mode, mode_rec.decode_bits)
+                # print(mode, mode_rec.decode_bits)
                 mode_bits = {(row, col)
                              for row, col in mode_rec.decode_bits
                              if tile[row][col] == 1}
-                print("read", mode_bits)
+                # print("read", mode_bits)
                 if mode_rec.decode_bits == mode_bits:
                     zeros = zero_bits(mode, bel.iob_flags[iostd])
-                    print("zeros", zeros)
+                    # print("zeros", zeros)
                     used_bits = {tile[row][col] for row, col in zeros}
                     if not any(used_bits):
                         bels.setdefault(name, set()).add(mode)
-                        print(f"found: {mode}")
+                        # print(f"found: {mode}")
                         # mode found
                         break
 

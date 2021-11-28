@@ -189,7 +189,7 @@ def taps(rows, cols):
             clks = [ibuf(mod, cst, p) for p in true_pins]
             for i, clk in zip(rows, clks):
                 flop = dff(mod, cst, i, col)
-                if i < row:
+                if i <= row:
                     mod.assigns.append((flop, clk))
 
             modules.append(mod)
@@ -199,13 +199,15 @@ def taps(rows, cols):
     pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
 
     last_dffcol = None
-    seen_taps = set()
+    seen_primary_taps = set()
+    seen_secondary_taps = set()
     seen_spines = set()
     clks = {}
     for (gclk, dff_col), (sweep_bs, *_) in zip(locs, pnr_res):
         sweep_tiles = chipdb.tile_bitmap(db, sweep_bs)
         if dff_col != last_dffcol:
-            seen_taps = set()
+            seen_primary_taps = set()
+            seen_secondary_taps = set()
             seen_spines = set()
             last_dffcol = dff_col
 
@@ -218,13 +220,17 @@ def taps(rows, cols):
             spines   = set(s for s in clk_pips.keys() if s.startswith("SPINE"))
             new_spines = spines - seen_spines
             seen_spines.update(spines)
-            if ("GT00" in clk_pips or "GT01" in clk_pips) and col not in seen_taps:
+            print(clk_pips.keys())
+            if "GT00" in clk_pips and col not in seen_primary_taps:
                 tap = col
-                seen_taps.add(col)
+                seen_primary_taps.add(col)
+            if "GT10" in clk_pips and col not in seen_secondary_taps:
+                tap = col
+                seen_secondary_taps.add(col)
             print("loc", row, col, "tap", tap, "new spines", new_spines)
+        # if tap == None: breakpoint()
         clks.setdefault(gclk, {}).setdefault(tap, set()).add(dff_col)
         print(clks)
-    #if not tap: break
 
     return clks
 
