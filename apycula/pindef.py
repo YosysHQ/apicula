@@ -1,4 +1,3 @@
-import pandas as pd
 from os.path import expanduser
 from glob import glob
 import json
