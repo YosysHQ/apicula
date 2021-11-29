@@ -127,8 +127,8 @@ def dff(locations):
 
                     row = loc[0]+1
                     col = loc[1]+1
-                    cst.cells[lutname] = f"R{row}C{col}[{cls}][{side}]"
-                    cst.cells[name] = f"R{row}C{col}[{cls}][{side}]"
+                    cst.cells[lutname] = (row, col, cls, side)
+                    cst.cells[name] = (row, col, cls, side)
         yield Fuzzer(ttyp, mod, cst, {}, '')
 
 # illegal pin-attr combination for device
@@ -329,12 +329,12 @@ def route_bits(db, row, col):
     _route_mem.setdefault((row, col), bits)
     return bits
 
-dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'mode'}
+dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'mode', 'i2c'}
 def dualmode(ttyp):
     for pin in dualmode_pins:
         mod = codegen.Module()
         cst = codegen.Constraints()
-        cfg = {pin: 'false'}
+        cfg = {pin: "0"}
         # modules with different ttyp can be combined, so in theory it could happen
         # that there is an IOB in the module, which claims the dual-purpose pin.
         # P&R will not be able to place it and the fuzzling result will be misleading.
@@ -380,7 +380,7 @@ def primitive_caused_err(name, err_code, log):
 # Result of the vendor router-packer run
 PnrResult = namedtuple('PnrResult', [
     'bitmap', 'hdr', 'ftr',
-    'posp',           # parsed Post-Place file
+    'constrs',        # constraints
     'config',         # device config
     'attrs',          # port attributes
     'errs'            # parsed log file
@@ -388,55 +388,57 @@ PnrResult = namedtuple('PnrResult', [
 
 def run_pnr(mod, constr, config):
     cfg = codegen.DeviceConfig({
-        "JTAG regular_io": config.get('jtag', "true"),
-        "SSPI regular_io": config.get('sspi', "true"),
-        "MSPI regular_io": config.get('mspi', "true"),
-        "READY regular_io": config.get('ready', "true"),
-        "DONE regular_io": config.get('done', "true"),
-        "RECONFIG_N regular_io": config.get('reconfig', "true"),
-        "MODE regular_io": config.get('mode', "true"),
-        "CRC_check": "true",
-        "compress": "false",
-        "encryption": "false",
-        "security_bit_enable": "true",
-        "bsram_init_fuse_print": "true",
-        "download_speed": "250/100",
-        "spi_flash_address": "0x00FFF000",
-        "format": "txt",
-        "background_programming": "false",
-        "secure_mode": "false"})
+        "use_jtag_as_gpio"      : config.get('jtag', "1"),
+        "use_sspi_as_gpio"      : config.get('sspi', "1"),
+        "use_mspi_as_gpio"      : config.get('mspi', "1"),
+        "use_ready_as_gpio"     : config.get('ready', "1"),
+        "use_done_as_gpio"      : config.get('done', "1"),
+        "use_reconfign_as_gpio" : config.get('reconfig', "1"),
+        "use_mode_as_gpio"      : config.get('mode', "1"),
+        "bit_crc_check"         : "1",
+        "bit_compress"          : "0",
+        "bit_encrypt"           : "0",
+        "bit_security"          : "1",
+        "bit_incl_bsram_init"   : "0",
+        "loading_rate"          : "250/100",
+        "spi_flash_addr"        : "0x00FFF000",
+        "bit_format"            : "txt",
+        "bg_programming"        : "off",
+        "secure_mode"           : "0"})
 
-    opt = codegen.PnrOptions(["posp", "warning_all", "oc", "ibs"])
-            #"sdf", "oc", "ibs", "posp", "o",
-            #"warning_all", "timing", "reg_not_in_iob"])
+    opt = codegen.PnrOptions({
+        "gen_posp"          : "1",
+        "gen_io_cst"        : "1",
+        "gen_ibis"          : "1",
+        "ireg_in_iob"       : "0",
+        "oreg_in_iob"       : "0",
+        "ioreg_in_iob"      : "0",
+        "timing_driven"     : "0",
+        "cst_warn_to_error" : "0"})
+    #"show_all_warn" : "1",
 
     pnr = codegen.Pnr()
-    pnr.device = params['device']
+    pnr.device = device
     pnr.partnumber = params['partnumber']
+    pnr.opt = opt
+    pnr.cfg = cfg
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        pnr.outdir = tmpdir
         with open(tmpdir+"/top.v", "w") as f:
             mod.write(f)
         pnr.netlist = tmpdir+"/top.v"
         with open(tmpdir+"/top.cst", "w") as f:
             constr.write(f)
         pnr.cst = tmpdir+"/top.cst"
-        with open(tmpdir+"/device.cfg", "w") as f:
-            cfg.write(f)
-        pnr.cfg = tmpdir+"/device.cfg"
-        with open(tmpdir+"/pnr.cfg", "w") as f:
-            opt.write(f)
-        pnr.opt = tmpdir+"/pnr.cfg"
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
 
-        subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
+        subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
         #print(tmpdir); input()
         try:
             return PnrResult(
                     *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
-                    list(read_posp(tmpdir+"/impl/pnr/top.posp")),
+                    constr,
                     config, constr.attrs,
                     read_err_log(tmpdir+"/impl/pnr/top.log"))
         except FileNotFoundError:
@@ -527,11 +529,16 @@ if __name__ == "__main__":
         seen = {}
         diff = pnr.bitmap ^ pnr_empty.bitmap
         bm = fuse_h4x.tile_bitmap(fse, diff)
-        for cst_type, name, *info in pnr.posp:
+        placement = chain(
+           [("cst", name, info) for name, info in pnr.constrs.cells.items()],
+           [("place", name, pin_re.match(info).groups()) for name, info in pnr.constrs.ports.items()]
+           )
+        for cst_type, name, info in placement:
             if primitive_caused_err(name, "CT1108", pnr.errs) or \
                 primitive_caused_err(name, "CT1117", pnr.errs) or \
                 primitive_caused_err(name, "PR2016", pnr.errs) or \
-                primitive_caused_err(name, "PR2017", pnr.errs):
+                primitive_caused_err(name, "PR2017", pnr.errs) or \
+                primitive_caused_err(name, "CT1005", pnr.errs):
                   raise Exception(f"Placement conflict (PR201[67]):{name} or CT1108/CT1117")
 
             bel_type, cell_type = type_re.match(name).groups()
@@ -541,7 +548,8 @@ if __name__ == "__main__":
                 row = row-1
                 col = col-1
             elif cst_type == "place":
-                side, num, pin = info
+                side, numx, pin = info
+                num = int(numx)
                 if side == 'T':
                     row = 0
                     col = num-1

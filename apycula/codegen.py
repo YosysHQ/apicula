@@ -86,7 +86,8 @@ class Constraints:
 
     def write(self, f):
         for key, val in self.cells.items():
-            f.write("INS_LOC \"{}\" {};\n".format(key, val))
+            row, col, side, lut = val
+            f.write("INS_LOC \"{}\" R{}C{}[{}][{}];\n".format(key, row, col, side, lut))
         for key, val in self.ports.items():
             f.write("IO_LOC \"{}\" {};\n".format(key, val))
         for key, val in self.attrs.items():
@@ -101,17 +102,17 @@ class DeviceConfig:
     def __init__(self, settings):
         self.settings = settings
 
-    def write(self, f):
-        for key, val in self.settings.items():
-            f.write("set {} = {}\n".format(key, val))
+    @property
+    def text(self):
+        return "".join([' -' + name + ' ' + val for name, val in self.settings.items()])
 
 class PnrOptions:
     def __init__(self, options):
         self.options = options
 
-    def write(self, f):
-        for opt in self.options:
-            f.write("-{}\n".format(opt))
+    @property
+    def text(self):
+        return "".join([' -' + name + ' ' + val for name, val in self.options.items()])
 
 class Pnr:
     def __init__(self):
@@ -121,23 +122,24 @@ class Pnr:
         self.device = None
         self.partnumber = None
         self.opt = None
-        self.outdir = None
 
     def write(self, f):
         template = """
-            add_file -cst {cst}
-            add_file -vm {netlist}
-            add_file -cfg {cfg}
-            set_option -device {device}
-            set_option -pn {partnumber}
-            set_option -out_dir {outdir}
-            run_pnr -opt {opt}
+            add_file -type cst {cst}
+            add_file -type netlist {netlist}
+            set_device {device_desc}
+            set_option {opt}
+            run pnr
             """
+
+        device_desc = self.partnumber
+        if self.device in ['GW1N-9', 'GW1N-4']:
+            device_desc = f'-name {self.device} {device_desc}'
+
         f.write(template.format(
             cst=self.cst,
             netlist=self.netlist,
-            cfg=self.cfg,
             device=self.device,
-            partnumber=self.partnumber,
-            opt=self.opt,
-            outdir=self.outdir))
+            device_desc=device_desc,
+            opt=self.opt.text + self.cfg.text))
+

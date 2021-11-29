@@ -284,10 +284,10 @@ print(hex(pos))
 print()
 pos = 0x2dee4
 for i in range(10):
-    pos = print_arr8(['SpecIOL', i], pos, 10, 10)
+    pos = print_arr8(['SpecIOL', i], pos, 15, 15)
 print()
 for i in range(10):
-    pos = print_arr8(['SpecIOR', i], pos, 10, 10)
+    pos = print_arr8(['SpecIOR', i], pos, 15, 15)
 print(hex(pos))
 
 print()
@@ -330,7 +330,7 @@ def print_clkins(name, pos, num):
         pos += 4
     return pos
 
-pos = 0x44194
+pos = 0x4e7fc
 
 print('FS GRID')
 for _ in range(grid_h-2):
@@ -344,7 +344,7 @@ for _ in range(grid_h-2, 150):
     pos += 200
 print()
 
-assert pos == 0x4b6c4
+assert pos == 0x55d2c
 pos = print_u16(['IobufAIn'], pos)
 pos = print_u16(['IobufAOut'], pos)
 pos = print_u16(['IobufAOE'], pos)
@@ -356,10 +356,10 @@ pos = print_u16(['IObufBIO'], pos)
 pos = print_arr16(['IobufIns'], pos, 10)
 pos = print_arr16(['IobufOuts'], pos, 10)
 pos = print_arr16(['IobufOes'], pos, 10)
-pos = print_arr16(['IologicAIn'], pos, 0x2b)
-pos = print_arr16(['IologicAOut'], pos, 0x15)
-pos = print_arr16(['IologicBIn'], pos, 0x2b)
-pos = print_arr16(['IologicBOut'], pos, 0x15)
+pos = print_arr16(['IologicAIn'], pos, 0x31)
+pos = print_arr16(['IologicAOut'], pos, 0x16)
+pos = print_arr16(['IologicBIn'], pos, 0x31)
+pos = print_arr16(['IologicBOut'], pos, 0x16)
 pos = print_arr16(['BsramIn'], pos, 0x84)
 pos = print_arr16(['BsramOut'], pos, 0x48)
 pos = print_arr16(['BsramInDlt'], pos, 0x84)
@@ -390,8 +390,8 @@ pos = print_mult(['CtrlIn'], pos, 0xe)
 pos = print_mult(['CtrlInDlt'], pos, 0xe)
 print()
 #print(hex(pos))
-print(d[pos:320314].hex())
-pos = 320314
+print(d[pos:320314 + 42628].hex())
+pos = 320314 + 42628
 #print(hex(pos))
 for i in range(320):
     pos = print_arr16(['CiuConnection', i], pos, 60)
@@ -414,7 +414,8 @@ pos = print_arr16(['JtagOuts'], pos, 11)
 pos = print_arr16(['ClksrcIns'], pos, 0x26)
 pos = print_arr16(['ClksrcOuts'], pos, 16)
 pos = print_outs(['UfbIns'], pos, 0x5a)
-pos = print_outs(['UfbOuts'], pos, 0x20)
+pos = print_outs(['UfbOuts'], pos, 0x20) # 20
+pos = pos + 4
 pos = print_outs(['McuIns'], pos, 0x109)
 pos = print_outs(['McuOuts'], pos, 0x174)
 pos = print_outs(['AdcIns'], pos, 0xf)
@@ -424,9 +425,9 @@ pos = print_outs(['Usb2PhyOuts'], pos, 0x20)
 pos = print_outs(['Eflash128kIns'], pos, 0x39)
 #assert pos == 0x6f89e
 
-print(d[0x6f89e:0x6f8da].hex())
+print(d[0x6f89e + 42628:0x6f8da + 42628].hex())
 
-pos = 0x6f8da
+pos = 0x6f8da + 42628
 pos = print_outs(['Eflash128kOuts'], pos, 0x21)
 pos = print_outs(['SpmiIns'], pos, 0x17)
 pos = print_outs(['SpmiOuts'], pos, 0x2f)
