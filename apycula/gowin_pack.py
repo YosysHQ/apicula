@@ -224,7 +224,6 @@ def header_footer(db, bs, compress):
 
     res = int(bb[0::2].sum() * pow(2,8) + bb[1::2].sum())
     checksum = res & 0xffff
-    db.cmd_hdr[0] = bytearray.fromhex(f"{checksum:04x}")
 
     if compress:
         # update line 0x10 with compress enable bit
@@ -232,7 +231,7 @@ def header_footer(db, bs, compress):
         hdr10 = int.from_bytes(db.cmd_hdr[4], 'big') | (1 << 13)
         db.cmd_hdr[4] = bytearray.fromhex(f"{hdr10:016x}")
 
-    # same task for line 2 in footer
+    # set the checksum
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
 def dualmode_pins(db, tilemap, args):
