@@ -395,6 +395,7 @@ def run_pnr(mod, constr, config):
         "use_done_as_gpio"      : config.get('done', "1"),
         "use_reconfign_as_gpio" : config.get('reconfig', "1"),
         "use_mode_as_gpio"      : config.get('mode', "1"),
+        "use_i2c_as_gpio"       : config.get('i2c', "1"),
         "bit_crc_check"         : "1",
         "bit_compress"          : "0",
         "bit_encrypt"           : "0",
