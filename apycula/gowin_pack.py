@@ -152,7 +152,7 @@ def place(db, tilemap, bels, cst, args):
 
             cst.attrs.setdefault(cellname, {}).update({"IO_TYPE": iostd})
             # collect flag bits
-            bits = iob.iob_flags[iostd][mode].encode_bits
+            bits = iob.iob_flags[iostd][mode].encode_bits.copy()
             for flag in attrs.keys():
                 flag_name_val = flag.split("=")
                 if len(flag_name_val) < 2:
@@ -186,7 +186,7 @@ def place(db, tilemap, bels, cst, args):
             tile = tilemap[(brow, bcol)]
             if not len(tiledata.bels) == 0:
                 bank_bel = tiledata.bels['BANK']
-                bits = bank_bel.modes['ENABLE']
+                bits = bank_bel.modes['ENABLE'].copy()
                 # iostd flag
                 bits |= bank_bel.bank_flags[iostd]
                 for row, col in bits:
