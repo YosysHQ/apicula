@@ -48,6 +48,7 @@ example: `PULL_MODE=DOWN`:
 
 example: `HYSTERESIS=HIGH`:
 [37, 57, 85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3352, 3374, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+
 See this *37*? This is the ignored part of the key.
 
 Complex attributes take into account the current I/O standard. But the standard code is only in addition to the attribute code, and does not work as a separate single switch.
