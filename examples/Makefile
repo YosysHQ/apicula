@@ -43,25 +43,25 @@ clean:
 	$(NEXTPNR) --json $< --write $@ --device GW1NS-UX2CQN48C5/I4 --cst honeycomb.cst
 
 attosoc-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
-	$(YOSYS) -p "synth_gowin -json $@" $^
+	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
 attosocnodffe-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
-	$(YOSYS) -p "synth_gowin -nodffe -json $@" $^
+	$(YOSYS) -p "read_verilog $^; synth_gowin -nodffe -json $@"
 
 nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
-	$(YOSYS) -p "synth_gowin -json $@" $^
+	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
 %-tec0117-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=8 -p "synth_gowin -json $@" $^
+	$(YOSYS) -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"
 
 %-runber-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=8 -p "synth_gowin -json $@" $^
+	$(YOSYS) -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"
 
 %-tangnano-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -p "synth_gowin -json $@" $^
+	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
 
 %-honeycomb-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -p "synth_gowin -json $@" $^
+	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
 
 %-honeycomb-prog: %-honeycomb.fs
 	openFPGALoader -b honeycomb $^
