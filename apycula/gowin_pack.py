@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import pickle
+import itertools
 import numpy as np
 import json
 import argparse
@@ -60,6 +61,13 @@ iostd_alias = {
         "SSTL33_II"  : "SSTL33_I",
         "LVTTL33"    : "LVCMOS33",
         }
+# For each bank, remember the Bels used, mark whether Outs were among them and the standard.
+class BankDesc:
+    def __init__(self, iostd, inputs_only, bels_tiles):
+        self.iostd = iostd
+        self.inputs_only = inputs_only
+        self.bels_tiles = bels_tiles
+
 _banks = {}
 _sides = "AB"
 def place(db, tilemap, bels, cst, args):
@@ -124,7 +132,7 @@ def place(db, tilemap, bels, cst, args):
             pinless_io = False
             try:
                 bank = chipdb.loc2bank(db, row - 1, col - 1)
-                iostd = _banks.setdefault(bank, None)
+                iostd = _banks.setdefault(bank, BankDesc(None, True, [])).iostd
             except KeyError:
                 if not args.allow_pinless_io:
                     raise Exception(f"IO{edge}{idx}{num} is not allowed for a given package")
@@ -148,11 +156,19 @@ def place(db, tilemap, bels, cst, args):
             if not iostd:
                 iostd = "LVCMOS18"
             if not pinless_io:
-                _banks[bank] = iostd
+                _banks[bank].iostd = iostd
+                if mode == 'IBUF':
+                    _banks[bank].bels_tiles.append((iob, tile))
+                else:
+                    _banks[bank].inputs_only = False
 
             cst.attrs.setdefault(cellname, {}).update({"IO_TYPE": iostd})
             # collect flag bits
             bits = iob.iob_flags[iostd][mode].encode_bits.copy()
+            # XXX OPEN_DRAIN must be after DRIVE
+            attrs_keys = attrs.keys()
+            if 'OPEN_DRAIN=ON' in attrs_keys:
+                attrs_keys = itertools.chain(attrs_keys, ['OPEN_DRAIN=ON'])
             for flag in attrs.keys():
                 flag_name_val = flag.split("=")
                 if len(flag_name_val) < 2:
@@ -161,6 +177,10 @@ def place(db, tilemap, bels, cst, args):
                     continue
                 if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
                     continue
+                # skip OPEN_DRAIN=OFF can't clear by mask and OFF is the default
+                if flag_name_val[0] == chipdb.mode_attr_sep + "OPEN_DRAIN" \
+                        and flag_name_val[1] == 'OFF':
+                            continue
                 # set flag
                 mode_desc = iob.iob_flags[iostd][mode]
                 try:
@@ -191,7 +211,14 @@ def place(db, tilemap, bels, cst, args):
                 bits |= bank_bel.bank_flags[iostd]
                 for row, col in bits:
                     tile[row][col] = 1
-
+    # If the entire bank has only inputs, the LVCMOS12/15/18 bit is set
+    # in each IBUF regardless of the actual I/O standard.
+    for _, bank_desc in _banks.items():
+        if bank_desc.inputs_only:
+            if bank_desc.iostd in {'LVCMOS33', 'LVCMOS25'}:
+                for bel, tile in bank_desc.bels_tiles:
+                    for row, col in bel.lvcmos121518_bits:
+                        tile[row][col] = 1
 
 def route(db, tilemap, pips):
     for row, col, src, dest in pips:

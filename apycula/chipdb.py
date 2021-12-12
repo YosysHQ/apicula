@@ -40,6 +40,7 @@ class Bel:
     flags: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     # { iostd: { mode : IOBMode}}
     iob_flags: Dict[str, Dict[str, IOBMode]] = field(default_factory=dict)
+    lvcmos121518_bits: Set[Coord] = field(default_factory = set)
     # banks
     bank_mask: Set[Coord] = field(default_factory=set)
     bank_flags: Dict[str, Set[Coord]] = field(default_factory=dict)
