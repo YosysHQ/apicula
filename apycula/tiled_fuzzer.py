@@ -37,6 +37,11 @@ params = {
         "device": "GW1NS-2C-LQ144-5",
         "partnumber": "GW1NS-UX2CLQ144C5/I4",
     },
+    "GW1NS-4": {
+        "package": "MBGA64",
+        "device": "GW1NS-4-MBGA64-6",
+        "partnumber": "GW1NS-LV4MG64C6/I5",
+    },
     "GW1N-9": {
         "package": "PBGA256",
         "device": "GW1N-9-PBGA256-6",

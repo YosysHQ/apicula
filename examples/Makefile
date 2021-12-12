@@ -36,6 +36,12 @@ clean:
 	$(NEXTPNR) --json $^ --write $@ --device GW1N-LV1QN48C6/I5 \
 		--cst iob/tangnano-default.cst
 
+%-tangnano4k.fs: %-tangnano4k.json
+	gowin_pack -d GW1NS-4 -o $@ $^
+
+%-tangnano4k.json: %-tangnano4k-synth.json tangnano4k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --cst tangnano4k.cst
+
 %-honeycomb.fs: %-honeycomb.json
 	gowin_pack -d GW1NS-2 -o $@ $<
 
@@ -60,6 +66,9 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 %-tangnano-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
 
+%-tangnano4k-synth.json: %.v
+	$(YOSYS) -D LEDS_NR=1 -p "read_verilog $^; synth_gowin -json $@"
+
 %-honeycomb-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
 
@@ -75,8 +84,14 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 %-tangnano-prog: %-tangnano.fs
 	openFPGALoader -b tangnano $^
 	
+%-tangnano4k-prog: %-tangnano4k.fs
+	openFPGALoader -b tangnano4k $^
+
 %-tangnano-unpacked.v: %-tangnano.fs
 	gowin_unpack -d GW1N-1 -o $@ $^
+
+%-tangnano4k-unpacked.v: %-tangnano4k.fs
+	gowin_unpack -d GW1NS-4 -o $@ $^
 
 %-runber-unpacked.v: %-runber.fs
 	gowin_unpack -d GW1N-4 -o $@ $^

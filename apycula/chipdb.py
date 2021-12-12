@@ -234,8 +234,8 @@ def from_fse(fse):
     return dev
 
 def get_pins(device):
-    if device not in {"GW1N-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1NS-2", "GW1NS-2C"}:
-        raise Exception("unsupported device")
+    if device not in {"GW1N-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C"}:
+        raise Exception(f"unsupported device {device}")
     pkgs = pindef.all_packages(device)
     res = {}
     res_bank_pins = {}
@@ -259,6 +259,19 @@ def json_pinout(device):
         return (pkgs, {
             "GW1N-4": pins
         }, bank_pins)
+    elif device == "GW1NS-4":
+        pkgs_sr, pins_sr, bank_pins_sr = get_pins("GW1NSR-4C")
+        pkgs, pins, bank_pins = get_pins("GW1NS-4")
+        res = {}
+        res.update(pkgs)
+        res.update(pkgs_sr)
+        res_bank_pins = {}
+        res_bank_pins.update(bank_pins)
+        res_bank_pins.update(bank_pins_sr)
+        return (res, {
+            "GW1NS-4": pins,
+            "GW1NSR-4C": pins_sr
+        }, res_bank_pins)
     elif device == "GW1N-9":
         pkgs, pins, bank_pins = get_pins("GW1N-9")
         pkgs_r, pins_r, bank_pins_r = get_pins("GW1NR-9")

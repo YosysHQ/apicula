@@ -47,7 +47,7 @@ def all_packages(device):
                continue
             speeds.update({row['partnumber']: row['speed']})
     global _pindef_index
-    _pindef_index = {}
+    # _pindef_index = {}
     res = {}
     with open(f"{gowinhome}/IDE/data/device/device_package.csv", mode='r') as csv_file:
         csv_reader = csv.DictReader(csv_file, fieldnames =
