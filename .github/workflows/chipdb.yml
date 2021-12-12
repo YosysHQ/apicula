@@ -1,6 +1,14 @@
 name: Chipdb builder
 
-on: [push, pull_request]
+on:
+  # Trigger the workflow on push or pull request,
+  # but only for the main branch
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   gw1n1:
@@ -127,6 +135,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [pypi]
     strategy:
+      fail-fast: false
       matrix:
         yosys: [master, yosys-0.12]
         nextpnr: [master, nextpnr-0.1]
