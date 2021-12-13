@@ -42,6 +42,16 @@ def recode_idx_gw1ns_2(idx):
         new_idx += 1
     return new_idx
 
+def recode_idx_gw1ns_4(idx):
+    new_idx = idx
+    if idx >= 48:
+        new_idx -= 1
+    if idx >= 55:
+        new_idx -= 1
+    if idx >= 70:
+        new_idx -= 3
+    return new_idx
+
 def recode_idx_gw1n9(idx):
     new_idx = idx
     if idx >= 69:
@@ -66,6 +76,12 @@ params = {
         "device": "GW1NS-2C-LQFP144-5",
         "partnumber": "GW1NS-UX2CLQ144C5/I4",
         "recode_idx": recode_idx_gw1ns_2,
+    },
+    "GW1NS-4": {
+        "package": "MBGA64",
+        "device": "GW1NS-4C-MBGA64-6",
+        "partnumber": "GW1NS-LV4CMG64C6/I5",
+        "recode_idx": recode_idx_gw1ns_4,
     },
     "GW1N-9": {
         "package": "PBGA256",
@@ -350,7 +366,7 @@ def fse_drive(fse, db, pin_locations):
                         if iostd_key == -1 or (iostd == "PCI33" and opt_name == '8'):
                             loc = set()
                         else:
-                            if device == 'GW1N-4':
+                            if device in ['GW1N-4', 'GW1NS-4']:
                                 opt_key = gw1n4_aliases[opt_name]
                                 if opt_key:
                                     val = _drive_key.union({opt_key})
@@ -389,7 +405,7 @@ def fse_open_drain(fse, db, pin_locations):
                 # come up with a smarter way to find them.
                 # XXX Below is a very shamanic method of determining the fuses,
                 iostd33_key, _, _, gw1n4_aliases = _iostd_codes["LVCMOS33"]
-                if device == 'GW1N-4':
+                if device in ['GW1N-4', 'GW1NS-4']:
                     cur16ma_key = _drive_key.union({gw1n4_aliases["16"]})
                     keys = _open_drain_gw1n4_key
                 else:
