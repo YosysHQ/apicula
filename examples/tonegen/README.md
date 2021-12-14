@@ -25,4 +25,11 @@ o--------| R = 100 Ohms |--------|-------------------o   Output
                                -----                                          
                                 ---                                           
 ```
-             
+
+For the TEC0117 board, the output pin is pin 1 on the 12-pin PMOD header.
+
+
+## bugs
+Using nextpnr-gowin -- Next Generation Place and Route (Version 06d58e6e) and 
+Yosys 0.9+4081 (git sha1 c6681508, gcc 9.3.0-17ubuntu1~20.04 -fPIC -Os, it appears that not all phase increments work. See top.v for more information.
+

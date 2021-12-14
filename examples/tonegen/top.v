@@ -13,18 +13,20 @@ module top(clk, rst_n, sd_out, led);
     output  sd_out;     // noise shaper output
     output  [7:0] led;  // leds for debugging
 
-    reg [23:0]  phase_accu = 24'd0;
+    reg [23:0]  phase_accu;
 
     // frequency = 12e6 / 2^32 * phase_inc
+    //reg [23:0]  phase_inc  = 24'd70; // (works) approximately 50 Hz at 12MHz system clock
+    reg [23:0]  phase_inc  = 24'd350;  // (fails?) approximately 250 kHz at 12MHz system clock
+    //reg [23:0]  phase_inc  = 24'd1398; // (works) approximately 1 kHz at 12MHz system clock
+    //reg [23:0]  phase_inc  = 24'd6991; // (works) approximately 5 kHz at 12MHz system clock
 
-    reg [23:0]  phase_inc  = 24'd5592; // approximately 1kHz at 12MHz system clock
     wire signed [15:0] sinusoid;
 
     // phase accumulator to drive the cordic
     always @(posedge clk)
     begin
-        phase_inc  <= phase_inc + 24'd1;
-        phase_accu <= phase_accu + phase_inc[23:14];
+        phase_accu <= phase_accu + phase_inc;
     end;
 
     cordic_10_16 cordic

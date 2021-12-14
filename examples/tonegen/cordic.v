@@ -86,26 +86,26 @@ module cordic_10_16(clk, rst_n, angle_in, cos_out, sin_out);
         case($unsigned(angle_in[16-1:16-2]))
             2'b00:
                 begin
-                    x_in <= 16'd19897;
+                    x_in <= 16'd19896;
                     y_in <= 0;
                     z_in <= angle_in;
                 end
             2'b11:
                 begin
-                    x_in <= 16'd19897;
+                    x_in <= 16'd19896;
                     y_in <= 0;
                     z_in <= angle_in;
                 end
             2'b01:
                 begin
                     x_in <= 0;
-                    y_in <= 16'd19897;
+                    y_in <= 16'd19896;
                     z_in <= $signed({2'b00, angle_in[16-3:0]});
                 end
             2'b10:
                 begin
                     x_in <= 0;
-                    y_in <= -16'd19897;
+                    y_in <= -16'd19896;
                     z_in <= $signed({2'b11, angle_in[16-3:0]});
                 end
         endcase
