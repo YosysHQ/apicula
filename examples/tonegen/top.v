@@ -15,9 +15,12 @@ module top(clk, rst_n, sd_out, led);
 
     reg [23:0]  phase_accu;
 
+    // ### BUGS BE HERE ###
     // frequency = 12e6 / 2^32 * phase_inc
     //reg [23:0]  phase_inc  = 24'd70; // (works) approximately 50 Hz at 12MHz system clock
+    //reg [23:0]  phase_inc  = 24'd349;  // (works) approximately 250 Hz at 12MHz system clock
     reg [23:0]  phase_inc  = 24'd350;  // (fails?) approximately 250 Hz at 12MHz system clock
+    //reg [23:0]  phase_inc  = 24'd351;  // (works) approximately 250 Hz at 12MHz system clock
     //reg [23:0]  phase_inc  = 24'd1398; // (works) approximately 1 kHz at 12MHz system clock
     //reg [23:0]  phase_inc  = 24'd6991; // (works) approximately 5 kHz at 12MHz system clock
 
