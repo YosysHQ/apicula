@@ -3,11 +3,11 @@
 // Author: Niels A. Moseley, n.a.moseley@moseleyinstruments.com
 //
 
-module top(clk, rst_n, sd_out, led);
+module top(clk, rst, sd_out, led);
 
     // inputs
     input   clk;        // clock 12 MHz
-    input   rst_n;      // synchronous reset, active low
+    input   rst;      // synchronous reset, active low
 
     // outputs
     output  sd_out;     // noise shaper output
@@ -35,7 +35,7 @@ module top(clk, rst_n, sd_out, led);
     cordic_10_16 cordic
     (
         .clk(clk),
-        .rst_n(rst_n),
+        .rst_n(rst),
         .angle_in(phase_accu[23:8]),
         .cos_out(sinusoid)
     );
@@ -43,7 +43,7 @@ module top(clk, rst_n, sd_out, led);
     sddac dac
     (
         .clk(clk),
-        .rst_n(rst_n),
+        .rst_n(rst),
         .sig_in( {sinusoid[15], sinusoid[15:1]} ),
         .sd_out(sd_out)
     );
