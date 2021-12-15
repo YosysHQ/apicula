@@ -15,7 +15,7 @@ def readFse(f):
     while True:
         ttyp = rint(f, 4)
         if ttyp == 0x9a1d85: break
-        #print("tile type", ttyp)
+        # print("tile type", ttyp)
         tiles[ttyp] = readOneFile(f, ttyp)
     return tiles
 
@@ -30,7 +30,7 @@ def readOneFile(f, fuselength):
     for i in range(tables):
         typ = rint(f, 4)
         size = rint(f, 4)
-        #print(hex(f.tell()), " Table type", typ, "of size", size)
+        # print(hex(f.tell()), " Table type", typ, "of size", size)
         if typ == 61:
             size2 = rint(f, 4)
             typn = "grid"
@@ -52,7 +52,7 @@ def readOneFile(f, fuselength):
         elif typ in {5, 0x11, 0x14, 0x15, 0x16, 0x19, 0x1a, 0x1b,
                      0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23,
                      0x24, 0x32, 0x33, 0x38, 0x3c, 0x40, 0x42, 0x44,
-                     0x47, 0x49, 0x4b, 0x4d}:
+                     0x47, 0x49, 0x4b, 0x4d, 0x4f, 0x50}:
             typn = "shortval"
             t = readTable(f, size, 14, 2)
         elif typ in {6, 0x45}:
