@@ -38,9 +38,9 @@ params = {
         "partnumber": "GW1NS-UX2CLQ144C5/I4",
     },
     "GW1NS-4": {
-        "package": "MBGA64",
-        "device": "GW1NS-4C-MBGA64-6",
-        "partnumber": "GW1NS-LV4CMG64C6/I5",
+        "package": "QFN48",
+        "device": "GW1NS-4C-QFN48-6",
+        "partnumber": "GW1NS-LV4CQN48C6/I5",
     },
     "GW1N-9": {
         "package": "PBGA256",
@@ -140,12 +140,16 @@ def dff(locations):
 _illegal_combo = { ("IOR6A", "SLEW_RATE") : "GW1NS-2",
                    ("IOR6B", "SLEW_RATE") : "GW1NS-2"}
 
-def is_illegal(pin, attr):
+def is_illegal(iostd, pin, attr):
     if _illegal_combo.get((pin, attr)) == device:
         return True
     # GW1N-1, GW1NS-2, GW1N-4 and GW1N-9 allow single resisor only in banks 1/3
     if (attr == "SINGLE_RESISTOR") and (pin[2] in "BT"):
         return True
+    # bottom pins GW1NS-4 (bank 3) support LVCMOS only
+    if iostd != '' and device == 'GW1NS-4':
+        if pin.startswith('IOB'):
+            return not iostd.startswith('LVCMOS')
     return False
 
 # take TBUF == IOBUF - O
@@ -298,7 +302,7 @@ def iob(locations):
                                 loc = find_next_loc(pin, locs)
 
                             # special pins
-                            if is_illegal(loc, attr):
+                            if is_illegal(iostd, loc, attr):
                                 continue
                             name = make_name("IOB", typ)
                             iob = codegen.Primitive(typ, name)
