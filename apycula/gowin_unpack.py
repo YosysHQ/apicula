@@ -246,7 +246,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
                 lut.portmap['I3'] = f"R{row}C{col}_D{idx}"
                 mod.wires.update(lut.portmap.values())
                 mod.primitives[name] = lut
-                cst.cells[name] = f"R{row}C{col}[{int(idx) // 2}][{_sides[int(idx) % 2]}]"
+                cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
             make_muxes(row, col, idx, db, mod)
         elif typ == "ALU":
             print(flags)
@@ -291,7 +291,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
                 dff.portmap[port] = f"R{row}C{col}_LSR{idx//2}"
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
-            cst.cells[name] = f"R{row}C{col}[{int(idx) // 2}][{_sides[int(idx) % 2]}]"
+            cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
         elif typ == "IOB":
             try:
                 kind, = flags.intersection(iobmap.keys())
