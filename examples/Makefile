@@ -1,11 +1,11 @@
 YOSYS ?= yosys
 NEXTPNR ?= nextpnr-gowin
 
-all: attosoc-tec0117.fs attosocnodffe-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
+all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs iob-tangnano.fs iob-default-flags-tangnano.fs
 
-unpacked: attosoc-tec0117-unpacked.v attosocnodffe-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
+unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
 	shift-tangnano-unpacked.v shift-honeycomb-unpacked.v iob-tangnano-unpacked.v iob-default-flags-tangnano-unpacked.v
 	
@@ -50,9 +50,6 @@ clean:
 
 attosoc-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
-
-attosocnodffe-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
-	$(YOSYS) -p "read_verilog $^; synth_gowin -nodffe -json $@"
 
 nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"

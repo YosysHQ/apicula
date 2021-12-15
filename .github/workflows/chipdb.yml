@@ -5,7 +5,7 @@ on:
   # but only for the main branch
   push:
     branches:
-      - main
+      - master
   pull_request:
 
 jobs:
@@ -194,7 +194,7 @@ jobs:
         make -j$(nproc)
         sudo make install
         cd ../examples
-        make all
+        make -j$(nproc) all
     - name: Archive artifact
       uses: actions/upload-artifact@v2
       with:
