@@ -1,4 +1,4 @@
-# these are the HDMI pins!
+// these are the HDMI pins!
 IO_LOC "led[0]" 27;
 IO_LOC "led[1]" 28;
 IO_LOC "led[2]" 29;
