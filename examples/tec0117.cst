@@ -7,6 +7,7 @@
 
 IO_LOC "clk" 35;
 IO_LOC "rst" 77;
+IO_LOC "sd_out" 47; // PMOD header pin 1
 IO_LOC "led[0]" 86;
 IO_LOC "led[1]" 85;
 IO_LOC "led[2]" 84;

@@ -287,6 +287,12 @@ def read_tm(f, device):
             "ES_LV",
             "A4",
             "A4_LV",
+            "8",
+            "9",
+            "10",
+            "11",
+            "C7/I6",
+            "C7/I6_LV"
         ]
     elif device.lower().startswith("gw2a"):
         chunk_order = [
