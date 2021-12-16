@@ -306,8 +306,7 @@ def fse_pull_mode(fse, db, pin_locations):
         bels = {name[-1] for loc in tiles.values() for name in loc}
         for bel_idx in bels:
             bel = db.grid[row][col].bels.setdefault(f"IOB{bel_idx}", chipdb.Bel())
-            for iostd in iostandards:
-                b_iostd  = bel.iob_flags.setdefault(iostd, {})
+            for iostd, b_iostd in bel.iob_flags.items():
                 for io_mode in _pull_mode_iob:
                     b_mode = b_iostd.setdefault(io_mode, chipdb.IOBMode())
                     b_attr = b_mode.flags.setdefault('PULL_MODE', chipdb.IOBFlag())
@@ -333,8 +332,7 @@ def fse_slew_rate(fse, db, pin_locations):
         bels = {name[-1] for loc in tiles.values() for name in loc}
         for bel_idx in bels:
             bel = db.grid[row][col].bels.setdefault(f"IOB{bel_idx}", chipdb.Bel())
-            for iostd in iostandards:
-                b_iostd = bel.iob_flags.setdefault(iostd, {})
+            for iostd, b_iostd in bel.iob_flags.items():
                 for io_mode in _slew_rate_iob:
                     b_mode  = b_iostd.setdefault(io_mode, chipdb.IOBMode())
                     b_attr = b_mode.flags.setdefault('SLEW_RATE', chipdb.IOBFlag())
@@ -357,8 +355,7 @@ def fse_drive(fse, db, pin_locations):
         bels = {name[-1] for loc in tiles.values() for name in loc}
         for bel_idx in bels:
             bel = db.grid[row][col].bels.setdefault(f"IOB{bel_idx}", chipdb.Bel())
-            for iostd in iostandards:
-                b_iostd  = bel.iob_flags.setdefault(iostd, {})
+            for iostd, b_iostd in bel.iob_flags.items():
                 for io_mode in _drive_iob:
                     b_mode = b_iostd.setdefault(io_mode, chipdb.IOBMode())
                     b_attr = b_mode.flags.setdefault('DRIVE', chipdb.IOBFlag())
@@ -398,10 +395,9 @@ def fse_open_drain(fse, db, pin_locations):
         bels = {name[-1] for loc in tiles.values() for name in loc}
         for bel_idx in bels:
             bel = db.grid[row][col].bels.setdefault(f"IOB{bel_idx}", chipdb.Bel())
-            for iostd in iostd_open_drain:
-                if iostd not in iostandards:
+            for iostd, b_iostd in bel.iob_flags.items():
+                if iostd not in iostd_open_drain:
                     continue
-                b_iostd  = bel.iob_flags.setdefault(iostd, {})
                 # XXX presumably OPEN_DRAIN is another DRIVE mode, strange as it may sound.
                 # Three fuses are used: ON=100, i.e. one is set and the other two are cleared,
                 # OFF=xxx (xxx != 100)
@@ -446,11 +442,9 @@ def fse_hysteresis(fse, db, pin_locations):
         bels = {name[-1] for loc in tiles.values() for name in loc}
         for bel_idx in bels:
             bel = db.grid[row][col].bels.setdefault(f"IOB{bel_idx}", chipdb.Bel())
-            for iostd in iostd_histeresis:
-                # XXX
-                if iostd not in iostandards:
+            for iostd, b_iostd in bel.iob_flags.items():
+                if iostd not in iostd_histeresis:
                     continue
-                b_iostd  = bel.iob_flags.setdefault(iostd, {})
                 for io_mode in _hysteresis_iob:
                     b_mode  = b_iostd.setdefault(io_mode, chipdb.IOBMode())
                     b_attr = b_mode.flags.setdefault('HYSTERESIS', chipdb.IOBFlag())
