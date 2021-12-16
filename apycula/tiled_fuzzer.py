@@ -78,15 +78,10 @@ params = {
         "recode_idx": recode_idx_gw1ns_2,
     },
     "GW1NS-4": {
-        "package": "MBGA64",
-        "device": "GW1NS-4C-MBGA64-6",
-        "partnumber": "GW1NS-LV4CMG64C6/I5",
-        "recode_idx": recode_idx_gw1ns_4,
-    },
-    "GW1NS-4": {
         "package": "QFN48",
-        "device": "GW1NS-4C-QFN48-6",
-        "partnumber": "GW1NS-LV4CQN48C6/I5",
+        "device": "GW1NSR-4C-QFN48-7",
+        "partnumber": "GW1NSR-LV4CQN48PC7/I6",
+        "recode_idx": recode_idx_gw1ns_4,
     },
     "GW1N-9": {
         "package": "PBGA256",
