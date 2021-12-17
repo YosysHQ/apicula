@@ -97,7 +97,7 @@ def place(db, tilemap, bels, cst, args):
                     tile[brow][bcol] = 1
             # XXX skip power
             if not cellname.startswith('\$PACKER'):
-                cst.cells[cellname] = f"R{row}C{col}[{int(num) // 2}][{_sides[int(num) % 2]}]"
+                cst.cells[cellname] = (row, col, int(num) // 2, _sides[int(num) % 2])
         elif typ == "IOB":
             edge = 'T'
             idx = col;
