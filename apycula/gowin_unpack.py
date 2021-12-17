@@ -379,9 +379,11 @@ def main():
     device = args.device
     # For tool integration it is allowed to pass a full part number
     m = re.match("GW1N([A-Z]*)-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+)(C[0-9]/I[0-9])", device)
+    m = re.match("GW1N(S?)[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
     if m:
+        mods = m.group(1)
         luts = m.group(3)
-        device = f"GW1N-{luts}"
+        device = f"GW1N{mods}-{luts}"
 
     with importlib.resources.open_binary("apycula", f"{device}.pickle") as f:
         db = pickle.load(f)
