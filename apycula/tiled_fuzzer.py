@@ -477,6 +477,7 @@ def iob(locations):
             bels = {name[-1] for loc in tiles.values() for name in loc}
             for pin in bels: # [A, B, C, D, ...]
                 for attr, attr_values in iobattrs.items():  # each IOB attribute
+                    # XXX remove
                     if iostd == "PCI33" and attr == "SINGLE_RESISTOR":
                         continue
                     attr_vals = attr_values.values
@@ -793,7 +794,6 @@ if __name__ == "__main__":
             elif bel_type == "IOB":
                 bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
                 bel.lvcmos121518_bits = get_12_15_18_bits(fse, typ, pin)
-                loc -= route_bits(db, row, col)
                 pnr_attrs = pnr.attrs.get(name)
                 if pnr_attrs:
                     # first get iostd

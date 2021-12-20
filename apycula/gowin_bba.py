@@ -68,7 +68,10 @@ def write_pips(b, pips):
 def write_bels(b, bels):
     with b.block("bels") as blk:
         for typ, bel in bels.items():
-            b.u16(id_string(typ))
+            if bel.simplified_iob:
+                b.u16(id_string(f'{typ}S'))
+            else:
+                b.u16(id_string(typ))
             with b.block("portmap") as port_blk:
                 for dest, src in bel.portmap.items():
                     b.u16(id_string(dest))
