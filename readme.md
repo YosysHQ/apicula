@@ -13,6 +13,7 @@ Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr
 Currently supported boards are
  * Trenz TEC0117: GW1NR-UV9QN881C6/I5
  * Sipeed Tang Nano: GW1N-LV1QN48C6/I5
+ * Sipeed Tang Nano 4K: GW1NSR-LV4CQN48PC7/I6
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
  * @Disasm honeycomb: GW1NS-UX2CQN48C5/I4
 
@@ -33,7 +34,7 @@ export PATH="/home/pepijn/.local/bin:$PATH" # add binaries to the path
 
 From there, compile a blinky.
 
-The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber`, `tangnano` or `honeycomb` accordingly. Also note the number of LEDs on your board: 8 for tec0117 and runber, 3 for honeycomb and tangnano. 
+The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber`, `tangnano`, `tangnano4k` or `honeycomb` accordingly. Also note the number of LEDs on your board: 8 for tec0117 and runber, 3 for honeycomb and tangnano. 
 You can also use the Makefile in the examples folder to build the examples.
 
 ```bash
@@ -53,12 +54,7 @@ openFPGALoader -b tec0117 pack.fs # change to your board
 
 In addition to the above, to run the fuzzers and build the ChipDB, the following additional dependencies are needed.
 
-Version 1.9.3.01 of the Gowin vendor tools. Newer versions may work, but have not been tested. A copy of the following Gowin files downloaded in `~/Documents/gowinsemi`:
-* `UG107-1.09E_GW1N-1 Pinout.xlsx`
-* `UG114-1.4E_GW1N-9 Pinout.xlsx`
-* `UG801-1.5E_GW1NR-9 Pinout.xlsx`
-* `UG105-1.6E_GW1N-4 Pinout.xlsx`
-* `UG825-1.2.1E_GW1NS-2C Pinout.xlsx`
+Version 1.9.8 of the Gowin vendor tools. Newer versions may work, but have not been tested.
 
 Alternatively, you can use the `Dockerfile` to run the fuzzers in a container.
 
@@ -101,7 +97,6 @@ There is a `fuse_h4x.parse_tile` function which uses our understanding of the ve
 
 Things that could be fuzzed:
 
-* ALU modes
 * DRAM modes and bits
 * BRAM modes and bits
 * IO logic (LVDS etc.), expected to be complex.
@@ -129,5 +124,3 @@ There are quite a few sketchy places in the code that could use some tender lovi
 The `.dat` parser was sort of patched to output a JSON file, but it would be a lot nicer if one could just import it as a library and get Python datastructures back directly. Both parsers could optionally be extended to map known IDs to more human readable values (`wirenames.py` for example), provide a more convenient structure, and chomp of padding values.
 
 The fuzzers should be extended so that they run against all FPGA types. This is important to detect differences between FPGAs and generate ChipDBs for all of them. This does not require much in-depth knowledge. Just adding parameters for all FPGA types. A bit more involved is extending the fuzzer to fuzz global settings and constraints, these would need to be assigned config bits and toggle them accordingly.
-
-Eventually it'd be really sweet if there were some tests and continuous integration.
