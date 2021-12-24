@@ -26,7 +26,7 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     package_data={
-        'apycula': ['GW1N-1.pickle', 'GW1NS-2.pickle', 'GW1N-4.pickle', 'GW1N-9.pickle'],
+        'apycula': ['*.pickle']
     },
     entry_points={
         'console_scripts': [
