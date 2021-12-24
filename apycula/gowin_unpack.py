@@ -30,6 +30,14 @@ def zero_bits(mode, all_modes):
         m_mask.update(flag.mask)
     return res.difference(all_modes[mode].decode_bits).difference(m_mask)
 
+# If the length of the bit pattern is equal, start the comparison with IOBUF
+def _io_mode_sort_func(mode):
+    l = len(mode[1].decode_bits) * 10
+    if mode[0] == 'IOBUF':
+        l += 2
+    elif mode[1] == 'OBUF':
+        l += 1
+    return l
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowun_unpack io standard is determined first and it is known.
@@ -39,6 +47,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
     bels = {}
     for name, bel in tiledata.bels.items():
         if name[0:3] == "IOB":
+            #print(name)
             if noiostd:
                 iostd = ''
             else:
@@ -49,7 +58,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             # Here we don't use a mask common to all modes (it didn't work),
             # instead we try the longest bit sequence first.
             for mode, mode_rec in sorted(bel.iob_flags[iostd].items(),
-                    key = lambda m: len(m[1].decode_bits), reverse = True):
+                    key = _io_mode_sort_func, reverse = True):
                 # print(mode, mode_rec.decode_bits)
                 mode_bits = {(row, col)
                              for row, col in mode_rec.decode_bits
@@ -249,7 +258,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
                 cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
             make_muxes(row, col, idx, db, mod)
         elif typ == "ALU":
-            print(flags)
+            #print(flags)
             kind, = flags # ALU only have one flag
             idx = int(idx)
             name = f"R{row}C{col}_ALU_{idx}"
@@ -277,7 +286,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
                 mod.primitives[name] = alu
 
         elif typ == "DFF":
-            print(flags)
+            #print(flags)
             kind, = flags # DFF only have one flag
             idx = int(idx)
             port = dffmap[kind]
