@@ -40,6 +40,9 @@ class Bel:
     flags: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     # { iostd: { mode : IOBMode}}
     iob_flags: Dict[str, Dict[str, IOBMode]] = field(default_factory=dict)
+    lvcmos121518_bits: Set[Coord] = field(default_factory = set)
+    # this Bel is IOBUF and needs routing to become IBUF or OBUF
+    simplified_iob: bool = field(default = False)
     # banks
     bank_mask: Set[Coord] = field(default_factory=set)
     bank_flags: Dict[str, Set[Coord]] = field(default_factory=dict)
@@ -404,6 +407,14 @@ def dff_clean(dev):
                     for mode, bits in bel.modes.items():
                         bits -= extra_bits
 
+def get_route_bits(db, row, col):
+    """ All routing bits for the cell """
+    bits = set()
+    for w in db.grid[row][col].pips.values():
+        for v in w.values():
+            bits.update(v)
+    return bits
+
 def diff2flag(dev):
     """ Minimize bits for flag values and calc flag bitmask"""
     seen_bels = []
@@ -414,11 +425,18 @@ def diff2flag(dev):
                     if not bel.iob_flags or bel in seen_bels:
                         continue
                     seen_bels.append(bel)
+                    # get routing bits for cell
+                    rbits = get_route_bits(dev, idx, jdx)
                     # If for a given mode all possible values of one flag
                     # contain some bit, then this bit is "noise" --- this bit
                     # belongs to the default value of another flag. Remove.
                     for iostd, iostd_rec in bel.iob_flags.items():
                         for mode, mode_rec in iostd_rec.items():
+                            # if encoding has routing
+                            r_encoding = mode_rec.encode_bits & rbits
+                            mode_rec.encode_bits -= rbits
+                            if r_encoding and mode != 'IOBUF':
+                                bel.simplified_iob = True
                             mode_rec.decode_bits = mode_rec.encode_bits.copy()
                             for flag, flag_rec in mode_rec.flags.items():
                                 noise_bits = None
