@@ -89,6 +89,12 @@ params = {
         "partnumber": "GW1N-LV9PG256C6/I5",
         "recode_idx": recode_idx_gw1n9,
     },
+    "GW1N-9C": {
+        "package": "UBGA332",
+        "device": "GW1N-9C-UBGA332-6",
+        "partnumber": "GW1N-LV9UG332C6/I5",
+        "recode_idx": recode_idx_gw1n9, # TODO: recheck
+    },
     "GW1N-4": {
         "package": "PBGA256",
         "device": "GW1N-4-PBGA256-6",
