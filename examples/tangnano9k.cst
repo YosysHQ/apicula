@@ -1,0 +1,11 @@
+//Part Number: GW1NR-LV9QN88PC6/I5
+
+IO_LOC "clk" 52;
+IO_LOC "led[0]" 10;
+IO_LOC "led[1]" 11;
+IO_LOC "led[2]" 13;
+IO_LOC "led[3]" 14;
+IO_LOC "led[4]" 15;
+IO_LOC "led[5]" 16;
+IO_LOC "key" 3;
+IO_LOC "rst" 4;
