@@ -198,7 +198,8 @@ def fse_luts(fse, ttyp):
             # CDN
             add_alu_mode(mode, bel.modes, lut, "7",     "0101000001011111")
             # CUPCDN
-            add_alu_mode(mode, bel.modes, lut, "8",     "1010000001011010")
+            # The functionality of this seems to be the same with SUB
+            # add_alu_mode(mode, bel.modes, lut, "8",     "1010000001011010")
             # MULT   INIT="0111 1000 1000 1000"
             #
             add_alu_mode(mode, bel.modes, lut, "9",     "0111100010001000")
