@@ -45,6 +45,8 @@ def read_bitstream(fname):
                 if not preamble and ba[0] == 0x06: # device ID
                     if ba == b'\x06\x00\x00\x00\x11\x00\x58\x1b':
                         padding = 4
+                    elif ba == b'\x06\x00\x00\x00\x11\x00H\x1b':
+                        padding = 4
                     elif ba == b'\x06\x00\x00\x00\x09\x00\x28\x1b':
                         padding = 0
                     elif ba == b'\x06\x00\x00\x00\x01\x008\x1b':

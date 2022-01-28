@@ -47,6 +47,24 @@ jobs:
       with:
           name: gw1n-9-stage
           path: GW1N-9*
+  gw1n9c:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build gw1n-9c chipdb
+      run: |
+        docker pull pepijndevos/apicula:1.9.8
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1N-9C.pickle
+    - name: Archive artifact
+      uses: actions/upload-artifact@v2
+      with:
+          name: gw1n-9c-chipdb
+          path: apycula/GW1N-9C.pickle
+    - name: Archive stage artifact
+      uses: actions/upload-artifact@v2
+      with:
+          name: gw1n-9c-stage
+          path: GW1N-9C*
   gw1n4:
     runs-on: ubuntu-latest
     steps:
@@ -103,7 +121,7 @@ jobs:
           path: GW1NS-4*
   pypi:
     runs-on: ubuntu-latest
-    needs: [gw1n1, gw1n9, gw1n4, gw1ns2, gw1ns4]
+    needs: [gw1n1, gw1n9, gw1n9c, gw1n4, gw1ns2, gw1ns4]
     steps:
     - uses: actions/checkout@v2
     - name: Download gw1n-1 chipdb
@@ -120,6 +138,11 @@ jobs:
       uses: actions/download-artifact@v2
       with:
         name: gw1n-9-chipdb
+        path: apycula
+    - name: Download gw1n-9c chipdb
+      uses: actions/download-artifact@v2
+      with:
+        name: gw1n-9c-chipdb
         path: apycula
     - name: Download gw1ns-2 chipdb
       uses: actions/download-artifact@v2
