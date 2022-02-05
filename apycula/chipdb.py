@@ -136,7 +136,7 @@ def add_alu_mode(base_mode, modes, lut, new_alu_mode, new_mode_bits):
         if bit == '0':
             alu_mode.update(lut.flags[15 - i])
 
-# also make ALUs
+# also make ALUs and shadow RAM
 def fse_luts(fse, ttyp):
     try:
         data = fse[ttyp]['shortval'][5]
@@ -218,6 +218,27 @@ def fse_luts(fse, ttyp):
                 'I1': f"B{alu_idx}",
                 'I3': f"D{alu_idx}",
             }
+
+    # main fuse: enable shadow SRAM in the slice
+    # shortval(28) [2, 0, fuses]
+    if 28 in fse[ttyp]['shortval']:
+        data = fse[ttyp]['shortval'][28]
+        bel = luts.setdefault(f"RAM16SDP4", Bel())
+        mode = set()
+        for key0, key1, *fuses in data:
+            if key0 == 2 and key1 == 0:
+                for f in (f for f in fuses if f != -1):
+                    coord = fuse.fuse_lookup(fse, ttyp, f)
+                    mode.update({coord})
+                break
+        bel.portmap = {
+            'DI': ("A5", "B5", "C5", "D5"),
+            'CLK': "CLK2",
+            'WRE': "LSR2",
+            'WAD': ("A4", "B4", "C4", "D4"),
+            'RAD': tuple(tuple(f"{j}{i}" for i in range(4)) for j in ["A", "B", "C", "D"]),
+            'DO': ("F0", "F1", "F2", "F3"),
+        }
     return luts
 
 
