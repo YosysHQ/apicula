@@ -63,6 +63,8 @@ class Primitive:
             if not first:
                 f.write(",")
             first = False
+            if isinstance(wire, list):
+                wire = "{" + ", ".join([x for x in wire]) + "}"
             f.write("\n.{}({})".format(port, wire))
         f.write("\n);\n")
 

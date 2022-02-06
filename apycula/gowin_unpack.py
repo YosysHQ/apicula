@@ -106,6 +106,8 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         for flag, bits in bel.flags.items():
             used_bits = {tile[row][col] for row, col in bits}
             if all(used_bits):
+                if name == "RAM16" and not name in bels:
+                    continue
                 bels.setdefault(name, set()).add(flag)
 
     pips = {}
@@ -224,6 +226,15 @@ def removeALUs(bels):
     for bel in bels_to_remove:
         bels.pop(bel, None)
 
+def ram16_remove_bels(bels):
+    bels_to_remove = []
+    for bel in bels:
+        if bel == "RAM16":
+            bels_to_remove.extend(f"LUT{x}" for x in range(6))
+            bels_to_remove.extend(f"DFF{x}" for x in range(4, 6))
+    for bel in bels_to_remove:
+        bels.pop(bel, None)
+
 _sides = "AB"
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
     # db is 0-based, floorplanner is 1-based
@@ -236,7 +247,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16)(\w*)")
     for bel, flags in bels.items():
         typ, idx = belre.match(bel).groups()
 
@@ -284,6 +295,25 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cfg, cst, db):
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
                 mod.wires.update(alu.portmap.values())
                 mod.primitives[name] = alu
+        elif typ == "RAM16":
+            val0 = sum(1<<x for x in range(0,16) if not x in flags)
+            val1 = sum(1<<(x-16) for x in range(16,32) if not x in flags)
+            val2 = sum(1<<(x-32) for x in range(32,48) if not x in flags)
+            val3 = sum(1<<(x-48) for x in range(48,64) if not x in flags)
+            name = f"R{row}C{col}_RAM16"
+            ram16 = codegen.Primitive("RAM16SDP4", name)
+            ram16.params["INIT_0"] = f"16'b{val0:016b}"
+            ram16.params["INIT_1"] = f"16'b{val1:016b}"
+            ram16.params["INIT_2"] = f"16'b{val2:016b}"
+            ram16.params["INIT_3"] = f"16'b{val3:016b}"
+            ram16.portmap['DI'] = [f"R{row}C{col}_{x}5" for x in "ABCD"]
+            ram16.portmap['CLK'] = f"R{row}C{col}_CLK2"
+            ram16.portmap['WRE'] = f"R{row}C{col}_LSR2"
+            ram16.portmap['WAD'] = [f"R{row}C{col}_{x}4" for x in "ABCD"]
+            ram16.portmap['RAD'] = [f"R{row}C{col}_{x}0" for x in "ABCD"]
+            ram16.portmap['DO'] = [f"R{row}C{col}_F{x}" for x in range(4)]
+            mod.wires.update(chain.from_iterable([x if isinstance(x, list) else [x] for x in ram16.portmap.values()]))
+            mod.primitives[name] = ram16                                       
 
         elif typ == "DFF":
             #print(flags)
@@ -438,6 +468,7 @@ def main():
             removeALUs(bels)
         else:
             removeLUTs(bels)
+        ram16_remove_bels(bels)
         tile2verilog(row, col, bels, pips, clock_pips, mod, cfg, cst, db)
 
     with open(args.output, 'w') as f:
