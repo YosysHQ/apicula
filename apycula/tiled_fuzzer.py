@@ -107,6 +107,12 @@ params = {
         "partnumber": "GW1N-LV1LQ144C6/I5",
         "recode_idx": recode_idx_gw1n1,
     },
+    "GW1NZ-1": {
+        "package": "QFN48",
+        "device": "GW1NZ-1-QFN48-6",
+        "partnumber": "GW1NZ-LV1QN48C6/I5",
+        "recode_idx": recode_idx_gw1n1, # TODO: check
+    },
 }[device]
 
 name_idx = 0
