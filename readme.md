@@ -13,6 +13,7 @@ Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr
 Currently supported boards are
  * Trenz TEC0117: GW1NR-UV9QN881C6/I5
  * Sipeed Tang Nano: GW1N-LV1QN48C6/I5
+ * Sipeed Tang Nano 1K: GW1NZ-LV1QN48C6/I5
  * Sipeed Tang Nano 4K: GW1NSR-LV4CQN48PC7/I6
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
  * @Disasm honeycomb: GW1NS-UX2CQN48C5/I4
