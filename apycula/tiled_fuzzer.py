@@ -68,6 +68,16 @@ def recode_idx_gw1n4(idx):
         new_idx -= 2
     return new_idx
 
+def recode_idx_gw1nz_1(idx):
+    new_idx = idx
+    if idx >= 40:
+        new_idx -= 10
+    if idx >= 60:
+        new_idx -= 2
+    if idx >= 80:
+        new_idx -= 6
+    return new_idx
+
 # device = os.getenv("DEVICE")
 device = sys.argv[1]
 params = {
@@ -111,7 +121,7 @@ params = {
         "package": "QFN48",
         "device": "GW1NZ-1-QFN48-6",
         "partnumber": "GW1NZ-LV1QN48C6/I5",
-        "recode_idx": recode_idx_gw1n1, # TODO: check
+        "recode_idx": recode_idx_gw1nz_1, # TODO: check
     },
 }[device]
 
