@@ -104,7 +104,7 @@ def quadrants():
         sweep_tiles = fuse_h4x.tile_bitmap(fse, mybs^pnr.bitmap)
 
         # find which tap was used
-        taps = [r for (r, c, typ), t in sweep_tiles.items() if typ in {13, 14, 15, 16}]
+        taps = [r for (r, c, typ), t in sweep_tiles.items() if typ in {13, 14, 15, 16, 18, 19}]
 
         # find which center tile was used
         t8x = [(r, c) for (r, c, typ), t in sweep_tiles.items() if typ >= 80 and typ < 90]

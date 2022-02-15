@@ -4,7 +4,7 @@ NEXTPNR ?= nextpnr-gowin
 all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs iob-tangnano.fs iob-default-flags-tangnano.fs \
-	tonegen-tec0117.fs blinky-tangnano9k.fs
+	tonegen-tec0117.fs blinky-tangnano9k.fs blinky-tangnano1k.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
@@ -37,6 +37,12 @@ clean:
 %-default-flags-tangnano.json: %-tangnano-synth.json
 	$(NEXTPNR) --json $^ --write $@ --device GW1N-LV1QN48C6/I5 \
 		--cst iob/tangnano-default.cst
+
+%-tangnano1k.fs: %-tangnano1k.json
+	gowin_pack -d GW1NZ-1 -o $@ $^
+
+%-tangnano1k.json: %-tangnano1k-synth.json tangnano1k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NZ-LV1QN48C6/I5 --family GW1NZ-1 --cst tangnano1k.cst
 
 %-tangnano4k.fs: %-tangnano4k.json
 	gowin_pack -d GW1NS-4 -o $@ $^
@@ -72,6 +78,9 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 	$(YOSYS) -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"
 
 %-tangnano-synth.json: %.v
+	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
+
+%-tangnano1k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
 
 %-tangnano4k-synth.json: %.v
