@@ -220,7 +220,7 @@ def is_illegal(iostd, pin, attr, attr_value = None):
     # bottom pins GW1NS-4 (bank 3) support LVCMOS only
     if iostd != '' and device == 'GW1NS-4':
         if pin.startswith('IOB'):
-            return (not iostd.startswith('LVCMOS') and not iostd != 'PCI33')
+            return (not iostd.startswith('LVCMOS') and iostd != 'PCI33')
     if device == 'GW1NZ-1':
          return iostd in ["SSTL25_I", "SSTL33_I", "SSTL15", "HSTL18_I"]
     if device == 'GW1N-9C' and pin.startswith('IOB') and attr == 'DRIVE':
