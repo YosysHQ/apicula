@@ -46,6 +46,7 @@ class Bel:
     # banks
     bank_mask: Set[Coord] = field(default_factory=set)
     bank_flags: Dict[str, Set[Coord]] = field(default_factory=dict)
+    bank_input_only_modes: Dict[str, str] = field(default_factory=dict)
     # there can be only one mode, modes are exclusive
     modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     portmap: Dict[str, str] = field(default_factory=dict)
@@ -98,14 +99,28 @@ class Device:
     def width(self):
         return sum(tile.width for tile in self.grid[0])
 
+    # XXX consider removing
     @property
     def corners(self):
         # { (row, col) : bank# }
         return {
-            (0, 0) : 0,
-            (0, self.cols - 1) : 1,
-            (self.rows - 1, self.cols - 1) : 2,
-            (self.rows - 1, 0) : 3}
+            (0, 0) : '0',
+            (0, self.cols - 1) : '1',
+            (self.rows - 1, self.cols - 1) : '2',
+            (self.rows - 1, 0) : '3'}
+
+    # Some chips have bits responsible for different banks in the same corner tile.
+    # Here stores the correspondence of the bank number to the (row, col) of the tile.
+    @property
+    def bank_tiles(self):
+        # { bank# : (row, col) }
+        res = {}
+        for pos in self.corners.keys():
+            row, col = pos
+            for bel in self.grid[row][col].bels.keys():
+                if bel[0:4] == 'BANK':
+                    res.update({ bel[4:] : pos })
+        return res
 
 def unpad(fuses, pad=-1):
     try:
@@ -245,6 +260,37 @@ def fse_luts(fse, ttyp):
         }
     return luts
 
+# XXX This is not a nice way, I will replace it with automatic creation of banks
+# in the very near future.
+def set_banks(device, db):
+    # fill the bank# : corner tile table
+    w = db.cols - 1
+    h = db.rows - 1
+    if device == 'GW1NZ-1':
+        db.grid[0][0].bels.setdefault('BANK0', Bel())
+        db.grid[0][w].bels.setdefault('BANK1', Bel())
+    elif device == 'GW1NS-2':
+        db.grid[0][0].bels.setdefault('BANK0', Bel())
+        db.grid[0][w].bels.setdefault('BANK1', Bel())
+        db.grid[h][w].bels.setdefault('BANK2', Bel())
+        db.grid[0][0].bels.setdefault('BANK3', Bel())
+    elif device == 'GW1NS-4':
+        db.grid[0][0].bels.setdefault('BANK0', Bel())
+        db.grid[0][w].bels.setdefault('BANK1', Bel())
+        db.grid[h][w].bels.setdefault('BANK2', Bel())
+        db.grid[h][w].bels.setdefault('BANK3', Bel())
+    elif device == 'GW1N-9':
+        db.grid[0][0].bels.setdefault('BANK0', Bel())
+        db.grid[0][w].bels.setdefault('BANK1', Bel())
+        db.grid[h][w].bels.setdefault('BANK2', Bel())
+        db.grid[h][0].bels.setdefault('BANK3', Bel())
+        db.grid[0][0].bels.setdefault('BANK10', Bel())
+        db.grid[0][0].bels.setdefault('BANK30', Bel())
+    else:
+        db.grid[0][0].bels.setdefault('BANK0', Bel())
+        db.grid[0][w].bels.setdefault('BANK1', Bel())
+        db.grid[h][w].bels.setdefault('BANK2', Bel())
+        db.grid[h][0].bels.setdefault('BANK3', Bel())
 
 def from_fse(fse):
     dev = Device()
@@ -457,6 +503,9 @@ def get_route_bits(db, row, col):
     for w in db.grid[row][col].pips.values():
         for v in w.values():
             bits.update(v)
+    for w in db.grid[row][col].clock_pips.values():
+        for v in w.values():
+            bits.update(v)
     return bits
 
 def diff2flag(dev):
@@ -496,7 +545,7 @@ def diff2flag(dev):
                             # decode bits don't include flags
                             for _, flag_rec in mode_rec.flags.items():
                                 mode_rec.decode_bits -= flag_rec.mask
-                elif name == "BANK":
+                elif name[0:4] == "BANK":
                     noise_bits = None
                     for bits in bel.bank_flags.values():
                         if noise_bits != None:
@@ -564,7 +613,7 @@ def loc2pin_name(db, row, col):
     return f"IO{side}{idx}"
 
 def loc2bank(db, row, col):
-    """ returns bank index 0...n
+    """ returns bank index '0'...'n'
     """
     bank =  db.corners.get((row, col))
     if bank == None:
