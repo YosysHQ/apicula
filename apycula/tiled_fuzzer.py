@@ -158,7 +158,7 @@ dffmap = {
     "DFFNC": "CLEAR",
 }
 def dff(locations):
-    for ttyp in range(12, 18): # for each tile type
+    for ttyp in range(12, 20): # for each tile type
         mod = codegen.Module()
         cst = codegen.Constraints()
         try:
