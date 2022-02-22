@@ -52,15 +52,20 @@ def recode_idx_gw1ns_4(idx):
         new_idx -= 1
     if idx >= 70:
         new_idx -= 3
+    if idx >= 79:
+        new_idx += 1
+    if idx >= 83:
+        new_idx -= 1
     return new_idx
 
 def recode_idx_gw1n9(idx):
     new_idx = idx
     if idx >= 69:
         new_idx += 3
-    if idx == 79:
-        new_idx += 4
-        return new_idx
+    if idx >= 79:
+        new_idx += 1
+    if idx >= 83:
+        new_idx -=1
     return new_idx
 
 def recode_idx_gw1n4(idx):
@@ -71,6 +76,10 @@ def recode_idx_gw1n4(idx):
         new_idx -= 1
     if idx >= 70:
         new_idx -= 2
+    if idx >= 73:
+        new_idx -= 1
+    if idx >= 79:
+        new_idx += 1
     return new_idx
 
 def recode_idx_gw1nz_1(idx):
