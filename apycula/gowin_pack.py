@@ -164,6 +164,9 @@ def place(db, tilemap, bels, cst, args):
 
             cst.attrs.setdefault(cellname, {}).update({"IO_TYPE": iostd})
             # collect flag bits
+            if iostd not in iob.iob_flags.keys():
+                print(f"Warning: {iostd} isn't allowed for IO{edge}{idx}{num}. Set LVCMOS18 instead.")
+                iostd = 'LVCMOS18'
             bits = iob.iob_flags[iostd][mode].encode_bits.copy()
             # XXX OPEN_DRAIN must be after DRIVE
             attrs_keys = attrs.keys()
@@ -197,28 +200,26 @@ def place(db, tilemap, bels, cst, args):
 
             if pinless_io:
                 return
-            #bank enable
-            for pos, bnum in db.corners.items():
-                if bnum == bank:
-                    break
-            brow, bcol = pos
-            tiledata = db.grid[brow][bcol]
-            tile = tilemap[(brow, bcol)]
-            if not len(tiledata.bels) == 0:
-                bank_bel = tiledata.bels['BANK']
-                bits = bank_bel.modes['ENABLE'].copy()
-                # iostd flag
-                bits |= bank_bel.bank_flags[iostd]
-                for row, col in bits:
-                    tile[row][col] = 1
     # If the entire bank has only inputs, the LVCMOS12/15/18 bit is set
     # in each IBUF regardless of the actual I/O standard.
-    for _, bank_desc in _banks.items():
+    for bank, bank_desc in _banks.items():
+        #bank enable
+        brow, bcol = db.bank_tiles[bank]
+        tiledata = db.grid[brow][bcol]
+        btile = tilemap[(brow, bcol)]
+        bank_bel = tiledata.bels['BANK' + bank]
+        bits = bank_bel.modes['ENABLE'].copy()
+        iostd = bank_desc.iostd
         if bank_desc.inputs_only:
             if bank_desc.iostd in {'LVCMOS33', 'LVCMOS25'}:
                 for bel, tile in bank_desc.bels_tiles:
                     for row, col in bel.lvcmos121518_bits:
                         tile[row][col] = 1
+            iostd = bank_bel.bank_input_only_modes[bank_desc.iostd]
+        # iostd flag
+        bits |= bank_bel.bank_flags[iostd]
+        for row, col in bits:
+            btile[row][col] = 1
 
 def route(db, tilemap, pips):
     for row, col, src, dest in pips:

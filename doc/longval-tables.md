@@ -94,6 +94,66 @@ Perhaps the most difficult attribute at the moment. It uses the same fuses as `D
 |:-----:|:-----------:|
 |   ON  |  {55, 70}   |
 
-(An example will come later)
+NOISE fuse: {55, 72}
+
+example: 'OPEN_DRAIN=ON':
+
+16mA LVCMOS33 fuse: 
+
+[12, 52, 56, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3210, 3238, 3245, 3263, 3273, 3281, -1, -1, -1, -1, -1, -1]
+
+ON fuse:
+
+[10, 55, 70, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3273, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+
+NOISE fuse:
+
+[7, 55, 72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3238, 3263, 3273, 3281, -1, -1, -1, -1, -1, -1, -1, -1]
+
+Thus we clear {3210, 3245} and set {3273}.
 
 
+## Tables of corner tiles
+Corner tiles enable I/O banks and set logical levels.
+
+Table 37.
+
+The key includes the bank number, usually unchanged, but there are strange numbers like 10 or 30. which still need to be investigated.
+
+Simple modes are found simply by the standard code:
+
+| Value     | Code  |
+|:---------:|:-----:|
+| LVCMOS33  |  68   |
+| LVCMOS25  |  67   |
+| LVCMOS18  |  66   |
+| LVCMOS15  |  65   |
+| LVCMOS12  |  64   |
+
+example: 'IO_TYPE=LVCMOS15'
+
+[2, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2797, 2813, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+
+
+Complex modes are obtained by adding fuse 79:
+
+| Mode      | Fuses  |
+|:---------:|:-----------------------:|
+| SSTL15    |  fuses(65) + fuses(79)  |
+| HSTL18_I  |  fuses(66) + fuses(79)  |
+| SSTL25_I  |  fuses(67) + fuses(79)  |
+| SSTL33_I  |  fuses(68) + fuses(79)  |
+
+example: 'IO_TYPE=SSTL15'
+
+Fuse 79: 
+
+[3, 79, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2229, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+
+Fuse 65:
+
+[3, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2181, 2197, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+
+Thus we set {2181, 2197, 2229}
+
+TODO: Describe the situation when all pins in the bank are working as input
