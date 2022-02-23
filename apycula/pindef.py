@@ -93,4 +93,32 @@ def get_clock_locs(device, package):
     return [(pin['NAME'], *pin['CFG'].split('/')) for pin in df
             if 'CFG' in pin.keys() and pin['CFG'].startswith("GCLK")]
 
+# { name : (is_diff, is_true_lvds, is_positive)}
+def get_diff_cap_info(device, package, special_pins=False):
+    df = get_package(device, package, special_pins)
+    res = {}
+    # If one pin of the pair is forbidden for the diff IO,
+    # we can determine this only after we read the data of all pairs
+    positive = {}
+    negative = {}
+    for pin in df:
+        is_positive = False
+        is_diff = 'DIFF' in pin.keys()
+        if not is_diff:
+            res[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive)
+            cotinue
+        is_true_lvds = 'TRUELVDS' in pin.keys()
+        if pin['DIFF'] == 'P':
+            is_positive = True
+            positive[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive)
+        else:
+            is_positive = False
+            negative[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive)
+    # check the pairs
+    for pos_name, pos_flags in positive.items():
+        neg_name = pos_name[:-1] + 'B'
+        if neg_name in negative.keys():
+            res.update({pos_name : pos_flags})
+            res.update({neg_name : negative[neg_name]})
+    return res
 

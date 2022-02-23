@@ -98,6 +98,8 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                                       if tile[row][col] == 1}
                         for iostd, bits in bel.bank_flags.items():
                             if bits == flag_bits:
+                                if iostd.startswith('LVDS25'):
+                                    iostd = iostd[7:]
                                 _banks[name[4:]] = iostd
                                 break
                         # mode found
@@ -151,6 +153,7 @@ iobmap = {
     "IBUF": {"wires": ["O"], "inputs": ["I"]},
     "OBUF": {"wires": ["I"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OE"], "inouts": ["IO"]},
+    "TLVDS_OBUF": {"wires": ["I"], "outputs": ["O", "OB"]},
 }
 
 # OE -> OEN
@@ -361,6 +364,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             pos = chipdb.loc2pin_name(db, dbrow, dbcol)
             bank = chipdb.loc2bank(db, dbrow, dbcol)
             cst.ports[name] = f"{pos}{idx}"
+            if kind[0:5] == 'TLVDS':
+                cst.ports[name] = f"{pos}{idx},{pos}{chr(ord(idx) + 1)}"
             iostd = _banks.get(bank)
             if iostd:
                 cst.attrs.setdefault(name, {}).update({"IO_TYPE" : iostd})
