@@ -9,7 +9,7 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
-	shift-tangnano-unpacked.v shift-honeycomb-unpacked.v iob-tangnano-unpacked.v iob-default-flags-tangnano-unpacked.v \
+	shift-tangnano-unpacked.v shift-honeycomb-unpacked.v blinky-default-flags-tangnano-unpacked.v \
 	tonegen-tec0117-unpacked.v blinky-tangnano9k-unpacked.v blinky-tangnano1k-unpacked.v blinky-tangnano4k-unpacked.v \
 	shift-tangnano9k-unpacked.v shift-tangnano1k-unpacked.v shift-tangnano4k-unpacked.v
 	
