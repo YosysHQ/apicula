@@ -40,15 +40,17 @@ You can also use the Makefile in the examples folder to build the examples.
 
 ```bash
 cd examples
-yosys -D LEDS_NR=8 -p "synth_gowin -json blinky.json" blinky.v
+yosys -D LEDS_NR=8 -p "read_verilog blinky.v; synth_gowin -json blinky.json"
+DEVICE='GW1NR-UV9QN881C6/I5'  # change to your device
+BOARD='tec0117' # change to your board
 nextpnr-gowin --json blinky.json \
               --write pnrblinky.json \
-              --device GW1NR-UV9QN881C6/I5 \ # change to your device
-              --cst tec0117.cst # change to the constraint file for your board
-gowin_pack -d GW1NR-UV9QN881C6/I5 -o pack.fs pnrblinky.json # chango to your device
-# gowin_unpack -d GW1NR-UV9QN881C6/I5 -o unpack.v pack.fs
+              --device $DEVICE \
+              --cst $BOARD.cst
+gowin_pack -d $DEVICE -o pack.fs pnrblinky.json # chango to your device
+# gowin_unpack -d $DEVICE -o unpack.v pack.fs
 # yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
-openFPGALoader -b tec0117 pack.fs # change to your board
+openFPGALoader -b $BOARD pack.fs
 ```
 
 ## Getting started for contributors
