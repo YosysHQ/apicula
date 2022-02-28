@@ -10,7 +10,8 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
 	shift-tangnano-unpacked.v shift-honeycomb-unpacked.v iob-tangnano-unpacked.v iob-default-flags-tangnano-unpacked.v \
-	tonegen-tec0117-unpacked.v
+	tonegen-tec0117-unpacked.v \
+	tlvds-tangnano4k-unpacked.v tlvds-tangnano9k-unpacked.v tlvds-tec0117-unpacked.v
 	
 clean:
 	rm -f *.json *.fs *-unpacked.v
