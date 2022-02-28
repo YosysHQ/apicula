@@ -38,11 +38,14 @@ def _io_mode_sort_func(mode):
     elif mode[1] == 'OBUF':
         l += 1
     return l
+
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowun_unpack io standard is determined first and it is known.
 def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True):
-    # print((row, col))
+    # TLVDS takes two BUF bels, so skip the B bels.
+    skip_bels = set()
+    #print((row, col))
     tiledata = db.grid[row][col]
     bels = {}
     for name, bel in tiledata.bels.items():
@@ -70,7 +73,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                     used_bits = {tile[row][col] for row, col in zeros}
                     if not any(used_bits):
                         bels.setdefault(name, set()).add(mode)
-                        # print(f"found: {mode}")
+                        #print(f"found: {mode}")
                         # mode found
                         break
 
@@ -81,6 +84,9 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 for opt, bits in flag_parm.options.items():
                     if bits == flag_bits:
                         bels.setdefault(name, set()).add(f"{flag}={opt}")
+            # skip B bel
+            if mode.startswith('TLVDS'):
+                skip_bels.update({name[:-1] + 'B'})
         else:
             mode_bits = {(row, col)
                          for row, col in bel.mode_bits
@@ -133,8 +139,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             # only report connection aliased to by a spine
             if bits == used_bits and (noalias or (row, col, src) in db.aliases):
                 clock_pips[dest] = src
-
-    return bels, pips, clock_pips
+    return {name: bel for name, bel in bels.items() if name not in skip_bels}, pips, clock_pips
 
 
 dffmap = {
