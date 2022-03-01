@@ -4,14 +4,16 @@ NEXTPNR ?= nextpnr-gowin
 all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs iob-tangnano.fs iob-default-flags-tangnano.fs \
-	tonegen-tec0117.fs blinky-tangnano9k.fs blinky-tangnano1k.fs \
+  tonegen-tec0117.fs blinky-tangnano9k.fs blinky-tangnano1k.fs blinky-tangnano4k.fs \
+	shift-tangnano9k.fs shift-tangnano1k.fs shift-tangnano4k.fs \
 	tlvds-tangnano4k.fs tlvds-tangnano9k.fs tlvds-tec0117.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
 	shift-tangnano-unpacked.v shift-honeycomb-unpacked.v iob-tangnano-unpacked.v iob-default-flags-tangnano-unpacked.v \
-	tonegen-tec0117-unpacked.v \
-	tlvds-tangnano4k-unpacked.v tlvds-tangnano9k-unpacked.v tlvds-tec0117-unpacked.v
+	tonegen-tec0117-unpacked.v blinky-tangnano9k-unpacked.v blinky-tangnano1k-unpacked.v blinky-tangnano4k-unpacked.v \
+	shift-tangnano9k-unpacked.v shift-tangnano1k-unpacked.v shift-tangnano4k-unpacked.v \
+  tlvds-tangnano4k-unpacked.v tlvds-tangnano9k-unpacked.v tlvds-tec0117-unpacked.v
 	
 clean:
 	rm -f *.json *.fs *-unpacked.v
@@ -112,6 +114,9 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 %-tangnano-unpacked.v: %-tangnano.fs
 	gowin_unpack -d GW1N-1 -o $@ $^
 
+%-tangnano1k-unpacked.v: %-tangnano1k.fs
+	gowin_unpack -d GW1NZ-1 -o $@ $^
+	
 %-tangnano4k-unpacked.v: %-tangnano4k.fs
 	gowin_unpack -d GW1NS-4 -o $@ $^
 
