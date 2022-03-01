@@ -112,7 +112,7 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 %-tangnano-unpacked.v: %-tangnano.fs
 	gowin_unpack -d GW1N-1 -o $@ $^
 
-%-tangnano1k-unpacked.v: %-tangnano4k.fs
+%-tangnano1k-unpacked.v: %-tangnano1k.fs
 	gowin_unpack -d GW1NZ-1 -o $@ $^
 	
 %-tangnano4k-unpacked.v: %-tangnano4k.fs
