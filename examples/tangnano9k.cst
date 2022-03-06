@@ -9,3 +9,6 @@ IO_LOC "led[4]" 15;
 IO_LOC "led[5]" 16;
 IO_LOC "key" 3;
 IO_LOC "rst" 4;
+
+// true LVDS pins
+IO_LOC "tlvds_p" 25,26;

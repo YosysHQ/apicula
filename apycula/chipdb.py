@@ -43,6 +43,9 @@ class Bel:
     lvcmos121518_bits: Set[Coord] = field(default_factory = set)
     # this Bel is IOBUF and needs routing to become IBUF or OBUF
     simplified_iob: bool = field(default = False)
+    # differential signal capabilities info
+    is_diff:      bool = field(default = False)
+    is_true_lvds: bool = field(default = False)
     # banks
     bank_mask: Set[Coord] = field(default_factory=set)
     bank_flags: Dict[str, Set[Coord]] = field(default_factory=dict)

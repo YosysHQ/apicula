@@ -6,8 +6,10 @@
 //Created Time: Sun Dec 15 11:40:09 2019
 
 IO_LOC "clk" 35;
+IO_PORT "clk" IO_TYPE=LVCMOS33;
 IO_LOC "rst" 77;
 IO_LOC "sd_out" 47; // PMOD header pin 1
+IO_PORT "sd_out" IO_TYPE=LVCMOS33;
 IO_LOC "led[0]" 86;
 IO_LOC "led[1]" 85;
 IO_LOC "led[2]" 84;
@@ -16,3 +18,7 @@ IO_LOC "led[4]" 82;
 IO_LOC "led[5]" 81;
 IO_LOC "led[6]" 80;
 IO_LOC "led[7]" 79;
+
+// true LVDS pins
+IO_LOC "tlvds_p" 29,30;
+IO_PORT "tlvds_p" IO_TYPE=LVCMOS33;
