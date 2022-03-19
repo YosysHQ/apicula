@@ -31,6 +31,7 @@ def get_bels(data):
     belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8)(\w)")
     for cellname, cell in data['modules']['top']['cells'].items():
         bel = cell['attributes']['NEXTPNR_BEL']
+        if bel in {"VCC", "GND"}: continue
         bels = belre.match(bel)
         if not bels:
             raise Exception(f"Unknown bel:{bel}")
