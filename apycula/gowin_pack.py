@@ -28,7 +28,7 @@ def sanitize_name(name):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8)(\w)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8)(\w)")
     for cellname, cell in data['modules']['top']['cells'].items():
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
@@ -89,6 +89,8 @@ def place(db, tilemap, bels, cst, args):
     for typ, row, col, num, parms, attrs, cellname in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
+        if typ == "GSR":
+            pass
         if typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
 
