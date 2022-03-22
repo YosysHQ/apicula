@@ -19,6 +19,7 @@ from apycula import codegen
 from apycula import bslib
 from apycula import pindef
 from apycula import fuse_h4x
+from apycula.wirenames import wirenames, clknames
 #TODO proper API
 #from apycula import dat19_h4x
 from apycula import tm_h4x
@@ -304,6 +305,17 @@ def get_longval(fse, ttyp, table, key, ignore_key_elem = set(), keep_key_elem = 
         k = [el for idx, el in enumerate(rec[:16]) if idx not in ignore_key_elem]
         if k == sorted_key:
             fuses = [f for f in rec[16:] if f != -1]
+            for fuse in fuses:
+                bits.update({fuse_h4x.fuse_lookup(fse, ttyp, fuse)})
+            break
+    return bits
+
+#
+def get_shortval(fse, ttyp, table, key):
+    bits = set()
+    for rec in fse[ttyp]['shortval'][table]:
+        if key[0] == rec[0] and key[1] == rec[1]:
+            fuses = [f for f in rec[2:] if f != -1]
             for fuse in fuses:
                 bits.update({fuse_h4x.fuse_lookup(fse, ttyp, fuse)})
             break
@@ -616,7 +628,7 @@ def fse_diff_iob(fse, db, pin_locations, diff_cap_info):
                     pull_mode_loc = bel_b_flags['PULL_MODE'].options['NONE'].copy();
                     pull_mode_loc.update(bel_flags['PULL_MODE'].options['NONE']);
                 except KeyError:
-                    raise Exception(f"TLVDS base bes must have SLEW_RATE and PULL_MODE defined")
+                    raise Exception(f"TLVDS base bels must have SLEW_RATE and PULL_MODE defined")
 
                 b_iostd = bel.iob_flags.setdefault('LVCMOS25', dict())
                 b_mode = b_iostd.setdefault('TLVDS_OBUF', chipdb.IOBMode())
@@ -648,6 +660,44 @@ def fse_diff_iob(fse, db, pin_locations, diff_cap_info):
             else:
                 # emulated LVDS
                 pass
+
+# make IOLogic bels
+_iologic_table = {'A' : 21, 'B' : 22}
+_oddr_keys = {
+        'GW1N-1'  : [[9, 0],  [88, 0]],
+        'GW1NZ-1' : [[9, 0],  [88, 0]],
+        'GW1NS-2' : [[10, 0], [90, 0]],
+        'GW1N-4'  : [[9, 0],  [88, 0]],
+        'GW1NS-4' : [[10, 0], [-39, 0], [91, 0]],
+        'GW1N-9'  : [[10, 0], [91, 0]],
+        'GW1N-9C' : [[10, 0], [91, 0]],
+        }
+_oddr_io_key = {89}
+def fse_iologic(fse, db, pin_locations):
+    for ttyp, tiles in pin_locations.items():
+        pin_loc = list(tiles.keys())[0]
+        side, num = _tbrlre.match(pin_loc).groups()
+        row, col = tbrl2rc(fse, side, num)
+        bels = {name[-1] for loc in tiles.values() for name in loc}
+        for bel_idx in bels:
+            if bel_idx not in {'A', 'B'}:
+                continue
+            if 'shortval' in fse[ttyp] and _iologic_table[bel_idx] in fse[ttyp]['shortval']:
+                bel = db.grid[row][col].bels.setdefault(f"ODDR{bel_idx}", chipdb.Bel())
+                loc = set()
+                for fs in _oddr_keys[device] :
+                    loc.update(get_shortval(fse, ttyp, _iologic_table[bel_idx], fs))
+                bel.modes.setdefault('ENABLE', loc)
+                # iobuf
+                loc = get_longval(fse, ttyp, _pin_mode_longval[bel_idx],
+                        recode_key(_oddr_io_key))
+                bel.flags.setdefault('IOBUF', loc)
+                bel.portmap = {
+                    'D0':  wirenames[dat[f'Iologic{bel_idx}In'][1]],
+                    'D1':  wirenames[dat[f'Iologic{bel_idx}In'][2]],
+                    'CLK': wirenames[dat[f'Iologic{bel_idx}In'][17]],
+                    'TX':  wirenames[dat[f'Iologic{bel_idx}In'][27]],
+                }
 
 # IOB fuzzer
 def find_next_loc(pin, locs):
@@ -823,7 +873,9 @@ def run_pnr(mod, constr, config):
     pnr.opt = opt
     pnr.cfg = cfg
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    #with tempfile.TemporaryDirectory() as tmpdir:
+    tmpdir = tempfile.mkdtemp(dir = "/home/rabbit/tmp/oddr")
+    if True:
         with open(tmpdir+"/top.v", "w") as f:
             mod.write(f)
         pnr.netlist = tmpdir+"/top.v"
@@ -1053,6 +1105,11 @@ if __name__ == "__main__":
     fse_slew_rate(fse, db, pin_locations)
     fse_hysteresis(fse, db, pin_locations)
     fse_drive(fse, db, pin_locations)
+    fse_iologic(fse, db, pin_locations)
+
+    # diff IOB
+    diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
+    fse_diff_iob(fse, db, pin_locations, diff_cap_info);
 
     # diff IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
@@ -1074,7 +1131,7 @@ if __name__ == "__main__":
     db.template[(3, 1)] = 1
     db.template[(3, 2)] = 1
     # GSR
-    db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+    db.grid[0][0].bels.setdefault('GSR0', chipdb.Bel()).portmap['GSRI'] = 'C4';
 
     for row, col, ttyp in corners:
         if "BANK" not in db.grid[row][col].bels.keys():

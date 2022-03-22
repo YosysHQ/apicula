@@ -7,8 +7,8 @@ module top (
     output tlvds_n,
 );
 
-reg [25:0] ctr_q;
-wire [25:0] ctr_d;
+reg [24:0] ctr_q;
+wire [24:0] ctr_d;
 wire i_tick;
 
 // Sequential code (flip-flop)
@@ -17,7 +17,7 @@ always @(posedge clk)
 
 // Combinational code (boolean logic)
 assign ctr_d = ctr_q + 1'b1;
-assign i_tick = |ctr_q[25:24];
+assign i_tick = |ctr_q[24:23];
 
 TLVDS_OBUF diff_buf(
         .O(tlvds_p),

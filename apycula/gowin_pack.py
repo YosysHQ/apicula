@@ -28,7 +28,7 @@ def sanitize_name(name):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8)(\w)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR)(\w)")
     for cellname, cell in data['modules']['top']['cells'].items():
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
@@ -233,6 +233,14 @@ def place(db, tilemap, bels, cst, args):
 
             if pinless_io:
                 return
+        elif typ == "ODDR":
+            bel = tiledata.bels[f'ODDR{num}']
+            bits = bel.modes['ENABLE'].copy()
+            if int(attrs["IOBUF"], 2):
+                bits.update(bel.flags['IOBUF'])
+            for r, c in bits:
+                tile[r][c] = 1
+
     # If the entire bank has only inputs, the LVCMOS12/15/18 bit is set
     # in each IBUF regardless of the actual I/O standard.
     for bank, bank_desc in _banks.items():
@@ -316,7 +324,6 @@ def dualmode_pins(db, tilemap, args):
         bits.update(db.grid[0][0].bels['CFG'].flags['DONE'])
     if args.reconfign_as_gpio:
         bits.update(db.grid[0][0].bels['CFG'].flags['RECONFIG'])
-
     if bits:
         tile = tilemap[(0, 0)]
         for row, col in bits:

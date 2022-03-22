@@ -6,14 +6,23 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs blinky-default-flags-tangnano.fs \
 	tonegen-tec0117.fs blinky-tangnano9k.fs blinky-tangnano1k.fs blinky-tangnano4k.fs \
 	shift-tangnano9k.fs shift-tangnano1k.fs shift-tangnano4k.fs \
-	tlvds-tangnano4k.fs tlvds-tangnano9k.fs tlvds-tec0117.fs
+	tlvds-tangnano4k.fs tlvds-tangnano9k.fs tlvds-tec0117.fs \
+	tlvds-oddr-tangnano4k.fs tlvds-oddr-tangnano9k.fs tlvds-oddr-tec0117.fs \
+	blinky-oddr-tec0117.fs blinky-oddr-runber.fs \
+	blinky-oddr-tangnano.fs blinky-oddr-honeycomb.fs \
+	blinky-oddr-tangnano4k.fs blinky-oddr-tangnano9k.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
 	shift-tangnano-unpacked.v shift-honeycomb-unpacked.v blinky-default-flags-tangnano-unpacked.v \
 	tonegen-tec0117-unpacked.v blinky-tangnano9k-unpacked.v blinky-tangnano1k-unpacked.v blinky-tangnano4k-unpacked.v \
 	shift-tangnano9k-unpacked.v shift-tangnano1k-unpacked.v shift-tangnano4k-unpacked.v \
-	tlvds-tangnano4k-unpacked.v tlvds-tangnano9k-unpacked.v tlvds-tec0117-unpacked.v
+	tlvds-tangnano4k-unpacked.v tlvds-tangnano9k-unpacked.v tlvds-tec0117-unpacked.v \
+	tlvds-tangnano4k-oddr-unpacked.v tlvds-tangnano9k-oddr-unpacked.v tlvds-tec0117-oddr-unpacked.v \
+	blinky-oddr-tec0117-unpacked.v blinky-oddr-runber-unpacked.v \
+	blinky-oddr-tangnano-unpacked.v blinky-oddr-honeycomb-unpacked.v \
+	blinky-oddr-tangnano-unpacked.v blinky-oddr-honeycomb-unpacked.v \
+	blinky-oddr-tangnano4k-unpacked.v blinky-oddr-tangnano9k-unpacked.v
 	
 clean:
 	rm -f *.json *.fs *-unpacked.v

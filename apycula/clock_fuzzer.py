@@ -25,18 +25,60 @@ def dff(mod, cst, row, col, clk=None):
     cst.cells[name] = (row, col, 0, 'A') # f"R{row}C{col}"
     return dff.portmap['CLK']
 
+def oddr(mod, cst, loc, clk=None, bel='A'):
+    "make a ODDR with optional clock"
+    name = tiled_fuzzer.make_name("IOB", "OBUF")
+    iob = codegen.Primitive("OBUF", name)
+    iob.portmap["I"] = name+"_I"
+    iob.portmap["O"] = name+"_O"
+    mod.wires.update([iob.portmap["I"]])
+    mod.outputs.update([iob.portmap["O"]])
+    mod.primitives[name] = iob
+    cst.ports[name] = loc
+
+    name = tiled_fuzzer.make_name("ODDR", "ODDR")
+    oddr = codegen.Primitive("ODDR", name)
+    oddr.portmap['CLK'] = clk if clk else name+"_CLK"
+    oddr.portmap['D0'] = name+"_D0"
+    oddr.portmap['D1'] = name+"_D1"
+    oddr.portmap['Q0'] = iob.portmap["I"]
+    oddr.portmap['Q1'] = name+"_Q1"
+    oddr.portmap['TX'] = name+"_TX"
+    mod.wires.update(oddr.portmap.values())
+    mod.primitives[name] = oddr
+    return oddr.portmap['CLK']
+
 def ibuf(mod, cst, loc, clk=None):
     "make an ibuf with optional clock"
     name = tiled_fuzzer.make_name("IOB", "IBUF")
     iob = codegen.Primitive("IBUF", name)
     iob.portmap["I"] = name+"_I"
     iob.portmap["O"] = clk if clk else name+"_O"
-
     mod.wires.update([iob.portmap["O"]])
     mod.inputs.update([iob.portmap["I"]])
     mod.primitives[name] = iob
     cst.ports[name] = loc
     return iob.portmap["O"]
+
+def prim(db, clk_pin, mod, cst, row, col, clk=None):
+    if "DFF0" in db.grid[row - 1][col - 1].bels:
+        return dff(mod, cst, row, col, clk)
+    else:
+        bel = 'A'
+        if clk_pin[-1:] == 'A':
+            bel = 'B'
+        edge = 'T'
+        idx = col;
+        if row == db.rows:
+            edge = 'B'
+        elif col == 1:
+            edge = 'L'
+            idx = row
+        elif col == db.cols:
+            edge = 'R'
+            idx = row
+        loc = f"IO{edge}{idx}{bel}"
+        return oddr(mod, cst, loc, clk)
 
 with open(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.fse", 'rb') as f:
     fse = fuse_h4x.readFse(f)
@@ -67,31 +109,31 @@ def quadrants():
     modules = []
     constrs = []
     idxes = []
-    for i in range(2, db.cols):
-        for j in [2, db.rows-3]: # avoid bram
-            if "DFF0" not in db.grid[j-1][i-1].bels:
-                print(i, j)
+    for i in range(1, db.cols + 1):
+        for j in [1, db.rows]: # avoid bram
+            if "DFF0" not in db.grid[j-1][i-1].bels and "ODDRA" not in db.grid[j-1][i-1].bels and "ODDRB" not in db.grid[j-1][i-1].bels:
+                print("bad cell:", j, i)
                 continue
             mod = codegen.Module()
             cst = codegen.Constraints()
 
             ibuf(mod, cst, true_pins[0], clk="myclk")
-            dff(mod, cst, j, i, clk="myclk")
+            prim(db, true_pins[0], mod, cst, j, i, clk="myclk")
 
             modules.append(mod)
             constrs.append(cst)
             idxes.append((j, i))
 
-    for i in [2, db.cols-2]:
-        for j in range(2, db.rows):
-            if "DFF0" not in db.grid[j-1][i-1].bels:
-                print(i, j)
+    for i in [1, db.cols]:
+        for j in range(1, db.rows + 1):
+            if "DFF0" not in db.grid[j-1][i-1].bels and "ODDRA" not in db.grid[j-1][i-1].bels and "ODDRB" not in db.grid[j-1][i-1].bels:
+                print("bad cell:", j, i)
                 continue
             mod = codegen.Module()
             cst = codegen.Constraints()
 
             ibuf(mod, cst, true_pins[0], clk="myclk")
-            dff(mod, cst, j, i, clk="myclk")
+            prim(db, true_pins[0], mod, cst, j, i, clk="myclk")
 
             modules.append(mod)
             constrs.append(cst)
@@ -118,13 +160,13 @@ def center_muxes(ct, rows, cols):
     "Find which mux drives which spine, and maps their inputs to clock pins"
 
     fr = min(rows)
-    dff_locs = [(fr+1, c+1) for c in cols][:len(true_pins)]
+    prim_locs = [(fr+1, c+1) for c in cols][:len(true_pins)]
 
     mod = codegen.Module()
     cst = codegen.Constraints()
 
-    ibufs = [ibuf(mod, cst, p) for p in true_pins]
-    dffs = [dff(mod, cst, row, col) for row, col in dff_locs]
+    #ibufs = [ibuf(mod, cst, p) for p in true_pins]
+    #prims = [prim(mod, cst, row, col) for row, col in prim_locs]
 
     pnr = tiled_fuzzer.run_pnr(mod, cst, {})
 
@@ -133,9 +175,13 @@ def center_muxes(ct, rows, cols):
     for i, pin in enumerate(true_pins):
         mod = codegen.Module()
         cst = codegen.Constraints()
-        ibufs = [ibuf(mod, cst, p) for p in true_pins]
-        dffs = [dff(mod, cst, row, col) for row, col in dff_locs]
-        mod.assigns = list(zip(dffs, ibufs))[:i+1]
+        ibufs = []
+        prims = []
+        for j in range(0, i + 1):
+            p = true_pins[j]
+            ibufs.append(ibuf(mod, cst, p))
+            prims.append(prim(db, p, mod, cst, prim_locs[j][0], prim_locs[j][1]))
+        mod.assigns = list(zip(prims, ibufs))[:i+1]
 
         modules.append(mod)
         constrs.append(cst)
@@ -179,16 +225,17 @@ def taps(rows, cols):
     locs = []
 
     # use a different row for each clock
-    # row by row, column by column, hook up the clock to the dff
+    # row by row, column by column, hook up the clock to the prim
     # in the old IDE row 1 always used clock 1 and so forth
     for col in cols:
         for gclk, row in enumerate(rows[:len(true_pins)]):
             mod = codegen.Module()
             cst = codegen.Constraints()
 
-            clks = [ibuf(mod, cst, p) for p in true_pins]
-            for i, clk in zip(rows, clks):
-                flop = dff(mod, cst, i, col)
+            clks = [(p, ibuf(mod, cst, p)) for p in true_pins]
+            for i, pin_clk in zip(rows, clks):
+                pin, clk = pin_clk
+                flop = prim(db, pin, mod, cst, i, col)
                 if i <= row:
                     mod.assigns.append((flop, clk))
 
@@ -198,22 +245,22 @@ def taps(rows, cols):
 
     pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
 
-    last_dffcol = None
+    last_primcol = None
     seen_primary_taps = set()
     seen_secondary_taps = set()
     seen_spines = set()
     clks = {}
-    for (gclk, dff_col), (sweep_bs, *_) in zip(locs, pnr_res):
+    for (gclk, prim_col), (sweep_bs, *_) in zip(locs, pnr_res):
         sweep_tiles = chipdb.tile_bitmap(db, sweep_bs)
-        if dff_col != last_dffcol:
+        if prim_col != last_primcol:
             seen_primary_taps = set()
             seen_secondary_taps = set()
             seen_spines = set()
-            last_dffcol = dff_col
+            last_primcol = prim_col
 
         tap = None
         print("#"*80)
-        print("gclk", gclk, "dff_col", dff_col)
+        print("gclk", gclk, "prim_col", prim_col)
         for loc, tile in sweep_tiles.items():
             row, col = loc
             _, _, clk_pips = gowin_unpack.parse_tile_(db, row, col, tile, noalias=True)
@@ -229,7 +276,7 @@ def taps(rows, cols):
                 seen_secondary_taps.add(col)
             print("loc", row, col, "tap", tap, "new spines", new_spines)
         # if tap == None: breakpoint()
-        clks.setdefault(gclk, {}).setdefault(tap, set()).add(dff_col)
+        clks.setdefault(gclk, {}).setdefault(tap, set()).add(prim_col)
         print(clks)
 
     return clks
@@ -308,10 +355,10 @@ if __name__ == "__main__":
 
         clks[ct] = taps(rows, cols)
 
-    for _, cols, _ in quads.values():
+    #for _, cols, _ in quads.values():
         # col 0 contains a tap, but not a dff
-        if 1 in cols:
-            cols.add(0)
+        #if 1 in cols:
+            #cols.add(0)
 
     print("    quads =", quads)
     print("    srcs =", srcs)
