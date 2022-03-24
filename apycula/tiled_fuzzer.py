@@ -785,7 +785,7 @@ PnrResult = namedtuple('PnrResult', [
     'errs'            # parsed log file
     ])
 
-def run_pnr(mod, constr, config):
+def run_pnr(mod, constr, config, ioregs = False):
     cfg = codegen.DeviceConfig({
         "use_jtag_as_gpio"      : config.get('jtag', "1"),
         "use_sspi_as_gpio"      : config.get('sspi', "1"),
@@ -806,15 +806,27 @@ def run_pnr(mod, constr, config):
         "bg_programming"        : "off",
         "secure_mode"           : "0"})
 
-    opt = codegen.PnrOptions({
-        "gen_posp"          : "1",
-        "gen_io_cst"        : "1",
-        "gen_ibis"          : "1",
-        "ireg_in_iob"       : "0",
-        "oreg_in_iob"       : "0",
-        "ioreg_in_iob"      : "0",
-        "timing_driven"     : "0",
-        "cst_warn_to_error" : "0"})
+    if ioregs:
+        opt = codegen.PnrOptions({
+            "gen_posp"          : "1",
+            "gen_io_cst"        : "1",
+            "gen_ibis"          : "1",
+            "ireg_in_iob"       : "1",
+            "oreg_in_iob"       : "1",
+            "ioreg_in_iob"      : "1",
+            "timing_driven"     : "0",
+            "cst_warn_to_error" : "0"})
+    else:
+        opt = codegen.PnrOptions({
+            "gen_posp"          : "1",
+            "gen_io_cst"        : "1",
+            "gen_ibis"          : "1",
+            "ireg_in_iob"       : "0",
+            "oreg_in_iob"       : "0",
+            "ioreg_in_iob"      : "0",
+            "timing_driven"     : "0",
+            "cst_warn_to_error" : "0"})
+
     #"show_all_warn" : "1",
 
     pnr = codegen.Pnr()

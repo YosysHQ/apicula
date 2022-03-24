@@ -2,6 +2,7 @@ from itertools import chain
 
 class Module:
     def __init__(self):
+        self.comment = ''
         self.inputs = set()
         self.outputs = set()
         self.inouts = set()
@@ -11,6 +12,7 @@ class Module:
 
     def __add__(self, other):
         m = Module()
+        m.comment = self.comment + ' ' + other.comment
         m.inputs = self.inputs | other.inputs
         m.outputs = self.outputs | other.outputs
         m.inouts = self.inouts | other.inouts
@@ -20,6 +22,8 @@ class Module:
         return m
 
     def write(self, f):
+        f.write(self.comment)
+        f.write("\n")
         f.write("module top(")
         first = True
         for port in chain(self.inputs, self.outputs, self.inouts):

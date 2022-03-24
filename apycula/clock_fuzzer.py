@@ -13,31 +13,6 @@ from apycula import fuse_h4x
 from apycula import gowin_unpack
 from apycula.wirenames import wirenames
 
-def dff(mod, cst, row, col, clk=None):
-    "make a dff with optional clock"
-    name = tiled_fuzzer.make_name("DFF", "DFF")
-    dff = codegen.Primitive("DFF", name)
-    dff.portmap['CLK'] = clk if clk else name+"_CLK"
-    dff.portmap['D'] = name+"_D"
-    dff.portmap['Q'] = name+"_Q"
-    mod.wires.update(dff.portmap.values())
-    mod.primitives[name] = dff
-    cst.cells[name] = (row, col, 0, 'A') # f"R{row}C{col}"
-    return dff.portmap['CLK']
-
-def ibuf(mod, cst, loc, clk=None):
-    "make an ibuf with optional clock"
-    name = tiled_fuzzer.make_name("IOB", "IBUF")
-    iob = codegen.Primitive("IBUF", name)
-    iob.portmap["I"] = name+"_I"
-    iob.portmap["O"] = clk if clk else name+"_O"
-
-    mod.wires.update([iob.portmap["O"]])
-    mod.inputs.update([iob.portmap["I"]])
-    mod.primitives[name] = iob
-    cst.ports[name] = loc
-    return iob.portmap["O"]
-
 with open(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.fse", 'rb') as f:
     fse = fuse_h4x.readFse(f)
 
@@ -56,48 +31,154 @@ clock_pins = pindef.get_clock_locs(
 # pins appear to be differential with T/C denoting true/complementary
 true_pins = [p[0] for p in clock_pins if "GCLKT" in p[1]]
 
+# we need real pins to place iodffs
+io_pins = pindef.get_locs(tiled_fuzzer.device, tiled_fuzzer.params['package'], True)
+
+def rc2tbrl(db, row, col, bel):
+    edge = 'T'
+    idx = col;
+    if row == db.rows:
+        edge = 'B'
+    elif col == 1:
+        edge = 'L'
+        idx = row
+    elif col == db.cols:
+        edge = 'R'
+        idx = row
+    return f"IO{edge}{idx}{bel}"
+
+def dff(db, mod, cst, row, col, clk=None, clk_locs = []):
+    "make a dff (pure or iologic one) with optional clock"
+    name = tiled_fuzzer.make_name("DFF", "DFF")
+    dff = codegen.Primitive("DFF", name)
+    dff.portmap['CLK'] = clk if clk else name+"_CLK"
+    dff.portmap['D'] = name+"_D"
+    dff.portmap['Q'] = name+"_Q"
+    mod.wires.update(dff.portmap.values())
+    mod.primitives[name] = dff
+    # is an internal cell?
+    if 'DFF0' in db.grid[row - 1][col - 1].bels:
+        cst.cells[name] = (row, col, 0, 'A') # f"R{row}C{col}"
+    else:
+        # consider a possible conflict with the clock pin
+        loc = rc2tbrl(db, row, col, 'A')
+        if loc in clk_locs:
+            loc = rc2tbrl(db, row, col, 'B')
+        name = tiled_fuzzer.make_name("IOREG", "OBUF")
+        iob = codegen.Primitive("OBUF", name)
+        iob.portmap["I"] = dff.portmap['Q']
+        iob.portmap["O"] = name+"_O"
+        mod.outputs.update([iob.portmap["O"]])
+        mod.primitives[name] = iob
+        cst.ports[name] = loc
+    return dff.portmap['CLK']
+
+def ibuf(mod, cst, loc, clk=None):
+    "make an ibuf with optional clock"
+    name = tiled_fuzzer.make_name("IOB", "IBUF")
+    iob = codegen.Primitive("IBUF", name)
+    iob.portmap["I"] = name+"_I"
+    iob.portmap["O"] = clk if clk else name+"_O"
+
+    mod.wires.update([iob.portmap["O"]])
+    mod.inputs.update([iob.portmap["I"]])
+    mod.primitives[name] = iob
+    cst.ports[name] = loc
+    return iob.portmap["O"]
+
+
+# cells wo usuful bels
+bad_cells = set()
+def bad_rows():
+    return {r for (r, c) in bad_cells}
+
 pool = Pool()
+
+# If the dff cannot be placed in a given cell, then find
+# a suitable cell in the neighborhood if possible.
+# XXX The code is not pretty, come back later and rewrite.
+def get_good_cell(db, stage, j, i):
+    inc_j = 0
+    inc_i = 0
+    lim_j = -1
+    lim_i = -1
+    if stage == 0:
+        inc_j = 1
+        lim_j = db.rows
+        if j != 1:
+            inc_j = -1
+            lim_j = 1
+    else:
+        inc_i = 1
+        lim_i = db.cols
+        if i != 1:
+            inc_i = -1
+            lim_i = 1
+    locA = rc2tbrl(db, j, i, 'A')
+    locB = locA[:-1] + 'B'
+    while "DFF0" not in db.grid[j-1][i-1].bels.keys() and \
+          (locA not in io_pins or locB not in io_pins or
+          'IOBA' not in db.grid[j-1][i-1].bels.keys() or
+          'IOBB' not in db.grid[j-1][i-1].bels.keys() or
+          (locA in io_pins and db.grid[j-1][i-1].bels['IOBA'].simplified_iob) or
+          (locB in io_pins and db.grid[j-1][i-1].bels['IOBB'].simplified_iob)):
+        print(j, i)
+        bad_cells.update({(j - 1, i - 1)})
+        if j == lim_j or i == lim_i:
+            return (False, j, i)
+        j += inc_j
+        i += inc_i
+        locA = rc2tbrl(db, j, i, 'A')
+        locB = locA[:-1] + 'B'
+    else:
+        return (True, j, i)
+
 
 def quadrants():
     mod = codegen.Module()
     cst = codegen.Constraints()
     ibuf(mod, cst, true_pins[2], clk="myclk")
-    pnr = tiled_fuzzer.run_pnr(mod, cst, {})
+    pnr = tiled_fuzzer.run_pnr(mod, cst, {}, ioregs = True)
 
     modules = []
     constrs = []
     idxes = []
-    for i in range(2, db.cols):
-        for j in [2, db.rows-3]: # avoid bram
-            if "DFF0" not in db.grid[j-1][i-1].bels:
-                print(i, j)
+    for i in range(1, db.cols + 1):
+        for j in [1, db.rows]:
+            # because of the search for the right cells sometimes get the same cell twice, ignore
+            found, row, col = get_good_cell(db, 0, j, i)
+            if not found or (row, col) in idxes:
                 continue
+
             mod = codegen.Module()
+            mod.comment = '/*quadrants stage 0*/'
             cst = codegen.Constraints()
 
             ibuf(mod, cst, true_pins[0], clk="myclk")
-            dff(mod, cst, j, i, clk="myclk")
+            dff(db, mod, cst, row, col, clk="myclk", clk_locs = [true_pins[0]])
 
             modules.append(mod)
             constrs.append(cst)
-            idxes.append((j, i))
+            idxes.append((row, col))
 
-    for i in [2, db.cols-2]:
-        for j in range(2, db.rows):
-            if "DFF0" not in db.grid[j-1][i-1].bels:
-                print(i, j)
+    for i in [1, db.cols]:
+        for j in range(1, db.rows + 1):
+            found, row, col = get_good_cell(db, 1, j, i)
+            if not found or (row, col) in idxes:
                 continue
+
             mod = codegen.Module()
+            mod.comment = '/*quadrants stage 1*/'
             cst = codegen.Constraints()
 
             ibuf(mod, cst, true_pins[0], clk="myclk")
-            dff(mod, cst, j, i, clk="myclk")
+            dff(db, mod, cst, row, col, clk="myclk", clk_locs = [true_pins[0]])
 
             modules.append(mod)
             constrs.append(cst)
-            idxes.append((j, i))
+            idxes.append((row, col))
 
-    pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
+    pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}, ioregs = True), zip(modules, constrs))
 
     res = {}
     for (row, col), (mybs, *_) in zip(idxes, pnr_res):
@@ -117,14 +198,15 @@ def quadrants():
 def center_muxes(ct, rows, cols):
     "Find which mux drives which spine, and maps their inputs to clock pins"
 
-    fr = min(rows)
-    dff_locs = [(fr+1, c+1) for c in cols][:len(true_pins)]
+    # use only strings consisting entirely of cells suitable for placing dff
+    good_rows = rows - bad_rows()
+    if not good_rows:
+        return {}, {}
+    fr = min(good_rows)
+    dff_locs = [(fr+1, c+1) for c in cols if (fr, c)][:len(true_pins)]
 
     mod = codegen.Module()
     cst = codegen.Constraints()
-
-    ibufs = [ibuf(mod, cst, p) for p in true_pins]
-    dffs = [dff(mod, cst, row, col) for row, col in dff_locs]
 
     pnr = tiled_fuzzer.run_pnr(mod, cst, {})
 
@@ -132,15 +214,16 @@ def center_muxes(ct, rows, cols):
     constrs = []
     for i, pin in enumerate(true_pins):
         mod = codegen.Module()
+        mod.comment = '/* center muxes */'
         cst = codegen.Constraints()
         ibufs = [ibuf(mod, cst, p) for p in true_pins]
-        dffs = [dff(mod, cst, row, col) for row, col in dff_locs]
+        dffs = [dff(db, mod, cst, row, col) for row, col in dff_locs]
         mod.assigns = list(zip(dffs, ibufs))[:i+1]
 
         modules.append(mod)
         constrs.append(cst)
 
-    pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
+    pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}, ioregs = True), zip(modules, constrs))
 
     gb_sources = {}
     gb_destinations = {}
@@ -183,12 +266,17 @@ def taps(rows, cols):
     # in the old IDE row 1 always used clock 1 and so forth
     for col in cols:
         for gclk, row in enumerate(rows[:len(true_pins)]):
+            if (row - 1, col - 1) in bad_cells:
+                continue
             mod = codegen.Module()
+            mod.comment = '/* taps */'
             cst = codegen.Constraints()
 
             clks = [ibuf(mod, cst, p) for p in true_pins]
             for i, clk in zip(rows, clks):
-                flop = dff(mod, cst, i, col)
+                if (i - 1, col - 1) in bad_cells:
+                    continue
+                flop = dff(db, mod, cst, i, col, clk_locs = true_pins)
                 if i <= row:
                     mod.assigns.append((flop, clk))
 
@@ -196,7 +284,7 @@ def taps(rows, cols):
             constrs.append(cst)
             locs.append((gclk, col-1))
 
-    pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}), zip(modules, constrs))
+    pnr_res = pool.map(lambda param: tiled_fuzzer.run_pnr(*param, {}, ioregs = True), zip(modules, constrs))
 
     last_dffcol = None
     seen_primary_taps = set()
@@ -307,11 +395,6 @@ if __name__ == "__main__":
         dests.update(qdests)
 
         clks[ct] = taps(rows, cols)
-
-    for _, cols, _ in quads.values():
-        # col 0 contains a tap, but not a dff
-        if 1 in cols:
-            cols.add(0)
 
     print("    quads =", quads)
     print("    srcs =", srcs)
