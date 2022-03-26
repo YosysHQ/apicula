@@ -404,7 +404,7 @@ def dat_portmap(dat, dev):
             for name, bel in tile.bels.items():
                 if bel.portmap: continue
                 if name.startswith("IOB"):
-                    if len(tile.bels) > 2:
+                    if name[3] > 'B':
                         idx = ord(name[-1]) - ord('A')
                         inp = wirenames[dat['IobufIns'][idx]]
                         bel.portmap['I'] = inp
