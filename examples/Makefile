@@ -41,6 +41,9 @@ clean:
 %-runber.json: %-runber-synth.json runber.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1N-UV4LQ144C6/I5 --cst runber.cst
 
+blinky-oddr-runber.json: blinky-oddr-runber-synth.json runber-tlvds.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1N-UV4LQ144C6/I5 --cst runber-tlvds.cst
+
 %-tangnano.fs: %-tangnano.json
 	gowin_pack -d GW1N-1 -o $@ $^
 

@@ -1,3 +1,6 @@
+/*
+* led[0] is connected directly, led[1] --- via ODDR. This primitive needs 4 clock cycles to start working, so be patient:)
+*/
 module top (
 	input clk,
 	output [`LEDS_NR-1:0] led
