@@ -10,7 +10,10 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	tlvds-oddr-tangnano4k.fs tlvds-oddr-tangnano9k.fs tlvds-oddr-tec0117.fs \
 	blinky-oddr-tec0117.fs blinky-oddr-runber.fs \
 	blinky-oddr-tangnano.fs blinky-oddr-honeycomb.fs \
-	blinky-oddr-tangnano4k.fs blinky-oddr-tangnano9k.fs
+	blinky-oddr-tangnano4k.fs blinky-oddr-tangnano9k.fs \
+	blinky-osc-tec0117.fs blinky-osc-runber.fs blinky-osc-tangnano.fs  \
+	blinky-osc-honeycomb.fs blinky-osc-default-flags-tangnano.fs \
+	blinky-osc-tangnano9k.fs blinky-osc-tangnano1k.fs blinky-osc-tangnano4k.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
@@ -22,7 +25,10 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	blinky-oddr-tec0117-unpacked.v blinky-oddr-runber-unpacked.v \
 	blinky-oddr-tangnano-unpacked.v blinky-oddr-honeycomb-unpacked.v \
 	blinky-oddr-tangnano-unpacked.v blinky-oddr-honeycomb-unpacked.v \
-	blinky-oddr-tangnano4k-unpacked.v blinky-oddr-tangnano9k-unpacked.v
+	blinky-oddr-tangnano4k-unpacked.v blinky-oddr-tangnano9k-unpacked.v \
+	blinky-osc-tec0117-unpacked.v blinky-osc-runber-unpacked.v blinky-osc-tangnano-unpacked.v \
+	blinky-osc-honeycomb-unpacked.v blinky-osc-default-flags-tangnano-unpacked.v \
+	blinky-osc-tangnano9k-unpacked.v blinky-osc-tangnano1k-unpacked.v blinky-osc-tangnano4k-unpacked.v
 	
 clean:
 	rm -f *.json *.fs *-unpacked.v
@@ -91,25 +97,25 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
 %-tec0117-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
 
 %-runber-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
 
 %-tangnano-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCH -p "read_verilog $^; synth_gowin -json $@"
 
 %-tangnano1k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCZ -p "read_verilog $^; synth_gowin -json $@"
 
 %-tangnano4k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -p "read_verilog $^; synth_gowin -json $@"
 
 %-tangnano9k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
 
 %-honeycomb-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCF -p "read_verilog $^; synth_gowin -json $@"
 
 %-honeycomb-prog: %-honeycomb.fs
 	openFPGALoader -b honeycomb $^
