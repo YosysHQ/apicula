@@ -18,7 +18,7 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	tonegen-tec0117-unpacked.v blinky-tangnano9k-unpacked.v blinky-tangnano1k-unpacked.v blinky-tangnano4k-unpacked.v \
 	shift-tangnano9k-unpacked.v shift-tangnano1k-unpacked.v shift-tangnano4k-unpacked.v \
 	tlvds-tangnano4k-unpacked.v tlvds-tangnano9k-unpacked.v tlvds-tec0117-unpacked.v \
-	tlvds-tangnano4k-oddr-unpacked.v tlvds-tangnano9k-oddr-unpacked.v tlvds-tec0117-oddr-unpacked.v \
+	tlvds-oddr-tangnano4k-unpacked.v tlvds-oddr-tangnano9k-unpacked.v tlvds-oddr-tec0117-unpacked.v \
 	blinky-oddr-tec0117-unpacked.v blinky-oddr-runber-unpacked.v \
 	blinky-oddr-tangnano-unpacked.v blinky-oddr-honeycomb-unpacked.v \
 	blinky-oddr-tangnano-unpacked.v blinky-oddr-honeycomb-unpacked.v \
