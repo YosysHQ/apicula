@@ -275,7 +275,7 @@ def add_rim(rows, cols):
         rows.update({row for row in range(max(rows) + 1, db.rows)})
     if 1 in cols:
         cols.add(0)
-    else:
+    elif db.cols - 2 in cols:
         cols.add(db.cols - 1)
     return rows, cols
 
