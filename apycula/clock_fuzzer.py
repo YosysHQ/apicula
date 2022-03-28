@@ -266,9 +266,23 @@ def spine_aliases(quads, dests, clks):
                     aliases[spine_row, tap, dest] = ct[0], ct[1], dest
     return aliases
 
+# add border cells
+def add_rim(rows, cols):
+    if 1 in rows:
+        rows.add(0)
+    else:
+        # XXX fill all rows
+        rows.update({row for row in range(max(rows) + 1, db.rows)})
+    if 1 in cols:
+        cols.add(0)
+    elif db.cols - 2 in cols:
+        cols.add(db.cols - 1)
+    return rows, cols
+
 def tap_aliases(quads):
     aliases = {}
     for _, (rows, cols, spine_row) in quads.items():
+        add_rim(rows, cols)
         for col in cols:
             for row in rows:
                 for src in ["GT00", "GT10"]:
@@ -286,6 +300,7 @@ def branch_aliases(quads, clks):
             else:
                 src = "GBO1"
             for tap, branch_cols in taps.items():
+                add_rim(rows, branch_cols)
                 for row in rows:
                     for col in branch_cols:
                         aliases[row, col, f"GB{clk}0"] = row, tap, src
@@ -307,11 +322,6 @@ if __name__ == "__main__":
         dests.update(qdests)
 
         clks[ct] = taps(rows, cols)
-
-    for _, cols, _ in quads.values():
-        # col 0 contains a tap, but not a dff
-        if 1 in cols:
-            cols.add(0)
 
     print("    quads =", quads)
     print("    srcs =", srcs)
