@@ -268,7 +268,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?)(\w*)")
     if have_iologic(bels):
         bels_items = move_iologic(bels)
     else:
@@ -341,7 +341,16 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             ram16.portmap['DO'] = [f"R{row}C{col}_F{x}" for x in range(4)]
             mod.wires.update(chain.from_iterable([x if isinstance(x, list) else [x] for x in ram16.portmap.values()]))
             mod.primitives[name] = ram16
-
+        elif typ in {"OSC", "OSCZ", "OSCF", "OSCH"}:
+            name = f"R{row}C{col}_{typ}"
+            osc = codegen.Primitive(typ, name)
+            divisor, = flags
+            osc.params["FREQ_DIV"] = f"{divisor*2}"
+            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+            for port, wname in portmap.items():
+                osc.portmap[port] = f"R{row}C{col}_{wname}"
+            mod.wires.update(osc.portmap.values())
+            mod.primitives[name] = osc
         elif typ == "DFF":
             #print(flags)
             kind, = flags # DFF only have one flag

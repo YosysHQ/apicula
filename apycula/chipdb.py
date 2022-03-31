@@ -156,10 +156,7 @@ def add_alu_mode(base_mode, modes, lut, new_alu_mode, new_mode_bits):
 
 # also make ALUs and shadow RAM
 def fse_luts(fse, ttyp):
-    try:
-        data = fse[ttyp]['shortval'][5]
-    except KeyError:
-        return {}
+    data = fse[ttyp]['shortval'][5]
 
     luts = {}
     for lutn, bit, *fuses in data:
@@ -263,6 +260,48 @@ def fse_luts(fse, ttyp):
         }
     return luts
 
+def fse_osc(device, fse, ttyp):
+    osc = {}
+
+    if device in {'GW1N-4', 'GW1N-9', 'GW1N-9C'}:
+        bel = osc.setdefault(f"OSC", Bel())
+    elif device in {'GW1NZ-1', 'GW1NS-4'}:
+        bel = osc.setdefault(f"OSCZ", Bel())
+    elif device == 'GW1NS-2':
+        bel = osc.setdefault(f"OSCF", Bel())
+    elif device == 'GW1N-1':
+        bel = osc.setdefault(f"OSCH", Bel())
+    else:
+        raise Exception(f"Oscillator not yet supported on {device}")
+
+    bel.portmap = {}
+
+    if device in {'GW1N-1', 'GW1N-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NS-4'}:
+        bel.portmap['OSCOUT'] = "Q4"
+    elif device == 'GW1NZ-1':
+        bel.portmap['OSCOUT'] = "OF3"
+
+    if device == 'GW1NS-2':
+        bel.portmap['OSCEN'] = "B3"
+    elif device == 'GW1NS-4':   
+        bel.portmap['OSCEN'] = "D6"
+    elif device == 'GW1NZ-1':
+        bel.portmap['OSCEN'] = "A6"
+
+    data = fse[ttyp]['shortval'][51]
+
+    for i in range(64):
+        bel.modes.setdefault(i+1, set())
+
+    for key0, key1, *fuses in data:
+        if key0 <= 64 and key1 == 0:
+            mode = bel.modes[key0]
+            for f in (f for f in fuses if f != -1):
+                coord = fuse.fuse_lookup(fse, ttyp, f)
+                mode.update({coord})
+
+    return osc
+
 # XXX This is not a nice way, I will replace it with automatic creation of banks
 # in the very near future.
 def set_banks(device, db):
@@ -295,7 +334,7 @@ def set_banks(device, db):
         db.grid[h][w].bels.setdefault('BANK2', Bel())
         db.grid[h][0].bels.setdefault('BANK3', Bel())
 
-def from_fse(fse):
+def from_fse(device, fse):
     dev = Device()
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
     tiles = {}
@@ -305,7 +344,10 @@ def from_fse(fse):
         tile = Tile(w, h)
         tile.pips = fse_pips(fse, ttyp, 2, wirenames)
         tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
-        tile.bels = fse_luts(fse, ttyp)
+        if 5 in fse[ttyp]['shortval']:
+            tile.bels = fse_luts(fse, ttyp)
+        if 51 in fse[ttyp]['shortval']:
+            tile.bels = fse_osc(device, fse, ttyp)
         tiles[ttyp] = tile
 
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
