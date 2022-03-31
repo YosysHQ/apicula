@@ -350,7 +350,7 @@ def main():
     # For tool integration it is allowed to pass a full part number
     m = re.match("GW1N(S|Z)?[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
     if m:
-        mods = m.group(1)
+        mods = m.group(1) or ""
         luts = m.group(3)
         device = f"GW1N{mods}-{luts}"
 
