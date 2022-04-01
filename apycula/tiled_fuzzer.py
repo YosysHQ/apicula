@@ -689,9 +689,10 @@ def fse_iologic(fse, db, pin_locations):
                     loc.update(get_shortval(fse, ttyp, _iologic_table[bel_idx], fs))
                 bel.modes.setdefault('ENABLE', loc)
                 # iobuf
-                loc = get_longval(fse, ttyp, _pin_mode_longval[bel_idx],
-                        recode_key(_oddr_io_key))
-                bel.flags.setdefault('IOBUF', loc)
+                # XXX not supporting T/IOBUF yet
+                #loc = get_longval(fse, ttyp, _pin_mode_longval[bel_idx],
+                #        recode_key(_oddr_io_key))
+                #bel.flags.setdefault('IOBUF', loc)
                 bel.portmap = {
                     'D0':  wirenames[dat[f'Iologic{bel_idx}In'][1]],
                     'D1':  wirenames[dat[f'Iologic{bel_idx}In'][2]],
