@@ -457,7 +457,7 @@ def main():
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-o', '--output', default='unpack.v')
     parser.add_argument('-s', '--cst', default=None)
-    parser.add_argument('--noalu', action = 'store_false')
+    parser.add_argument('--noalu', action = 'store_true')
 
     args = parser.parse_args()
 
