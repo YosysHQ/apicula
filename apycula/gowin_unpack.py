@@ -300,6 +300,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             kind, = flags # ALU only have one flag
             idx = int(idx)
             name = f"R{row}C{col}_ALU_{idx}"
+            if kind == 'hadder':
+                kind = '0'
             if kind in "012346789": # main ALU
                 alu = codegen.Primitive("ALU", name)
                 alu.params["ALU_MODE"] = kind
