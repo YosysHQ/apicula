@@ -1125,6 +1125,12 @@ if __name__ == "__main__":
     fse_banks(fse, db, corners)
 
     chipdb.dat_portmap(dat, db)
+    # XXX GW1NR-9 has interesting IOBA pins on the bottom side
+    if device == 'GW1N-9' :
+        loc = locations[52][0]
+        bel = db.grid[loc[0]][loc[1]].bels['IOBA']
+        bel.portmap['XXX_VSS0'] = wirenames[dat[f'IologicAIn'][40]]
+        bel.portmap['XXX_VSS1'] = wirenames[dat[f'IologicAIn'][42]]
     chipdb.dat_aliases(dat, db)
     chipdb.diff2flag(db)
 
