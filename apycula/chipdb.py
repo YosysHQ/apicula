@@ -201,6 +201,7 @@ def fse_luts(fse, ttyp):
             # ADDSUB INIT="0110 0000 1001 1010"
             #              add   0   sub  carry
             add_alu_mode(mode, bel.modes, lut, "2",     "0110000010011010")
+            add_alu_mode(mode, bel.modes, lut, "hadder", "1111000000000000")
             # NE     INIT="1001 0000 1001 1111"
             #              add   0   sub  carry
             add_alu_mode(mode, bel.modes, lut, "3",     "1001000010011111")
@@ -283,7 +284,7 @@ def fse_osc(device, fse, ttyp):
 
     if device == 'GW1NS-2':
         bel.portmap['OSCEN'] = "B3"
-    elif device == 'GW1NS-4':   
+    elif device == 'GW1NS-4':
         bel.portmap['OSCEN'] = "D6"
     elif device == 'GW1NZ-1':
         bel.portmap['OSCEN'] = "A6"
