@@ -176,35 +176,38 @@ For type 12:
 | CE2  132 |   X  |   X  |   X  |   X  |      |      |      |   X  |
 
 # E
-The two cells in the center of the chip with types 81 and 82 are responsible for sources for long wires.
+The two cells in the center of the chip with types 81 and 82 are responsible for sources for long wires. Here I also add two adjacent cells with types 83 and 84. 83 contains 7 muxes for lines 40--46 and 84 contains a mux for line 47.
+
+These lines 40--47 are connected to buses `SS00` and `SS40` in the bottom row of the chip. But so far I can't get the vendor IDE to use them so their purpose is unclear.
+
 The `+` marked sources whose locations are known and I will explain how to find them.
 
-|      | LW0 | LW1 | LW2 | LW3 | LW4 | LW5 | LW6 | LW7 |
-|:----:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|  121 |  X  |     |     |     |     |     |     |  X  |
-|  122 |     |  X  |     |     |     |     |  X  |     |
-|  123 |     |     |  X  |     |     |     |  X  |     |
-|  124 |     |     |     |  X  |     |     |     |  X  |
-|  125 |     |     |  X  |     |  X  |     |     |     |
-|  126 |     |     |     |  X  |     |  X  |     |     |
-|  127 |     |  X  |     |     |     |  X  |     |     |
-|  128 |  X  |     |     |     |  X  |     |     |     |
-|  154 |  X  |  X  |  X  |     |  X  |  X  |  X  |     |
-| +155 |     |  X  |  X  |  X  |     |  X  |  X  |  X  |
-|  156 |  X  |  X  |  X  |     |  X  |  X  |  X  |     |
-| +157 |     |  X  |  X  |  X  |     |  X  |  X  |  X  |
-|  158 |  X  |  X  |     |  X  |  X  |  X  |     |  X  |
-|  159 |  X  |  X  |     |  X  |  X  |  X  |     |  X  |
-|  160 |     |     |  X  |  X  |  X  |     |  X  |  X  |
-|  161 |  X  |     |  X  |  X  |  X  |     |  X  |  X  |
-| +162 |  X  |     |     |     |     |  X  |  X  |  X  |
-| +163 |     |  X  |  X  |  X  |  X  |     |     |     |
-| +164 |  X  |     |  X  |  X  |     |  X  |     |     |
-| +165 |     |  X  |     |     |  X  |     |  X  |  X  |
-| +166 |  X  |  X  |     |  X  |     |     |  X  |     |
-| +167 |     |     |  X  |     |  X  |  X  |     |  X  |
-| +168 |  X  |  X  |  X  |     |     |     |     |  X  |
-| +169 |     |     |     |  X  |  X  |  X  |  X  |     |
+|      | LW0 | LW1 | LW2 | LW3 | LW4 | LW5 | LW6 | LW7 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 |
+|:----:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+|  121 |  X  |     |     |     |     |     |     |  X  |  X |    |    |    |    |    |    |  X |
+|  122 |     |  X  |     |     |     |     |  X  |     |    |  X |    |    |    |    |  X |    |
+|  123 |     |     |  X  |     |     |     |  X  |     |    |    |  X |    |    |    |  X |    |
+|  124 |     |     |     |  X  |     |     |     |  X  |    |    |    |  X |    |    |    |  X |
+|  125 |     |     |  X  |     |  X  |     |     |     |    |    |  X |    |  X |    |    |    |
+|  126 |     |     |     |  X  |     |  X  |     |     |    |    |    |  X |    |  X |    |    |
+|  127 |     |  X  |     |     |     |  X  |     |     |    |  X |    |    |    |  X |    |    |
+|  128 |  X  |     |     |     |  X  |     |     |     |  X |    |    |    |  X |    |    |    |
+|  154 |  X  |  X  |  X  |     |  X  |  X  |  X  |     |  X |  X |  X |    |  X |  X |  X |    |
+| +155 |     |  X  |  X  |  X  |     |  X  |  X  |  X  |    |  X |  X |  X |    |  X |  X |  X |
+|  156 |  X  |  X  |  X  |     |  X  |  X  |  X  |     |  X |  X |  X |    |  X |  X |  X |    |
+| +157 |     |  X  |  X  |  X  |     |  X  |  X  |  X  |    |  X |  X |  X |    |  X |  X |  X |
+|  158 |  X  |  X  |     |  X  |  X  |  X  |     |  X  |  X |  X |    |  X |  X |  X |    |  X |
+|  159 |  X  |  X  |     |  X  |  X  |  X  |     |  X  |  X |  X |    |  X |  X |  X |    |  X |
+|  160 |  X  |     |  X  |  X  |  X  |     |  X  |  X  |  X |    |  X |  X |  X |    |  X |  X |
+|  161 |  X  |     |  X  |  X  |  X  |     |  X  |  X  |  X |    |  X |  X |  X |    |  X |  X |
+| +162 |  X  |     |     |     |     |  X  |  X  |  X  |  X |    |    |    |    |  X |  X |  X |
+| +163 |     |  X  |  X  |  X  |  X  |     |     |     |    |  X |  X |  X |  X |    |    |    |
+| +164 |  X  |     |  X  |  X  |     |  X  |     |     |  X |    |  X |  X |    |  X |    |    |
+| +165 |     |  X  |     |     |  X  |     |  X  |  X  |    |  X |    |    |  X |    |  X |  X |
+| +166 |  X  |  X  |     |  X  |     |     |  X  |     |  X |  X |    |  X |    |    |  X |    |
+| +167 |     |     |  X  |     |  X  |  X  |     |  X  |    |    |  X |    |  X |  X |    |  X |
+| +168 |  X  |  X  |  X  |     |     |     |     |  X  |  X |  X |  X |    |    |    |    |  X |
+| +169 |     |     |     |  X  |  X  |  X  |  X  |     |    |    |    |  X |  X |  X |  X |    |
 
 The `dat` dictionary has a table `UfbIns`, whose entries have the structure `[row number, column number, pip code]`. Thus the entry `[4, 1, 126]` means that CLK2 pip in cell [4, 1] is an entry point to somewhere.
 Experimentally it is found that CLK2 are the entry points to the long wire system and it is these points that are marked with a `+` sign in the table above.
