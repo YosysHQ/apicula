@@ -285,7 +285,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             else:
                 name = f"R{row}C{col}_LUT4_{idx}"
                 lut = codegen.Primitive("LUT4", name)
-                lut.params["INIT"] = f"16'b{val:016b}"
+                lut.params["INIT"] = f"16'h{val:04x}"
                 lut.portmap['F'] = f"R{row}C{col}_F{idx}"
                 lut.portmap['I0'] = f"R{row}C{col}_A{idx}"
                 lut.portmap['I1'] = f"R{row}C{col}_B{idx}"
@@ -430,8 +430,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
     # vcc = codegen.Primitive("VCC", "myvcc")
     # vcc.portmap["V"] = "VCC"
     # mod.primitives["myvcc"] = vcc
-    mod.assigns.append(("VCC", "1"))
-    mod.assigns.append(("VSS", "0"))
+    mod.assigns.append(("VCC", "1'b1"))
+    mod.assigns.append(("VSS", "1'b0"))
 
 def default_device_config():
     return {
