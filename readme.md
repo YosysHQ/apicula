@@ -15,6 +15,7 @@ Currently supported boards are
  * Sipeed Tang Nano: GW1N-LV1QN48C6/I5
  * Sipeed Tang Nano 1K: GW1NZ-LV1QN48C6/I5
  * Sipeed Tang Nano 4K: GW1NSR-LV4CQN48PC7/I6
+ * Sipeed Tang Nano 9K: GW1NR-LV9QN88PC6/I5
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
  * @Disasm honeycomb: GW1NS-UX2CQN48C5/I4
 
