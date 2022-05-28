@@ -8,3 +8,12 @@ IO_LOC "led[4]" 26;
 IO_LOC "led[5]" 25;
 IO_LOC "led[6]" 24;
 IO_LOC "led[7]" 23;
+
+CLOCK_LOC "led[0]" BUFS;
+CLOCK_LOC "led[1]" BUFS;
+CLOCK_LOC "led[2]" BUFS;
+CLOCK_LOC "led[3]" BUFS;
+CLOCK_LOC "led[4]" BUFS;
+CLOCK_LOC "led[5]" BUFS;
+CLOCK_LOC "led[6]" BUFS;
+CLOCK_LOC "led[7]" BUFS;

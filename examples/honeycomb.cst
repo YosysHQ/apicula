@@ -4,3 +4,7 @@ IO_LOC "clk" 10;
 IO_LOC "led[0]" 32;
 IO_LOC "led[1]" 33;
 IO_LOC "led[2]" 34;
+
+CLOCK_LOC "led[0]" BUFS;
+CLOCK_LOC "led[1]" BUFS;
+CLOCK_LOC "led[2]" BUFS;

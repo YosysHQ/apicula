@@ -19,6 +19,15 @@ IO_LOC "led[5]" 81;
 IO_LOC "led[6]" 80;
 IO_LOC "led[7]" 79;
 
+CLOCK_LOC "led[0]" BUFS;
+CLOCK_LOC "led[1]" BUFS;
+CLOCK_LOC "led[2]" BUFS;
+CLOCK_LOC "led[3]" BUFS;
+CLOCK_LOC "led[4]" BUFS;
+CLOCK_LOC "led[5]" BUFS;
+CLOCK_LOC "led[6]" BUFS;
+CLOCK_LOC "led[7]" BUFS;
+
 // true LVDS pins
 IO_LOC "tlvds_p" 29,30;
 IO_PORT "tlvds_p" IO_TYPE=LVCMOS33;

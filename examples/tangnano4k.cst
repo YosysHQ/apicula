@@ -9,5 +9,12 @@ IO_LOC "key" 15;
 IO_LOC "rst" 14;
 IO_LOC "clk" 45;
 
+CLOCK_LOC "led[0]" BUFS;
+CLOCK_LOC "led[1]" BUFS;
+CLOCK_LOC "led[2]" BUFS;
+CLOCK_LOC "led[3]" BUFS;
+CLOCK_LOC "led[4]" BUFS;
+CLOCK_LOC "led[5]" BUFS;
+
 // true LVDS pins
 IO_LOC "tlvds_p" 35,34;
