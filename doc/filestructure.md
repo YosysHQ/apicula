@@ -22,10 +22,11 @@ The vendor files use wire IDs that map to the following names. A full mapping is
 * 149-212 X2 two-hop wires, destination segments
 * 213-244 X8 eight-hop wires, destination segments
 * 245-260 X1 one-hop alias wires to SN/EW wires, going both ways
-* 261-268 unknown
-* 269-276 global wires
+* 261-268 long wires (branches)
+* 269-276 global wires (branches)
 * 277-278 high and low constant wires
-* 279-294 unknown, maybe related to global wires
+* 279-290 long wires (taps ans spines)
+* 291-294 global wires (taps)
 * 295-302 DRAM input wires
 * 303-308 ALU carry-in
 * 309-314 ALU carry-out
