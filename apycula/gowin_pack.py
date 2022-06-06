@@ -28,7 +28,7 @@ def sanitize_name(name):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?)(\w*)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|RAMW)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
@@ -102,6 +102,7 @@ def place(db, tilemap, bels, cst, args):
                     tile[r][c] = 1
         if typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
+            if parms['FF_TYPE'] == "RAMW_BLOCK": continue
 
             if 'ALU_MODE' in parms.keys():
                 alu_bel = tiledata.bels[f"ALU{num}"]
@@ -249,6 +250,14 @@ def place(db, tilemap, bels, cst, args):
                 bits.update(bel.flags['IOBUF'])
             for r, c in bits:
                 tile[r][c] = 1
+        elif typ == "RAMW":
+            bel = tiledata.bels['RAM16']
+            bits = bel.modes['0']
+            print(bits)
+            for r, c in bits:
+                tile[r][c] = 1
+        else:
+            print("unknown type", typ)
 
     # If the entire bank has only inputs, the LVCMOS12/15/18 bit is set
     # in each IBUF regardless of the actual I/O standard.
