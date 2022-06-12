@@ -375,8 +375,16 @@ def make_lw_aliases(fse, dat, db, quads, clks):
     any_mux = list(clks.keys())[0]
     for gclk in range(4):
         if gclk not in clks[any_mux].keys():
-            raise Exception("Inconsistent clock tap columns, something is went wrong with the clock detection.")
+            # XXX
+            continue
         lw_taps[gclk] = min(clks[any_mux][gclk].keys())
+
+    if -1 in lw_taps:
+        # XXX GW1NZ-1 temporary hack
+        if lw_taps.count(-1) != 1:
+            raise Exception("Inconsistent clock tap columns, something is went wrong with the clock detection.")
+        else:
+            lw_taps[lw_taps.index(-1)] = 0 + 1 + 2 + 3 - 1 - sum(lw_taps)
     print("    lw_taps = ", lw_taps)
 
     for lw in range(4):
