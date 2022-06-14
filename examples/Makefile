@@ -31,7 +31,6 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	blinky-osc-tec0117-unpacked.v blinky-osc-runber-unpacked.v blinky-osc-tangnano-unpacked.v \
 	blinky-osc-honeycomb-unpacked.v \
 	blinky-osc-tangnano9k-unpacked.v blinky-osc-tangnano1k-unpacked.v blinky-osc-tangnano4k-unpacked.v \
-
 	blinky-lw-tangnano-unpacked.v blinky-lw-tangnano1k-unpacked.v blinky-lw-tangnano4k-unpacked.v \
 	blinky-lw-tangnano9k-unpacked.v \
 	blinky-lw-honeycomb-unpacked.v blinky-lw-tec0117-unpacked.v blinky-lw-runber-unpacked.v
