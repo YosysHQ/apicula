@@ -41,12 +41,13 @@ def _io_mode_sort_func(mode):
 
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
-# With normal gowun_unpack io standard is determined first and it is known.
+# With normal gowin_unpack io standard is determined first and it is known.
 def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True):
     # TLVDS takes two BUF bels, so skip the B bels.
     skip_bels = set()
     #print((row, col))
     tiledata = db.grid[row][col]
+    clock_pips = {}
     bels = {}
     for name, bel in tiledata.bels.items():
         if name[0:3] == "IOB":
@@ -61,15 +62,15 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             # Here we don't use a mask common to all modes (it didn't work),
             # instead we try the longest bit sequence first.
             for mode, mode_rec in sorted(bel.iob_flags[iostd].items(),
-                    key = _io_mode_sort_func, reverse = True):
-                # print(mode, mode_rec.decode_bits)
+                key = _io_mode_sort_func, reverse = True):
+                #print(mode, mode_rec.decode_bits)
                 mode_bits = {(row, col)
                              for row, col in mode_rec.decode_bits
                              if tile[row][col] == 1}
-                # print("read", mode_bits)
+                #print("read", mode_bits)
                 if mode_rec.decode_bits == mode_bits:
                     zeros = zero_bits(mode, bel.iob_flags[iostd])
-                    # print("zeros", zeros)
+                    #print("zeros", zeros)
                     used_bits = {tile[row][col] for row, col in zeros}
                     if not any(used_bits):
                         bels.setdefault(name, set()).add(mode)
@@ -92,7 +93,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                          for row, col in bel.mode_bits
                          if tile[row][col] == 1}
             #print(name, sorted(bel.mode_bits))
-            #print("read", sorted(mode_bits))
+            #print("read mode:", sorted(mode_bits))
             for mode, bits in bel.modes.items():
                 #print(mode, sorted(bits))
                 if bits == mode_bits and (default or bits):
@@ -117,6 +118,17 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 if name == "RAM16" and not name in bels:
                     continue
                 bels.setdefault(name, set()).add(flag)
+        # revert BUFS flags
+        if name.startswith('BUFS'):
+            flags = bels.get(name, set()) ^ {'R', 'L'}
+            if flags:
+                num = name[4:]
+                half = 'T'
+                if row != 0:
+                    half = 'B'
+                for qd in flags:
+                    clock_pips[f'LWSPINE{half}{qd}{num}'] = f'LW{half}{num}'
+        #print("flags:", sorted(bels.get(name, set())))
 
     pips = {}
     for dest, srcs in tiledata.pips.items():
@@ -129,7 +141,6 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             if bits == used_bits and (default or bits):
                 pips[dest] = src
 
-    clock_pips = {}
     for dest, srcs in tiledata.clock_pips.items():
         pip_bits = set().union(*srcs.values())
         used_bits = {(row, col)
@@ -139,6 +150,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             # only report connection aliased to by a spine
             if bits == used_bits and (noalias or (row, col, src) in db.aliases):
                 clock_pips[dest] = src
+
     return {name: bel for name, bel in bels.items() if name not in skip_bels}, pips, clock_pips
 
 
@@ -268,7 +280,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS)(\w*)")
     if have_iologic(bels):
         bels_items = move_iologic(bels)
     else:

@@ -19,7 +19,7 @@ from apycula import codegen
 from apycula import bslib
 from apycula import pindef
 from apycula import fuse_h4x
-from apycula.wirenames import wirenames, clknames
+from apycula.wirenames import wirenames, clknames, wirenumbers, clknumbers
 #TODO proper API
 #from apycula import dat19_h4x
 from apycula import tm_h4x
@@ -118,7 +118,7 @@ params = {
         "package": "UBGA332",
         "device": "GW1N-9C-UBGA332-6",
         "partnumber": "GW1N-LV9UG332C6/I5",
-        "recode_idx": recode_idx_gw1n9, # TODO: recheck
+        "recode_idx": recode_idx_gw1n9,
     },
     "GW1N-4": {
         "package": "PBGA256",
@@ -136,9 +136,11 @@ params = {
         "package": "QFN48",
         "device": "GW1NZ-1-QFN48-6",
         "partnumber": "GW1NZ-LV1QN48C6/I5",
-        "recode_idx": recode_idx_gw1nz_1, # TODO: check
+        "recode_idx": recode_idx_gw1nz_1,
     },
 }[device]
+
+
 
 name_idx = 0
 def make_name(bel, typ):
@@ -1112,10 +1114,6 @@ if __name__ == "__main__":
     fse_hysteresis(fse, db, pin_locations)
     fse_drive(fse, db, pin_locations)
     fse_iologic(fse, db, pin_locations)
-
-    # diff IOB
-    diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
-    fse_diff_iob(fse, db, pin_locations, diff_cap_info);
 
     # diff IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
