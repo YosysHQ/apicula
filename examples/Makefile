@@ -1,6 +1,8 @@
 YOSYS ?= yosys
 NEXTPNR ?= nextpnr-gowin
 
+.DEFAULT_GOAL := all
+
 # globals router tests
 include globals/Makefile.inc
 
