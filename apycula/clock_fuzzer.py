@@ -398,7 +398,7 @@ def make_lw_aliases(fse, dat, db, quads, clks):
         for lw, tap_desc in taps.items():
             for tap_col, cols in tap_desc.items():
                 tap_row = 0
-                if row > (center_row * 2):
+                if row > (center_row * 2) and has_bottom_quadrants:
                     tap_row = last_row
                 db.aliases.update({(row, tap_col, 'LT01') : (tap_row, tap_col, 'LT02')})
                 db.aliases.update({(row, tap_col, 'LT04') : (tap_row, tap_col, 'LT13')})
@@ -410,6 +410,10 @@ def make_lw_aliases(fse, dat, db, quads, clks):
     rows = { (0, 'T') }
     if has_bottom_quadrants:
         rows.update({ (last_row, 'B') })
+    else:
+        for tp in ['LT02', 'LT13']:
+            del db.grid[last_row][tap_col].pips[tp]
+
     for row, qd in rows:
         for lw, tap_desc in taps.items():
             for tap_col, cols in tap_desc.items():
@@ -424,6 +428,7 @@ def make_lw_aliases(fse, dat, db, quads, clks):
                 for tp in ['LT02', 'LT13']:
                     for pip in [p for p in db.grid[row][tap_col].pips[tp] if p not in pip2keep]:
                         del db.grid[row][tap_col].pips[tp][pip]
+
     # logic entries
     srcs = {}
     for i, src in enumerate(dat['UfbIns']):
