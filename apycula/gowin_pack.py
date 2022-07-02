@@ -110,7 +110,6 @@ def place(db, tilemap, bels, cst, args):
                     tile[r][c] = 1
         if typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
-            if parms['FF_TYPE'] == "RAMW_BLOCK": continue
 
             if 'ALU_MODE' in parms.keys():
                 alu_bel = tiledata.bels[f"ALU{num}"]
@@ -133,7 +132,7 @@ def place(db, tilemap, bels, cst, args):
                         for brow, bcol in fuses:
                             tile[brow][bcol] = 1
 
-            if int(num) < 6 and int(parms['FF_USED']):
+            if int(num) < 6:
                 mode = str(parms['FF_TYPE']).strip('E')
                 dffbits = tiledata.bels[f'DFF{num}'].modes[mode]
                 for brow, bcol in dffbits:
