@@ -133,7 +133,7 @@ def place(db, tilemap, bels, cst, args):
                         for brow, bcol in fuses:
                             tile[brow][bcol] = 1
 
-            if int(num) < 6:
+            if int(num) < 6 and int(parms['FF_USED']):
                 mode = str(parms['FF_TYPE']).strip('E')
                 dffbits = tiledata.bels[f'DFF{num}'].modes[mode]
                 for brow, bcol in dffbits:
