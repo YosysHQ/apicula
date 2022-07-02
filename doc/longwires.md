@@ -18,91 +18,60 @@ You can figure out a lot already from the syntax of the CLOCK_LOC constraint:
 
  So we have 8 long wires per quandrant, which btw can be set as LEFT (L), RIGHT (R) for GW1N series and as TOPLEFT (TL), TOPRIGHT (TR), BOTTOMLEFT (BT) and BOTTOMRIGHT (BR) for GW1N-9/GW1NR-9/GW1N-9C/GW1NR-9C, GW2A series.
 
-Specifying a limit does not mean that the vendor P&R will necessarily involve a long wire. You need to play around with the number of consumers and the type of sockets. The minimum set can be represented as:
-```
-    name = "r_src"
-    dff = codegen.Primitive("DFF", name)
-    dff.portmap['CLK'] = "w_clk"
-    dff.portmap['D'] = "w_dummy"
-    dff.portmap['Q'] = "w_lw"
-    mod.wires.update({"w_dummy", "w_lw"})
-    mod.primitives[name] = dff
-    cst.clocks["w_lw"] = "BUFS[5]=LOGIC"
-    cst.cells[name] = "R8C12[0][A]"
-    # dest ff0
-    name = "r_dst0"
-    dff = codegen.Primitive("DFF", name)
-    dff.portmap['CLK'] = "w_clk"
-    dff.portmap['D'] = "w_lw"
-    dff.portmap['Q'] = "w_dst2_d"
-    mod.wires.update({"w_dst2_d"})
-    mod.primitives[name] = dff
-    cst.cells[name] = "R2C2[0][B]"
-    # dest ff2
-    name = "r_dst2"
-    dff = codegen.Primitive("DFFS", name)
-    dff.portmap['CLK'] = "w_clk"
-    dff.portmap['D'] = "w_lw"
-    dff.portmap['Q'] = "w_led"
-    dff.portmap['SET'] = "w_dst2_d"
-    mod.primitives[name] = dff
-    cst.cells[name] = "R3C3[0][B]"
-```
-
-
+The following description focuses on the GW1N-1 chip, which has two quadrants and therefore only long wires with the letter T (top), the chips with four quadrants will also have long wires with the letter B (bottom).
 
 ![long wires diagram](fig/lw.png)
 
 # A
-Here the long wires LW[0-7] are connected to the SS00 and SS40 buses of the left and right quadrants. The corresponding fuses must be reset to 0 in order to connect the long wire to the bus.
+Here the long wires LWT[0-7] are connected to the SS00 and SS40 buses of the left and right quadrants. The corresponding fuses must be reset to 0 in order to connect the long wire to the bus.
 There is no choice to which bus (SS00 or SS40), only connect/disconnect.
 
 The buses consist of spines that are different for the right and left quadrant.
 
 | Bus/Code | Spine/Code      | Quadrant |
 |:--------:|:---------------:|:--------:|
-| SS00 289 | LW_SPINE0 1001  |    Left  |
-| SS00 289 | LW_SPINE1 1002  |    Left  |
-| SS00 289 | LW_SPINE2 1003  |    Left  |
-| SS00 289 | LW_SPINE3 1004  |    Left  |
-| SS40 290 | LW_SPINE4 1005  |    Left  |
-| SS40 290 | LW_SPINE5 1006  |    Left  |
-| SS40 290 | LW_SPINE6 1007  |    Left  |
-| SS40 290 | LW_SPINE7 1009  |    Left  |
-| SS00 289 | LW_SPINE8 1010  |   Right  |
-| SS00 289 | LW_SPINE9 1011  |   Right  |
-| SS00 289 | LW_SPINE10 1012 |   Right  |
-| SS00 289 | LW_SPINE11 1013 |   Right  |
-| SS40 290 | LW_SPINE12 1014 |   Right  |
-| SS40 290 | LW_SPINE13 1015 |   Right  |
-| SS40 290 | LW_SPINE14 1016 |   Right  |
-| SS40 290 | LW_SPINE15 1017 |   Right  |
+| SS00 289 | LWSPINETL0 1001 |    Left  |
+| SS00 289 | LWSPINETL1 1002 |    Left  |
+| SS00 289 | LWSPINETL2 1003 |    Left  |
+| SS00 289 | LWSPINETL3 1004 |    Left  |
+| SS40 290 | LWSPINETL4 1005 |    Left  |
+| SS40 290 | LWSPINETL5 1006 |    Left  |
+| SS40 290 | LWSPINETL6 1007 |    Left  |
+| SS40 290 | LWSPINETL7 1008 |    Left  |
+| SS00 289 | LWSPINETR0 1009 |   Right  |
+| SS00 289 | LWSPINETR1 1010 |   Right  |
+| SS00 289 | LWSPINETR2 1011 |   Right  |
+| SS00 289 | LWSPINETR3 1012 |   Right  |
+| SS40 290 | LWSPINETR4 1013 |   Right  |
+| SS40 290 | LWSPINETR5 1014 |   Right  |
+| SS40 290 | LWSPINETR6 1015 |   Right  |
+| SS40 290 | LWSPINETR7 1016 |   Right  |
 
 Fuses (table 38):
-| Long wire/Code | Spine/Code      | Fuses/Bits   |
-|:--------------:|:---------------:|:------------:|
-|    LW0 32      | LW_SPINE0  1001 | 1462 (23, 58)|
-|    LW1 33      | LW_SPINE1  1002 | 1455 (19, 59)|
-|    LW2 34      | LW_SPINE2  1003 | 1450 (14, 59)|
-|    LW3 35      | LW_SPINE3  1004 | 1456 (20, 58)|
-|    LW4 36      | LW_SPINE4  1005 | 1625 (24, 0) |
-|    LW5 37      | LW_SPINE5  1006 | 1446 (10, 59)|
-|    LW6 38      | LW_SPINE6  1007 | 1442 (6,  59)|
-|    LW7 39      | LW_SPINE7  1008 | 1642 (27, 59)|
-|    LW0 32      | LW_SPINE8  1009 | 1462 (24, 59)|
-|    LW1 33      | LW_SPINE9  1010 | 1453 (17, 59)|
-|    LW2 34      | LW_SPINE10 1011 | 1449 (13, 59)|
-|    LW3 35      | LW_SPINE11 1012 | 1461 (22, 59)|
-|    LW4 36      | LW_SPINE12 1013 | 1458 (21, 58)|
-|    LW5 37      | LW_SPINE13 1014 | 1445 (9,  59)|
-|    LW6 38      | LW_SPINE14 1015 | 1441 (5,  59)|
-|    LW7 39      | LW_SPINE15 1016 | 1643 (26, 58)|
+| Long wire/Code  | Spine/Code      | Fuses/Bits   |
+|:---------------:|:---------------:|:------------:|
+|    LWT0 32      | LWSPINETL0 1001 | 1462 (23, 58)|
+|    LWT1 33      | LWSPINETL1 1002 | 1455 (19, 59)|
+|    LWT2 34      | LWSPINETL2 1003 | 1450 (14, 59)|
+|    LWT3 35      | LWSPINETL3 1004 | 1456 (20, 58)|
+|    LWT4 36      | LWSPINETL4 1005 | 1625 (24, 0) |
+|    LWT5 37      | LWSPINETL5 1006 | 1446 (10, 59)|
+|    LWT6 38      | LWSPINETL6 1007 | 1442 (6,  59)|
+|    LWT7 39      | LWSPINETL7 1008 | 1642 (27, 59)|
+|    LWT0 32      | LWSPINETR0 1009 | 1462 (24, 59)|
+|    LWT1 33      | LWSPINETR1 1010 | 1453 (17, 59)|
+|    LWT2 34      | LWSPINETR2 1011 | 1449 (13, 59)|
+|    LWT3 35      | LWSPINETR3 1012 | 1461 (22, 59)|
+|    LWT4 36      | LWSPINETR4 1013 | 1458 (21, 58)|
+|    LWT5 37      | LWSPINETR5 1014 | 1445 (9,  59)|
+|    LWT6 38      | LWSPINETR6 1015 | 1441 (5,  59)|
+|    LWT7 39      | LWSPINETR7 1016 | 1643 (26, 58)|
 
 
 # B
 Connecting the spines with the vertical wires. Here shown is the vertical wire from the `SS40` bus, which is not drawn in the picture of the whole chip because it would result in a mess, but these hidden wires go in pairs with the drawn wires from the `SS00` bus.
 
-Only one spine from each tire is connected, which one is determined from the column of the cell using the table:
+Only one spine from each bus is connected, which one is determined from the column of the cell using the table (is specified for the GW1N-1 chip, tables for others can be found in the code):
 
 | Col mod 4 | SS00 spine | SS40 spine |
 |:---------:|:----------:|:----------:|
@@ -110,6 +79,28 @@ Only one spine from each tire is connected, which one is determined from the col
 |     1     |     0      |      4     |   
 |     2     |     3      |      7     |   
 |     3     |     2      |      6     |   
+
+Important: taps are easy to determine, but which columns are served by which tap is a little more difficult to determine by the rule:
+
+If there is a tap to the right of the current tap for a given long wire, then the current tap serves two columns to the right, otherwise all columns to the right.
+
+For example GW1N-1, chip width 20 columns, long wire #1, this is how the columns are serviced with taps:
+
+|   col#  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 |
+|:-------:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| tap pip | 0 |   |   |   | 1 |   |   |   | 2 |   |    |    |  3 |    |    |    |  4 |    |    |    |
+| cells   | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 2  | 3  |  3 | 3  | 3  | 4  |  4 | 4  | 4  | 4  |
+
+For long wire #2:
+
+|   col#  | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 |
+|:-------:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| tap pip |   |   |   | 0 |   |   |   | 1 |   |   |    | 2  |    |    |    | 3  |    |    |    | 4  |
+| cells   | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 2  | 2  |  2 | 2  | 3  | 3  |  3 | 3  | 4  | 4  |
+
+
+One more thing quadrants are not squares (horrible): their borders are uneven because the belonging of a cell to one or another quadrant is determined not by its coordinates, but by the coordinates of the tap that serves it.
+For example column 9 is central for GW1N-1 so from the table above cells in column 10 belong to the left quadrant for the long wire #1 as column 10 is served by tap in column 8, but the same cell belongs to the right quadrant for the long wire #2 as it is served by tap in column 11.
 
 What the `A6`, `A7`, `B6`, `B7`, `F6`, `F7` inputs are is still unclear.
 It is interesting that it is possible to connect the same spine to `LT02` and `LT13`.

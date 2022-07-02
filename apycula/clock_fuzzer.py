@@ -11,7 +11,7 @@ from apycula import bslib
 from apycula import chipdb
 from apycula import fuse_h4x
 from apycula import gowin_unpack
-from apycula.wirenames import wirenames
+from apycula.wirenames import wirenames, clknames, wirenumbers, clknumbers
 
 def dff(mod, cst, row, col, clk=None):
     "make a dff with optional clock"
@@ -307,6 +307,139 @@ def branch_aliases(quads, clks):
 
     return aliases
 
+def get_bufs_bits(fse, ttyp, win, wout):
+    wi = clknumbers[win]
+    wo = clknumbers[wout]
+    fuses = []
+    for rec in fse[ttyp]['wire'][38]:
+        if rec[0] == wi and rec[1] == wo:
+            fuses = chipdb.unpad(rec[2:])
+            break
+    return {fuse_h4x.fuse_lookup(fse, ttyp, f) for f in fuses}
+
+# create aliases and pips for long wires
+def make_lw_aliases(fse, dat, db, quads, clks):
+    # type 81, 82, 83, 84 tiles have source muxes
+    center_row, col82 = dat['center']
+    center_row -= 1
+    last_row = db.rows - 1
+    col82 -= 1
+    col81 = col82 - 1
+    col83 = col82 + 1
+    col84 = col82 + 2
+    # type 91 and 92 tiles activate the quadrants
+    # XXX GW1NS-4 have different types
+    type91 = fse['header']['grid'][61][0][col82]
+    type92 = fse['header']['grid'][61][last_row][col82]
+    col91 = col82
+    has_bottom_quadrants = len(quads) > 2
+
+    # quadrants activation bels
+    # delete direct pips "long wire->spine" because the artificial bel will be used,
+    # which replaces this direct pip
+    rows = {(0, 'T', type91)}
+    if has_bottom_quadrants:
+        rows.update({ (last_row, 'B', type92) })
+    for row, half, ttyp in rows:
+        for idx in range(8):
+            bel = db.grid[row][col91].bels.setdefault(f'BUFS{idx}', chipdb.Bel())
+            del db.grid[row][col91].clock_pips[f'LWSPINE{half}L{idx}']
+            del db.grid[row][col91].clock_pips[f'LWSPINE{half}R{idx}']
+            src = f'LW{half}{idx}'
+            db.grid[row][col91].clock_pips.setdefault(f'LWI{idx}', {})[src] = {}
+            db.grid[row][col91].clock_pips.setdefault(f'LWSPINE{half}L{idx}', {})[f'LWO{idx}'] = {}
+            bel.flags['L'] = get_bufs_bits(fse, ttyp, f'LW{half}{idx}', f'LWSPINE{half}L{idx}')
+            db.grid[row][col91].clock_pips.setdefault(f'LWSPINE{half}R{idx}', {})[f'LWO{idx}'] = {}
+            bel.flags['R'] = get_bufs_bits(fse, ttyp, f'LW{half}{idx}', f'LWSPINE{half}R{idx}')
+            bel.portmap['I'] = f'LWI{idx}'
+            bel.portmap['O'] = f'LWO{idx}'
+            # aliases for long wire origins (center muxes)
+            # If we have only two quadrants, then do not create aliases in the bottom tile 92,
+            # thereby excluding these wires from the candidates for routing
+            if half == 'B' and not has_bottom_quadrants:
+                continue
+            if half == 'T':
+                if idx != 7:
+                    db.aliases.update({(row, col82, src) : (center_row, col82, src)})
+                else:
+                    db.aliases.update({(row, col82, src) : (center_row, col81, src)})
+            else:
+                if idx != 7:
+                    db.aliases.update({(row, col82, src) : (center_row, col83, src)})
+                else:
+                    db.aliases.update({(row, col82, src) : (center_row, col84, src)})
+    # branches
+    # {lw#: {tap_col: {cols}}
+    taps = {}
+    lw_taps = [-1, -1, -1, -1]
+    any_mux = list(clks.keys())[0]
+    for gclk in range(4):
+        if gclk not in clks[any_mux].keys():
+            # XXX
+            continue
+        lw_taps[gclk] = min(clks[any_mux][gclk].keys())
+
+    if -1 in lw_taps:
+        # XXX GW1NZ-1 temporary hack
+        if lw_taps.count(-1) != 1:
+            raise Exception("Inconsistent clock tap columns, something is went wrong with the clock detection.")
+        else:
+            lw_taps[lw_taps.index(-1)] = 0 + 1 + 2 + 3 - 1 - sum(lw_taps)
+    print("    lw_taps = ", lw_taps)
+
+    for lw in range(4):
+        tap_col = lw_taps[lw]
+        for col in range(db.cols):
+            if (col > tap_col + 2) and (tap_col + 4 < db.cols):
+                tap_col += 4
+            taps.setdefault(lw, {}).setdefault(tap_col, set()).add(col)
+
+    for row in range(db.rows):
+        for lw, tap_desc in taps.items():
+            for tap_col, cols in tap_desc.items():
+                tap_row = 0
+                if row > (center_row * 2) and has_bottom_quadrants:
+                    tap_row = last_row
+                db.aliases.update({(row, tap_col, 'LT01') : (tap_row, tap_col, 'LT02')})
+                db.aliases.update({(row, tap_col, 'LT04') : (tap_row, tap_col, 'LT13')})
+                for col in cols:
+                    db.aliases.update({(row, col, f'LB{lw}1') : (row, tap_col, f'LBO0')})
+                    db.aliases.update({(row, col, f'LB{lw + 4}1') : (row, tap_col, f'LBO1')})
+
+    # tap sources
+    rows = { (0, 'T') }
+    if has_bottom_quadrants:
+        rows.update({ (last_row, 'B') })
+    else:
+        for tp in ['LT02', 'LT13']:
+            del db.grid[last_row][tap_col].pips[tp]
+
+    for row, qd in rows:
+        for lw, tap_desc in taps.items():
+            for tap_col, cols in tap_desc.items():
+                if tap_col <= col91:
+                    half = 'L'
+                else:
+                    half = 'R'
+                db.aliases.update({ (row, tap_col, 'SS00') : (row, col91, f'LWSPINE{qd}{half}{lw}') })
+                db.aliases.update({ (row, tap_col, 'SS40') : (row, col91, f'LWSPINE{qd}{half}{lw + 4}') })
+                # XXX remove all pips except SS00 and SS40
+                pip2keep = {'SS00', 'SS40'}
+                for tp in ['LT02', 'LT13']:
+                    for pip in [p for p in db.grid[row][tap_col].pips[tp] if p not in pip2keep]:
+                        del db.grid[row][tap_col].pips[tp][pip]
+
+    # logic entries
+    srcs = {}
+    for i, src in enumerate(dat['UfbIns']):
+        row, col, pip = src
+        if pip == 126: # CLK2
+            db.aliases.update({ (center_row, col82, f'UNK{i + 104}'): (row - 1, col -1, 'CLK2')})
+            db.aliases.update({ (center_row, col81, f'UNK{i + 104}'): (row - 1, col -1, 'CLK2')})
+            if has_bottom_quadrants:
+                db.aliases.update({ (center_row, col83, f'UNK{i + 104}'): (row - 1, col -1, 'CLK2')})
+                db.aliases.update({ (center_row, col84, f'UNK{i + 104}'): (row - 1, col -1, 'CLK2')})
+
 if __name__ == "__main__":
     quads = quadrants()
 
@@ -342,6 +475,10 @@ if __name__ == "__main__":
     db.aliases.update(sa)
     db.aliases.update(ta)
     db.aliases.update(ba)
+
+    # long wires
+    make_lw_aliases(fse, dat, db, quads, clks)
+
 
     with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)

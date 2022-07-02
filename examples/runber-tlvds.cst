@@ -8,3 +8,4 @@ IO_LOC "led[4]" 26;
 IO_LOC "led[5]" 25;
 IO_LOC "led[6]" 24;
 IO_LOC "led[7]" 23;
+

@@ -23,9 +23,17 @@ wirenames = { 0: "A0", 1: "B0", 2: "C0", 3: "D0", 4: "A1", 5: "B1", 6: "C1", 7: 
 279: "LT00", 280: "LT10", 281: "LT20", 282: "LT30", 283: "LT02", 284: "LT13", 285: "LT01", 286: "LT04", 287: "LBO0", 288: "LBO1", 289: "SS00", 290: "SS40",
 291: "GT00", 292: "GT10", 293: "GBO0", 294: "GBO1", 295: "DI0", 296: "DI1", 297: "DI2", 298: "DI3", 299: "DI4", 300: "DI5", 301: "DI6", 302: "DI7",
 303: "CIN0", 304: "CIN1", 305: "CIN2", 306: "CIN3", 307: "CIN4", 308: "CIN5", 309: "COUT0", 310: "COUT1", 311: "COUT2", 312: "COUT3", 313: "COUT4", 314: "COUT5"}
+wirenames.update({n: f"LWSPINETL{n - 1001}" for n in range(1001, 1009)})
+wirenames.update({n: f"LWSPINETR{n - 1009}" for n in range(1009, 1017)})
+wirenames.update({n: f"LWSPINEBL{n - 1033}" for n in range(1033, 1041)})
+wirenames.update({n: f"LWSPINEBR{n - 1041}" for n in range(1041, 1049)})
 
 wirenumbers = {v: k for k, v in wirenames.items()}
 
 clknames = wirenames.copy()
 clknames.update({n: f"SPINE{n}" for n in range(32)})
-clknames.update({n: f"UNK{n}" for n in range(32, 261)})
+clknames.update({n: f"LWT{n - 32}" for n in range(32, 40)})
+clknames.update({n: f"LWB{n - 40}" for n in range(40, 48)})
+clknames.update({n: f"UNK{n}" for n in range(48, 261)})
+
+clknumbers = {v: k for k, v in clknames.items()}
