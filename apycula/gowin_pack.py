@@ -91,7 +91,7 @@ def place(db, tilemap, bels, cst, args):
         tile = tilemap[(row-1, col-1)]
         if typ == "GSR":
             pass
-        if typ == "BUFS":
+        elif typ == "BUFS":
             # fuses must be reset in order to activate so remove them
             bits2zero = set()
             for fuses in [fuses for fuses in parms.keys() if fuses in {'L', 'R'}]:
@@ -99,7 +99,7 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits2zero:
                 tile[r][c] = 0
 
-        if typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH'}:
+        elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH'}:
             divisor = int(parms['FREQ_DIV'], 2)
             if divisor % 2 == 1:
                 raise Exception(f"Divisor of {typ} must be even")
@@ -108,7 +108,7 @@ def place(db, tilemap, bels, cst, args):
                 bits = tiledata.bels[typ].modes[divisor]
                 for r, c in bits:
                     tile[r][c] = 1
-        if typ == "SLICE":
+        elif typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
 
             if 'ALU_MODE' in parms.keys():
