@@ -35,7 +35,7 @@ def _io_mode_sort_func(mode):
     l = len(mode[1].decode_bits) * 10
     if mode[0] == 'IOBUF':
         l += 2
-    elif mode[1] == 'OBUF':
+    elif mode[0] == 'OBUF':
         l += 1
     return l
 

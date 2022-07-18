@@ -28,7 +28,7 @@ def sanitize_name(name):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS)(\w*)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
@@ -91,7 +91,7 @@ def place(db, tilemap, bels, cst, args):
         tile = tilemap[(row-1, col-1)]
         if typ == "GSR":
             pass
-        if typ == "BUFS":
+        elif typ == "BUFS":
             # fuses must be reset in order to activate so remove them
             bits2zero = set()
             for fuses in [fuses for fuses in parms.keys() if fuses in {'L', 'R'}]:
@@ -99,7 +99,7 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits2zero:
                 tile[r][c] = 0
 
-        if typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH'}:
+        elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH'}:
             divisor = int(parms['FREQ_DIV'], 2)
             if divisor % 2 == 1:
                 raise Exception(f"Divisor of {typ} must be even")
@@ -108,7 +108,7 @@ def place(db, tilemap, bels, cst, args):
                 bits = tiledata.bels[typ].modes[divisor]
                 for r, c in bits:
                     tile[r][c] = 1
-        if typ == "SLICE":
+        elif typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
 
             if 'ALU_MODE' in parms.keys():
@@ -257,6 +257,14 @@ def place(db, tilemap, bels, cst, args):
                 bits.update(bel.flags['IOBUF'])
             for r, c in bits:
                 tile[r][c] = 1
+        elif typ == "RAMW":
+            bel = tiledata.bels['RAM16']
+            bits = bel.modes['0']
+            print(bits)
+            for r, c in bits:
+                tile[r][c] = 1
+        else:
+            print("unknown type", typ)
 
     # If the entire bank has only inputs, the LVCMOS12/15/18 bit is set
     # in each IBUF regardless of the actual I/O standard.

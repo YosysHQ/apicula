@@ -127,11 +127,11 @@ class Pnr:
 
     def write(self, f):
         template = """
-            add_file -type cst {cst}
-            add_file -type netlist {netlist}
-            set_device {device_desc}
-            set_option {opt}
-            run pnr
+add_file -type cst {cst}
+add_file -type netlist {netlist}
+set_device {device_desc}
+set_option {opt}
+run pnr
             """
 
         device_desc = self.partnumber

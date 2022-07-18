@@ -238,19 +238,24 @@ def fse_luts(fse, ttyp):
     # main fuse: enable shadow SRAM in the slice
     # shortval(28) [2, 0, fuses]
     if 28 in fse[ttyp]['shortval']:
-        data = fse[ttyp]['shortval'][28]
+        for i in range(6):
+            bel = luts.setdefault(f"DFF{i}", Bel())
+            mode = bel.modes.setdefault("RAM", set())
+            for key0, key1, *fuses in fse[ttyp]['shortval'][25+i//2]:
+                if key0 < 0:
+                    for f in fuses:
+                        if f == -1: break
+                        coord = fuse.fuse_lookup(fse, ttyp, f)
+                        mode.add(coord)
+
         bel = luts.setdefault(f"RAM16", Bel())
         mode = bel.modes.setdefault("0", set())
-        for key0, key1, *fuses in data:
+        for key0, key1, *fuses in fse[ttyp]['shortval'][28]:
             if key0 == 2 and key1 == 0:
-                for f in (f for f in fuses if f != -1):
+                for f in fuses:
+                    if f == -1: break
                     coord = fuse.fuse_lookup(fse, ttyp, f)
-                    mode.update({coord})
-                break
-        bel.flags.update({k:v for (k, v) in luts["LUT0"].flags.items()})
-        bel.flags.update({k+16:v for (k, v) in luts["LUT1"].flags.items()})
-        bel.flags.update({k+32:v for (k, v) in luts["LUT2"].flags.items()})
-        bel.flags.update({k+48:v for (k, v) in luts["LUT3"].flags.items()})
+                    mode.add(coord)
         bel.portmap = {
             'DI': ("A5", "B5", "C5", "D5"),
             'CLK': "CLK2",

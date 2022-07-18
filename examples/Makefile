@@ -95,6 +95,9 @@ blinky-oddr-runber.json: blinky-oddr-runber-synth.json runber-tlvds.cst
 attosoc-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
+lutram-tec0117-synth.json: lutram/lutram.v lutram/prbs.v lutram/top.v
+	$(YOSYS) -p "read_verilog $^; synth_gowin -nolutram -json $@"
+
 attosoc-tangnano9k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
