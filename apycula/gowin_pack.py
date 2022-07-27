@@ -30,6 +30,8 @@ def get_bels(data):
     later = []
     belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
+        if cell['type'].startswith('DUMMY_') :
+            continue
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
         bels = belre.match(bel)
@@ -90,6 +92,8 @@ def place(db, tilemap, bels, cst, args):
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
         if typ == "GSR":
+            pass
+        elif typ.startswith('MUX2_'):
             pass
         elif typ == "BUFS":
             # fuses must be reset in order to activate so remove them
