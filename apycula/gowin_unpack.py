@@ -368,6 +368,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         elif typ == "DFF":
             #print(flags)
             kind, = flags # DFF only have one flag
+            if kind == "RAM": continue
             idx = int(idx)
             port = dffmap[kind]
             name = f"R{row}C{col}_{typ}E_{idx}"
