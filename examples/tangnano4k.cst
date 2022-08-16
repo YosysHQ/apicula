@@ -1,14 +1,24 @@
 // these are the HDMI pins!
-IO_LOC "led[0]" 27;
-IO_LOC "led[1]" 28;
-IO_LOC "led[2]" 29;
-IO_LOC "led[3]" 30;
-IO_LOC "led[4]" 31;
-IO_LOC "led[5]" 32;
+// in NP pairs
+//TXC
+IO_LOC "hdmi[0]" 27;
+IO_LOC "hdmi[1]" 28;
+//TX0
+IO_LOC "hdmi[2]" 29;
+IO_LOC "hdmi[3]" 30;
+//TX1
+IO_LOC "hdmi[4]" 31;
+IO_LOC "hdmi[5]" 32;
+//TX2
+IO_LOC "hdmi[6]" 34;
+IO_LOC "hdmi[7]" 35;
+
+//Buttons
 IO_LOC "key" 15;
 IO_LOC "rst" 14;
-IO_LOC "clk" 45;
 
+IO_LOC "led" 10;
+IO_LOC "clk" 45;
 
 // true LVDS pins
 IO_LOC "tlvds_p" 35,34;
