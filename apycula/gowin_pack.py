@@ -159,7 +159,14 @@ def place(db, tilemap, bels, cst, args):
             elif col == db.cols:
                 edge = 'R'
                 idx = row
-            cst.ports[cellname] = f"IO{edge}{idx}{num}"
+            bel_loc = f"IO{edge}{idx}{num}"
+            if bel_loc in db.dangerous_pins.keys():
+                if what_to_do == 0:
+                    exit(f"It is forbidden to use a {pin_name} pin ({bel_loc}) as a GPIO.")
+                else:
+                    print(f"WARNING: {pin_name} pin ({bel_loc}) used as a GPIO!")
+
+            cst.ports[cellname] = bel_loc
             iob = tiledata.bels[f'IOB{num}']
             if 'DIFF' in attrs.keys():
                 mode = attrs['DIFF_TYPE']

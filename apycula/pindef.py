@@ -93,6 +93,16 @@ def get_clock_locs(device, package):
     return [(pin['NAME'], *pin['CFG'].split('/')) for pin in df
             if 'CFG' in pin.keys() and pin['CFG'].startswith("GCLK")]
 
+# { location : (pin_name, what-to-do)}
+def get_dangerous_locs(device, package):
+    df = get_package(device, package, True)
+    # return 0 (stop) for now
+    res = {}
+    spec_pins = [p for p in df if 'CFG' in p.keys() and p['CFG'].startswith('MODE')]
+    for pin in spec_pins:
+        res.update({pin['NAME'] : (pin['CFG'].split('/')[0], 0)})
+    return res
+
 # { name : (is_diff, is_true_lvds, is_positive)}
 def get_diff_cap_info(device, package, special_pins=False):
     df = get_package(device, package, special_pins)

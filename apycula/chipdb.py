@@ -80,6 +80,7 @@ class Device:
     packages: Dict[str, Tuple[str, str, str]] = field(default_factory=dict)
     pinout: Dict[str, Dict[str, Dict[str, str]]] = field(default_factory=dict)
     pin_bank: Dict[str, int] = field(default_factory = dict)
+    dangerous_pins: Dict[str, Tuple[str, int]] = field(default_factory=dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)
     template: np.ndarray = None
@@ -373,26 +374,38 @@ def get_pins(device):
         res_bank_pins.update(pindef.get_bank_pins(device, pkg))
     return (pkgs, res, res_bank_pins)
 
+#
+def get_dangerous_pins(device, pkgs):
+    for pkg in pkgs.values():
+        dangerous_pins = pindef.get_dangerous_locs(device, pkg[0])
+        if dangerous_pins:
+            break
+    return dangerous_pins
+
 # returns ({partnumber: (package, device, speed)}, {pins}, {bank_pins})
 def json_pinout(device):
     if device == "GW1N-1":
         pkgs, pins, bank_pins = get_pins("GW1N-1")
+        dangerous_pins = get_dangerous_pins(device, pkgs)
         return (pkgs, {
             "GW1N-1": pins
-        }, bank_pins)
+        }, bank_pins, dangerous_pins)
     elif device == "GW1NZ-1":
         pkgs, pins, bank_pins = get_pins("GW1NZ-1")
+        dangerous_pins = get_dangerous_pins(device, pkgs)
         return (pkgs, {
             "GW1NZ-1": pins
-        }, bank_pins)
+        }, bank_pins, dangerous_pins)
     elif device == "GW1N-4":
         pkgs, pins, bank_pins = get_pins("GW1N-4")
+        dangerous_pins = get_dangerous_pins(device, pkgs)
         return (pkgs, {
             "GW1N-4": pins
-        }, bank_pins)
+        }, bank_pins, dangerous_pins)
     elif device == "GW1NS-4":
         pkgs_sr, pins_sr, bank_pins_sr = get_pins("GW1NSR-4C")
         pkgs, pins, bank_pins = get_pins("GW1NS-4")
+        dangerous_pins = get_dangerous_pins(device, pkgs)
         res = {}
         res.update(pkgs)
         res.update(pkgs_sr)
@@ -402,9 +415,10 @@ def json_pinout(device):
         return (res, {
             "GW1NS-4": pins,
             "GW1NSR-4C": pins_sr
-        }, res_bank_pins)
+        }, res_bank_pins, dangerous_pins)
     elif device == "GW1N-9":
         pkgs, pins, bank_pins = get_pins("GW1N-9")
+        dangerous_pins = get_dangerous_pins(device, pkgs)
         pkgs_r, pins_r, bank_pins_r = get_pins("GW1NR-9")
         res = {}
         res.update(pkgs)
@@ -415,9 +429,10 @@ def json_pinout(device):
         return (res, {
             "GW1N-9": pins,
             "GW1NR-9": pins_r
-        }, res_bank_pins)
+        }, res_bank_pins, dangerous_pins)
     elif device == "GW1N-9C":
         pkgs, pins, bank_pins = get_pins("GW1N-9C")
+        dangerous_pins = get_dangerous_pins(device, pkgs)
         pkgs_r, pins_r, bank_pins_r = get_pins("GW1NR-9C")
         res = {}
         res.update(pkgs)
@@ -428,9 +443,10 @@ def json_pinout(device):
         return (res, {
             "GW1N-9C": pins,
             "GW1NR-9C": pins_r
-        }, res_bank_pins)
+        }, res_bank_pins, dangerous_pins)
     elif device == "GW1NS-2":
         pkgs, pins, bank_pins = get_pins("GW1NS-2")
+        dangerous_pins = get_dangerous_pins(device, pkgs)
         pkgs_c, pins_c, bank_pins_c = get_pins("GW1NS-2C")
         res = {}
         res.update(pkgs)
@@ -441,7 +457,7 @@ def json_pinout(device):
         return (res, {
             "GW1NS-2": pins,
             "GW1NS-2C": pins_c
-        }, res_bank_pins)
+        }, res_bank_pins, dangerous_pins)
     else:
         raise Exception("unsupported device")
 

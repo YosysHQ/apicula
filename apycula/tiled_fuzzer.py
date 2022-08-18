@@ -923,7 +923,7 @@ if __name__ == "__main__":
     db = chipdb.from_fse(device, fse)
     chipdb.set_banks(device, db)
     db.timing = tm
-    db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
+    db.packages, db.pinout, db.pin_bank, db.dangerous_pins = chipdb.json_pinout(device)
 
     corners = [
         (0, 0, fse['header']['grid'][61][0][0]),
