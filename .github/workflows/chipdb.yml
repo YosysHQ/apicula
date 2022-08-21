@@ -206,8 +206,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        yosys: [master, yosys-0.15]
-        nextpnr: [master, nextpnr-0.2]
+        yosys: [master, yosys-0.20]
+        nextpnr: [master, nextpnr-0.3]
     steps:
     - uses: actions/checkout@v2
     - name: Download python package
