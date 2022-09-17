@@ -308,37 +308,16 @@ def fse_osc(device, fse, ttyp):
 
     return osc
 
-# XXX This is not a nice way, I will replace it with automatic creation of banks
-# in the very near future.
-def set_banks(device, db):
+def set_banks(fse, db):
     # fill the bank# : corner tile table
     w = db.cols - 1
     h = db.rows - 1
-    if device == 'GW1NZ-1':
-        db.grid[0][0].bels.setdefault('BANK0', Bel())
-        db.grid[0][w].bels.setdefault('BANK1', Bel())
-    elif device == 'GW1NS-2':
-        db.grid[0][0].bels.setdefault('BANK0', Bel())
-        db.grid[0][w].bels.setdefault('BANK1', Bel())
-        db.grid[h][w].bels.setdefault('BANK2', Bel())
-        db.grid[0][0].bels.setdefault('BANK3', Bel())
-    elif device == 'GW1NS-4':
-        db.grid[0][0].bels.setdefault('BANK0', Bel())
-        db.grid[0][w].bels.setdefault('BANK1', Bel())
-        db.grid[h][w].bels.setdefault('BANK2', Bel())
-        db.grid[h][w].bels.setdefault('BANK3', Bel())
-    elif device == 'GW1N-9':
-        db.grid[0][0].bels.setdefault('BANK0', Bel())
-        db.grid[0][w].bels.setdefault('BANK1', Bel())
-        db.grid[h][w].bels.setdefault('BANK2', Bel())
-        db.grid[h][0].bels.setdefault('BANK3', Bel())
-        db.grid[0][0].bels.setdefault('BANK10', Bel())
-        db.grid[0][0].bels.setdefault('BANK30', Bel())
-    else:
-        db.grid[0][0].bels.setdefault('BANK0', Bel())
-        db.grid[0][w].bels.setdefault('BANK1', Bel())
-        db.grid[h][w].bels.setdefault('BANK2', Bel())
-        db.grid[h][0].bels.setdefault('BANK3', Bel())
+    for row, col in [(0, 0), (0, w), (h, 0), (h, w)]:
+        ttyp = fse['header']['grid'][61][row][col]
+        if 'longval' in fse[ttyp].keys():
+            if 37 in fse[ttyp]['longval'].keys():
+                for rd in fse[ttyp]['longval'][37]:
+                    db.grid[row][col].bels.setdefault(f"BANK{rd[0]}", Bel())
 
 def from_fse(device, fse):
     dev = Device()

@@ -921,7 +921,7 @@ if __name__ == "__main__":
         tm = tm_h4x.read_tm(f, device)
 
     db = chipdb.from_fse(device, fse)
-    chipdb.set_banks(device, db)
+    chipdb.set_banks(fse, db)
     db.timing = tm
     db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
 
