@@ -338,6 +338,31 @@ _known_logic_tables = {
         }
 
 _known_shortval_tables = {
+            21: 'IOBA',
+            22: 'IOBB',
+            23: 'IOBSA',
+            24: 'IOBSB',
+            25: 'CLS0',
+            26: 'CLS1',
+            27: 'CLS2',
+            28: 'CLS3',
+            35: 'PLL',
+            37: 'BANK',
+            40: 'IOBSC',
+            41: 'IOBSD',
+            42: 'IOBSE',
+            43: 'IOBSF',
+            44: 'IOBSG',
+            45: 'IOBSH',
+            46: 'IOBSI',
+            47: 'IOBSJ',
+            53: 'DLLDEL0',
+            54: 'DLLDEL1',
+            56: 'DLL0',
+            64: 'USB',
+            66: 'EFLASH',
+            68: 'ADC',
+            80: 'DLL1',
         }
 
 def fse_fill_logic_tables(dev, fse):
