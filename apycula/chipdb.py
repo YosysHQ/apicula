@@ -83,6 +83,9 @@ class Device:
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)
     template: np.ndarray = None
+    # allowable values of bel attributes
+    # {table_name: {line_id: (attr_id, attr_value)}}
+    logicinfo: Dict[str, List[Tuple[int, int]]] = field(default_factory=dict)
     # always-connected dest, src aliases
     aliases: Dict[Tuple[int, int, str], Tuple[int, int, str]] = field(default_factory=dict)
 
@@ -319,6 +322,27 @@ def set_banks(fse, db):
                 for rd in fse[ttyp]['longval'][37]:
                     db.grid[row][col].bels.setdefault(f"BANK{rd[0]}", Bel())
 
+_known_logic_tables = {
+            8:  'DCS',
+            9:  'GSR',
+            10: 'IOLOGIC',
+            11: 'PIO',
+            12: 'SLICE',
+            13: 'BSRAM',
+            14: 'DSP',
+            15: 'PLL',
+            62: 'USB',
+        }
+
+def fse_fill_logic_tables(dev, fse):
+    for ltable in fse['header']['logicinfo'].keys():
+        if ltable in _known_logic_tables.keys():
+            table = dev.logicinfo.setdefault(_known_logic_tables[ltable], [])
+        else:
+            table = dev.logicinfo.setdefault(f"unknown_{ltable}", [])
+        for attr, val, _ in fse['header']['logicinfo'][ltable]:
+            table.append((attr, val))
+
 def from_fse(device, fse):
     dev = Device()
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
@@ -335,6 +359,7 @@ def from_fse(device, fse):
             tile.bels = fse_osc(device, fse, ttyp)
         tiles[ttyp] = tile
 
+    fse_fill_logic_tables(dev, fse)
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     return dev
 
@@ -654,4 +679,5 @@ def loc2bank(db, row, col):
         else:
             bank = db.pin_bank[name + 'B']
     return bank
+
 
