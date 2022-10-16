@@ -84,8 +84,11 @@ class Device:
     cmd_ftr: List[ByteString] = field(default_factory=list)
     template: np.ndarray = None
     # allowable values of bel attributes
-    # {table_name: {line_id: (attr_id, attr_value)}}
+    # {table_name: [(attr_id, attr_value)]}
     logicinfo: Dict[str, List[Tuple[int, int]]] = field(default_factory=dict)
+    # fuses for a pair of the "features" (or pairs of parameter values)
+    # {ttype: {table_name: {(feature_A, feature_B): {bits}}}
+    shortval: Dict[int, Dict[str, Dict[Tuple[int, int], Set[Coord]]]] = field(default_factory=dict)
     # always-connected dest, src aliases
     aliases: Dict[Tuple[int, int, str], Tuple[int, int, str]] = field(default_factory=dict)
 
@@ -334,7 +337,11 @@ _known_logic_tables = {
             62: 'USB',
         }
 
+_known_shortval_tables = {
+        }
+
 def fse_fill_logic_tables(dev, fse):
+    # logicinfo
     for ltable in fse['header']['logicinfo'].keys():
         if ltable in _known_logic_tables.keys():
             table = dev.logicinfo.setdefault(_known_logic_tables[ltable], [])
@@ -342,6 +349,19 @@ def fse_fill_logic_tables(dev, fse):
             table = dev.logicinfo.setdefault(f"unknown_{ltable}", [])
         for attr, val, _ in fse['header']['logicinfo'][ltable]:
             table.append((attr, val))
+    # shortval
+    ttypes = {t for row in fse['header']['grid'][61] for t in row}
+    for ttyp in ttypes:
+        if 'shortval' not in fse[ttyp].keys():
+            continue
+        ttyp_rec = dev.shortval.setdefault(ttyp, {})
+        for stable in fse[ttyp]['shortval'].keys():
+            if stable in _known_shortval_tables:
+                table = ttyp_rec.setdefault(_known_shortval_tables[stable], {})
+            else:
+                table = ttyp_rec.setdefault(f"unknown_{stable}", {})
+            for f_a, f_b, *fuses in fse[ttyp]['shortval'][stable]:
+                table[(f_a, f_b)] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
 
 def from_fse(device, fse):
     dev = Device()
