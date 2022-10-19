@@ -332,7 +332,7 @@ _known_logic_tables = {
             8:  'DCS',
             9:  'GSR',
             10: 'IOLOGIC',
-            11: 'PIO',
+            11: 'IOB',
             12: 'SLICE',
             13: 'BSRAM',
             14: 'DSP',
