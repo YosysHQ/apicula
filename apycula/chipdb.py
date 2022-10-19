@@ -421,15 +421,15 @@ def from_fse(device, fse):
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     return dev
 
-# get fuses for attr/val set using longval table for cell type ttyp
+# get fuses for attr/val set using short/longval table
 # returns:
 #  (True, bits' set)
 #  (False, problem attr/val set)
-def get_longval_fuses(dev, ttyp, attrs, longval_table):
+def get_table_fuses(attrs, table):
     rem_attrs = set()
     rem_attrs.update(attrs)
     bits = set()
-    for key, fuses in dev.longval[ttyp][longval_table].items():
+    for key, fuses in table.items():
         # all 16 "features" must be present to be able to use a set of bits from the record
         have_all_16 = True
         for attrval in key:
@@ -454,6 +454,21 @@ def get_longval_fuses(dev, ttyp, attrs, longval_table):
     if rem_attrs:
        return (False, rem_attrs)
     return (True, bits)
+
+# get fuses for attr/val set using shortval table for ttyp
+# returns:
+#  (True, bits' set)
+#  (False, problem attr/val set)
+def get_shortval_fuses(dev, ttyp, attrs, table_name):
+    return get_table_fuses(attrs, dev.shortval[ttyp][table_name])
+
+# get fuses for attr/val set using longval table for ttyp
+# returns:
+#  (True, bits' set)
+#  (False, problem attr/val set)
+def get_longval_fuses(dev, ttyp, attrs, table_name):
+    return get_table_fuses(attrs, dev.longval[ttyp][table_name])
+
 
 def get_pins(device):
     if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C"}:
