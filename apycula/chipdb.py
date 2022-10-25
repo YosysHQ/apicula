@@ -469,6 +469,13 @@ def get_shortval_fuses(dev, ttyp, attrs, table_name):
 def get_longval_fuses(dev, ttyp, attrs, table_name):
     return get_table_fuses(attrs, dev.longval[ttyp][table_name])
 
+# add the attribute/value pair into an set, which is then passed to
+# get_longval_fuses() and get_shortval_fuses()
+def add_attr_val(dev, logic_table, attrs, attr, val):
+    for idx, attr_val in enumerate(dev.logicinfo[logic_table]):
+        if attr_val[0] == attr and attr_val[1] == val:
+            attrs.add(idx)
+            break
 
 def get_pins(device):
     if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C"}:

@@ -6,7 +6,7 @@ iob_attrids = {
         'PULLMODE':              2, # *
         'DRIVE':                 3, # *
         'OPENDRAIN':             4, # *
-        'HISTERESIS':            5, # *
+        'HYSTERESIS':            5, # *
         'CLAMP':                 6, # *
         'DIFFRESISTOR':          7, # *
         'SINGLERESISTOR':        8, # *
