@@ -422,38 +422,30 @@ def from_fse(device, fse):
     return dev
 
 # get fuses for attr/val set using short/longval table
-# returns:
-#  (True, bits' set)
-#  (False, problem attr/val set)
+# returns bits' set
 def get_table_fuses(attrs, table):
-    rem_attrs = set()
-    rem_attrs.update(attrs)
     bits = set()
     for key, fuses in table.items():
         # all 16 "features" must be present to be able to use a set of bits from the record
-        have_all_16 = True
+        have_full_key = True
         for attrval in key:
             if attrval == 0: # no "feature"
                 continue
             if attrval > 0:
                 # this "feature" must present
                 if attrval not in attrs:
-                    have_all_16 = False
+                    have_full_key = False
                     break
                 continue
             if attrval < 0:
                 # this "feature" is set by default and can only be unset
                 if abs(attrval) in attrs:
-                    have_all_16 = False
-                    rem_attrs = rem_attrs - {abs(attrval)}
+                    have_full_key = False
                     break
-        if not have_all_16:
+        if not have_full_key:
             continue
-        rem_attrs = rem_attrs - {av for av in key if av != 0}
         bits.update(fuses)
-    if rem_attrs:
-       return (False, rem_attrs)
-    return (True, bits)
+    return bits
 
 # get fuses for attr/val set using shortval table for ttyp
 # returns:
