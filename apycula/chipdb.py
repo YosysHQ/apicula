@@ -422,7 +422,7 @@ def from_fse(device, fse):
     return dev
 
 # get fuses for attr/val set using short/longval table
-# returns bits' set
+# returns a bit set
 def get_table_fuses(attrs, table):
     bits = set()
     for key, fuses in table.items():
@@ -448,16 +448,12 @@ def get_table_fuses(attrs, table):
     return bits
 
 # get fuses for attr/val set using shortval table for ttyp
-# returns:
-#  (True, bits' set)
-#  (False, problem attr/val set)
+# returns a bit set
 def get_shortval_fuses(dev, ttyp, attrs, table_name):
     return get_table_fuses(attrs, dev.shortval[ttyp][table_name])
 
 # get fuses for attr/val set using longval table for ttyp
-# returns:
-#  (True, bits' set)
-#  (False, problem attr/val set)
+# returns a bit set
 def get_longval_fuses(dev, ttyp, attrs, table_name):
     return get_table_fuses(attrs, dev.longval[ttyp][table_name])
 
