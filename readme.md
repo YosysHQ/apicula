@@ -32,8 +32,8 @@ Note that on some systems the installed binaries might not be on the path. Eithe
 ```bash
 which gowin_bba # check if binaries are on the path
 python -m site --user-base # find the site packages base directory
-ls /home/pepijn/.local/bin # confirm the binaries are installed in this folder
-export PATH="/home/pepijn/.local/bin:$PATH" # add binaries to the path
+ls $HOME/.local/bin # confirm the binaries are installed in this folder
+export PATH="$HOME/.local/bin:$PATH" # add binaries to the path
 ```
 
 From there, compile a blinky.
