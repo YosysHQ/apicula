@@ -359,6 +359,11 @@ def dualmode_pins(db, tilemap, args):
             tile[row][col] = 1
 
 def main():
+    pil_available = True
+    try:
+        from PIL import Image
+    except ImportError:
+        pil_available = False
     parser = argparse.ArgumentParser(description='Pack Gowin bitstream')
     parser.add_argument('netlist')
     parser.add_argument('-d', '--device', required=True)
@@ -372,7 +377,8 @@ def main():
     parser.add_argument('--ready_as_gpio', action = 'store_true')
     parser.add_argument('--done_as_gpio', action = 'store_true')
     parser.add_argument('--reconfign_as_gpio', action = 'store_true')
-    parser.add_argument('--png')
+    if pil_available:
+        parser.add_argument('--png')
 
     args = parser.parse_args()
     device = args.device
@@ -397,7 +403,7 @@ def main():
     dualmode_pins(db, tilemap, args)
     res = chipdb.fuse_bitmap(db, tilemap)
     header_footer(db, res, args.compress)
-    if args.png:
+    if pil_available and args.png:
         bslib.display(args.png, res)
     bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress)
     if args.cst:

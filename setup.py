@@ -19,8 +19,6 @@ setuptools.setup(
     ],
     install_requires=[
         'numpy',
-        'pandas',
-        'pillow',
         'crcmod',
         'openpyxl',
     ],
