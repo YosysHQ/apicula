@@ -21,7 +21,8 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-osc-tangnano9k.fs blinky-osc-tangnano1k.fs blinky-osc-tangnano4k.fs \
 	blinky-lw-tangnano.fs blinky-lw-tangnano1k.fs blinky-lw-tangnano4k.fs blinky-lw-tangnano9k.fs \
 	blinky-lw-honeycomb.fs blinky-lw-tec0117.fs blinky-lw-runber.fs \
-	globals_all
+	globals_all \
+	pll-tangnano.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
