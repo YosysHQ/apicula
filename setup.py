@@ -20,7 +20,6 @@ setuptools.setup(
     install_requires=[
         'numpy',
         'crcmod',
-        'openpyxl',
     ],
     python_requires='>=3.6',
     package_data={
