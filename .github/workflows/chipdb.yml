@@ -178,7 +178,7 @@ jobs:
         name: gw1ns-4-chipdb
         path: apycula
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v4
       with:
         python-version: '3.8'
     - name: Install and build
@@ -216,7 +216,7 @@ jobs:
         name: python-dist
         path: dist
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v4
       with:
         python-version: '3.9'
     - name: Install and build
