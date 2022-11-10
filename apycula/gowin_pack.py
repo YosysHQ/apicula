@@ -3,6 +3,7 @@ import os
 import re
 import pickle
 import itertools
+import math
 import numpy as np
 import json
 import argparse
@@ -10,7 +11,11 @@ import importlib.resources
 from collections import namedtuple
 from apycula import codegen
 from apycula import chipdb
+from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses
+from apycula import attrids
+from apycula.attrids import pll_attrids, pll_attrvals
 from apycula import bslib
+from apycula import attrids
 from apycula.wirenames import wirenames, wirenumbers
 
 _verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
@@ -28,7 +33,7 @@ def sanitize_name(name):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW)(\w*)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|RPLL[AB])(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') :
             continue
@@ -67,6 +72,149 @@ def get_pips(data):
 
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
+
+# add the default pll attributes according to the documentation
+_default_pll_inattrs = {
+            'FCLKIN'        : '100.00',
+            'IDIV_SEL'      : '0',
+            'DYN_IDIV_SEL'  : 'false',
+            'FBDIV_SEL'     : '00000000000000000000000000000010', # XXX not as in doc
+            'DYN_FBDIV_SEL' : 'false',
+            'ODIV_SEL'      : '00000000000000000000000000001000',
+            'DYN_ODIV_SEL'  : 'false',
+            'PSDA_SEL'      : '0000 ', # XXX extra space for compatibility, but it will work with or without it in the future
+            'DUTYDA_SEL'    : '1000 ', # ^^^
+            'DYN_DA_EN'     : 'false',
+            'CLKOUT_FT_DIR' : '1',
+            'CLKOUT_DLY_STEP': '00000000000000000000000000000000',
+            'CLKOUTP_FT_DIR': '1',
+            'CLKOUTP_DLY_STEP': '00000000000000000000000000000000',
+            'DYN_SDIV_SEL'  : '00000000000000000000000000000010',
+            'CLKFB_SEL'     : 'internal',
+            'CLKOUTD_SRC'   : 'CLKOUT',
+            'CLKOUTD3_SRC'  : 'CLKOUT',
+            'CLKOUT_BYPASS' : 'false',
+            'CLKOUTP_BYPASS': 'false',
+            'CLKOUTD_BYPASS': 'false',
+            'DEVICE'        : 'GW1N-1'
+
+        }
+
+def add_pll_default_attrs(attrs):
+    pll_inattrs = attrs.copy()
+    for k, v in _default_pll_inattrs.items():
+        if k in pll_inattrs.keys():
+            continue
+        pll_inattrs[k] = v
+    return pll_inattrs
+
+_default_pll_internal_attrs = {
+            'INSEL': 'CLKIN1',
+            'FBSEL': 'CLKFB3',
+            'PLOCK': 'ENABLE',
+            'FLOCK': 'ENABLE',
+            'FLTOP': 'ENABLE',
+            'GMCMODE': 15,
+            'CLKOUTDIV3': 'ENABLE',
+            'CLKOUTDIV': 'ENABLE',
+            'CLKOUTPS': 'ENABLE',
+            'PDN': 'ENABLE',
+            'PASEL': 0,
+            'IRSTEN': 'ENABLE',
+            'SRSTEN': 'ENABLE',
+            'PWDEN': 'ENABLE',
+            'RSTEN': 'ENABLE',
+            'FLDCOUNT': 16,
+            'GMCGAIN': 0,
+            'LPR': 'R4',
+            'ICPSEL': 50,
+}
+
+# typ - PLL type (RPLL, etc)
+def set_pll_attrs(db, typ, attrs):
+    pll_inattrs = add_pll_default_attrs(attrs)
+    pll_attrs = _default_pll_internal_attrs.copy()
+    pll_attrs['IRSTEN'] = 'DISABLE'
+    pll_attrs['SRSTEN'] = 'DISABLE'
+
+    if typ not in ['RPLL']:
+        raise Exception(f"PLL type {typ} is not supported for now")
+
+    # parse attrs
+    for attr, val in pll_inattrs.items():
+        # XXX clock in and feedback in
+        if attr == 'CLKOUTD_SRC':
+            if val == 'CLKOUTP':
+                pll_attrs['CLKOUTDIVSEL'] = 'CLKOUTPS'
+            continue
+        if attr == 'CLKOUTD3_SRC':
+            if val == 'CLKOUTP':
+                pll_attrs['CLKOUTDIV3SEL'] = 'CLKOUTPS'
+            continue
+        # XXX selin
+        if attr == 'DYN_IDIV_SEL':
+            if val == 'true':
+                pll_attrs['IDIVSEL'] = 'DYN'
+            continue
+        if attr == 'DYN_FBDIV_SEL':
+            if val == 'true':
+                pll_attrs['FDIVSEL'] = 'DYN'
+            continue
+        if attr == 'DYN_ODIV_SEL':
+            if val == 'true':
+                pll_attrs['ODIVSEL'] = 'DYN'
+            continue
+        if attr == 'CLKOUT_BYPASS':
+            if val == 'true':
+                pll_attrs['BYPCK'] = 'BYPASS'
+            continue
+        if attr == 'CLKOUTP_BYPASS':
+            if val == 'true':
+                pll_attrs['BYPCKPS'] = 'BYPASS'
+            continue
+        if attr == 'CLKOUTD_BYPASS':
+            if val == 'true':
+                pll_attrs['BYPCKDIV'] = 'BYPASS'
+            continue
+        if attr == 'IDIV_SEL':
+            idiv = 1 + int(val, 2)
+            pll_attrs['IDIV'] = idiv
+            continue
+        if attr == 'FBDIV_SEL':
+            fbdiv = 1 + int(val, 2)
+            pll_attrs['FDIV'] = fbdiv
+            continue
+        if attr == 'DYN_SDIV_SEL':
+            pll_attrs['SDIV'] = 2 + int(val, 2)
+            continue
+        if attr == 'ODIV_SEL':
+            odiv = int(val, 2)
+            pll_attrs['ODIV'] = odiv
+            continue
+        if attr == 'FCLKIN':
+            fclkin = float(val)
+            continue
+
+    # XXX input is 24MHz only and output either 52MHz or 56MHz
+    if (fclkin - 24) > 0.01:
+        raise Exception(f"PLL input frequency {fclkin} is not supported")
+    if fbdiv == 13 and idiv == 6 and odiv == 8:
+        pll_attrs['FLDCOUNT'] = 16
+        pll_attrs['ICPSEL'] = 20
+        pll_attrs['LPR'] = 6
+    elif fbdiv == 7 and idiv == 3 and odiv == 8:
+        pll_attrs['FLDCOUNT'] = 16
+        pll_attrs['ICPSEL'] = 40
+        pll_attrs['LPR'] = 5
+    else:
+        raise Exception(f"PLL parameters are not supported for now")
+
+    fin_attrs = set()
+    for attr, val in pll_attrs.items():
+        if isinstance(val, str):
+            val = pll_attrvals[val]
+        add_attr_val(db, 'PLL', fin_attrs, pll_attrids[attr], val)
+    return fin_attrs
 
 iostd_alias = {
         "HSTL18_II"  : "HSTL18_I",
@@ -264,9 +412,16 @@ def place(db, tilemap, bels, cst, args):
         elif typ == "RAMW":
             bel = tiledata.bels['RAM16']
             bits = bel.modes['0']
-            print(bits)
+            #print(typ, bits)
             for r, c in bits:
                 tile[r][c] = 1
+        elif typ.startswith('RPLL'):
+            pll_attrs = set_pll_attrs(db, 'RPLL', parms)
+            bits = get_shortval_fuses(db, tiledata.ttyp, pll_attrs, 'PLL')
+            #print(typ, bits)
+            for r, c in bits:
+                tile[r][c] = 1
+
         else:
             print("unknown type", typ)
 
