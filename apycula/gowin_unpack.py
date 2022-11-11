@@ -9,6 +9,7 @@ import argparse
 import importlib.resources
 from apycula import codegen
 from apycula import chipdb
+from apycula.attrids import pll_attrids, pll_attrvals
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
@@ -39,9 +40,114 @@ def _io_mode_sort_func(mode):
         l += 1
     return l
 
+#
+def get_attr_name(attrname_table, code):
+    for name, cod in attrname_table.items():
+        if cod == code:
+            return name
+    return ''
+
+# fix names and types of the PLL attributes
+# { internal_name: external_name }
+_pll_attrs = {
+        'IDIV' :            'IDIV_SEL',
+        'IDIVSEL' :         'DYN_IDIV_SEL',
+        'FDIV' :            'FBDIV_SEL',
+        'FDIVSEL' :         'DYN_FBDIV_SEL',
+        'ODIV' :            'ODIV_SEL',
+        'ODIVSEL' :         'DYN_ODIV_SEL',
+        'PHASE' :           'PSDA_SEL',
+        'DUTY' :            'DUTYDA_SEL',
+        'DPSEL' :           'DYN_DA_EN',
+
+        'OPDLY' :           'CLKOUT_DLY_STEP',
+
+        'OSDLY' :           'CLKOUTP_DLY_STEP',
+        'SDIV' :            'DYN_SDIV_SEL',
+
+        'CLKOUTDIVSEL' :    'CLKOUTD_SRC',
+        'CLKOUTDIV3SEL' :   'CLKOUTD3_SRC',
+        'BYPCK' :           'CLKOUT_BYPASS',
+        'BYPCKPS' :         'CLKOUTP_BYPASS',
+        'BYPCKDIV' :        'CLKOUTD_BYPASS',
+        }
+def pll_attrs_refine(in_attrs):
+    res = set()
+    for attr, val in in_attrs.items():
+        if attr not in _pll_attrs.keys():
+            continue
+        attr = _pll_attrs[attr]
+        new_val = f'"{val}"'
+        if attr in ['CLKOUTP_DLY_STEP', 'CLKOUT_DLY_STEP']:
+            new_val = val / 50
+        elif attr in ['PSDA_SEL', 'DUTYDA_SEL']:
+            new_val = f'"{val:04b}"'
+        elif attr in ['IDIV_SEL', 'FBDIV_SEL']:
+            new_val = val - 1
+        elif attr == 'DYN_SDIV_SEL':
+            new_val = val - 2
+        elif attr == 'ODIV_SEL':
+            new_val = val
+        res.add(f'{attr}={new_val}')
+    return res
+
+# parse attributes and values use 'logicinfo' table
+# returns {attr: value}
+# attribute names are decoded with the attribute table, but the values are returned in raw form
+def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
+    def is_neg_key(key):
+        for k in key:
+            if k < 0:
+                return True
+        return False
+
+    def is_pos_key(key):
+        return not is_neg_key(key)
+
+    res = {}
+    set_mask = set()
+    zero_mask = set()
+    # collect masks
+    for av, bits in fuse_table.items():
+        if is_neg_key(av):
+            zero_mask.update(bits)
+        else:
+            set_mask.update(bits)
+    set_bits =  {(row, col) for row, col in set_mask if tile[row][col] == 1}
+    zero_bits = {(row, col) for row, col in set_mask if tile[row][col] == 0}
+    # find candidates from fuse table
+    attrvals = set()
+    for raw_bits, test_fn in [(zero_bits, is_neg_key), (set_bits, is_pos_key)]:
+        cnd = { av: bits for av, bits in fuse_table.items() if test_fn(av) and bits.issubset(raw_bits)}
+        for av, bits in cnd.items():
+            keep = True
+            for bt in cnd.values():
+                if bits !=  bt and bits.issubset(bt):
+                    keep = False
+                    break
+            if keep:
+                attrvals.add(av)
+
+    for key in attrvals:
+        for av in [a for a in key if a != 0]:
+            attr, val = logicinfo_table[av]
+            res[get_attr_name(attrname_table, attr)] = val
+    return res
+
+# { (row, col, type) : idx}
+# type 'A'| 'B'
+_pll_cells = {}
+
+# returns the A cell of the PLL
+def get_pll_A(db, row, col, typ):
+    if typ == 'B':
+        col -= 1
+    return row, col, 'A'
+
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowin_unpack io standard is determined first and it is known.
+# (bels, pips, clock_pips)
 def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True):
     # TLVDS takes two BUF bels, so skip the B bels.
     skip_bels = set()
@@ -50,7 +156,15 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
     clock_pips = {}
     bels = {}
     for name, bel in tiledata.bels.items():
-        if name[0:3] == "IOB":
+        if name.startswith("RPLL"):
+            idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
+            attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
+            modes = bels.setdefault(f'{name}{idx}', set())
+            for attrval in attrvals:
+                modes.add(attrval)
+            print(idx, modes)
+            continue
+        if name.startswith("IOB"):
             #print(name)
             if noiostd:
                 iostd = ''
@@ -152,7 +266,6 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 clock_pips[dest] = src
 
     return {name: bel for name, bel in bels.items() if name not in skip_bels}, pips, clock_pips
-
 
 dffmap = {
     "DFF": None,
@@ -280,7 +393,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS|RPLL[AB])(\w*)")
     if have_iologic(bels):
         bels_items = move_iologic(bels)
     else:
@@ -307,6 +420,16 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                 mod.primitives[name] = lut
                 cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
             make_muxes(row, col, idx, db, mod)
+        elif typ.startswith("RPLL"):
+            name = f"PLL_{idx}"
+            pll = mod.primitives.setdefault(name, codegen.Primitive("rPLL", name))
+            for paramval in flags:
+                param, _, val = paramval.partition('=')
+                pll.params[param] = val
+            portmap = db.grid[dbrow][dbcol].bels[bel[:-1]].portmap
+            for port, wname in portmap.items():
+                pll.portmap[port] = f"R{row}C{col}_{wname}"
+            mod.wires.update(pll.portmap.values())
         elif typ == "ALU":
             #print(flags)
             kind, = flags # ALU only have one flag
