@@ -162,7 +162,8 @@ def fse_pips(fse, ttyp, table=2, wn=wirenames):
 # make PLL bels
 def fse_pll(device, fse, ttyp):
     bels = {}
-    if device == 'GW1N-1':
+    # XXX use second grid in order to find PLL ttypes
+    if device in ['GW1N-1',  'GW1NZ-1']:
         if ttyp == 89:
             bel = bels.setdefault('RPLLB', Bel())
         else:

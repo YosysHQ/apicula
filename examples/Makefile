@@ -22,7 +22,7 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-lw-tangnano.fs blinky-lw-tangnano1k.fs blinky-lw-tangnano4k.fs blinky-lw-tangnano9k.fs \
 	blinky-lw-honeycomb.fs blinky-lw-tec0117.fs blinky-lw-runber.fs \
 	globals_all \
-	pll-tangnano.fs
+	pll-tangnano.fs pll-tangnano1k.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
@@ -115,10 +115,10 @@ nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
 
 %-tangnano-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCH -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCH -p "read_verilog pll/GW1N-1.vh $^; synth_gowin -json $@"
 
 %-tangnano1k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCZ -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCZ -p "read_verilog pll/GW1NZ-1.vh $^; synth_gowin -json $@"
 
 %-tangnano4k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -p "read_verilog $^; synth_gowin -json $@"

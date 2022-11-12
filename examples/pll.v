@@ -21,12 +21,11 @@ module top(input wire clk, output wire [`LEDS_NR-1:0]led);
 		.RESET(GND),
 		.RESET_P(GND) 
 	);
-	defparam pll.DEVICE = "GW1N-1";
-	defparam pll.FCLKIN = "24";
-	defparam pll.FBDIV_SEL = 12; // 52 MHz (12, 5, 8)  56 MHz (6, 2, 8)
-	defparam pll.IDIV_SEL =  5;
-	defparam pll.ODIV_SEL =  8;
-
+	defparam pll.DEVICE = `PLL_DEVICE;
+	defparam pll.FCLKIN = `PLL_FCLKIN;
+	defparam pll.FBDIV_SEL = `PLL_FBDIV_SEL;
+	defparam pll.IDIV_SEL =  `PLL_IDIV_SEL;
+	defparam pll.ODIV_SEL =  `PLL_ODIV_SEL;
 	defparam pll.CLKFB_SEL="internal";
 	defparam pll.CLKOUTD3_SRC="CLKOUT";
 	defparam pll.CLKOUTD_BYPASS="false";

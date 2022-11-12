@@ -18,6 +18,8 @@ from apycula import bslib
 from apycula import attrids
 from apycula.wirenames import wirenames, wirenumbers
 
+device = ""
+
 _verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
 def sanitize_name(name):
     retname = name
@@ -196,7 +198,10 @@ def set_pll_attrs(db, typ, attrs):
             continue
 
     # XXX input is 24MHz only and output either 52MHz or 56MHz
-    if (fclkin - 24) > 0.01:
+    # XXX input is 27MHz only and output either 58.5MHz or 63MHz
+    if device != "GW1N-1" and device != "GW1NZ-1":
+        raise Exception(f"PLL is not supported")
+    if (abs(fclkin - 24) > 0.01 and device == "GW1N-1") or (abs(fclkin - 27) > 0.01 and device == "GW1NZ-1"):
         raise Exception(f"PLL input frequency {fclkin} is not supported")
     if fbdiv == 13 and idiv == 6 and odiv == 8:
         pll_attrs['FLDCOUNT'] = 16
@@ -514,6 +519,7 @@ def dualmode_pins(db, tilemap, args):
             tile[row][col] = 1
 
 def main():
+    global device
     parser = argparse.ArgumentParser(description='Pack Gowin bitstream')
     parser.add_argument('netlist')
     parser.add_argument('-d', '--device', required=True)
