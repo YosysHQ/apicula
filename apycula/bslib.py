@@ -1,6 +1,5 @@
 from math import ceil
 import numpy as np
-from PIL import Image
 from crcmod.predefined import mkPredefinedCrcFun
 
 crc16arc = mkPredefinedCrcFun('crc-16')
@@ -126,6 +125,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
 
 
 def display(fname, data):
+    from PIL import Image
     im = Image.frombytes(
             mode='1',
             size=data.shape[::-1],
