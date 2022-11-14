@@ -213,7 +213,6 @@ jobs:
         omitBodyDuringUpdate: True
         omitNameDuringUpdate: True
         tag: bucket-linux-x64
-        repo: oss-cad-suite-build
         artifacts: "linux-x64-gowin-data.tgz"
         token: ${{ secrets.GITHUB_TOKEN }}
 
