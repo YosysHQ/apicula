@@ -1,6 +1,5 @@
 import sys
 import numpy as np
-from PIL import Image
 import random
 
 def rint(f, w):
@@ -122,6 +121,7 @@ def render_bitmap(d):
     return bitmap
 
 def display(fname, data):
+    from PIL import Image
     im = Image.frombytes(
             mode='P',
             size=data.shape[::-1],

@@ -14,7 +14,7 @@ RUN mkdir -p "/root/Documents/gowinsemi/" && \
 	curl -so "/root/Documents/gowinsemi/GW1NS-2C Pinout.xlsx" "https://wishfulcoding.nl/gowin/UG825-1.2.1E_GW1NS-2C%20Pinout.xlsx" && \
 	curl -so "/root/Documents/gowinsemi/GW1NS-2 Pinout.xlsx" "https://wishfulcoding.nl/gowin/UG822-1.2.1E_GW1NS-2%20Pinout.xlsx"
 
-RUN pip install --no-cache-dir numpy pillow crcmod openpyxl
+RUN pip install --no-cache-dir numpy crcmod
 
 WORKDIR /usr/src/apicula
 
