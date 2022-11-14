@@ -199,6 +199,23 @@ jobs:
         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       run: |
         twine upload dist/*
+    - name: Pack release data
+      if: startsWith(github.ref, 'refs/heads/master')
+      run: |
+        tar cvfz linux-x64-gowin-data.tgz apycula/*.pickle
+    - name: Upload to oss-cad-suite
+      uses: ncipollo/release-action@v1
+      if: hashFiles('linux-x64-gowin-data.tgz') != ''
+      with:
+        allowUpdates: True
+        prerelease: True
+        omitBody: True
+        omitBodyDuringUpdate: True
+        omitNameDuringUpdate: True
+        tag: bucket-linux-x64
+        repo: oss-cad-suite-build
+        artifacts: "linux-x64-gowin-data.tgz"
+        token: ${{ secrets.GITHUB_TOKEN }}
 
   example:
     runs-on: ubuntu-latest
