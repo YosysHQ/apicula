@@ -75,12 +75,24 @@ def get_pips(data):
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
 
+# Permitted frequencies for chips
+# { device : (max_in, max_out, min_out, max_vco, min_vco) }
+_permitted_freqs = {
+        "GW1N-1":  (400, 450, 3.125,  900,  400),
+        "GW1NZ-1": (400, 400, 3.125,  800,  400),
+        "GW1N-4":  (400, 500, 3.125,  1000, 400),
+        "GW1NS-4": (400, 600, 4.6875, 1200, 600),
+        "GW1N-9":  (400, 500, 3.125,  1000, 400),
+        "GW1N-9C": (400, 600, 3.125,  1200, 400),
+        "GW1NS-2": (400, 500, 3.125,  1200, 400),
+        }
+
 # add the default pll attributes according to the documentation
 _default_pll_inattrs = {
             'FCLKIN'        : '100.00',
             'IDIV_SEL'      : '0',
             'DYN_IDIV_SEL'  : 'false',
-            'FBDIV_SEL'     : '00000000000000000000000000000010', # XXX not as in doc
+            'FBDIV_SEL'     : '00000000000000000000000000000000',
             'DYN_FBDIV_SEL' : 'false',
             'ODIV_SEL'      : '00000000000000000000000000001000',
             'DYN_ODIV_SEL'  : 'false',
@@ -193,9 +205,57 @@ def set_pll_attrs(db, typ, attrs):
             odiv = int(val, 2)
             pll_attrs['ODIV'] = odiv
             continue
+        if attr == 'DYN_DA_EN':
+            if val == 'true':
+                pll_attrs['DPSEL'] = 'DYN'
+                pll_attrs['DUTY'] = 0
+                pll_attrs['PHASE'] = 0
+                pll_attrs['PASEL'] = 'DISABLE'
+                # steps in 50ps
+                tmp_val = int(pll_inattrs['CLKOUT_DLY_STEP'], 2) * 50
+                pll_attrs['OPDLY'] = tmp_val
+                # XXX here is unclear according to the documentation only three
+                # values are allowed: 0, 1 and 2, but there are 4 fuses (0, 50,
+                # 75, 100). Find out what to do with 75
+                tmp_val = int(pll_inattrs['CLKOUTP_DLY_STEP'], 2) * 50
+                pll_attrs['OSDLY'] = tmp_val
+            else:
+                pll_attrs['OSDLY'] = 'DISABLE'
+                pll_attrs['OPDLY'] = 'DISABLE'
+                phase_val = int(pll_inattrs['PSDA_SEL'].strip(), 2)
+                pll_attrs['PHASE'] = phase_val
+                duty_val = int(pll_inattrs['DUTYDA_SEL'].strip(), 2)
+                # XXX there are fuses for 15 variants (excluding 0) so for now
+                # we will implement all of them, including those prohibited by
+                # documentation 1 and 15
+                if (phase_val + duty_val) < 16:
+                    duty_val = phase_val + duty_val
+                else:
+                    duty_val = phase_val + duty_val - 16
+                pll_attrs['DUTY'] = duty_val
+            continue
         if attr == 'FCLKIN':
             fclkin = float(val)
+            if fclkin < 3 or fclkin > _permitted_freqs[device][0]:
+                print(f"The {fclkin}MHz frequency is outside the permissible range of 3-{_permitted_freqs[device][0]}MHz.")
+                fclkin = 100.0
             continue
+
+    # static vs dynamic
+    if pll_inattrs['DYN_IDIV_SEL'] == 'false' and pll_inattrs['DYN_FBDIV_SEL'] == 'false' and pll_inattrs['DYN_ODIV_SEL'] == 'false':
+        # static. We can immediately check the compatibility of the divisors
+        idiv = pll_attrs['IDIV']
+        fbdiv = pll_attrs['FDIV']
+        clkout = fclkin * fbdiv / idiv
+        if clkout <= _permitted_freqs[device][2] or clkout > _permitted_freqs[device][1]:
+            raise Exception(f"CLKOUT = FCLKIN*(FBDIV_SEL+1)/(IDIV_SEL+1) = {clkout}MHz not in range {_permitted_freqs[device][2]} - {_permitted_freqs[device][1]}MHz")
+        pfd = fclkin / idiv
+        if pfd < 3.0 or pfd > _permitted_freqs[device][0]:
+            raise Exception(f"PFD = FCLKIN/(IDIV_SEL+1) = {pfd}MHz not in range 3.0 - {_permitted_freqs[device][0]}MHz")
+        odiv = pll_attrs['ODIV']
+        fvco = odiv * fclkin * fbdiv / idiv
+        if fvco < _permitted_freqs[device][4] or  fvco > _permitted_freqs[device][3]:
+            raise Exception(f"VCO = FCLKIN*(FBDIV_SEL+1)*ODIV_SEL/(IDIV_SEL+1) = {fvco}MHz not in range {_permitted_freqs[device][4]} - {_permitted_freqs[device][3]}MHz")
 
     # XXX input is 24MHz only and output either 52MHz or 56MHz
     # XXX input is 27MHz only and output either 58.5MHz or 63MHz
