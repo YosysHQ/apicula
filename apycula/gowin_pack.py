@@ -86,6 +86,41 @@ _permitted_freqs = {
         "GW1N-9C": (400, 600, 3.125,  1200, 400),
         "GW1NS-2": (400, 500, 3.125,  1200, 400),
         }
+# input params are calculated as described in GOWIN doc (UG286-1.7E_Gowin Clock User Guide)
+# fref = fclkin / idiv
+# fvco = (odiv * fdiv * fclkin) / idiv
+#
+# returns (fclkin_idx, icp, r_idx)
+# fclkin_idx - input frequency range index
+# icp - charge current
+# r_idx - resistor value index
+
+# There are not many resistors so the whole frequency range is divided into
+# 30MHz intervals and the number of this interval is one of the fuse sets. But
+# the resistor itself is not directly dependent on the input frequency.
+_freq_R = [(2.6, 65100.0), (3.87, 43800.0), (7.53, 22250.0), (14.35, 11800.0), (28.51, 5940.0), (57.01, 2970.0), (114.41, 1480), (206.34, 820.0)]
+def calc_pll_pump(fref, fvco):
+    fclkin_idx = int((fref - 1) // 30)
+    if (fclkin_idx == 13 and fref <= 395) or (fclkin_idx == 14 and fref <= 430) or (fclkin_idx == 15 and fref <= 465) or fclkin_idx == 16:
+        fclkin_idx = fclkin_idx - 1
+
+    r_vals = [(fr[1], len(_freq_R) - 1 - idx) for idx, fr in enumerate(_freq_R) if fr[0] < fref]
+    r_vals.reverse()
+
+    # Find the resistor that provides the minimum current through the capacitor
+    K0 = (497.5 - math.sqrt(247506.25 - (2675.4 - fvco) * 78.46)) / 39.23
+    K1 = 4.8714 * K0 * K0 + 6.5257 * K0 + 142.67
+    Kvco = 1000000.0 * K1
+    Ndiv = fvco / fref
+    C1 = 6.69244e-11
+
+    for R1, r_idx in r_vals:
+        Ic = (1.8769 / (R1 * R1 * Kvco * C1)) * 4.0 * Ndiv
+        if Ic <= 0.00028:
+            icp = int(Ic * 100000.0 + 0.5) * 10
+            break
+
+    return ((fclkin_idx + 1) * 16, icp, r_idx)
 
 # add the default pll attributes according to the documentation
 _default_pll_inattrs = {
@@ -244,35 +279,24 @@ def set_pll_attrs(db, typ, attrs):
     # static vs dynamic
     if pll_inattrs['DYN_IDIV_SEL'] == 'false' and pll_inattrs['DYN_FBDIV_SEL'] == 'false' and pll_inattrs['DYN_ODIV_SEL'] == 'false':
         # static. We can immediately check the compatibility of the divisors
-        idiv = pll_attrs['IDIV']
-        fbdiv = pll_attrs['FDIV']
         clkout = fclkin * fbdiv / idiv
         if clkout <= _permitted_freqs[device][2] or clkout > _permitted_freqs[device][1]:
             raise Exception(f"CLKOUT = FCLKIN*(FBDIV_SEL+1)/(IDIV_SEL+1) = {clkout}MHz not in range {_permitted_freqs[device][2]} - {_permitted_freqs[device][1]}MHz")
         pfd = fclkin / idiv
         if pfd < 3.0 or pfd > _permitted_freqs[device][0]:
             raise Exception(f"PFD = FCLKIN/(IDIV_SEL+1) = {pfd}MHz not in range 3.0 - {_permitted_freqs[device][0]}MHz")
-        odiv = pll_attrs['ODIV']
         fvco = odiv * fclkin * fbdiv / idiv
         if fvco < _permitted_freqs[device][4] or  fvco > _permitted_freqs[device][3]:
             raise Exception(f"VCO = FCLKIN*(FBDIV_SEL+1)*ODIV_SEL/(IDIV_SEL+1) = {fvco}MHz not in range {_permitted_freqs[device][4]} - {_permitted_freqs[device][3]}MHz")
 
-    # XXX input is 24MHz only and output either 52MHz or 56MHz
-    # XXX input is 27MHz only and output either 58.5MHz or 63MHz
-    if device != "GW1N-1" and device != "GW1NZ-1":
-        raise Exception(f"PLL is not supported")
-    if (abs(fclkin - 24) > 0.01 and device == "GW1N-1") or (abs(fclkin - 27) > 0.01 and device == "GW1NZ-1"):
-        raise Exception(f"PLL input frequency {fclkin} is not supported")
-    if fbdiv == 13 and idiv == 6 and odiv == 8:
-        pll_attrs['FLDCOUNT'] = 16
-        pll_attrs['ICPSEL'] = 20
-        pll_attrs['LPR'] = 6
-    elif fbdiv == 7 and idiv == 3 and odiv == 8:
-        pll_attrs['FLDCOUNT'] = 16
-        pll_attrs['ICPSEL'] = 40
-        pll_attrs['LPR'] = 5
-    else:
-        raise Exception(f"PLL parameters are not supported for now")
+    # pump
+    fref = fclkin / idiv
+    fvco = (odiv * fbdiv * fclkin) / idiv
+    fclkin_idx, icp, r_idx = calc_pll_pump(fref, fvco)
+
+    pll_attrs['FLDCOUNT'] = fclkin_idx
+    pll_attrs['ICPSEL'] = int(icp)
+    pll_attrs['LPR'] = f"R{r_idx}"
 
     fin_attrs = set()
     for attr, val in pll_attrs.items():
