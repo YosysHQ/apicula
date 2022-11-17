@@ -303,6 +303,7 @@ def set_pll_attrs(db, typ, attrs):
         if isinstance(val, str):
             val = pll_attrvals[val]
         add_attr_val(db, 'PLL', fin_attrs, pll_attrids[attr], val)
+    #print(fin_attrs)
     return fin_attrs
 
 iostd_alias = {

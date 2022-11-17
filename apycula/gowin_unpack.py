@@ -129,7 +129,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
                 attrvals.add(av)
 
     for key in attrvals:
-        for av in [a for a in key if a != 0]:
+        for av in [abs(a) for a in key if a != 0]:
             attr, val = logicinfo_table[av]
             res[get_attr_name(attrname_table, attr)] = val
     return res
@@ -159,10 +159,12 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("RPLL"):
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
             attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
-            modes = bels.setdefault(f'{name}{idx}', set())
+            modes = set()
             for attrval in attrvals:
                 modes.add(attrval)
-            print(idx, modes)
+            if modes:
+                bels[f'{name}{idx}'] = modes
+                print(idx, modes)
             continue
         if name.startswith("IOB"):
             #print(name)
