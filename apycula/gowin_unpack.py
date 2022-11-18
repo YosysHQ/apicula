@@ -77,17 +77,21 @@ def pll_attrs_refine(in_attrs):
         if attr not in _pll_attrs.keys():
             continue
         attr = _pll_attrs[attr]
-        new_val = f'"{val}"'
         if attr in ['CLKOUTP_DLY_STEP', 'CLKOUT_DLY_STEP']:
             new_val = val / 50
         elif attr in ['PSDA_SEL', 'DUTYDA_SEL']:
             new_val = f'"{val:04b}"'
         elif attr in ['IDIV_SEL', 'FBDIV_SEL']:
             new_val = val - 1
-        elif attr == 'DYN_SDIV_SEL':
-            new_val = val - 2
-        elif attr == 'ODIV_SEL':
+        elif attr in ['DYN_SDIV_SEL', 'ODIV_SEL']:
             new_val = val
+        else:
+            attrvals = [ name for name, vl in pll_attrvals.items() if vl == val ]
+            if not attrvals:
+                raise Exception(f"PLL no {attr} = {val}")
+            new_val = f'"{attrvals[0]}"'
+        if attr in ['DYN_FBDIV_SEL', 'DYN_IDIV_SEL'] and new_val == '"DYN"':
+            new_val = '"true"'
         res.add(f'{attr}={new_val}')
     return res
 
@@ -593,6 +597,14 @@ def default_device_config():
         "background_programming": "false",
         "secure_mode": "false"}
 
+def fix_pll_ports(mod):
+    for prim in [pr for pr in mod.primitives.values() if pr.typ == 'rPLL']:
+        for portname, up_limit in [('PSDA', 4), ('DUTYDA', 4), ('FDLY', 4), ('FBDSEL', 6), ('IDSEL', 6), ('ODSEL', 6)]:
+            for n in range(0, up_limit):
+                port = prim.portmap.setdefault(portname, [])
+                port.append(prim.portmap[f'{portname}{n}'])
+                prim.portmap.pop(f'{portname}{n}')
+
 def main():
     parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
     parser.add_argument('bitstream')
@@ -657,6 +669,8 @@ def main():
             removeLUTs(bels)
         ram16_remove_bels(bels)
         tile2verilog(row, col, bels, pips, clock_pips, mod, cst, db)
+
+    fix_pll_ports(mod)
 
     with open(args.output, 'w') as f:
         mod.write(f)
