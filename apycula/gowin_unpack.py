@@ -164,7 +164,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 modes.add(attrval)
             if modes:
                 bels[f'{name}{idx}'] = modes
-                print(idx, modes)
+                #print(idx, modes)
             continue
         if name.startswith("IOB"):
             #print(name)

@@ -23,7 +23,8 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-lw-honeycomb.fs blinky-lw-tec0117.fs blinky-lw-runber.fs \
 	globals_all \
 	pll-52-tangnano.fs pll-80-tangnano.fs \
-	pll-54-tangnano1k.fs pll-81-tangnano1k.fs
+	pll-54-tangnano1k.fs pll-81-tangnano1k.fs \
+	pll-dyn-tangnano.fs pll-dyn-tangnano1k.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
@@ -44,7 +45,8 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	blinky-lw-honeycomb-unpacked.v blinky-lw-tec0117-unpacked.v blinky-lw-runber-unpacked.v \
 	globals_unpacked \
 	pll-52-tangnano-unpacked.v pll-80-tangnano-unpacked.v \
-	pll-54-tangnano1k-unpacked.v pll-81-tangnano1k-unpacked.v
+	pll-54-tangnano1k-unpacked.v pll-81-tangnano1k-unpacked.v \
+	pll-dyn-tangnano-unpacked.v pll-dyn-tangnano1k-unpacked.v
 	
 clean: globals_clean
 	rm -f *.json *.fs *-unpacked.v

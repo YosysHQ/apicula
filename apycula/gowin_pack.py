@@ -234,7 +234,7 @@ def set_pll_attrs(db, typ, attrs):
             pll_attrs['FDIV'] = fbdiv
             continue
         if attr == 'DYN_SDIV_SEL':
-            pll_attrs['SDIV'] = 2 + int(val, 2)
+            pll_attrs['SDIV'] = int(val, 2)
             continue
         if attr == 'ODIV_SEL':
             odiv = int(val, 2)
