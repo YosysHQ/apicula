@@ -2,6 +2,7 @@
 module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
 	wire VCC;
 	wire GND;
+	wire reset;
 	wire [2:0]dummy;
 	assign VCC = 1'b1;
 	assign GND = 1'b0;
@@ -28,7 +29,7 @@ module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
 		.DUTYDA({GND,GND,GND,GND}),
 		.PSDA({GND,GND,GND,GND}),
 		.FDLY({GND,GND,GND,GND}),
-		.RESET(GND),
+		.RESET(reset),
 		.RESET_P(GND)
 	);
 	defparam pll.DEVICE = `PLL_DEVICE;
@@ -70,6 +71,10 @@ module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
             fdiv <= ~`PLL_FBDIV_SEL_1;
             idiv <= ~`PLL_IDIV_SEL_1;
         end
+    end
+`else
+    always @ (posedge clk) begin
+		reset <= ~key;
     end
 `endif
 endmodule
