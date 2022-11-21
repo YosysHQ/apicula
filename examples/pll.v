@@ -2,8 +2,6 @@
 module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
 	wire VCC;
 	wire GND;
-	wire reset;
-	wire [2:0]dummy;
 	assign VCC = 1'b1;
 	assign GND = 1'b0;
 `ifdef PLL_DYN
@@ -16,21 +14,17 @@ module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
 	assign idiv = 6'd0;
 `endif
 	rPLL pll(
-		.CLKOUT(led[0]),         // connect an oscilloscope here
+		.CLKOUT(led[0]),         // connect an oscilloscope here. main freq
 		.CLKIN(clk),
-		.CLKOUTP(dummy[0]),
-		.CLKOUTD(led[2]),
-		.CLKOUTD3(dummy[1]),
+		.CLKOUTD(led[2]),		 // freq / SDIV = freq / 124
 		.LOCK(led[1]),           // this LED lights up when the PLL lock is triggered
 		.CLKFB(GND),
 		.FBDSEL(fdiv),
 		.IDSEL(idiv),
-		.ODSEL({VCC,GND,GND,GND,GND,GND}),
+		.ODSEL({GND,GND,GND,GND,GND,GND}),
 		.DUTYDA({GND,GND,GND,GND}),
 		.PSDA({GND,GND,GND,GND}),
 		.FDLY({GND,GND,GND,GND}),
-		.RESET(reset),
-		.RESET_P(GND)
 	);
 	defparam pll.DEVICE = `PLL_DEVICE;
 	defparam pll.FCLKIN = `PLL_FCLKIN;
@@ -58,7 +52,7 @@ module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
 	defparam pll.DYN_IDIV_SEL="false";
 `endif
 	defparam pll.DYN_ODIV_SEL="false";
-	defparam pll.DYN_SDIV_SEL=2;
+	defparam pll.DYN_SDIV_SEL=124;
 	defparam pll.PSDA_SEL="0000";
 
     // dynamic
@@ -71,10 +65,6 @@ module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
             fdiv <= ~`PLL_FBDIV_SEL_1;
             idiv <= ~`PLL_IDIV_SEL_1;
         end
-    end
-`else
-    always @ (posedge clk) begin
-		reset <= ~key;
     end
 `endif
 endmodule

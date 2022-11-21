@@ -71,6 +71,12 @@ _pll_attrs = {
         'BYPCKPS' :         'CLKOUTP_BYPASS',
         'BYPCKDIV' :        'CLKOUTD_BYPASS',
         }
+
+_pll_vals = {
+        'DYN' :             'true',
+        'CLKOUTPS' :        'CLKOUTP',
+        'BYPASS' :          'true',
+        }
 def pll_attrs_refine(in_attrs):
     res = set()
     for attr, val in in_attrs.items():
@@ -89,9 +95,9 @@ def pll_attrs_refine(in_attrs):
             attrvals = [ name for name, vl in pll_attrvals.items() if vl == val ]
             if not attrvals:
                 raise Exception(f"PLL no {attr} = {val}")
-            new_val = f'"{attrvals[0]}"'
-        if attr in ['DYN_FBDIV_SEL', 'DYN_IDIV_SEL'] and new_val == '"DYN"':
-            new_val = '"true"'
+            if attrvals[0] in _pll_vals.keys():
+                new_val = _pll_vals[attrvals[0]]
+            new_val = f'"{new_val}"'
         res.add(f'{attr}={new_val}')
     return res
 

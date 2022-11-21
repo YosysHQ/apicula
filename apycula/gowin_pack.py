@@ -191,6 +191,8 @@ def set_pll_attrs(db, typ, attrs):
 
     # parse attrs
     for attr, val in pll_inattrs.items():
+        if attr in pll_attrs.keys():
+            pll_attrs[attr] = val
         # XXX clock in and feedback in
         if attr == 'CLKOUTD_SRC':
             if val == 'CLKOUTP':
