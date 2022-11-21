@@ -194,6 +194,9 @@ def set_pll_attrs(db, typ, attrs):
         if attr in pll_attrs.keys():
             pll_attrs[attr] = val
         # XXX clock in and feedback in
+        if attr == 'CLKFB_SEL':
+            if val != 'internal':
+                raise Exception(f"Only internal feedback is supported for now")
         if attr == 'CLKOUTD_SRC':
             if val == 'CLKOUTP':
                 pll_attrs['CLKOUTDIVSEL'] = 'CLKOUTPS'
