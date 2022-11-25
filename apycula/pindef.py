@@ -85,7 +85,10 @@ def get_pin_locs(device, package, special_pins=False):
     df = get_package(device, package, special_pins)
     res = {}
     for pin in df:
-        res[str(pin['INDEX'])] = pin['NAME']
+        cfgs = []
+        if 'CFG' in pin.keys():
+            cfgs = pin['CFG'].split('/')
+        res[str(pin['INDEX'])] = (pin['NAME'], cfgs)
     return res
 
 def get_clock_locs(device, package):
