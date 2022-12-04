@@ -169,8 +169,8 @@ _default_pll_internal_attrs = {
             'CLKOUTPS': 'ENABLE',
             'PDN': 'ENABLE',
             'PASEL': 0,
-            'IRSTEN': 'ENABLE',
-            'SRSTEN': 'ENABLE',
+            'IRSTEN': 'DISABLE',
+            'SRSTEN': 'DISABLE',
             'PWDEN': 'ENABLE',
             'RSTEN': 'ENABLE',
             'FLDCOUNT': 16,
@@ -183,8 +183,6 @@ _default_pll_internal_attrs = {
 def set_pll_attrs(db, typ, attrs):
     pll_inattrs = add_pll_default_attrs(attrs)
     pll_attrs = _default_pll_internal_attrs.copy()
-    pll_attrs['IRSTEN'] = 'DISABLE'
-    pll_attrs['SRSTEN'] = 'DISABLE'
 
     if typ not in ['RPLL']:
         raise Exception(f"PLL type {typ} is not supported for now")
@@ -193,10 +191,6 @@ def set_pll_attrs(db, typ, attrs):
     for attr, val in pll_inattrs.items():
         if attr in pll_attrs.keys():
             pll_attrs[attr] = val
-        # XXX clock in and feedback in
-        if attr == 'CLKFB_SEL':
-            if val != 'internal':
-                raise Exception(f"Only internal feedback is supported for now")
         if attr == 'CLKOUTD_SRC':
             if val == 'CLKOUTP':
                 pll_attrs['CLKOUTDIVSEL'] = 'CLKOUTPS'
@@ -205,7 +199,6 @@ def set_pll_attrs(db, typ, attrs):
             if val == 'CLKOUTP':
                 pll_attrs['CLKOUTDIV3SEL'] = 'CLKOUTPS'
             continue
-        # XXX selin
         if attr == 'DYN_IDIV_SEL':
             if val == 'true':
                 pll_attrs['IDIVSEL'] = 'DYN'
