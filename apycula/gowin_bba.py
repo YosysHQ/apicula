@@ -179,9 +179,15 @@ def write_pinout(b, db):
                 for pkg, pins in pkgs.items():
                     b.u32(id_string(pkg))
                     with b.block("pins") as pinblk:
-                        for num, loc in pins.items():
+                        for num, loccfg in pins.items():
+                            loc, cfgs = loccfg
                             b.u16(id_string(num))
                             b.u16(id_string(iob2bel(db, loc)))
+                            with b.block("cfgs") as cfgblk:
+                                for cfg in cfgs:
+                                    b.u32(id_string(cfg))
+                            b.u32(len(cfgs))
+                            b.ref(cfgblk)
                     b.u32(len(pins))
                     b.ref(pinblk)
             b.u32(len(pkgs))
@@ -197,7 +203,7 @@ def write_chipdb(db, f, device):
     b.pre('NEXTPNR_NAMESPACE_BEGIN')
     with b.block(f'chipdb_{cdev}') as blk:
         b.str(device)
-        b.u32(1) # version
+        b.u32(2) # version
         b.u16(db.rows)
         b.u16(db.cols)
         write_grid(b, db.grid)
