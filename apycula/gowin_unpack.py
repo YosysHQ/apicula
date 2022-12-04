@@ -416,14 +416,17 @@ def disable_unused_pll_ports(pll):
             del pll.portmap[f'FBDSEL{n}']
     if 'DYN_ODIV_SEL' not in pll.params.keys():
         for n in range(0, 6):
-            del pll.portmap[f'ODSEL{n}']
+            if f'ODSEL{n}' in pll.portmap.keys():
+                del pll.portmap[f'ODSEL{n}']
     if 'PWDEN' in pll.params.keys():
         if pll.params['PWDEN'] == 'DISABLE':
-            del pll.portmap['RESET_P']
+            if 'RESET_P' in pll.portmap.keys():
+                del pll.portmap['RESET_P']
         del pll.params['PWDEN']
     if 'RSTEN' in pll.params.keys():
         if pll.params['RSTEN'] == 'DISABLE':
-            del pll.portmap['RESET']
+            if 'RESET' in pll.portmap.keys():
+                del pll.portmap['RESET']
         del pll.params['RSTEN']
     if 'CLKOUTDIV3' in pll.params.keys():
         if pll.params['CLKOUTDIV3'] == 'DISABLE':
