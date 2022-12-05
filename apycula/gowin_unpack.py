@@ -416,17 +416,14 @@ def disable_unused_pll_ports(pll):
             del pll.portmap[f'FBDSEL{n}']
     if 'DYN_ODIV_SEL' not in pll.params.keys():
         for n in range(0, 6):
-            if f'ODSEL{n}' in pll.portmap.keys():
-                del pll.portmap[f'ODSEL{n}']
+            del pll.portmap[f'ODSEL{n}']
     if 'PWDEN' in pll.params.keys():
         if pll.params['PWDEN'] == 'DISABLE':
-            if 'RESET_P' in pll.portmap.keys():
-                del pll.portmap['RESET_P']
+            del pll.portmap['RESET_P']
         del pll.params['PWDEN']
     if 'RSTEN' in pll.params.keys():
         if pll.params['RSTEN'] == 'DISABLE':
-            if 'RESET' in pll.portmap.keys():
-                del pll.portmap['RESET']
+            del pll.portmap['RESET']
         del pll.params['RSTEN']
     if 'CLKOUTDIV3' in pll.params.keys():
         if pll.params['CLKOUTDIV3'] == 'DISABLE':
@@ -709,8 +706,10 @@ def fix_pll_ports(pll):
                 pll.portmap.pop(f'{portname}{n}')
 
 def fix_plls(db, mod):
-    for pll in [pr for pr in mod.primitives.values() if pr.typ == 'rPLL']:
-        #print(pll.params)
+    for pll_name, pll in [pr for pr in mod.primitives.items() if pr[1].typ == 'rPLL']:
+        if 'INSEL' not in pll.params.keys():
+            del mod.primitives[pll_name]
+            continue
         disable_unused_pll_ports(pll)
         modify_pll_inputs(db, pll)
         mod.wires.update(pll.portmap.values())
