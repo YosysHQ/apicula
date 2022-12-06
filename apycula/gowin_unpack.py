@@ -13,6 +13,12 @@ from apycula.attrids import pll_attrids, pll_attrvals
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
+_pinout = ""
+_packages = {
+        'GW1N-1' : 'LQFP144', 'GW1NZ-1' : 'QFN48', 'GW1N-4' : 'PBGA256', 'GW1N-9C' : 'UBGA332',
+        'GW1N-9' : 'PBGA256', 'GW1NS-4' : 'QFN48', 'GW1NS-2' : 'LQFP144',
+}
+
 # bank iostandards
 # XXX default io standard may be board-dependent!
 _banks = {'0': "LVCMOS18", '1': "LVCMOS18", '2': "LVCMOS18", '3': "LVCMOS18"}
@@ -71,23 +77,36 @@ _pll_attrs = {
         'BYPCKPS' :         'CLKOUTP_BYPASS',
         'BYPCKDIV' :        'CLKOUTD_BYPASS',
         }
+
+_pll_vals = {
+        'DYN' :             'true',
+        'CLKOUTPS' :        'CLKOUTP',
+        'BYPASS' :          'true',
+        }
 def pll_attrs_refine(in_attrs):
     res = set()
     for attr, val in in_attrs.items():
+        #print(attr, val)
         if attr not in _pll_attrs.keys():
+            if attr in ['INSEL', 'FBSEL', 'PWDEN', 'RSTEN', 'CLKOUTDIV3', 'CLKOUTPS']:
+                res.add(f'{attr}={[ name for name, vl in pll_attrvals.items() if vl == val ][0]}')
             continue
         attr = _pll_attrs[attr]
-        new_val = f'"{val}"'
         if attr in ['CLKOUTP_DLY_STEP', 'CLKOUT_DLY_STEP']:
             new_val = val / 50
         elif attr in ['PSDA_SEL', 'DUTYDA_SEL']:
             new_val = f'"{val:04b}"'
         elif attr in ['IDIV_SEL', 'FBDIV_SEL']:
             new_val = val - 1
-        elif attr == 'DYN_SDIV_SEL':
-            new_val = val - 2
-        elif attr == 'ODIV_SEL':
+        elif attr in ['DYN_SDIV_SEL', 'ODIV_SEL']:
             new_val = val
+        else:
+            attrvals = [ name for name, vl in pll_attrvals.items() if vl == val ]
+            if not attrvals:
+                raise Exception(f"PLL no {attr} = {val}")
+            if attrvals[0] in _pll_vals.keys():
+                new_val = _pll_vals[attrvals[0]]
+            new_val = f'"{new_val}"'
         res.add(f'{attr}={new_val}')
     return res
 
@@ -129,7 +148,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
                 attrvals.add(av)
 
     for key in attrvals:
-        for av in [a for a in key if a != 0]:
+        for av in [abs(a) for a in key if a != 0]:
             attr, val = logicinfo_table[av]
             res[get_attr_name(attrname_table, attr)] = val
     return res
@@ -139,6 +158,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
 _pll_cells = {}
 
 # returns the A cell of the PLL
+# GW1N(Z)-1
 def get_pll_A(db, row, col, typ):
     if typ == 'B':
         col -= 1
@@ -159,10 +179,11 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("RPLL"):
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
             attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
-            modes = bels.setdefault(f'{name}{idx}', set())
+            modes = set()
             for attrval in attrvals:
                 modes.add(attrval)
-            print(idx, modes)
+            if modes:
+                bels[f'{name}{idx}'] = modes
             continue
         if name.startswith("IOB"):
             #print(name)
@@ -381,6 +402,92 @@ def move_iologic(bels):
     res += [(bel, flags) for bel, flags in bels.items() if not bel.startswith('ODDR')]
     return res
 
+def disable_unused_pll_ports(pll):
+    if 'DYN_DA_EN' not in pll.params.keys():
+        for n in range(0, 4):
+            del pll.portmap[f'PSDA{n}']
+            del pll.portmap[f'DUTYDA{n}']
+            del pll.portmap[f'FDLY{n}']
+    if 'DYN_IDIV_SEL' not in pll.params.keys():
+        for n in range(0, 6):
+            del pll.portmap[f'IDSEL{n}']
+    if 'DYN_FBDIV_SEL' not in pll.params.keys():
+        for n in range(0, 6):
+            del pll.portmap[f'FBDSEL{n}']
+    if 'DYN_ODIV_SEL' not in pll.params.keys():
+        for n in range(0, 6):
+            del pll.portmap[f'ODSEL{n}']
+    if 'PWDEN' in pll.params.keys():
+        if pll.params['PWDEN'] == 'DISABLE':
+            del pll.portmap['RESET_P']
+        del pll.params['PWDEN']
+    if 'RSTEN' in pll.params.keys():
+        if pll.params['RSTEN'] == 'DISABLE':
+            del pll.portmap['RESET']
+        del pll.params['RSTEN']
+    if 'CLKOUTDIV3' in pll.params.keys():
+        if pll.params['CLKOUTDIV3'] == 'DISABLE':
+            del pll.portmap['CLKOUTD3']
+        del pll.params['CLKOUTDIV3']
+    if 'CLKOUTDIV' in pll.params.keys():
+        if pll.params['CLKOUTDIV'] == 'DISABLE':
+            del pll.portmap['CLKOUTD']
+        del pll.params['CLKOUTDIV']
+    if 'CLKOUTPS' in pll.params.keys():
+        if pll.params['CLKOUTPS'] == 'DISABLE':
+            del pll.portmap['CLKOUTP']
+        del pll.params['CLKOUTPS']
+
+_tbrlre = re.compile(r"IO([TBRL])(\d+)(\w)")
+def tbrl2rc(db, loc):
+    side, num, bel_idx = _tbrlre.match(loc).groups()
+    if side == 'T':
+        row = 0
+        col = int(num) - 1
+    elif side == 'B':
+        row = db.rows - 1
+        col = int(num) - 1
+    elif side == 'L':
+        row = int(num) - 1
+        col = 0
+    elif side == 'R':
+        row = int(num) - 1
+        col = db.cols - 1
+    return (row, col, bel_idx)
+
+def find_pll_in_pin(db, pll):
+    locs = [loc for (loc, cfgs) in _pinout.values() if 'RPLL_T_IN' in cfgs]
+    if not locs:
+        raise Exception(f"No RPLL_T_IN pin in the current package")
+    row, col, bel_idx = tbrl2rc(db, locs[0])
+    wire = db.grid[row][col].bels[f'IOB{bel_idx}'].portmap['O']
+    pll.portmap['CLKIN'] = f'R{row + 1}C{col + 1}_{wire}'
+
+def modify_pll_inputs(db, pll):
+    if 'INSEL' in pll.params.keys():
+        insel = pll.params['INSEL']
+        if insel != 'CLKIN1':
+            # pin
+            if insel == 'CLKIN0':
+                find_pll_in_pin(db, pll)
+            else:
+                del pll.portmap['CLKIN']
+        del pll.params['INSEL']
+    if 'FBSEL' in pll.params.keys():
+        fbsel = pll.params['FBSEL']
+        if fbsel == 'CLKFB3':
+            # internal
+            pll.params['CLKFB_SEL'] = '"internal"'
+            del pll.portmap['CLKFB']
+        elif fbsel == 'CLKFB0':
+            # external CLK2
+            pll.params['CLKFB_SEL'] = '"external"'
+        elif fbsel == 'CLKFB2':
+            # external pin
+            pll.params['CLKFB_SEL'] = '"external"'
+            # XXX find pin
+        del pll.params['FBSEL']
+
 _sides = "AB"
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
     # db is 0-based, floorplanner is 1-based
@@ -429,7 +536,6 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             portmap = db.grid[dbrow][dbcol].bels[bel[:-1]].portmap
             for port, wname in portmap.items():
                 pll.portmap[port] = f"R{row}C{col}_{wname}"
-            mod.wires.update(pll.portmap.values())
         elif typ == "ALU":
             #print(flags)
             kind, = flags # ALU only have one flag
@@ -591,6 +697,24 @@ def default_device_config():
         "background_programming": "false",
         "secure_mode": "false"}
 
+def fix_pll_ports(pll):
+    for portname, up_limit in [('PSDA', 4), ('DUTYDA', 4), ('FDLY', 4), ('FBDSEL', 6), ('IDSEL', 6), ('ODSEL', 6)]:
+        for n in range(0, up_limit):
+            if f'{portname}{n}' in pll.portmap.keys():
+                port = pll.portmap.setdefault(portname, [])
+                port.append(pll.portmap[f'{portname}{n}'])
+                pll.portmap.pop(f'{portname}{n}')
+
+def fix_plls(db, mod):
+    for pll_name, pll in [pr for pr in mod.primitives.items() if pr[1].typ == 'rPLL']:
+        if 'INSEL' not in pll.params.keys():
+            del mod.primitives[pll_name]
+            continue
+        disable_unused_pll_ports(pll)
+        modify_pll_inputs(db, pll)
+        mod.wires.update(pll.portmap.values())
+        fix_pll_ports(pll)
+
 def main():
     parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
     parser.add_argument('bitstream')
@@ -603,7 +727,6 @@ def main():
 
     device = args.device
     # For tool integration it is allowed to pass a full part number
-    m = re.match("GW1N([A-Z]*)-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+)(C[0-9]/I[0-9])", device)
     m = re.match("GW1N(S?)[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
     if m:
         mods = m.group(1)
@@ -612,6 +735,9 @@ def main():
 
     with importlib.resources.open_binary("apycula", f"{device}.pickle") as f:
         db = pickle.load(f)
+
+    global _pinout
+    _pinout = db.pinout[device][_packages[device]]
 
     bitmap = read_bitstream(args.bitstream)[0]
     bm = chipdb.tile_bitmap(db, bitmap)
@@ -655,6 +781,8 @@ def main():
             removeLUTs(bels)
         ram16_remove_bels(bels)
         tile2verilog(row, col, bels, pips, clock_pips, mod, cst, db)
+
+    fix_plls(db, mod)
 
     with open(args.output, 'w') as f:
         mod.write(f)
