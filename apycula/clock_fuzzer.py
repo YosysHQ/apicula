@@ -428,14 +428,15 @@ def make_lw_aliases(fse, dat, db, quads, clks):
 
     # logic entries
     srcs = {}
-    for i, src in enumerate(dat['UfbIns']):
+    for i, src in dat['CmuxIns'].items():
         row, col, pip = src
         if pip == 126: # CLK2
-            db.aliases.update({ (center_row, col82, f'UNK{i + 104}'): (row - 1, col -1, 'CLK2')})
-            db.aliases.update({ (center_row, col81, f'UNK{i + 104}'): (row - 1, col -1, 'CLK2')})
+            idx = int(i)
+            db.aliases.update({ (center_row, col82, f'UNK{idx + 80}'): (row - 1, col -1, 'CLK2')})
+            db.aliases.update({ (center_row, col81, f'UNK{idx + 80}'): (row - 1, col -1, 'CLK2')})
             if has_bottom_quadrants:
-                db.aliases.update({ (center_row, col83, f'UNK{i + 104}'): (row - 1, col -1, 'CLK2')})
-                db.aliases.update({ (center_row, col84, f'UNK{i + 104}'): (row - 1, col -1, 'CLK2')})
+                db.aliases.update({ (center_row, col83, f'UNK{idx + 80}'): (row - 1, col -1, 'CLK2')})
+                db.aliases.update({ (center_row, col84, f'UNK{idx + 80}'): (row - 1, col -1, 'CLK2')})
 
 if __name__ == "__main__":
     quads = quadrants()
