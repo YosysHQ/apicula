@@ -65,7 +65,7 @@ The `grid` table is another tile grid, where the tile types map to other files i
 
 The `fuse` table is an important one. Many other tables contain indices into this table. The primary index is the fuse number, the secondary index is the tile type. The value in the table is 10000 or a decimal number in the form of `YYXX` representing the bit location within a tile corresponding to this fuse. Yea, you read that correctly, they stuff the bit location into a single number using decimal digits.
 
-Not much is known about the `logicinfo` table.
+The `logicinfo` table describes the valid values of the parameters of the primitives (bels). Each row is a pair (parameter_id, value). This table can be used to generate fuses that program the specified parameter value. The point is that the first two fields of the `shortval` and `longval` tables are the row numbers of this logicinfo table, meaning that the fuses listed in the row of the `shortval` table, for example, must be set to specify the values of this parameter pair.
 
 The other files all correspond to a specific tile type, and have a width and height. Note that IOB, DSP and BRAM tiles are slightly bigger than CFU tiles. Some important tables in thes tile files follow.
 
