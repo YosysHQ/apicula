@@ -264,11 +264,10 @@ def spine_aliases(quads, dests, clks):
     return aliases
 
 # add border cells
-def add_rim(rows, cols):
+def add_rim(rows, cols, spine_row):
     if 1 in rows:
         rows.add(0)
-    else:
-        # XXX fill all rows
+    if max(rows) > spine_row:
         rows.update({row for row in range(max(rows) + 1, db.rows)})
     if 1 in cols:
         cols.add(0)
@@ -279,7 +278,7 @@ def add_rim(rows, cols):
 def tap_aliases(quads):
     aliases = {}
     for _, (rows, cols, spine_row) in quads.items():
-        add_rim(rows, cols)
+        add_rim(rows, cols, spine_row)
         for col in cols:
             for row in rows:
                 for src in ["GT00", "GT10"]:
@@ -290,14 +289,14 @@ def tap_aliases(quads):
 
 def branch_aliases(quads, clks):
     aliases = {}
-    for ct, (rows, _, _) in quads.items():
+    for ct, (rows, _, spine_row) in quads.items():
         for clk, taps in clks[ct].items():
             if clk < 4:
                 src = "GBO0"
             else:
                 src = "GBO1"
             for tap, branch_cols in taps.items():
-                add_rim(rows, branch_cols)
+                add_rim(rows, branch_cols, spine_row)
                 for row in rows:
                     for col in branch_cols:
                         aliases[row, col, f"GB{clk}0"] = row, tap, src
