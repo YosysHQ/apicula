@@ -418,6 +418,25 @@ def fse_fill_logic_tables(dev, fse):
                 for f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, *fuses in fse[ttyp]['longval'][ltable]:
                     table[(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15)] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
 
+_pll_loc = {
+ 'GW1N-1':
+   {'TRPLL0CLK0': (0, 17, 'F4'), 'TRPLL0CLK1': (0, 17, 'F5'),
+    'TRPLL0CLK2': (0, 17, 'F6'), 'TRPLL0CLK3': (0, 17, 'F7'), },
+ 'GW1NZ-1':
+   {'TRPLL0CLK0': (0, 17, 'F4'), 'TRPLL0CLK1': (0, 17, 'F5'),
+    'TRPLL0CLK2': (0, 17, 'F6'), 'TRPLL0CLK3': (0, 17, 'F7'), },
+}
+def fse_create_pll_clock_aliases(db, device):
+    # we know exactly where the PLL is and therefore know which aliases to create
+    for row in range(db.rows):
+        for col in range(db.cols):
+            for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
+                for w_src in w_srcs.keys():
+                    # XXX
+                    if device in {'GW1N-1', 'GW1NZ-1'}:
+                        if w_src in _pll_loc[device].keys():
+                            db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
+
 def from_fse(device, fse):
     dev = Device()
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
@@ -432,12 +451,14 @@ def from_fse(device, fse):
             tile.bels = fse_luts(fse, ttyp)
         if 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
+        # XXX GW1N(Z)-1 for now
         if ttyp in [88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
         tiles[ttyp] = tile
 
     fse_fill_logic_tables(dev, fse)
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
+    fse_create_pll_clock_aliases(dev, device)
     return dev
 
 # get fuses for attr/val set using short/longval table

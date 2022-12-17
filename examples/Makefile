@@ -24,7 +24,8 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	globals_all \
 	pll-52-tangnano.fs pll-80-tangnano.fs \
 	pll-54-tangnano1k.fs pll-81-tangnano1k.fs \
-	pll-dyn-tangnano.fs pll-dyn-tangnano1k.fs
+	pll-dyn-tangnano.fs pll-dyn-tangnano1k.fs \
+	pll-nanolcd-tangnano.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
@@ -46,7 +47,8 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	globals_unpacked \
 	pll-52-tangnano-unpacked.v pll-80-tangnano-unpacked.v \
 	pll-54-tangnano1k-unpacked.v pll-81-tangnano1k-unpacked.v \
-	pll-dyn-tangnano-unpacked.v pll-dyn-tangnano1k-unpacked.v
+	pll-dyn-tangnano-unpacked.v pll-dyn-tangnano1k-unpacked.v \
+	pll-nanolcd-tangnano-unpacked.v
 	
 clean: globals_clean
 	rm -f *.json *.fs *-unpacked.v
@@ -112,6 +114,9 @@ tonegen-tec0117-synth.json: tonegen/top.v tonegen/sddac.v tonegen/cordic.v
 
 nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
+
+pll-nanolcd-tangnano-synth.json: pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
+	$(YOSYS) -p "read_verilog $^; synth_gowin -noalu -json $@"
 
 %-tec0117-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"

@@ -34,6 +34,60 @@ clknames = wirenames.copy()
 clknames.update({n: f"SPINE{n}" for n in range(32)})
 clknames.update({n: f"LWT{n - 32}" for n in range(32, 40)})
 clknames.update({n: f"LWB{n - 40}" for n in range(40, 48)})
-clknames.update({n: f"UNK{n}" for n in range(48, 261)})
+# Apparently the names of the 8 primary clock wires comprise the quadrant
+# number and the number of the actual clock wire: P34 stands for primary clock
+# #4, 3rd quadrant. The quadrants are numbered counterclockwise:
+# 2        1
+#   center
+# 3        4
+# in addition, chips with two quadrants have quadrant numbers 3 and 4, not 1
+# and 2 as you might expect.
+# Wires 6 and 7 are the outputs of the dynamic 4-input MUX, the assumed
+# numbers of these inputs are listed below:
+clknames.update({
+     48: 'P16A', 49: 'P16B', 50: 'P16C', 51: 'P16D',
+     52: 'P17A', 53: 'P17B', 54: 'P17C', 55: 'P17D',
+     56: 'P26A', 57: 'P26B', 58: 'P26C', 59: 'P26D',
+     60: 'P27A', 61: 'P27B', 62: 'P27C', 63: 'P27D',
+     64: 'P36A', 65: 'P36B', 66: 'P36C', 67: 'P36D',
+     68: 'P37A', 69: 'P37B', 70: 'P37C', 71: 'P37D',
+     72: 'P46A', 73: 'P46B', 74: 'P46C', 75: 'P46D',
+     76: 'P47A', 77: 'P47B', 78: 'P47C', 79: 'P47D'
+})
+clknames[80] = 'VSS'
+# each PLL has 4 delay-critical outputs (clkout, clkoutp, clkoutd, clkoutd3),
+# their numbers are listed here, the names indicate the possible location of
+# the PLL (Top Left etc):
+clknames.update({
+    81: 'TLPLL0CLK0', 82: 'TLPLL0CLK1', 83: 'TLPLL0CLK2', 84: 'TLPLL0CLK3',
+    85: 'TLPLL1CLK0', 86: 'TLPLL1CLK1', 87: 'TLPLL1CLK2', 88: 'TLPLL1CLK3',
+    89: 'BLPLL0CLK0', 90: 'BLPLL0CLK1', 91: 'BLPLL0CLK2', 92: 'BLPLL0CLK3',
+    93: 'TRPLL0CLK0', 94: 'TRPLL0CLK1', 95: 'TRPLL0CLK2', 96: 'TRPLL0CLK3',
+    97: 'TRPLL1CLK0', 98: 'TRPLL1CLK1', 99: 'TRPLL1CLK2', 100: 'TRPLL1CLK3',
+    101: 'BRPLL0CLK0', 102: 'BRPLL0CLK1', 103: 'BRPLL0CLK2', 104: 'BRPLL0CLK3',
+})
+clknames.update({n: f"UNK{n}" for n in range(105, 121)})
+# These are the external clock pins, one on each side
+clknames.update({
+    121: 'PCLKT0', 122: 'PCLKT1', 123: 'PCLKB0', 124: 'PCLKB1',
+    125: 'PCLKL0', 126: 'PCLKL1', 127: 'PCLKR0', 128: 'PCLKR1',
+})
+clknames.update({n: f"UNK{n}" for n in range(129, 153)})
+clknames[153] = 'VCC'
+clknames.update({n: f"UNK{n}" for n in range(154, 186)})
+# These wires are a mystery, they are a copy of P10-P15 etc, there is no reason
+# to have another number for the output, but it is these numbers that are
+# listed in tables 38, although the internal routes are routed to the
+# originals.
+# In general they are needed and the letter A is added to make the names
+# different.
+clknames.update({
+     186: 'P10A', 187: 'P11A', 188: 'P12A', 189: 'P13A', 190: 'P14A', 191: 'P15A',
+     192: 'P20A', 193: 'P21A', 194: 'P22A', 195: 'P23A', 196: 'P24A', 197: 'P25A',
+     198: 'P30A', 199: 'P31A', 200: 'P32A', 201: 'P33A', 202: 'P34A', 203: 'P35A',
+     204: 'P40A', 205: 'P41A', 206: 'P42A', 207: 'P43A', 208: 'P44A', 209: 'P45A',
+})
+
+clknames.update({n: f"UNK{n}" for n in range(210, 261)})
 
 clknumbers = {v: k for k, v in clknames.items()}
