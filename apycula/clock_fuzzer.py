@@ -314,7 +314,29 @@ def get_bufs_bits(fse, ttyp, win, wout):
     return {fuse_h4x.fuse_lookup(fse, ttyp, f) for f in fuses}
 
 # create aliases and pips for long wires
+def make_gw1n_1_lw(fse, dat, db, quads, clks):
+    spine_0 = 0
+    spine_1 = db.rows - 1
+    # start of right segment by LW#
+    right_start = [12, 11, 10, 9, 12, 11, 10, 9]
+    # tap posyition by LW#
+    tap_pos = [1, 0, 3, 2, 1, 0, 3, 2]
+
+    # lw branches and taps
+    for lw in range(4):
+        tap_col = tap_pos[lw]
+        for col in range(db.cols):
+            if (col > tap_col + 2) and (tap_col + 4 < db.cols):
+                tap_col += 4
+            for row in range(db.rows):
+                db.aliases[(row, col, f'LB{lw}1')] = (row, tap_col, 'LBO0')
+                db.aliases[(row, col, f'LB{lw + 4}1')] = (row, tap_col, 'LBO1')
+
 def make_lw_aliases(fse, dat, db, quads, clks):
+    if tiled_fuzzer.device == 'GW1N-1':
+        make_gw1n_1_lw(fse, dat, db, quads, clks)
+
+def make_lw_aliases_bck(fse, dat, db, quads, clks):
     # type 81, 82, 83, 84 tiles have source muxes
     center_row, col82 = dat['center']
     center_row -= 1
@@ -475,7 +497,6 @@ if __name__ == "__main__":
 
     # long wires
     make_lw_aliases(fse, dat, db, quads, clks)
-
 
     with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)
