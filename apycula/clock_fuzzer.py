@@ -280,6 +280,8 @@ def tap_aliases(quads):
     for _, (rows, cols, spine_row) in quads.items():
         add_rim(rows, cols, spine_row)
         for col in cols:
+            if col == dat['center'][1] - 1:
+                continue
             for row in rows:
                 for src in ["GT00", "GT10"]:
                     if row != spine_row:
