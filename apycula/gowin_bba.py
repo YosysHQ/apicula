@@ -54,11 +54,29 @@ def id_strings(b):
     b.u16(len(ids))
     b.ref(blk)
 
+# forbidden wires. prevent nextpnr from using wires with unclear purpose for routing
+_forbiden_wires = {
+        'UNK105', 'UNK106', 'UNK107', 'UNK108', 'UNK109', 'UNK110', 'UNK111',
+        'UNK112', 'UNK113', 'UNK114', 'UNK115', 'UNK116', 'UNK117', 'UNK118',
+        'UNK119', 'UNK120',
+
+        'UNK129', 'UNK130', 'UNK131', 'UNK132', 'UNK133', 'UNK134', 'UNK135',
+        'UNK136', 'UNK137', 'UNK138', 'UNK139', 'UNK140', 'UNK141', 'UNK142',
+        'UNK143', 'UNK144', 'UNK145', 'UNK146', 'UNK147', 'UNK148', 'UNK149',
+        'UNK150', 'UNK151', 'UNK152',
+
+        # the purpose of these is known: they are the outputs of the central MUX for
+        # clocks #6 and #7, but the mechanism of their activation is unclear so forbid
+        'P16A', 'P26A', 'P36A', 'P46A', 'P17A', 'P27A', 'P37A', 'P47A',
+        }
+
 def write_pips(b, pips):
     num = 0
     with b.block("pips") as blk:
         for dest, srcs in pips.items():
             for src in srcs:
+                if src in _forbiden_wires or dest in _forbiden_wires:
+                    continue
                 num += 1
                 b.u16(id_string(dest))
                 b.u16(id_string(src))
@@ -114,17 +132,21 @@ def write_grid(b, grid):
 
 
 def write_global_aliases(b, db):
+    num = 0
     with b.block('aliases') as blk:
         aliases = sorted(db.aliases.items(),
             key=lambda i: (i[0][0], i[0][1], id_string(i[0][2])))
         for (drow, dcol, dest), (srow, scol, src) in aliases:
+            if src in _forbiden_wires or dest in _forbiden_wires:
+                continue
+            num += 1
             b.u16(drow)
             b.u16(dcol)
             b.u16(id_string(dest))
             b.u16(srow)
             b.u16(scol)
             b.u16(id_string(src))
-    b.u32(len(db.aliases))
+    b.u32(num)
     b.ref(blk)
 
 def write_timing(b, timing):
