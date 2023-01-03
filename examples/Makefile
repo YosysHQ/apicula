@@ -3,9 +3,6 @@ NEXTPNR ?= nextpnr-gowin
 
 .DEFAULT_GOAL := all
 
-# globals router tests
-include globals/Makefile.inc
-
 all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs \
@@ -19,9 +16,6 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-osc-tec0117.fs blinky-osc-runber.fs blinky-osc-tangnano.fs  \
 	blinky-osc-honeycomb.fs \
 	blinky-osc-tangnano9k.fs blinky-osc-tangnano1k.fs blinky-osc-tangnano4k.fs \
-	blinky-lw-tangnano.fs blinky-lw-tangnano1k.fs blinky-lw-tangnano4k.fs blinky-lw-tangnano9k.fs \
-	blinky-lw-honeycomb.fs blinky-lw-tec0117.fs blinky-lw-runber.fs \
-	globals_all \
 	pll-52-tangnano.fs pll-80-tangnano.fs \
 	pll-54-tangnano1k.fs pll-81-tangnano1k.fs \
 	pll-dyn-tangnano.fs pll-dyn-tangnano1k.fs \
@@ -41,16 +35,12 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	blinky-osc-tec0117-unpacked.v blinky-osc-runber-unpacked.v blinky-osc-tangnano-unpacked.v \
 	blinky-osc-honeycomb-unpacked.v \
 	blinky-osc-tangnano9k-unpacked.v blinky-osc-tangnano1k-unpacked.v blinky-osc-tangnano4k-unpacked.v \
-	blinky-lw-tangnano-unpacked.v blinky-lw-tangnano1k-unpacked.v blinky-lw-tangnano4k-unpacked.v \
-	blinky-lw-tangnano9k-unpacked.v \
-	blinky-lw-honeycomb-unpacked.v blinky-lw-tec0117-unpacked.v blinky-lw-runber-unpacked.v \
-	globals_unpacked \
 	pll-52-tangnano-unpacked.v pll-80-tangnano-unpacked.v \
 	pll-54-tangnano1k-unpacked.v pll-81-tangnano1k-unpacked.v \
 	pll-dyn-tangnano-unpacked.v pll-dyn-tangnano1k-unpacked.v \
 	pll-nanolcd-tangnano-unpacked.v
 	
-clean: globals_clean
+clean: 
 	rm -f *.json *.fs *-unpacked.v
 	
 .PHONY: all clean
