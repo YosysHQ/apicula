@@ -25,8 +25,10 @@ wirenames = { 0: "A0", 1: "B0", 2: "C0", 3: "D0", 4: "A1", 5: "B1", 6: "C1", 7: 
 303: "CIN0", 304: "CIN1", 305: "CIN2", 306: "CIN3", 307: "CIN4", 308: "CIN5", 309: "COUT0", 310: "COUT1", 311: "COUT2", 312: "COUT3", 313: "COUT4", 314: "COUT5"}
 wirenames.update({n: f"LWSPINETL{n - 1001}" for n in range(1001, 1009)})
 wirenames.update({n: f"LWSPINETR{n - 1009}" for n in range(1009, 1017)})
-wirenames.update({n: f"LWSPINEBL{n - 1033}" for n in range(1033, 1041)})
-wirenames.update({n: f"LWSPINEBR{n - 1041}" for n in range(1041, 1049)})
+wirenames.update({n: f"LWSPINEBL{n - 1017}" for n in range(1017, 1025)})
+wirenames.update({n: f"LWSPINEBR{n - 1025}" for n in range(1025, 1033)})
+wirenames.update({n: f"LWSPINEB1L{n - 1033}" for n in range(1033, 1041)})
+wirenames.update({n: f"LWSPINEB1R{n - 1041}" for n in range(1041, 1049)})
 
 wirenumbers = {v: k for k, v in wirenames.items()}
 

@@ -541,10 +541,31 @@ def place(db, tilemap, bels, cst, args):
         for row, col in bits:
             btile[row][col] = 1
 
+# The vertical columns of long wires can receive a signal from either the upper
+# or the lower end of the column.
+# The default source is the top end of the column, but if optimum routing has
+# resulted in the bottom end of the column being used, the top end must be
+# electrically disconnected by setting special fuses.
+def secure_long_wires(db, tilemap, row, col, src, dest):
+    if device in {"GW1N-1"}:
+        # the column runs across the entire height of the chip from the first to the last row
+        check_row = db.rows
+        fuse_row = 0
+        if row == check_row and dest in {'LT02', 'LT13'}:
+            tiledata = db.grid[fuse_row][col - 1]
+            if dest in tiledata.alonenode_6.keys():
+                tile = tilemap[(fuse_row, col - 1)]
+                _, bits = tiledata.alonenode_6[dest]
+                for row, col in bits:
+                    tile[row][col] = 1
+
+
 def route(db, tilemap, pips):
     for row, col, src, dest in pips:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
+        # short-circuit prevention
+        secure_long_wires(db, tilemap, row, col, src, dest)
 
         try:
             if dest in tiledata.clock_pips:
