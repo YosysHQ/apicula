@@ -72,6 +72,9 @@ class Tile:
     # a mapping from dest, source wire to bit coordinates
     pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
+    # fuses to disable the long wire columns. This is the table 'alonenode[6]' in the vendor file
+    # {dst: ({src}, {bits})}
+    alonenode_6: Dict[str, Tuple[Set[str], Set[Coord]]] = field(default_factory=dict)
     # always-connected dest, src aliases
     aliases: Dict[str, str] = field(default_factory=dict)
     # a mapping from bel type to bel
@@ -158,6 +161,17 @@ def fse_pips(fse, ttyp, table=2, wn=wirenames):
             dest = wn.get(destid, str(destid))
             pips.setdefault(dest, {})[src] = fuses
 
+    return pips
+
+def fse_alonenode(fse, ttyp, table = 6):
+    pips = {}
+    if 'alonenode' in fse[ttyp].keys():
+        if table in fse[ttyp]['alonenode']:
+            for destid, *tail in fse[ttyp]['alonenode'][table]:
+                fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(tail[-2:])}
+                srcs = {wirenames.get(srcid, str(srcid)) for srcid in unpad(tail[:-2])}
+                dest = wirenames.get(destid, str(destid))
+                pips[dest] = (srcs, fuses)
     return pips
 
 # make PLL bels
@@ -447,6 +461,7 @@ def from_fse(device, fse):
         tile = Tile(w, h, ttyp)
         tile.pips = fse_pips(fse, ttyp, 2, wirenames)
         tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
+        tile.alonenode_6 = fse_alonenode(fse, ttyp, 6)
         if 5 in fse[ttyp]['shortval']:
             tile.bels = fse_luts(fse, ttyp)
         if 51 in fse[ttyp]['shortval']:
