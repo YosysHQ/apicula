@@ -21,7 +21,7 @@ jobs:
         run: |
           python --version
           pip --version
-          pip install yowasp-yosys yowasp-nextpnr-gowin
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ yowasp-yosys yowasp-nextpnr-gowin
       - name: build examples
         run: |
           cd examples
