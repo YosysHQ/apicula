@@ -267,8 +267,12 @@ def spine_aliases(quads, dests, clks):
 def add_rim(rows, cols, spine_row):
     if 1 in rows:
         rows.add(0)
+        if tiled_fuzzer.device.startswith("GW1N-9"):
+            rows.add(9)
     if max(rows) > spine_row and spine_row != 1:
         rows.update({row for row in range(max(rows) + 1, db.rows)})
+        if tiled_fuzzer.device.startswith("GW1N-9"):
+            rows.add(18)
     if 1 in cols:
         cols.add(0)
     elif db.cols - 2 in cols:
