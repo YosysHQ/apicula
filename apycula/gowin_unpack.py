@@ -89,7 +89,7 @@ def pll_attrs_refine(in_attrs):
         #print(attr, val)
         if attr not in _pll_attrs.keys():
             if attr in ['INSEL', 'FBSEL', 'PWDEN', 'RSTEN', 'CLKOUTDIV3', 'CLKOUTPS']:
-                res.add(f'{attr}={[ name for name, vl in pll_attrvals.items() if vl == val ][0]}')
+                res.add(f'{attr}="{[ name for name, vl in pll_attrvals.items() if vl == val ][0]}"')
             continue
         attr = _pll_attrs[attr]
         if attr in ['CLKOUTP_DLY_STEP', 'CLKOUT_DLY_STEP']:
@@ -178,6 +178,15 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
     for name, bel in tiledata.bels.items():
         if name.startswith("RPLL"):
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
+            attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
+            modes = set()
+            for attrval in attrvals:
+                modes.add(attrval)
+            if modes:
+                bels[f'{name}{idx}'] = modes
+            continue
+        if name == "PLLVR":
+            idx = _pll_cells.setdefault(get_pll_A(db, row, col, 'A'), len(_pll_cells))
             attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
             modes = set()
             for attrval in attrvals:
@@ -500,7 +509,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS|RPLL[AB])(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS|RPLL[AB]|PLLVR)(\w*)")
     if have_iologic(bels):
         bels_items = move_iologic(bels)
     else:
@@ -530,6 +539,15 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         elif typ.startswith("RPLL"):
             name = f"PLL_{idx}"
             pll = mod.primitives.setdefault(name, codegen.Primitive("rPLL", name))
+            for paramval in flags:
+                param, _, val = paramval.partition('=')
+                pll.params[param] = val
+            portmap = db.grid[dbrow][dbcol].bels[bel[:-1]].portmap
+            for port, wname in portmap.items():
+                pll.portmap[port] = f"R{row}C{col}_{wname}"
+        elif typ.startswith("PLLVR"):
+            name = f"PLL_{idx}"
+            pll = mod.primitives.setdefault(name, codegen.Primitive("PLLVR", name))
             for paramval in flags:
                 param, _, val = paramval.partition('=')
                 pll.params[param] = val
@@ -706,7 +724,7 @@ def fix_pll_ports(pll):
                 pll.portmap.pop(f'{portname}{n}')
 
 def fix_plls(db, mod):
-    for pll_name, pll in [pr for pr in mod.primitives.items() if pr[1].typ == 'rPLL']:
+    for pll_name, pll in [pr for pr in mod.primitives.items() if pr[1].typ in {'rPLL', 'PLLVR'}]:
         if 'INSEL' not in pll.params.keys():
             del mod.primitives[pll_name]
             continue

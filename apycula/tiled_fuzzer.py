@@ -1122,7 +1122,7 @@ if __name__ == "__main__":
     # bank modes
     fse_banks(fse, db, corners)
 
-    chipdb.dat_portmap(dat, db)
+    chipdb.dat_portmap(dat, db, device)
     # XXX GW1NR-9 has interesting IOBA pins on the bottom side
     if device == 'GW1N-9' :
         loc = locations[52][0]

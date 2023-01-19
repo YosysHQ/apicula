@@ -177,12 +177,14 @@ def fse_alonenode(fse, ttyp, table = 6):
 # make PLL bels
 def fse_pll(device, fse, ttyp):
     bels = {}
-    # XXX use second grid in order to find PLL ttypes
-    if device in ['GW1N-1',  'GW1NZ-1']:
+    if device in {'GW1N-1',  'GW1NZ-1'}:
         if ttyp == 89:
             bel = bels.setdefault('RPLLB', Bel())
         else:
             bel = bels.setdefault('RPLLA', Bel())
+    elif device in {'GW1NS-4'}:
+        if ttyp in {88, 89}:
+            bel = bels.setdefault('PLLVR', Bel())
     return bels
 
 # add the ALU mode
@@ -368,6 +370,7 @@ _known_logic_tables = {
             13: 'BSRAM',
             14: 'DSP',
             15: 'PLL',
+            59: 'CFG',
             62: 'USB',
         }
 
@@ -395,6 +398,7 @@ _known_tables = {
             53: 'DLLDEL0',
             54: 'DLLDEL1',
             56: 'DLL0',
+            60: 'CFG',
             64: 'USB',
             66: 'EFLASH',
             68: 'ADC',
@@ -439,6 +443,11 @@ _pll_loc = {
  'GW1NZ-1':
    {'TRPLL0CLK0': (0, 17, 'F4'), 'TRPLL0CLK1': (0, 17, 'F5'),
     'TRPLL0CLK2': (0, 17, 'F6'), 'TRPLL0CLK3': (0, 17, 'F7'), },
+ 'GW1NS-4':
+   {'TLPLL0CLK0': (0, 27, 'F4'), 'TLPLL0CLK1': (0, 27, 'F5'),
+    'TLPLL0CLK2': (0, 27, 'F6'), 'TLPLL0CLK3': (0, 27, 'F7'),
+    'TRPLL0CLK0': (0, 36, 'F4'), 'TRPLL0CLK1': (0, 36, 'F5'),
+    'TRPLL0CLK2': (0, 36, 'F6'), 'TRPLL0CLK3': (0, 36, 'F7'), },
 }
 def fse_create_pll_clock_aliases(db, device):
     # we know exactly where the PLL is and therefore know which aliases to create
@@ -447,7 +456,7 @@ def fse_create_pll_clock_aliases(db, device):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
                     # XXX
-                    if device in {'GW1N-1', 'GW1NZ-1'}:
+                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4'}:
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
 
@@ -466,7 +475,7 @@ def from_fse(device, fse):
             tile.bels = fse_luts(fse, ttyp)
         if 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
-        # XXX GW1N(Z)-1 for now
+        # XXX GW1N(Z)-1 and GW1NS-4 for now
         if ttyp in [88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
         tiles[ttyp] = tile
@@ -617,9 +626,9 @@ _pll_inputs = [(5, 'CLKFB'), (6, 'FBDSEL0'), (7, 'FBDSEL1'), (8, 'FBDSEL2'), (9,
                (28, 'DUTYDA0'), (29, 'DUTYDA1'), (30, 'DUTYDA2'), (31, 'DUTYDA3'),
                (32, 'FDLY0'), (33, 'FDLY1'), (34, 'FDLY2'), (35, 'FDLY3')]
 _pll_outputs = [(0, 'CLKOUT'), (1, 'LOCK'), (2, 'CLKOUTP'), (3, 'CLKOUTD'), (4, 'CLKOUTD3')]
-def dat_portmap(dat, dev):
-    for row in dev.grid:
-        for tile in row:
+def dat_portmap(dat, dev, device):
+    for row, row_dat in enumerate(dev.grid):
+        for col, tile in enumerate(row_dat):
             for name, bel in tile.bels.items():
                 if bel.portmap: continue
                 if name.startswith("IOB"):
@@ -661,6 +670,42 @@ def dat_portmap(dat, dev):
                     bel.portmap['RESET_P'] = reset_p
                     odsel5 = wirenames[dat['PllIn'][23]]
                     bel.portmap['ODSEL5'] = odsel5
+                elif name == 'PLLVR':
+                    pll_idx = 0
+                    if col != 27:
+                        pll_idx = 1
+                    for idx, nam in _pll_inputs:
+                        pin_row = dat[f'SpecPll{pll_idx}Ins'][idx * 3 + 0]
+                        wire = wirenames[dat[f'SpecPll{pll_idx}Ins'][idx * 3 + 2]]
+                        if pin_row == 1:
+                            bel.portmap[nam] = wire
+                        else:
+                            # some of the PLLVR inputs are in a special cell
+                            # (9, 37), here we create aliases where the
+                            # destination is the ports of the primitive, but
+                            # you should keep in mind that nextpnr is designed
+                            # so that it will not use such aliases. They have
+                            # to be taken care of separately.
+                            bel.portmap[nam] = f'PLLVR{wire}'
+                            dev.aliases[row, col, f'PLLVR{wire}'] = (9, 37, wire)
+                    for idx, nam in _pll_outputs:
+                        wire = wirenames[dat[f'SpecPll{pll_idx}Outs'][idx * 3 + 2]]
+                        bel.portmap[nam] = wire
+                    bel.portmap['CLKIN'] = wirenames[124];
+                    reset = wirenames[dat[f'SpecPll{pll_idx}Ins'][0 + 2]]
+                    bel.portmap['RESET'] = reset
+                    reset_p = wirenames[dat[f'SpecPll{pll_idx}Ins'][1 * 3 + 2]]
+                    bel.portmap['RESET_P'] = reset_p
+                    odsel5 = wirenames[dat[f'SpecPll{pll_idx}Ins'][23 * 3 + 2]]
+                    bel.portmap['ODSEL5'] = f'PLLVR{odsel5}'
+                    dev.aliases[row, col, f'PLLVR{odsel5}'] = (9, 37, odsel5)
+                    # VREN pin is placed in another cell
+                    if pll_idx == 0:
+                        vren = 'D0'
+                    else:
+                        vren = 'B0'
+                    bel.portmap['VREN'] = f'PLLVRV{vren}'
+                    dev.aliases[row, col, f'PLLVRV{vren}'] = (0, 37, vren)
 
 def dat_aliases(dat, dev):
     for row in dev.grid:
