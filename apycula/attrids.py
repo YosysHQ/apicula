@@ -601,3 +601,21 @@ pll_attrvals = {
         'FCLK':             47,
         'CLKOUT':           48
     }
+# config
+cfg_attrids = {
+        'GSR':              2,
+        'POR':              24, # power on reset
+    }
+
+cfg_attrvals = {
+        'UNKNOWN':          0,
+        'YES':              1,
+        'ACTIVE_LOW':       2,
+        'F0':               3,
+        'F1':               4,
+        'F2':               5,
+        'F3':               6,
+        'USED':             7,
+        'UNUSED':           8,
+        'FALSE':            9
+    }

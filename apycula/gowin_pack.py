@@ -35,7 +35,7 @@ def sanitize_name(name):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|RPLL[AB])(\w*)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|RPLL[AB]|PLLVR)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') :
             continue
@@ -180,12 +180,14 @@ _default_pll_internal_attrs = {
 }
 
 # typ - PLL type (RPLL, etc)
-def set_pll_attrs(db, typ, attrs):
+def set_pll_attrs(db, typ, idx, attrs):
     pll_inattrs = add_pll_default_attrs(attrs)
     pll_attrs = _default_pll_internal_attrs.copy()
 
-    if typ not in ['RPLL']:
+    if typ not in {'RPLL', 'PLLVR'}:
         raise Exception(f"PLL type {typ} is not supported for now")
+    if typ == 'PLLVR':
+        pll_attrs[['PLLVCC0', 'PLLVCC1'][idx]] = 'ENABLE'
 
     # parse attrs
     for attr, val in pll_inattrs.items():
@@ -504,11 +506,27 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits:
                 tile[r][c] = 1
         elif typ.startswith('RPLL'):
-            pll_attrs = set_pll_attrs(db, 'RPLL', parms)
+            pll_attrs = set_pll_attrs(db, 'RPLL', 0,  parms)
             bits = get_shortval_fuses(db, tiledata.ttyp, pll_attrs, 'PLL')
             #print(typ, bits)
             for r, c in bits:
                 tile[r][c] = 1
+        elif typ == 'PLLVR':
+            idx = 0
+            if col != 28:
+                idx = 1
+            pll_attrs = set_pll_attrs(db, 'PLLVR', idx, parms)
+            bits = get_shortval_fuses(db, tiledata.ttyp, pll_attrs, 'PLL')
+            #print(typ, bits)
+            for r, c in bits:
+                tile[r][c] = 1
+            # only for 4C, we know exactly where CFG is
+            cfg_type = 51
+            bits = get_shortval_fuses(db, cfg_type, pll_attrs, 'PLL')
+            cfg_tile = tilemap[(0, 37)]
+            for r, c in bits:
+                cfg_tile[r][c] = 1
+
 
         else:
             print("unknown type", typ)
