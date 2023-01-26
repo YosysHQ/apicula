@@ -9,3 +9,5 @@
 `define PLL_FBDIV_SEL_1 9
 `define PLL_IDIV_SEL_1  2
 
+`define PLL_FBDIV_SEL_LCD 29
+`define PLL_IDIV_SEL_LCD   7

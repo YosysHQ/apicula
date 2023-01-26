@@ -30,19 +30,19 @@ module TOP
 rPLL pll(
 	    .CLKOUT(CLK_SYS),  // 90MHz
 		.CLKIN(clk),
-		.CLKOUTD(CLK_PIX),
+		.CLKOUTD(CLK_PIX), // 9MHz
 		.CLKFB(GND),
 		.FBDSEL({GND,GND,GND,GND,GND,GND}),
 		.IDSEL({GND,GND,GND,GND,GND,GND}),
 		.ODSEL({GND,GND,GND,GND,GND,GND}),
 		.DUTYDA({GND,GND,GND,GND}),
 		.PSDA({GND,GND,GND,GND}),
-		.FDLY({GND,GND,GND,GND}),
+		.FDLY({GND,GND,GND,GND})
 	);
-	defparam pll.DEVICE = "GW1N-1";
-	defparam pll.FCLKIN = "24";
-	defparam pll.FBDIV_SEL = 29;
-	defparam pll.IDIV_SEL =  7;
+	defparam pll.DEVICE = `PLL_DEVICE;
+	defparam pll.FCLKIN = `PLL_FCLKIN;
+	defparam pll.FBDIV_SEL = `PLL_FBDIV_SEL_LCD;
+	defparam pll.IDIV_SEL =  `PLL_IDIV_SEL_LCD;
 	defparam pll.ODIV_SEL =  8;           // 90MHz sys clock
 	defparam pll.CLKFB_SEL="internal";
 	defparam pll.CLKOUTD3_SRC="CLKOUT";
@@ -54,7 +54,6 @@ rPLL pll(
 	defparam pll.CLKOUT_BYPASS="false";
 	defparam pll.CLKOUT_DLY_STEP=0;
 	defparam pll.CLKOUT_FT_DIR=1'b1;
-	defparam pll.DEVICE="GW1N-1";
 	defparam pll.DUTYDA_SEL="1000";
 	defparam pll.DYN_DA_EN="false";
 	defparam pll.DYN_FBDIV_SEL="false";
