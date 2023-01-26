@@ -269,6 +269,8 @@ def add_rim(rows, cols, spine_row):
         rows.add(0)
         if tiled_fuzzer.device.startswith("GW1N-9"):
             rows.add(9)
+        else:
+            rows.add(spine_row - 1)
     if max(rows) > spine_row and spine_row != 1:
         rows.update({row for row in range(max(rows) + 1, db.rows)})
         if tiled_fuzzer.device.startswith("GW1N-9"):

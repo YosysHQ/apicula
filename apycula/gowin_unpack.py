@@ -13,6 +13,7 @@ from apycula.attrids import pll_attrids, pll_attrvals
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
+_device = ""
 _pinout = ""
 _packages = {
         'GW1N-1' : 'LQFP144', 'GW1NZ-1' : 'QFN48', 'GW1N-4' : 'PBGA256', 'GW1N-9C' : 'UBGA332',
@@ -161,7 +162,13 @@ _pll_cells = {}
 # GW1N(Z)-1
 def get_pll_A(db, row, col, typ):
     if typ == 'B':
-        col -= 1
+        if _device in {"GW1N-9C"}:
+            if col > 28:
+                col = db.cols - 1
+            else:
+                col = 0
+        else:
+            col -= 1
     return row, col, 'A'
 
 # noiostd --- this is the case when the function is called
@@ -178,17 +185,18 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
     for name, bel in tiledata.bels.items():
         if name.startswith("RPLL"):
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
-            attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
-            modes = set()
-            for attrval in attrvals:
-                modes.add(attrval)
+            modes = { f'DEVICE="{_device}"' }
+            if 'PLL' in db.shortval[tiledata.ttyp].keys():
+                attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
+                for attrval in attrvals:
+                    modes.add(attrval)
             if modes:
                 bels[f'{name}{idx}'] = modes
             continue
         if name == "PLLVR":
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, 'A'), len(_pll_cells))
             attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
-            modes = set()
+            modes = { f'DEVICE="{_device}"' }
             for attrval in attrvals:
                 modes.add(attrval)
             if modes:
@@ -743,24 +751,31 @@ def main():
 
     args = parser.parse_args()
 
-    device = args.device
+    global _device
+    _device = args.device
     # For tool integration it is allowed to pass a full part number
-    m = re.match("GW1N(S?)[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
+    m = re.match("GW1N(S?)[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", _device)
     if m:
         mods = m.group(1)
         luts = m.group(3)
-        device = f"GW1N{mods}-{luts}"
+        _device = f"GW1N{mods}-{luts}"
 
-    with importlib.resources.open_binary("apycula", f"{device}.pickle") as f:
+    with importlib.resources.open_binary("apycula", f"{_device}.pickle") as f:
         db = pickle.load(f)
 
     global _pinout
-    _pinout = db.pinout[device][_packages[device]]
+    _pinout = db.pinout[_device][_packages[_device]]
 
     bitmap = read_bitstream(args.bitstream)[0]
     bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
     cst = codegen.Constraints()
+
+    # XXX this PLLs have empty main cell
+    if _device in {'GW1N-9C'}:
+        bm_pll = chipdb.tile_bitmap(db, bitmap, empty = True)
+        bm[(9, 0)] = bm_pll[(9, 0)]
+        bm[(9, 46)] = bm_pll[(9, 46)]
 
     for (drow, dcol, dname), (srow, scol, sname) in db.aliases.items():
         src = f"R{srow+1}C{scol+1}_{sname}"

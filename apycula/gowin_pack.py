@@ -33,9 +33,23 @@ def sanitize_name(name):
         return retname
     return f"\{retname} "
 
+def extra_pll_bels(cell, row, col, num, cellname):
+    # rPLL can occupy several cells, add them depending on the chip
+    offx = 1;
+    if device == 'GW1N-9C':
+        if int(col) > 28:
+            offx = -1
+        for off in [1, 2, 3]:
+            yield ('RPLLB', int(row), int(col) + offx * off, num,
+                cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}')
+    elif device in {'GW1N-1', 'GW1NZ-1'}:
+        for off in [1]:
+            yield ('RPLLB', int(row), int(col) + offx * off, num,
+                cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}')
+
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|RPLL[AB]|PLLVR)(\w*)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|rPLL|PLLVR)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') :
             continue
@@ -51,7 +65,11 @@ def get_bels(data):
         if 'DIFF' in cell['attributes'].keys():
             later.append((cellname, cell, row, col, num))
             continue
-        yield (cell['type'], int(row), int(col), num,
+        cell_type = cell['type']
+        if cell_type == 'rPLL':
+            cell_type = 'RPLLA'
+            yield from extra_pll_bels(cell, row, col, num, cellname)
+        yield (cell_type, int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname))
 
     # diff iobs
@@ -507,7 +525,9 @@ def place(db, tilemap, bels, cst, args):
                 tile[r][c] = 1
         elif typ.startswith('RPLL'):
             pll_attrs = set_pll_attrs(db, 'RPLL', 0,  parms)
-            bits = get_shortval_fuses(db, tiledata.ttyp, pll_attrs, 'PLL')
+            bits = set()
+            if 'PLL' in db.shortval[tiledata.ttyp].keys():
+                bits = get_shortval_fuses(db, tiledata.ttyp, pll_attrs, 'PLL')
             #print(typ, bits)
             for r, c in bits:
                 tile[r][c] = 1
