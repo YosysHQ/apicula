@@ -17,5 +17,5 @@ CLOCK_LOC "led[3]" BUFS;
 CLOCK_LOC "led[4]" BUFS;
 CLOCK_LOC "led[5]" BUFS;
 
-// true LVDS pins
-IO_LOC "tlvds_p" 25,26;
+// emulated LVDS pins
+IO_LOC "elvds_p" 25,26;

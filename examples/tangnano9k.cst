@@ -34,5 +34,5 @@ IO_LOC "LCD_XR"   32;
 IO_LOC "LCD_XL"   39;
 
 
-// true LVDS pins
-IO_LOC "tlvds_p" 25,26;
+// emulated LVDS pins
+IO_LOC "elvds_p" 25,26;
