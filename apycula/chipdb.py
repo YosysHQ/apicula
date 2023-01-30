@@ -185,7 +185,7 @@ def fse_pll(device, fse, ttyp):
     elif device in {'GW1NS-4'}:
         if ttyp in {88, 89}:
             bel = bels.setdefault('PLLVR', Bel())
-    elif device in {'GW1N-9C'}:
+    elif device in {'GW1N-9C', 'GW1N-9'}:
         if ttyp in {86, 87}:
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp in {74, 75, 76, 77, 78, 79}:
@@ -458,6 +458,11 @@ _pll_loc = {
     'TLPLL0CLK2': (9, 2, 'F5'), 'TLPLL0CLK3': (9, 2, 'F6'),
     'TRPLL0CLK0': (9, 44, 'F4'), 'TRPLL0CLK1': (9, 44, 'F7'),
     'TRPLL0CLK2': (9, 44, 'F5'), 'TRPLL0CLK3': (9, 44, 'F6'), },
+ 'GW1N-9':
+   {'TLPLL0CLK0': (9, 2, 'F4'), 'TLPLL0CLK1': (9, 2, 'F7'),
+    'TLPLL0CLK2': (9, 2, 'F5'), 'TLPLL0CLK3': (9, 2, 'F6'),
+    'TRPLL0CLK0': (9, 44, 'F4'), 'TRPLL0CLK1': (9, 44, 'F7'),
+    'TRPLL0CLK2': (9, 44, 'F5'), 'TRPLL0CLK3': (9, 44, 'F6'), },
 }
 
 def fse_create_pll_clock_aliases(db, device):
@@ -467,7 +472,7 @@ def fse_create_pll_clock_aliases(db, device):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
                     # XXX
-                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4', 'GW1N-9C'}:
+                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4', 'GW1N-9C', 'GW1N-9'}:
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
 
@@ -671,7 +676,7 @@ def dat_portmap(dat, dev, device):
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.
                     offx = 1
-                    if device in {'GW1N-9C'}:
+                    if device in {'GW1N-9C', 'GW1N-9'}:
                         # two mirrored PLLs
                         if col > dat['center'][1] - 1:
                             offx = -1
