@@ -401,9 +401,9 @@ def place(db, tilemap, bels, cst, args):
             if not cellname.startswith('\$PACKER'):
                 cst.cells[cellname] = (row, col, int(num) // 2, _sides[int(num) % 2])
         elif typ[:3] == "IOB":
-            # skip B for true lvds
+            # skip B for lvds
             if 'DIFF' in attrs.keys():
-                if attrs['DIFF_TYPE'] == 'TLVDS_OBUF' and attrs['DIFF'] == 'N':
+                if attrs['DIFF_TYPE'].endswith('LVDS_OBUF') and attrs['DIFF'] == 'N':
                     continue
             edge = 'T'
             idx = col;
@@ -456,7 +456,10 @@ def place(db, tilemap, bels, cst, args):
             # XXX default io standard may be board-dependent!
             if not iostd:
                 if 'DIFF' in attrs.keys():
-                    iostd = "LVCMOS25"
+                    if attrs['DIFF_TYPE'] == 'ELVDS_OBUF':
+                        iostd = "LVCMOS33"
+                    else:
+                        iostd = "LVCMOS25"
                 else:
                     iostd = "LVCMOS18"
             if not pinless_io:

@@ -437,7 +437,7 @@ def fse_banks(fse, db, corners):
             # Differential pins coexist with regular pins so that LVDS modes are not
             # some exclusive combination of bits in a corner tile, but an addition to the main
             # bank mode. Not that it matters now when all modes are flags:)
-            # TLVDS
+            # LVDS
             mode_loc = get_longval(fse, ttyp, 37, recode_key({_lvds25_key_0}), set(), [bank_idx])
             if mode_loc == {}:
                 continue
@@ -617,23 +617,26 @@ def fse_diff_iob(fse, db, pin_locations, diff_cap_info):
             side, num = _tbrlre.match(tile).groups()
             row, col = tbrl2rc(fse, side, num)
             print(f"[{row}][{col}]", pin_index, is_diff, is_true_lvds, is_positive)
-            if is_true_lvds:
+            if is_diff or is_true_lvds:
                 # XXX IOSTD & DRIVE
                 # Use only the IOBA bel
+                is_emu_lvds = is_diff and not is_true_lvds
+                IO_TYPE = 'LVCMOS33' if is_emu_lvds else 'LVCMOS25'
+                IO_MODE = 'ELVDS_OBUF' if is_emu_lvds else 'TLVDS_OBUF'
                 try:
                     bel_b = db.grid[row][col].bels["IOBB"]
-                    bel_b_flags = bel_b.iob_flags['LVCMOS25']['OBUF'].flags
+                    bel_b_flags = bel_b.iob_flags[IO_TYPE]['OBUF'].flags
                     bel = db.grid[row][col].bels["IOBA"]
-                    bel_flags = bel.iob_flags['LVCMOS25']['OBUF'].flags
+                    bel_flags = bel.iob_flags[IO_TYPE]['OBUF'].flags
                     slew_rate_loc = bel_b_flags['SLEW_RATE'].options['FAST'].copy();
                     slew_rate_loc.update(bel_flags['SLEW_RATE'].options['FAST']);
                     pull_mode_loc = bel_b_flags['PULL_MODE'].options['NONE'].copy();
                     pull_mode_loc.update(bel_flags['PULL_MODE'].options['NONE']);
                 except KeyError:
-                    raise Exception(f"TLVDS base bels must have SLEW_RATE and PULL_MODE defined")
+                    raise Exception(f"LVDS base bels must have SLEW_RATE and PULL_MODE defined")
 
-                b_iostd = bel.iob_flags.setdefault('LVCMOS25', dict())
-                b_mode = b_iostd.setdefault('TLVDS_OBUF', chipdb.IOBMode())
+                b_iostd = bel.iob_flags.setdefault(IO_TYPE, dict())
+                b_mode = b_iostd.setdefault(IO_MODE, chipdb.IOBMode())
                 # collect encode bits
                 merge_input_loc = get_longval(fse, ttyp, _pin_mode_longval['A'], recode_key(_merge_input_key))
                 lvds_0_loc = get_longval(fse, ttyp, _pin_mode_longval['A'],
@@ -656,12 +659,10 @@ def fse_diff_iob(fse, db, pin_locations, diff_cap_info):
                 b_mode.encode_bits.update(lvds_1_loc)
                 b_mode.encode_bits.update(lvds_2_loc)
                 bits = b_mode.encode_bits.copy()
-                b_iostd = bel.iob_flags.setdefault('LVCMOS33', dict())
-                b_mode = b_iostd.setdefault('TLVDS_OBUF', chipdb.IOBMode())
-                b_mode.encode_bits.update(bits)
-            else:
-                # emulated LVDS
-                pass
+                if not is_emu_lvds:
+                    b_iostd = bel.iob_flags.setdefault('LVCMOS33', dict())
+                    b_mode = b_iostd.setdefault(IO_MODE, chipdb.IOBMode())
+                    b_mode.encode_bits.update(bits)
 
 # make IOLogic bels
 _iologic_table = {'A' : 21, 'B' : 22}

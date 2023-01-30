@@ -238,6 +238,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                     if bits == flag_bits:
                         bels.setdefault(name, set()).add(f"{flag}={opt}")
             # skip B bel
+            # FIXME: Do we also skip bels for ELVDS ?
             if mode.startswith('TLVDS'):
                 skip_bels.update({name[:-1] + 'B'})
         else:
@@ -322,6 +323,7 @@ iobmap = {
     "OBUF": {"wires": ["I"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OE"], "inouts": ["IO"]},
     "TLVDS_OBUF": {"wires": ["I"], "outputs": ["O", "OB"]},
+    "ELVDS_OBUF": {"wires": ["I"], "outputs": ["O", "OB"]},
 }
 
 # OE -> OEN
@@ -685,6 +687,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             pos = chipdb.loc2pin_name(db, dbrow, dbcol)
             bank = chipdb.loc2bank(db, dbrow, dbcol)
             cst.ports[name] = f"{pos}{idx}"
+            # FIXME: just also check if ELVDS ?
             if kind[0:5] == 'TLVDS':
                 cst.ports[name] = f"{pos}{idx},{pos}{chr(ord(idx) + 1)}"
             iostd = _banks.get(bank)
