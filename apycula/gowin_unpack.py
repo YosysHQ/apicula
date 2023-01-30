@@ -162,7 +162,7 @@ _pll_cells = {}
 # GW1N(Z)-1
 def get_pll_A(db, row, col, typ):
     if typ == 'B':
-        if _device in {"GW1N-9C"}:
+        if _device in {"GW1N-9C", "GW1N-9"}:
             if col > 28:
                 col = db.cols - 1
             else:
@@ -473,9 +473,9 @@ def tbrl2rc(db, loc):
     return (row, col, bel_idx)
 
 def find_pll_in_pin(db, pll):
-    locs = [loc for (loc, cfgs) in _pinout.values() if 'RPLL_T_IN' in cfgs]
+    locs = [loc for (loc, cfgs) in _pinout.values() if 'RPLL_T_IN' in cfgs or 'LRPLL_T_IN' in cfgs]
     if not locs:
-        raise Exception(f"No RPLL_T_IN pin in the current package")
+        raise Exception(f"No [RL]PLL_T_IN pin in the current package")
     row, col, bel_idx = tbrl2rc(db, locs[0])
     wire = db.grid[row][col].bels[f'IOB{bel_idx}'].portmap['O']
     pll.portmap['CLKIN'] = f'R{row + 1}C{col + 1}_{wire}'
@@ -772,7 +772,7 @@ def main():
     cst = codegen.Constraints()
 
     # XXX this PLLs have empty main cell
-    if _device in {'GW1N-9C'}:
+    if _device in {'GW1N-9C', 'GW1N-9'}:
         bm_pll = chipdb.tile_bitmap(db, bitmap, empty = True)
         bm[(9, 0)] = bm_pll[(9, 0)]
         bm[(9, 46)] = bm_pll[(9, 46)]
