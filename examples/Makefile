@@ -19,7 +19,7 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	pll-52-tangnano.fs pll-80-tangnano.fs \
 	pll-54-tangnano1k.fs pll-81-tangnano1k.fs \
 	pll-dyn-tangnano.fs pll-dyn-tangnano1k.fs \
-	pll-tangnano4k.fs pll2-tangnano9k.fs pll2-tec0117.fs \
+	pll-tangnano4k.fs pll2-tangnano9k.fs pll2-tec0117.fs pll2-runber.fs \
 	pll-nanolcd-tangnano.fs pll-nanolcd-tangnano9k.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
@@ -39,7 +39,7 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	pll-52-tangnano-unpacked.v pll-80-tangnano-unpacked.v \
 	pll-54-tangnano1k-unpacked.v pll-81-tangnano1k-unpacked.v \
 	pll-dyn-tangnano-unpacked.v pll-dyn-tangnano1k-unpacked.v \
-	pll2-tangnano9k-unpacked.v pll2-tec0117-unpacked.v \
+	pll2-tangnano9k-unpacked.v pll2-tec0117-unpacked.v pll2-runber-unpacked.v \
 	pll-nanolcd-tangnano-unpacked.v pll-nanolcd-tangnano9k-unpacked.v pll-tangnano4k-unpacked.v
 	
 clean: 
@@ -124,6 +124,9 @@ pll2-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh pll2.v pll/rpll.v
 
 pll2-tec0117-synth.json: pll/GW1N-9-dyn.vh pll2.v pll/rpll.v
 	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
+
+pll2-runber-synth.json: pll/GW1N-4-dyn.vh pll2.v pll/rpll.v
+	$(YOSYS) -p "read_verilog $^; synth_gowin -noalu -json $@"
 
 %-tec0117-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"

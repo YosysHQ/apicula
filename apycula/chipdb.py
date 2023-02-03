@@ -177,7 +177,7 @@ def fse_alonenode(fse, ttyp, table = 6):
 # make PLL bels
 def fse_pll(device, fse, ttyp):
     bels = {}
-    if device in {'GW1N-1',  'GW1NZ-1'}:
+    if device in {'GW1N-1', 'GW1NZ-1'}:
         if ttyp == 88:
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp == 89:
@@ -185,6 +185,11 @@ def fse_pll(device, fse, ttyp):
     elif device in {'GW1NS-4'}:
         if ttyp in {88, 89}:
             bel = bels.setdefault('PLLVR', Bel())
+    elif device == 'GW1N-4':
+        if ttyp in {74, 77}:
+            bel = bels.setdefault('RPLLA', Bel())
+        elif ttyp in {75, 78}:
+            bel = bels.setdefault('RPLLB', Bel())
     elif device in {'GW1N-9C', 'GW1N-9'}:
         if ttyp in {86, 87}:
             bel = bels.setdefault('RPLLA', Bel())
@@ -448,6 +453,11 @@ _pll_loc = {
  'GW1NZ-1':
    {'TRPLL0CLK0': (0, 17, 'F4'), 'TRPLL0CLK1': (0, 17, 'F5'),
     'TRPLL0CLK2': (0, 17, 'F6'), 'TRPLL0CLK3': (0, 17, 'F7'), },
+ 'GW1N-4':
+   {'TLPLL0CLK0': (0, 9, 'F4'), 'TLPLL0CLK1': (0, 9, 'F7'),
+    'TLPLL0CLK2': (0, 9, 'F6'), 'TLPLL0CLK3': (0, 9, 'F5'),
+    'TRPLL0CLK0': (0, 27, 'F4'), 'TRPLL0CLK1': (0, 27, 'F7'),
+    'TRPLL0CLK2': (0, 27, 'F6'), 'TRPLL0CLK3': (0, 27, 'F5'), },
  'GW1NS-4':
    {'TLPLL0CLK0': (0, 27, 'F4'), 'TLPLL0CLK1': (0, 27, 'F7'),
     'TLPLL0CLK2': (0, 27, 'F6'), 'TLPLL0CLK3': (0, 27, 'F5'),
@@ -472,7 +482,7 @@ def fse_create_pll_clock_aliases(db, device):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
                     # XXX
-                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4', 'GW1N-9C', 'GW1N-9'}:
+                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9'}:
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
 
@@ -491,7 +501,6 @@ def from_fse(device, fse):
             tile.bels = fse_luts(fse, ttyp)
         if 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
-        # XXX GW1N(Z)-1 and GW1NS-4 for now
         if ttyp in [74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
         tiles[ttyp] = tile
