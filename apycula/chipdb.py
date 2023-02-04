@@ -185,11 +185,14 @@ def fse_pll(device, fse, ttyp):
     elif device in {'GW1NS-4'}:
         if ttyp in {88, 89}:
             bel = bels.setdefault('PLLVR', Bel())
+<<<<<<< HEAD
     elif device == 'GW1N-4':
         if ttyp in {74, 77}:
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp in {75, 78}:
             bel = bels.setdefault('RPLLB', Bel())
+=======
+>>>>>>> master
     elif device in {'GW1N-9C', 'GW1N-9'}:
         if ttyp in {86, 87}:
             bel = bels.setdefault('RPLLA', Bel())
@@ -482,7 +485,11 @@ def fse_create_pll_clock_aliases(db, device):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
                     # XXX
+<<<<<<< HEAD
                     if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9'}:
+=======
+                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4', 'GW1N-9C', 'GW1N-9'}:
+>>>>>>> master
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
 
