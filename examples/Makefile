@@ -19,7 +19,7 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	pll-52-tangnano.fs pll-80-tangnano.fs \
 	pll-54-tangnano1k.fs pll-81-tangnano1k.fs \
 	pll-dyn-tangnano.fs pll-dyn-tangnano1k.fs \
-	pll-tangnano4k.fs pll2-tangnano9k.fs pll2-tec0117.fs pll2-runber.fs \
+	pll-tangnano4k.fs pll2-tangnano9k.fs pll2-tec0117.fs pll2-runber.fs pll-dyn-honeycomb.fs \
 	pll-nanolcd-tangnano.fs pll-nanolcd-tangnano9k.fs
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
@@ -39,7 +39,7 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	pll-52-tangnano-unpacked.v pll-80-tangnano-unpacked.v \
 	pll-54-tangnano1k-unpacked.v pll-81-tangnano1k-unpacked.v \
 	pll-dyn-tangnano-unpacked.v pll-dyn-tangnano1k-unpacked.v \
-	pll2-tangnano9k-unpacked.v pll2-tec0117-unpacked.v pll2-runber-unpacked.v \
+	pll2-tangnano9k-unpacked.v pll2-tec0117-unpacked.v pll2-runber-unpacked.v pll-dyn-honeycomb-unpacked.v \
 	pll-nanolcd-tangnano-unpacked.v pll-nanolcd-tangnano9k-unpacked.v pll-tangnano4k-unpacked.v
 	
 clean: 
@@ -96,7 +96,7 @@ pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
 	gowin_pack -d GW1NS-2 -o $@ $<
 
 %-honeycomb.json: %-honeycomb-synth.json honeycomb.cst
-	$(NEXTPNR) --json $< --write $@ --device GW1NS-UX2CQN48C5/I4 --cst honeycomb.cst
+	$(NEXTPNR) -v --debug --json $< --write $@ --device GW1NS-UX2CQN48C5/I4 --cst honeycomb.cst
 
 attosoc-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
@@ -154,6 +154,9 @@ pll-tangnano4k-synth.json: pll-tangnano4k.v pll/pllvr.v
 
 %-tangnano9k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
+
+pll-%-honeycomb-synth.json: pll/GW1NS-2C-%.vh pll.v pll/rpll.v
+	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCF -p "read_verilog $^; synth_gowin -json $@"
 
 %-honeycomb-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCF -p "read_verilog $^; synth_gowin -json $@"
