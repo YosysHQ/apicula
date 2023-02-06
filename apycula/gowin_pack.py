@@ -13,7 +13,7 @@ from apycula import codegen
 from apycula import chipdb
 from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses
 from apycula import attrids
-from apycula.attrids import pll_attrids, pll_attrvals
+from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals
 from apycula import bslib
 from apycula import attrids
 from apycula.wirenames import wirenames, wirenumbers
@@ -392,11 +392,30 @@ def place(db, tilemap, bels, cst, args):
                         for brow, bcol in fuses:
                             tile[brow][bcol] = 1
 
-            if int(num) < 6:
+            if int(num) < 6 and int(parms['FF_USED'], 2):
                 mode = str(parms['FF_TYPE']).strip('E')
-                dffbits = tiledata.bels[f'DFF{num}'].modes[mode]
+                dff_attrs = set()
+                add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['REGMODE'], cls_attrvals['FF'])
+                # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
+                if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC'}:
+                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids[f'REG{int(num) % 2}_REGSET'], cls_attrvals['RESET'])
+                else:
+                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids[f'REG{int(num) % 2}_REGSET'], cls_attrvals['SET'])
+                # are set/reset/clear/preset port needed?
+                if mode not in {'DFF', 'DFFN'}:
+                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['LSRONMUX'], cls_attrvals['LSRMUX'])
+                # invert clock?
+                if mode in {'DFFN', 'DFFNR', 'DFFNC', 'DFFNP', 'DFFNS'}:
+                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['CLKMUX_CLK'], cls_attrvals['INV'])
+
+                # async option?
+                if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
+                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['SRMODE'], cls_attrvals['ASYNC'])
+
+                dffbits = get_shortval_fuses(db, tiledata.ttyp, dff_attrs, f'CLS{int(num) // 2}')
                 for brow, bcol in dffbits:
                     tile[brow][bcol] = 1
+
             # XXX skip power
             if not cellname.startswith('\$PACKER'):
                 cst.cells[cellname] = (row, col, int(num) // 2, _sides[int(num) % 2])

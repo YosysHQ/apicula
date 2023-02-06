@@ -157,67 +157,6 @@ Fuzzer = namedtuple('Fuzzer', [
     'iostd',    # io standard
     ])
 
-dffmap = {
-    "DFF": None,
-    "DFFN": None,
-    "DFFS": "SET",
-    "DFFR": "RESET",
-    "DFFP": "PRESET",
-    "DFFC": "CLEAR",
-    "DFFNS": "SET",
-    "DFFNR": "RESET",
-    "DFFNP": "PRESET",
-    "DFFNC": "CLEAR",
-}
-def dff(locations):
-    for ttyp in range(12, 20): # for each tile type
-        mod = codegen.Module()
-        cst = codegen.Constraints()
-        try:
-            # get all tiles of this type
-            # iter causes the loop to not repeat the same locs per cls
-            locs = iter(locations[ttyp])
-        except KeyError:
-            continue
-
-        for cls in range(3): # for each cls
-            for side in ["A", "B"]:
-                for typ, port in dffmap.items(): # for each bel type
-                    try:
-                        loc = next(locs) # get the next unused tile
-                    except StopIteration:
-                        yield Fuzzer(ttyp, mod, cst, {}, '')
-                        locs = iter(locations[ttyp])
-                        loc = next(locs)
-                        mod = codegen.Module()
-                        cst = codegen.Constraints()
-
-                    lutname = make_name("DUMMY", "LUT4")
-                    lut = codegen.Primitive("LUT4", lutname)
-                    lut.params["INIT"] = "16'hffff"
-                    lut.portmap['F'] = lutname+"_F"
-                    lut.portmap['I0'] = lutname+"_I0"
-                    lut.portmap['I1'] = lutname+"_I1"
-                    lut.portmap['I2'] = lutname+"_I2"
-                    lut.portmap['I3'] = lutname+"_I3"
-
-                    mod.wires.update(lut.portmap.values())
-                    mod.primitives[lutname] = lut
-                    name = make_name("DFF", typ)
-                    dff = codegen.Primitive(typ, name)
-                    dff.portmap['CLK'] = name+"_CLK"
-                    dff.portmap['D'] = lutname+"_F"
-                    dff.portmap['Q'] = name+"_Q"
-                    if port:
-                        dff.portmap[port] = name+"_"+port
-                    mod.wires.update(dff.portmap.values())
-                    mod.primitives[name] = dff
-
-                    row = loc[0]+1
-                    col = loc[1]+1
-                    cst.cells[lutname] = (row, col, cls, side)
-                    cst.cells[name] = (row, col, cls, side)
-        yield Fuzzer(ttyp, mod, cst, {}, '')
 
 # illegal pin-attr combination for device
 _illegal_combo = { ("IOR6A", "SLEW_RATE") : "GW1NS-2",
@@ -953,7 +892,6 @@ if __name__ == "__main__":
     # Add fuzzers here
     fuzzers = chain(
         iob(pin_locations),
-        dff(locations),
         dualmode(fse['header']['grid'][61][0][0]),
     )
 
@@ -1035,16 +973,7 @@ if __name__ == "__main__":
             if bel_type == "DUMMY":
                 continue
             elif bel_type == "DFF":
-                i = ord(lut)-ord("A")
-                bel = db.grid[row][col].bels.setdefault(f"DFF{cls*2+i}", chipdb.Bel())
-                bel.modes[cell_type] = loc
-                bel.portmap = {
-                    # D inputs hardwired to LUT F
-                    'Q': f"Q{cls*2+i}",
-                    'CLK': f"CLK{cls}",
-                    'LSR': f"LSR{cls}", # set/reset
-                    'CE': f"CE{cls}", # clock enable
-                }
+                continue
             elif bel_type == "IOB":
                 bel = db.grid[row][col].bels.setdefault(f"IOB{pin}", chipdb.Bel())
                 bel.lvcmos121518_bits = get_12_15_18_bits(fse, typ, pin)
@@ -1134,7 +1063,6 @@ if __name__ == "__main__":
 
     # must be after diff2flags in order to make clean mask for OPEN_DRAIN
     fse_open_drain(fse, db, pin_locations)
-    chipdb.dff_clean(db)
 
     db.grid[0][0].bels['CFG'].flags['UNK0'] = {(3, 1)}
     db.grid[0][0].bels['CFG'].flags['UNK1'] = {(3, 2)}
