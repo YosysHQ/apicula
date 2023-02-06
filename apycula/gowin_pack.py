@@ -324,6 +324,23 @@ def set_pll_attrs(db, typ, idx, attrs):
     #print(fin_attrs)
     return fin_attrs
 
+def set_osc_attrs(db, typ, params):
+    osc_attrs = map()
+    for param, val in params.items():
+        if attr == 'FREQ_DIV':
+            fdiv = int(val, 2) - 2
+            if fdiv % 2 == 1:
+                raise Exception(f"Divisor of {typ} must be even")
+            osc_attrs['MCLKCIB'] = fdiv
+            continue
+
+    fin_attrs = set()
+    for attr, val in osc_attrs.items():
+        if isinstance(val, str):
+            val = osc_attrvals[val]
+        add_attr_val(db, 'OSC', fin_attrs, osc_attrids[attr], val)
+    return fin_attrs 
+
 iostd_alias = {
         "HSTL18_II"  : "HSTL18_I",
         "SSTL18_I"   : "HSTL18_I",
@@ -359,15 +376,13 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits2zero:
                 tile[r][c] = 0
 
-        elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH'}:
-            divisor = int(parms['FREQ_DIV'], 2)
-            if divisor % 2 == 1:
-                raise Exception(f"Divisor of {typ} must be even")
-            divisor //= 2
-            if divisor in tiledata.bels[typ].modes:
-                bits = tiledata.bels[typ].modes[divisor]
-                for r, c in bits:
-                    tile[r][c] = 1
+        elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH', 'OSCW', 'OSCO'}:
+            osc_attrs = set_osc_attrs(db, typ, parms)
+            bits = set()
+            if typ in db.shortval[tiledata.ttyp].keys():
+                bits = get_shortval_fuses(db, tiledata.ttyp, osc_attrs, 'OSC')
+            for r, c in bits:
+                tile[r][c] = 1
         elif typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
 

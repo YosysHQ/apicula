@@ -324,15 +324,21 @@ def fse_osc(device, fse, ttyp):
         bel = osc.setdefault(f"OSCF", Bel())
     elif device == 'GW1N-1':
         bel = osc.setdefault(f"OSCH", Bel())
+    elif device == 'GW2AN-18':
+        bel = osc.setdefault(f"OSCW", Bel())
+    elif device == 'GW1N-2':
+        bel = osc.setdefault(f"OSCO", Bel())
     else:
         raise Exception(f"Oscillator not yet supported on {device}")
 
     bel.portmap = {}
 
-    if device in {'GW1N-1', 'GW1N-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NS-4'}:
+    if device in {'GW1N-1', 'GW1N-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NS-4', 'GW2AN-18'}:
         bel.portmap['OSCOUT'] = "Q4"
     elif device == 'GW1NZ-1':
         bel.portmap['OSCOUT'] = "OF3"
+    elif device == 'GW1N-2':
+        bel.portmap['OSCOUT'] = "Q7"
 
     if device == 'GW1NS-2':
         bel.portmap['OSCEN'] = "B3"
@@ -340,18 +346,8 @@ def fse_osc(device, fse, ttyp):
         bel.portmap['OSCEN'] = "D6"
     elif device == 'GW1NZ-1':
         bel.portmap['OSCEN'] = "A6"
-
-    data = fse[ttyp]['shortval'][51]
-
-    for i in range(64):
-        bel.modes.setdefault(i+1, set())
-
-    for key0, key1, *fuses in data:
-        if key0 <= 64 and key1 == 0:
-            mode = bel.modes[key0]
-            for f in (f for f in fuses if f != -1):
-                coord = fuse.fuse_lookup(fse, ttyp, f)
-                mode.update({coord})
+    elif device == 'GW1N-2':
+        bel.portmap['OSCEN'] = "B4"
 
     return osc
 
@@ -376,7 +372,8 @@ _known_logic_tables = {
             14: 'DSP',
             15: 'PLL',
             59: 'CFG',
-            62: 'USB',
+            62: 'OSC',
+            63: 'USB',
         }
 
 _known_tables = {
@@ -400,6 +397,7 @@ _known_tables = {
             45: 'IOBH',
             46: 'IOBI',
             47: 'IOBJ',
+            51: 'OSC',
             53: 'DLLDEL0',
             54: 'DLLDEL1',
             56: 'DLL0',

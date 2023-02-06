@@ -610,7 +610,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             ram16.portmap['DO'] = [f"R{row}C{col}_F{x}" for x in range(4)]
             mod.wires.update(chain.from_iterable([x if isinstance(x, list) else [x] for x in ram16.portmap.values()]))
             mod.primitives[name] = ram16
-        elif typ in {"OSC", "OSCZ", "OSCF", "OSCH"}:
+        elif typ in {"OSC", "OSCZ", "OSCF", "OSCH", "OSCW", "OSCO"}:
             name = f"R{row}C{col}_{typ}"
             osc = codegen.Primitive(typ, name)
             divisor, = flags
