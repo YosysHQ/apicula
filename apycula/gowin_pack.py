@@ -13,7 +13,7 @@ from apycula import codegen
 from apycula import chipdb
 from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses
 from apycula import attrids
-from apycula.attrids import pll_attrids, pll_attrvals
+from apycula.attrids import pll_attrids, pll_attrvals, osc_attrids, osc_attrvals
 from apycula import bslib
 from apycula import attrids
 from apycula.wirenames import wirenames, wirenumbers
@@ -332,6 +332,11 @@ def set_osc_attrs(db, typ, params):
             if fdiv % 2 == 1:
                 raise Exception(f"Divisor of {typ} must be even")
             osc_attrs['MCLKCIB'] = fdiv
+            continue
+        if attr == 'REGULATOR_EN':
+            reg = int(val, 2)
+            if reg == 1:
+                osc_attrs['OSCREG'] = "ENABLE"
             continue
 
     fin_attrs = set()
