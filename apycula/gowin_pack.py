@@ -325,15 +325,15 @@ def set_pll_attrs(db, typ, idx, attrs):
     return fin_attrs
 
 def set_osc_attrs(db, typ, params):
-    osc_attrs = map()
+    osc_attrs = dict()
     for param, val in params.items():
-        if attr == 'FREQ_DIV':
+        if param == 'FREQ_DIV':
             fdiv = int(val, 2) - 2
             if fdiv % 2 == 1:
                 raise Exception(f"Divisor of {typ} must be even")
             osc_attrs['MCLKCIB'] = fdiv
             continue
-        if attr == 'REGULATOR_EN':
+        if param == 'REGULATOR_EN':
             reg = int(val, 2)
             if reg == 1:
                 osc_attrs['OSCREG'] = "ENABLE"
