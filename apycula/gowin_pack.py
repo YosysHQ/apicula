@@ -399,7 +399,7 @@ def place(db, tilemap, bels, cst, args):
                 # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
                 if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC'}:
                     add_attr_val(db, 'SLICE', dff_attrs, cls_attrids[f'REG{int(num) % 2}_REGSET'], cls_attrvals['RESET'])
-                else:
+                elif mode not in {'DFF', 'DFFN'}:
                     add_attr_val(db, 'SLICE', dff_attrs, cls_attrids[f'REG{int(num) % 2}_REGSET'], cls_attrvals['SET'])
                 # are set/reset/clear/preset port needed?
                 if mode not in {'DFF', 'DFFN'}:
@@ -413,6 +413,7 @@ def place(db, tilemap, bels, cst, args):
                     add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['SRMODE'], cls_attrvals['ASYNC'])
 
                 dffbits = get_shortval_fuses(db, tiledata.ttyp, dff_attrs, f'CLS{int(num) // 2}')
+                #print(f'({row - 1}, {col - 1}) mode:{mode}, num{num}, attrs:{dff_attrs}, bits:{dffbits}')
                 for brow, bcol in dffbits:
                     tile[brow][bcol] = 1
 

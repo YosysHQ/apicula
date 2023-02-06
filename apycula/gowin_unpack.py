@@ -114,16 +114,16 @@ def pll_attrs_refine(in_attrs):
 
 # {(REGSET, LSRONMUX, CLKMUX_CLK, SRMODE) : dff_type}
 _dff_types = {
-   ('RESET', '',       'SIG', '') :      'DFF',
-   ('RESET', '',       'INV', '') :      'DFFN',
-   ('RESET', 'LSRMUX', 'SIG', 'ASYNC') : 'DFFC',
-   ('RESET', 'LSRMUX', 'INV', 'ASYNC') : 'DFFNC',
-   ('RESET', 'LSRMUX', 'SIG', '') :      'DFFR',
-   ('RESET', 'LSRMUX', 'INV', '') :      'DFFNR',
-   ('SET',   'LSRMUX', 'SIG', 'ASYNC') : 'DFFP',
-   ('SET',   'LSRMUX', 'INV', 'ASYNC') : 'DFFNP',
-   ('SET',   'LSRMUX', 'SIG', '') :      'DFFS',
-   ('SET',   'LSRMUX', 'INV', '') :      'DFFNS',
+   ('RESET', 'LSRMUX', 'SIG', '') :      'DFF',
+   ('RESET', 'LSRMUX', 'INV', '') :      'DFFN',
+   ('RESET', '',       'SIG', 'ASYNC') : 'DFFC',
+   ('RESET', '',       'INV', 'ASYNC') : 'DFFNC',
+   ('RESET', '',       'SIG', '') :      'DFFR',
+   ('RESET', '',       'INV', '') :      'DFFNR',
+   ('SET',   '',       'SIG', 'ASYNC') : 'DFFP',
+   ('SET',   '',       'INV', 'ASYNC') : 'DFFNP',
+   ('SET',   '',       'SIG', '') :      'DFFS',
+   ('SET',   '',       'INV', '') :      'DFFNS',
 }
 
 def get_dff_type(dff_idx, in_attrs):
@@ -149,7 +149,7 @@ def get_dff_type(dff_idx, in_attrs):
     if f'REG{dff_idx % 2}_REGSET' in in_attrs.keys():
         attrs['REGSET'] = get_attrval_name(in_attrs[f'REG{dff_idx % 2}_REGSET'])
     else:
-        attrs['REGSET'] = 'SET'
+        attrs['REGSET'] = 'RESET'
 
     return _dff_types.get((attrs['REGSET'], attrs['LSRONMUX'], attrs['CLKMUX_CLK'], attrs['SRMODE']))
 
@@ -176,7 +176,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
         else:
             set_mask.update(bits)
     set_bits =  {(row, col) for row, col in set_mask if tile[row][col] == 1}
-    zero_bits = {(row, col) for row, col in zero_mask if tile[row][col] == 0}
+    zero_bits = {(row, col) for row, col in zero_mask if tile[row][col] == 1}
     # find candidates from fuse table
     attrvals = set()
     for raw_bits, test_fn in [(zero_bits, is_neg_key), (set_bits, is_pos_key)]:
@@ -248,7 +248,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             idx = int(name[3])
             attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], cls_attrids)
             # skip ALU and unsupported modes
-            if attrvals.get('MODE') == cls_attrvals['ALU'] or attrvals.get('REGMODE') == cls_attrvals['LATCH'] or attrvals.get('MODE') == cls_attrvals['SSRAM']:
+            if attrvals.get('REGMODE') == cls_attrvals['LATCH'] or attrvals.get('MODE') == cls_attrvals['SSRAM']:
                 continue
             dff_type = get_dff_type(idx, attrvals)
             if dff_type:
