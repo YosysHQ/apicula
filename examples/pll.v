@@ -1,5 +1,8 @@
 `default_nettype none
-module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
+`ifndef KEY
+	`define KEY key
+`endif
+module top(input wire clk, input wire KEY, output wire [`LEDS_NR-1:0]led);
 	wire VCC;
 	wire GND;
 	assign VCC = 1'b1;
@@ -44,7 +47,7 @@ module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
     // dynamic
 `ifdef PLL_DYN
     always @ (posedge clk) begin
-        if (key) begin
+        if (KEY) begin
             fdiv <= ~`PLL_FBDIV_SEL;
             idiv <= ~`PLL_IDIV_SEL;
         end else begin
@@ -54,7 +57,7 @@ module top(input wire clk, input wire key, output wire [`LEDS_NR-1:0]led);
     end
 `else
 	always @ (posedge clk) begin
-		reset = ~key;
+		reset = ~KEY;
 	end
 `endif
 endmodule

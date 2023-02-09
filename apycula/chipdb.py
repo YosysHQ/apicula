@@ -182,6 +182,9 @@ def fse_pll(device, fse, ttyp):
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp == 89:
             bel = bels.setdefault('RPLLB', Bel())
+    elif device in {'GW1NS-2'}:
+        if ttyp in {87}:
+            bel = bels.setdefault('RPLLA', Bel())
     elif device in {'GW1NS-4'}:
         if ttyp in {88, 89}:
             bel = bels.setdefault('PLLVR', Bel())
@@ -464,6 +467,9 @@ _pll_loc = {
  'GW1NZ-1':
    {'TRPLL0CLK0': (0, 17, 'F4'), 'TRPLL0CLK1': (0, 17, 'F5'),
     'TRPLL0CLK2': (0, 17, 'F6'), 'TRPLL0CLK3': (0, 17, 'F7'), },
+ 'GW1NS-2':
+   {'TRPLL0CLK0': (5, 19, 'F4'), 'TRPLL0CLK1': (5, 19, 'F7'),
+    'TRPLL0CLK2': (5, 19, 'F5'), 'TRPLL0CLK3': (5, 19, 'F6'), },
  'GW1N-4':
    {'TLPLL0CLK0': (0, 9, 'F4'), 'TLPLL0CLK1': (0, 9, 'F7'),
     'TLPLL0CLK2': (0, 9, 'F6'), 'TLPLL0CLK3': (0, 9, 'F5'),
@@ -493,7 +499,7 @@ def fse_create_pll_clock_aliases(db, device):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
                     # XXX
-                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9'}:
+                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9'}:
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
 
@@ -703,7 +709,14 @@ def dat_portmap(dat, dev, device):
                     for idx, nam in _pll_inputs:
                         wire = wirenames[dat['PllIn'][idx]]
                         off = dat['PllInDlt'][idx] * offx
-                        if off == 0:
+                        if device in {'GW1NS-2'}:
+                            # NS-2 is a strange thingy
+                            if nam in {'RESET', 'RESET_P', 'IDSEL1', 'IDSEL2', 'ODSEL5'}:
+                                bel.portmap[nam] = f'rPLL{nam}{wire}'
+                                dev.aliases[row, col, f'rPLL{nam}{wire}'] = (9, col, wire)
+                            else:
+                                bel.portmap[nam] = wire
+                        elif off == 0:
                             bel.portmap[nam] = wire
                         else:
                             # not our cell, make an alias
@@ -712,7 +725,7 @@ def dat_portmap(dat, dev, device):
                     for idx, nam in _pll_outputs:
                         wire = wirenames[dat['PllOut'][idx]]
                         off = dat['PllOutDlt'][idx] * offx
-                        if off == 0:
+                        if off == 0 or device in {'GW1NS-2'}:
                             bel.portmap[nam] = wire
                         else:
                             # not our cell, make an alias
