@@ -134,7 +134,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
         else:
             set_mask.update(bits)
     set_bits =  {(row, col) for row, col in set_mask if tile[row][col] == 1}
-    zero_bits = {(row, col) for row, col in set_mask if tile[row][col] == 0}
+    zero_bits = {(row, col) for row, col in zero_mask if tile[row][col] == 1}
     # find candidates from fuse table
     attrvals = set()
     for raw_bits, test_fn in [(zero_bits, is_neg_key), (set_bits, is_pos_key)]:
