@@ -9,7 +9,7 @@ import argparse
 import importlib.resources
 from apycula import codegen
 from apycula import chipdb
-from apycula.attrids import pll_attrids, pll_attrvals
+from apycula.attrids import pll_attrids, pll_attrvals, osc_attrids, osc_attrvals
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
@@ -111,6 +111,25 @@ def pll_attrs_refine(in_attrs):
         res.add(f'{attr}={new_val}')
     return res
 
+_osc_attrs = {
+        'MCLKCIB': 'FREQ_DIV'
+}
+
+def osc_attrs_refine(in_attrs):
+    res = set()
+    for attr, val in in_attrs.items():
+        if attr in _osc_attrs.keys():
+            attr = _osc_attrs[attr]
+        if attr == 'FREQ_DIV':
+            new_val = val + 2
+        else:
+            attrvals = [ name for name, vl in osc_attrvals.items() if vl == val ]
+            if attrvals[0] in osc_attrvals.keys():
+                new_val = attrvals[0]
+            new_val = f'"{new_val}"'
+        res.add(f'{attr}={new_val}')
+    return res
+
 # parse attributes and values use 'logicinfo' table
 # returns {attr: value}
 # attribute names are decoded with the attribute table, but the values are returned in raw form
@@ -201,6 +220,14 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 modes.add(attrval)
             if modes:
                 bels[f'{name}{idx}'] = modes
+            continue
+        if name.startswith("OSC"):
+            attrvals = osc_attrs_refine(parse_attrvals(tile, db.logicinfo['OSC'], db.shortval[tiledata.ttyp]['OSC'], osc_attrids))
+            modes = set()
+            for attrval in attrvals:
+                modes.add(attrval)
+            if modes:
+                bels[name] = modes
             continue
         if name.startswith("IOB"):
             #print(name)
@@ -517,7 +544,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS|RPLL[AB]|PLLVR)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR)(\w*)")
     if have_iologic(bels):
         bels_items = move_iologic(bels)
     else:
@@ -613,8 +640,10 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         elif typ in {"OSC", "OSCZ", "OSCF", "OSCH", "OSCW", "OSCO"}:
             name = f"R{row}C{col}_{typ}"
             osc = codegen.Primitive(typ, name)
-            divisor, = flags
-            osc.params["FREQ_DIV"] = f"{divisor*2}"
+            for paramval in flags:
+                print(paramval)
+                param, _, val = paramval.partition('=')
+                osc.params[param] = val
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
             for port, wname in portmap.items():
                 osc.portmap[port] = f"R{row}C{col}_{wname}"

@@ -49,7 +49,7 @@ def extra_pll_bels(cell, row, col, num, cellname):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|rPLL|PLLVR)(\w*)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') :
             continue
@@ -331,7 +331,11 @@ def set_osc_attrs(db, typ, params):
             fdiv = int(val, 2) - 2
             if fdiv % 2 == 1:
                 raise Exception(f"Divisor of {typ} must be even")
+            if fdiv < 0:
+                raise Exception(f"Divisor of {typ} mus be at least 2")
             osc_attrs['MCLKCIB'] = fdiv
+            osc_attrs['MCLKCIB_EN'] = "ENABLE"
+            osc_attrs['NORMAL'] = "ENABLE"
             continue
         if param == 'REGULATOR_EN':
             reg = int(val, 2)
@@ -344,7 +348,7 @@ def set_osc_attrs(db, typ, params):
         if isinstance(val, str):
             val = osc_attrvals[val]
         add_attr_val(db, 'OSC', fin_attrs, osc_attrids[attr], val)
-    return fin_attrs 
+    return fin_attrs
 
 iostd_alias = {
         "HSTL18_II"  : "HSTL18_I",
@@ -384,8 +388,9 @@ def place(db, tilemap, bels, cst, args):
         elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH', 'OSCW', 'OSCO'}:
             osc_attrs = set_osc_attrs(db, typ, parms)
             bits = set()
-            if typ in db.shortval[tiledata.ttyp].keys():
+            if 'OSC' in db.shortval[tiledata.ttyp].keys():
                 bits = get_shortval_fuses(db, tiledata.ttyp, osc_attrs, 'OSC')
+            print(bits)
             for r, c in bits:
                 tile[r][c] = 1
         elif typ == "SLICE":
