@@ -328,7 +328,7 @@ def set_osc_attrs(db, typ, params):
     osc_attrs = dict()
     for param, val in params.items():
         if param == 'FREQ_DIV':
-            fdiv = int(val, 2) - 2
+            fdiv = int(val, 2) % 128
             if fdiv % 2 == 1:
                 raise Exception(f"Divisor of {typ} must be even")
             if fdiv < 0:

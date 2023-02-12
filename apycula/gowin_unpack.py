@@ -121,7 +121,10 @@ def osc_attrs_refine(in_attrs):
         if attr in _osc_attrs.keys():
             attr = _osc_attrs[attr]
         if attr == 'FREQ_DIV':
-            new_val = val + 2
+            if val == 0:
+                new_val = 128
+            else:
+                new_val = val
         else:
             attrvals = [ name for name, vl in osc_attrvals.items() if vl == val ]
             if attrvals[0] in osc_attrvals.keys():
@@ -641,7 +644,6 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             name = f"R{row}C{col}_{typ}"
             osc = codegen.Primitive(typ, name)
             for paramval in flags:
-                print(paramval)
                 param, _, val = paramval.partition('=')
                 osc.params[param] = val
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
