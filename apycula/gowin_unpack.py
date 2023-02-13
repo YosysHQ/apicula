@@ -112,25 +112,26 @@ def pll_attrs_refine(in_attrs):
     return res
 
 _osc_attrs = {
-        'MCLKCIB': 'FREQ_DIV'
+        'MCLKCIB': 'FREQ_DIV',
+        'OSCREG': 'REGULATOR_EN'
 }
 
 def osc_attrs_refine(in_attrs):
     res = set()
     for attr, val in in_attrs.items():
-        if attr in _osc_attrs.keys():
-            attr = _osc_attrs[attr]
+        if attr not in _osc_attrs.keys():
+            continue
+        attr = _osc_attrs[attr]
         if attr == 'FREQ_DIV':
-            if val == 0:
-                new_val = 128
-            else:
-                new_val = val
+            new_val = val
         else:
             attrvals = [ name for name, vl in osc_attrvals.items() if vl == val ]
             if attrvals[0] in osc_attrvals.keys():
                 new_val = attrvals[0]
             new_val = f'"{new_val}"'
         res.add(f'{attr}={new_val}')
+    if 'MCLKCIB' not in in_attrs.keys() and 'MCLKCIB_EN' in in_attrs.keys():
+        res.add('FREQ_DIV=128')
     return res
 
 # parse attributes and values use 'logicinfo' table

@@ -390,7 +390,6 @@ def place(db, tilemap, bels, cst, args):
             bits = set()
             if 'OSC' in db.shortval[tiledata.ttyp].keys():
                 bits = get_shortval_fuses(db, tiledata.ttyp, osc_attrs, 'OSC')
-            print(bits)
             for r, c in bits:
                 tile[r][c] = 1
         elif typ == "SLICE":
