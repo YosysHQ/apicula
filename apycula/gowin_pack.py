@@ -407,6 +407,8 @@ def place(db, tilemap, bels, cst, args):
                 # invert clock?
                 if mode in {'DFFN', 'DFFNR', 'DFFNC', 'DFFNP', 'DFFNS'}:
                     add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['CLKMUX_CLK'], cls_attrvals['INV'])
+                else:
+                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['CLKMUX_CLK'], cls_attrvals['SIG'])
 
                 # async option?
                 if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
