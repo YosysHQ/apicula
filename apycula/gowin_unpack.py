@@ -9,7 +9,7 @@ import argparse
 import importlib.resources
 from apycula import codegen
 from apycula import chipdb
-from apycula.attrids import pll_attrids, pll_attrvals
+from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
@@ -111,6 +111,48 @@ def pll_attrs_refine(in_attrs):
         res.add(f'{attr}={new_val}')
     return res
 
+
+# {(REGSET, LSRONMUX, CLKMUX_CLK, SRMODE) : dff_type}
+_dff_types = {
+   ('RESET', 'LSRMUX', 'SIG', '') :      'DFF',
+   ('RESET', 'LSRMUX', 'INV', '') :      'DFFN',
+   ('RESET', '',       'SIG', 'ASYNC') : 'DFFC',
+   ('RESET', '',       'INV', 'ASYNC') : 'DFFNC',
+   ('RESET', '',       'SIG', '') :      'DFFR',
+   ('RESET', '',       'INV', '') :      'DFFNR',
+   ('SET',   '',       'SIG', 'ASYNC') : 'DFFP',
+   ('SET',   '',       'INV', 'ASYNC') : 'DFFNP',
+   ('SET',   '',       'SIG', '') :      'DFFS',
+   ('SET',   '',       'INV', '') :      'DFFNS',
+}
+
+def get_dff_type(dff_idx, in_attrs):
+    def get_attrval_name(val):
+        for nam, vl in cls_attrvals.items():
+            if vl == val:
+                return nam
+        return None
+
+    attrs = {}
+    if 'LSRONMUX' in in_attrs.keys():
+        attrs['LSRONMUX'] = get_attrval_name(in_attrs['LSRONMUX'])
+    else:
+        attrs['LSRONMUX'] = ''
+    if 'CLKMUX_CLK' in in_attrs.keys():
+        attrs['CLKMUX_CLK'] = get_attrval_name(in_attrs['CLKMUX_CLK'])
+    else:
+        attrs['CLKMUX_CLK'] = 'SIG'
+    if 'SRMODE' in in_attrs.keys():
+        attrs['SRMODE'] = get_attrval_name(in_attrs['SRMODE'])
+    else:
+        attrs['SRMODE'] = ''
+    if f'REG{dff_idx % 2}_REGSET' in in_attrs.keys():
+        attrs['REGSET'] = get_attrval_name(in_attrs[f'REG{dff_idx % 2}_REGSET'])
+    else:
+        attrs['REGSET'] = 'RESET'
+
+    return _dff_types.get((attrs['REGSET'], attrs['LSRONMUX'], attrs['CLKMUX_CLK'], attrs['SRMODE']))
+
 # parse attributes and values use 'logicinfo' table
 # returns {attr: value}
 # attribute names are decoded with the attribute table, but the values are returned in raw form
@@ -201,6 +243,16 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 modes.add(attrval)
             if modes:
                 bels[f'{name}{idx}'] = modes
+            continue
+        if name.startswith("DFF"):
+            idx = int(name[3])
+            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], cls_attrids)
+            # skip ALU and unsupported modes
+            if attrvals.get('REGMODE') == cls_attrvals['LATCH'] or attrvals.get('MODE') == cls_attrvals['SSRAM']:
+                continue
+            dff_type = get_dff_type(idx, attrvals)
+            if dff_type:
+                bels[f'{name}'] = {dff_type}
             continue
         if name.startswith("IOB"):
             #print(name)

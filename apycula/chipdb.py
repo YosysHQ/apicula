@@ -209,7 +209,7 @@ def add_alu_mode(base_mode, modes, lut, new_alu_mode, new_mode_bits):
         if bit == '0':
             alu_mode.update(lut.flags[15 - i])
 
-# also make ALUs and shadow RAM
+# also make DFFs, ALUs and shadow RAM
 def fse_luts(fse, ttyp):
     data = fse[ttyp]['shortval'][5]
 
@@ -237,6 +237,17 @@ def fse_luts(fse, ttyp):
         except KeyError:
             continue
         for i in range(2):
+            # DFF
+            bel = luts.setdefault(f"DFF{cls * 2 + i}", Bel())
+            bel.portmap = {
+                # D inputs hardwired to LUT F
+                'Q'  : f"Q{cls * 2 + i}",
+                'CLK': f"CLK{cls}",
+                'LSR': f"LSR{cls}", # set/reset
+                'CE' : f"CE{cls}", # clock enable
+            }
+
+            # ALU
             alu_idx = cls * 2 + i
             bel = luts.setdefault(f"ALU{alu_idx}", Bel())
             mode = set()
@@ -818,27 +829,6 @@ def shared2flag(dev):
                             if mode_cb:
                                 belb.flags[mode+"C"] = mode_cb
                                 bits -= mode_cb
-
-def dff_clean(dev):
-    """ Clean DFF mode bits: fuzzer captures a bit of the neighboring trigger."""
-    seen_bels = []
-    for idx, row in enumerate(dev.grid):
-        for jdx, td in enumerate(row):
-            for name, bel in td.bels.items():
-                if name[0:3] == "DFF":
-                    if bel in seen_bels:
-                        continue
-                    seen_bels.append(bel)
-                    # find extra bit
-                    extra_bits = None
-                    for bits in bel.modes.values():
-                        if extra_bits != None:
-                            extra_bits &= bits
-                        else:
-                            extra_bits = bits.copy()
-                    # remove it
-                    for mode, bits in bel.modes.items():
-                        bits -= extra_bits
 
 def get_route_bits(db, row, col):
     """ All routing bits for the cell """
