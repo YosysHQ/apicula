@@ -9,7 +9,7 @@ import argparse
 import importlib.resources
 from apycula import codegen
 from apycula import chipdb
-from apycula.attrids import pll_attrids, pll_attrvals, osc_attrids, osc_attrvals
+from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals, osc_attrids, osc_attrvals
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
@@ -134,6 +134,47 @@ def osc_attrs_refine(in_attrs):
         res.add('FREQ_DIV=128')
     return res
 
+# {(REGSET, LSRONMUX, CLKMUX_CLK, SRMODE) : dff_type}
+_dff_types = {
+   ('RESET', 'LSRMUX', 'SIG', '') :      'DFF',
+   ('RESET', 'LSRMUX', 'INV', '') :      'DFFN',
+   ('RESET', '',       'SIG', 'ASYNC') : 'DFFC',
+   ('RESET', '',       'INV', 'ASYNC') : 'DFFNC',
+   ('RESET', '',       'SIG', '') :      'DFFR',
+   ('RESET', '',       'INV', '') :      'DFFNR',
+   ('SET',   '',       'SIG', 'ASYNC') : 'DFFP',
+   ('SET',   '',       'INV', 'ASYNC') : 'DFFNP',
+   ('SET',   '',       'SIG', '') :      'DFFS',
+   ('SET',   '',       'INV', '') :      'DFFNS',
+}
+
+def get_dff_type(dff_idx, in_attrs):
+    def get_attrval_name(val):
+        for nam, vl in cls_attrvals.items():
+            if vl == val:
+                return nam
+        return None
+
+    attrs = {}
+    if 'LSRONMUX' in in_attrs.keys():
+        attrs['LSRONMUX'] = get_attrval_name(in_attrs['LSRONMUX'])
+    else:
+        attrs['LSRONMUX'] = ''
+    if 'CLKMUX_CLK' in in_attrs.keys():
+        attrs['CLKMUX_CLK'] = get_attrval_name(in_attrs['CLKMUX_CLK'])
+    else:
+        attrs['CLKMUX_CLK'] = 'SIG'
+    if 'SRMODE' in in_attrs.keys():
+        attrs['SRMODE'] = get_attrval_name(in_attrs['SRMODE'])
+    else:
+        attrs['SRMODE'] = ''
+    if f'REG{dff_idx % 2}_REGSET' in in_attrs.keys():
+        attrs['REGSET'] = get_attrval_name(in_attrs[f'REG{dff_idx % 2}_REGSET'])
+    else:
+        attrs['REGSET'] = 'RESET'
+
+    return _dff_types.get((attrs['REGSET'], attrs['LSRONMUX'], attrs['CLKMUX_CLK'], attrs['SRMODE']))
+
 # parse attributes and values use 'logicinfo' table
 # returns {attr: value}
 # attribute names are decoded with the attribute table, but the values are returned in raw form
@@ -157,7 +198,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
         else:
             set_mask.update(bits)
     set_bits =  {(row, col) for row, col in set_mask if tile[row][col] == 1}
-    zero_bits = {(row, col) for row, col in set_mask if tile[row][col] == 0}
+    zero_bits = {(row, col) for row, col in zero_mask if tile[row][col] == 1}
     # find candidates from fuse table
     attrvals = set()
     for raw_bits, test_fn in [(zero_bits, is_neg_key), (set_bits, is_pos_key)]:
@@ -185,7 +226,7 @@ _pll_cells = {}
 # GW1N(Z)-1
 def get_pll_A(db, row, col, typ):
     if typ == 'B':
-        if _device in {"GW1N-9C"}:
+        if _device in {"GW1N-9C", "GW1N-9"}:
             if col > 28:
                 col = db.cols - 1
             else:
@@ -232,6 +273,16 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 modes.add(attrval)
             if modes:
                 bels[name] = modes
+            continue
+        if name.startswith("DFF"):
+            idx = int(name[3])
+            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], cls_attrids)
+            # skip ALU and unsupported modes
+            if attrvals.get('REGMODE') == cls_attrvals['LATCH'] or attrvals.get('MODE') == cls_attrvals['SSRAM']:
+                continue
+            dff_type = get_dff_type(idx, attrvals)
+            if dff_type:
+                bels[f'{name}'] = {dff_type}
             continue
         if name.startswith("IOB"):
             #print(name)
@@ -504,9 +555,9 @@ def tbrl2rc(db, loc):
     return (row, col, bel_idx)
 
 def find_pll_in_pin(db, pll):
-    locs = [loc for (loc, cfgs) in _pinout.values() if 'RPLL_T_IN' in cfgs]
+    locs = [loc for (loc, cfgs) in _pinout.values() if 'RPLL_T_IN' in cfgs or 'LRPLL_T_IN' in cfgs]
     if not locs:
-        raise Exception(f"No RPLL_T_IN pin in the current package")
+        raise Exception(f"No [RL]PLL_T_IN pin in the current package")
     row, col, bel_idx = tbrl2rc(db, locs[0])
     wire = db.grid[row][col].bels[f'IOB{bel_idx}'].portmap['O']
     pll.portmap['CLKIN'] = f'R{row + 1}C{col + 1}_{wire}'
@@ -804,7 +855,7 @@ def main():
     cst = codegen.Constraints()
 
     # XXX this PLLs have empty main cell
-    if _device in {'GW1N-9C'}:
+    if _device in {'GW1N-9C', 'GW1N-9'}:
         bm_pll = chipdb.tile_bitmap(db, bitmap, empty = True)
         bm[(9, 0)] = bm_pll[(9, 0)]
         bm[(9, 46)] = bm_pll[(9, 46)]

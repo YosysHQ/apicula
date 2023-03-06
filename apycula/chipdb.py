@@ -177,15 +177,23 @@ def fse_alonenode(fse, ttyp, table = 6):
 # make PLL bels
 def fse_pll(device, fse, ttyp):
     bels = {}
-    if device in {'GW1N-1',  'GW1NZ-1'}:
+    if device in {'GW1N-1', 'GW1NZ-1'}:
         if ttyp == 88:
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp == 89:
             bel = bels.setdefault('RPLLB', Bel())
+    elif device in {'GW1NS-2'}:
+        if ttyp in {87}:
+            bel = bels.setdefault('RPLLA', Bel())
     elif device in {'GW1NS-4'}:
         if ttyp in {88, 89}:
             bel = bels.setdefault('PLLVR', Bel())
-    elif device in {'GW1N-9C'}:
+    elif device == 'GW1N-4':
+        if ttyp in {74, 77}:
+            bel = bels.setdefault('RPLLA', Bel())
+        elif ttyp in {75, 78}:
+            bel = bels.setdefault('RPLLB', Bel())
+    elif device in {'GW1N-9C', 'GW1N-9'}:
         if ttyp in {86, 87}:
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp in {74, 75, 76, 77, 78, 79}:
@@ -201,7 +209,7 @@ def add_alu_mode(base_mode, modes, lut, new_alu_mode, new_mode_bits):
         if bit == '0':
             alu_mode.update(lut.flags[15 - i])
 
-# also make ALUs and shadow RAM
+# also make DFFs, ALUs and shadow RAM
 def fse_luts(fse, ttyp):
     data = fse[ttyp]['shortval'][5]
 
@@ -229,6 +237,17 @@ def fse_luts(fse, ttyp):
         except KeyError:
             continue
         for i in range(2):
+            # DFF
+            bel = luts.setdefault(f"DFF{cls * 2 + i}", Bel())
+            bel.portmap = {
+                # D inputs hardwired to LUT F
+                'Q'  : f"Q{cls * 2 + i}",
+                'CLK': f"CLK{cls}",
+                'LSR': f"LSR{cls}", # set/reset
+                'CE' : f"CE{cls}", # clock enable
+            }
+
+            # ALU
             alu_idx = cls * 2 + i
             bel = luts.setdefault(f"ALU{alu_idx}", Bel())
             mode = set()
@@ -446,12 +465,25 @@ _pll_loc = {
  'GW1NZ-1':
    {'TRPLL0CLK0': (0, 17, 'F4'), 'TRPLL0CLK1': (0, 17, 'F5'),
     'TRPLL0CLK2': (0, 17, 'F6'), 'TRPLL0CLK3': (0, 17, 'F7'), },
+ 'GW1NS-2':
+   {'TRPLL0CLK0': (5, 19, 'F4'), 'TRPLL0CLK1': (5, 19, 'F7'),
+    'TRPLL0CLK2': (5, 19, 'F5'), 'TRPLL0CLK3': (5, 19, 'F6'), },
+ 'GW1N-4':
+   {'TLPLL0CLK0': (0, 9, 'F4'), 'TLPLL0CLK1': (0, 9, 'F7'),
+    'TLPLL0CLK2': (0, 9, 'F6'), 'TLPLL0CLK3': (0, 9, 'F5'),
+    'TRPLL0CLK0': (0, 27, 'F4'), 'TRPLL0CLK1': (0, 27, 'F7'),
+    'TRPLL0CLK2': (0, 27, 'F6'), 'TRPLL0CLK3': (0, 27, 'F5'), },
  'GW1NS-4':
    {'TLPLL0CLK0': (0, 27, 'F4'), 'TLPLL0CLK1': (0, 27, 'F7'),
     'TLPLL0CLK2': (0, 27, 'F6'), 'TLPLL0CLK3': (0, 27, 'F5'),
     'TRPLL0CLK0': (0, 36, 'F4'), 'TRPLL0CLK1': (0, 36, 'F7'),
     'TRPLL0CLK2': (0, 36, 'F6'), 'TRPLL0CLK3': (0, 36, 'F5'), },
  'GW1N-9C':
+   {'TLPLL0CLK0': (9, 2, 'F4'), 'TLPLL0CLK1': (9, 2, 'F7'),
+    'TLPLL0CLK2': (9, 2, 'F5'), 'TLPLL0CLK3': (9, 2, 'F6'),
+    'TRPLL0CLK0': (9, 44, 'F4'), 'TRPLL0CLK1': (9, 44, 'F7'),
+    'TRPLL0CLK2': (9, 44, 'F5'), 'TRPLL0CLK3': (9, 44, 'F6'), },
+ 'GW1N-9':
    {'TLPLL0CLK0': (9, 2, 'F4'), 'TLPLL0CLK1': (9, 2, 'F7'),
     'TLPLL0CLK2': (9, 2, 'F5'), 'TLPLL0CLK3': (9, 2, 'F6'),
     'TRPLL0CLK0': (9, 44, 'F4'), 'TRPLL0CLK1': (9, 44, 'F7'),
@@ -465,7 +497,7 @@ def fse_create_pll_clock_aliases(db, device):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
                     # XXX
-                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-4', 'GW1N-9C'}:
+                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9'}:
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
 
@@ -484,7 +516,6 @@ def from_fse(device, fse):
             tile.bels = fse_luts(fse, ttyp)
         if 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
-        # XXX GW1N(Z)-1 and GW1NS-4 for now
         if ttyp in [74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
         tiles[ttyp] = tile
@@ -669,14 +700,21 @@ def dat_portmap(dat, dev, device):
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.
                     offx = 1
-                    if device in {'GW1N-9C'}:
+                    if device in {'GW1N-9C', 'GW1N-9'}:
                         # two mirrored PLLs
                         if col > dat['center'][1] - 1:
                             offx = -1
                     for idx, nam in _pll_inputs:
                         wire = wirenames[dat['PllIn'][idx]]
                         off = dat['PllInDlt'][idx] * offx
-                        if off == 0:
+                        if device in {'GW1NS-2'}:
+                            # NS-2 is a strange thingy
+                            if nam in {'RESET', 'RESET_P', 'IDSEL1', 'IDSEL2', 'ODSEL5'}:
+                                bel.portmap[nam] = f'rPLL{nam}{wire}'
+                                dev.aliases[row, col, f'rPLL{nam}{wire}'] = (9, col, wire)
+                            else:
+                                bel.portmap[nam] = wire
+                        elif off == 0:
                             bel.portmap[nam] = wire
                         else:
                             # not our cell, make an alias
@@ -685,7 +723,7 @@ def dat_portmap(dat, dev, device):
                     for idx, nam in _pll_outputs:
                         wire = wirenames[dat['PllOut'][idx]]
                         off = dat['PllOutDlt'][idx] * offx
-                        if off == 0:
+                        if off == 0 or device in {'GW1NS-2'}:
                             bel.portmap[nam] = wire
                         else:
                             # not our cell, make an alias
@@ -789,27 +827,6 @@ def shared2flag(dev):
                             if mode_cb:
                                 belb.flags[mode+"C"] = mode_cb
                                 bits -= mode_cb
-
-def dff_clean(dev):
-    """ Clean DFF mode bits: fuzzer captures a bit of the neighboring trigger."""
-    seen_bels = []
-    for idx, row in enumerate(dev.grid):
-        for jdx, td in enumerate(row):
-            for name, bel in td.bels.items():
-                if name[0:3] == "DFF":
-                    if bel in seen_bels:
-                        continue
-                    seen_bels.append(bel)
-                    # find extra bit
-                    extra_bits = None
-                    for bits in bel.modes.values():
-                        if extra_bits != None:
-                            extra_bits &= bits
-                        else:
-                            extra_bits = bits.copy()
-                    # remove it
-                    for mode, bits in bel.modes.items():
-                        bits -= extra_bits
 
 def get_route_bits(db, row, col):
     """ All routing bits for the cell """
