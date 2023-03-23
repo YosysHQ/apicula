@@ -1,0 +1,17 @@
+//Part Number: GW1NR-LV9QN88PC6/I5
+
+IO_LOC "clk_i" 52;
+
+IO_LOC "q_o[0]" 13;
+IO_LOC "q_o[1]" 14;
+IO_LOC "q_o[2]" 15;
+IO_LOC "q_o[3]" 16;
+IO_LOC "q_o[4]" 25;
+IO_LOC "q_o[5]" 25;
+IO_LOC "q_o[6]" 25;
+IO_LOC "q_o[7]" 25;
+
+// pclk_o - low frequency, fclk_o - high frequency
+IO_LOC "pclk_o" 10;
+IO_LOC "fclk_o" 11;
+

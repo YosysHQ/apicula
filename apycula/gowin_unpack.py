@@ -9,7 +9,7 @@ import argparse
 import importlib.resources
 from apycula import codegen
 from apycula import chipdb
-from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals
+from apycula import attrids
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
 
@@ -90,7 +90,7 @@ def pll_attrs_refine(in_attrs):
         #print(attr, val)
         if attr not in _pll_attrs.keys():
             if attr in ['INSEL', 'FBSEL', 'PWDEN', 'RSTEN', 'CLKOUTDIV3', 'CLKOUTPS']:
-                res.add(f'{attr}="{[ name for name, vl in pll_attrvals.items() if vl == val ][0]}"')
+                res.add(f'{attr}="{[ name for name, vl in attrids.pll_attrvals.items() if vl == val ][0]}"')
             continue
         attr = _pll_attrs[attr]
         if attr in ['CLKOUTP_DLY_STEP', 'CLKOUT_DLY_STEP']:
@@ -102,7 +102,7 @@ def pll_attrs_refine(in_attrs):
         elif attr in ['DYN_SDIV_SEL', 'ODIV_SEL']:
             new_val = val
         else:
-            attrvals = [ name for name, vl in pll_attrvals.items() if vl == val ]
+            attrvals = [ name for name, vl in attrids.pll_attrvals.items() if vl == val ]
             if not attrvals:
                 raise Exception(f"PLL no {attr} = {val}")
             if attrvals[0] in _pll_vals.keys():
@@ -128,7 +128,7 @@ _dff_types = {
 
 def get_dff_type(dff_idx, in_attrs):
     def get_attrval_name(val):
-        for nam, vl in cls_attrvals.items():
+        for nam, vl in attrids.cls_attrvals.items():
             if vl == val:
                 return nam
         return None
@@ -213,6 +213,12 @@ def get_pll_A(db, row, col, typ):
             col -= 1
     return row, col, 'A'
 
+_iologic_mode = {
+        'MODDRX2': 'OSER4',  'ODDRX2': 'OSER4',
+        'MODDRX4': 'OSER8',  'ODDRX4': 'OSER8',
+        'MODDRX5': 'OSER10', 'ODDRX5': 'OSER10',
+        'VIDEORX': 'OVIDEO',
+        }
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowin_unpack io standard is determined first and it is known.
@@ -229,7 +235,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
             modes = { f'DEVICE="{_device}"' }
             if 'PLL' in db.shortval[tiledata.ttyp].keys():
-                attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
+                attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], attrids.pll_attrids))
                 for attrval in attrvals:
                     modes.add(attrval)
             if modes:
@@ -237,18 +243,34 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             continue
         if name == "PLLVR":
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, 'A'), len(_pll_cells))
-            attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], pll_attrids))
+            attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], attrids.pll_attrids))
             modes = { f'DEVICE="{_device}"' }
             for attrval in attrvals:
                 modes.add(attrval)
             if modes:
                 bels[f'{name}{idx}'] = modes
             continue
+        if name.startswith("IOLOGIC"):
+            idx = name[-1]
+            attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids)
+            if not attrvals:
+                continue
+            # XXX skip oddr
+            if attrvals['OUTMODE'] == attrids.iologic_attrvals['MODDRX1']:
+                continue
+            # skip aux cells
+            if attrvals['OUTMODE'] == attrids.iologic_attrvals['DDRENABLE']:
+                continue
+            if attrids.iologic_num2val[attrvals['OUTMODE']] in _iologic_mode.keys():
+                bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['OUTMODE']]]}")
+            if 'CLKODDRMUX_ECLK' in attrvals.keys():
+                bels[name].add(f"CLKODDRMUX_ECLK={attrids.iologic_num2val[attrvals['CLKODDRMUX_ECLK']]}")
+
         if name.startswith("DFF"):
             idx = int(name[3])
-            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], cls_attrids)
+            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids)
             # skip ALU and unsupported modes
-            if attrvals.get('REGMODE') == cls_attrvals['LATCH'] or attrvals.get('MODE') == cls_attrvals['SSRAM']:
+            if attrvals.get('MODE') == attrids.cls_attrvals['SSRAM']:
                 continue
             dff_type = get_dff_type(idx, attrvals)
             if dff_type:
@@ -352,7 +374,8 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                      if tile[row][col] == 1}
         for src, bits in srcs.items():
             # only report connection aliased to by a spine
-            if bits == used_bits and (noalias or (row, col, src) in db.aliases):
+            # HCLKs are also switched here, so for now we are also considering SPINExx type wires
+            if bits == used_bits and (noalias or (row, col, src) in db.aliases or (src.startswith('SPINE') and dest.startswith('SPINE'))):
                 clock_pips[dest] = src
 
     return {name: bel for name, bel in bels.items() if name not in skip_bels}, pips, clock_pips
@@ -458,17 +481,13 @@ def ram16_remove_bels(bels):
     for bel in bels_to_remove:
         bels.pop(bel, None)
 
-
-def have_iologic(bels):
-    return 'ODDRA' in bels.keys() or 'ODDRB' in bels.keys()
-
+_iologic_bels = ['IOLOGICA', 'IOLOGICB', 'ODDRA', 'ODDRB']
 def move_iologic(bels):
     res = []
-    if 'ODDRA' in bels.keys():
-        res.append(('ODDRA', bels['ODDRA']))
-    if 'ODDRB' in bels.keys():
-        res.append(('ODDRB', bels['ODDRB']))
-    res += [(bel, flags) for bel, flags in bels.items() if not bel.startswith('ODDR')]
+    for iol_bel in _iologic_bels:
+        if iol_bel in bels.keys():
+            res.append((iol_bel, bels[iol_bel]))
+    res += [(bel, flags) for bel, flags in bels.items() if bel not in _iologic_bels]
     return res
 
 def disable_unused_pll_ports(pll):
@@ -557,6 +576,15 @@ def modify_pll_inputs(db, pll):
             # XXX find pin
         del pll.params['FBSEL']
 
+_iologic_ports = {
+        'OSER4': {'D0', 'D1', 'D2', 'D3', 'Q0', 'Q1', 'RESET', 'TX0', 'TX1', 'PCLK', 'FCLK'},
+        'OSER8': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'Q0', 'Q1', 'RESET', 'TX0', 'TX1', 'TX2', 'TX3', 'PCLK', 'FCLK'},
+        'OVIDEO': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'Q', 'RESET', 'PCLK', 'FCLK'},
+        'OSER10': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'Q', 'RESET', 'PCLK', 'FCLK'},
+}
+def iologic_ports_by_type(typ, portmap):
+    return { (port, wire) for port, wire in portmap.items() if port in _iologic_ports[typ] }
+
 _sides = "AB"
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
     # db is 0-based, floorplanner is 1-based
@@ -569,13 +597,11 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS|RPLL[AB]|PLLVR)(\w*)")
-    if have_iologic(bels):
-        bels_items = move_iologic(bels)
-    else:
-        bels_items = bels.items()
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC)(\w*)")
+    bels_items = move_iologic(bels)
 
-    iologic_detected = None
+    iologic_detected = set()
+    disable_oddr = False
     for bel, flags in bels_items:
         typ, idx = belre.match(bel).groups()
 
@@ -596,6 +622,43 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                 mod.primitives[name] = lut
                 cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
             make_muxes(row, col, idx, db, mod)
+        elif typ.startswith("IOLOGIC"):
+            iologic_detected.add(idx)
+            iol_mode = 'OSER4'
+            disable_oddr = True
+            eclk = 'HCLK1'
+            iol_params = {}
+            for paramval in flags:
+                param, _, val = paramval.partition('=')
+                if param == 'MODE':
+                    iol_mode = val
+                    if val == 'OSER4':
+                        disable_oddr = False
+                    continue
+                if param == 'CLKODDRMUX_ECLK':
+                    eclk == val
+                    continue
+                iol_params[param] = val
+            name = f"R{row}C{col}_{iol_mode}_{idx}"
+            iol = mod.primitives.setdefault(name, codegen.Primitive(iol_mode, name))
+            iol.params.update(iol_params)
+
+            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+            for port, wname in iologic_ports_by_type(iol_mode, portmap):
+                if port in _iologic_ports[iol_mode]:
+                    if port in {'Q', 'Q0', 'Q1'}:
+                        if port == 'Q1':
+                            iol.portmap[port] = f"R{row}C{col}_{portmap['TX0']}_IOL"
+                        else:
+                            iol.portmap[port] = f"R{row}C{col}_{portmap['D0']}_IOL"
+                    elif port == 'FCLK':
+                        wname = eclk
+                        if eclk == 'HCLK0' and device in {'GW1N-1'}:
+                            wname = 'CLK2'
+                        iol.portmap[port] = f"R{row}C{col}_{wname}"
+                    else:
+                        iol.portmap[port] = f"R{row}C{col}_{wname}"
+
         elif typ.startswith("RPLL"):
             name = f"PLL_{idx}"
             pll = mod.primitives.setdefault(name, codegen.Primitive("rPLL", name))
@@ -690,7 +753,9 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             mod.primitives[name] = dff
             cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
         elif typ == "ODDR":
-            iologic_detected = idx
+            if disable_oddr:
+                continue
+            iologic_detected.add(idx)
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
             name = f"R{row}C{col}_ODDR{idx}"
             oddr = codegen.Primitive("ODDR", name)
@@ -716,7 +781,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
 
             iob = codegen.Primitive(kind, name)
 
-            if iologic_detected == idx:
+            if idx in iologic_detected:
                 wires_suffix = '_IOL'
             else:
                 wires_suffix = ''

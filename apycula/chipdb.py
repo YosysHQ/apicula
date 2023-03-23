@@ -163,6 +163,30 @@ def fse_pips(fse, ttyp, table=2, wn=wirenames):
 
     return pips
 
+_supported_hclk_wires = {'SPINE2', 'SPINE3', 'SPINE4', 'SPINE5', 'SPINE10', 'SPINE11',
+                         'SPINE12', 'SPINE13', 'SPINE16', 'SPINE17', 'SPINE18', 'SPINE19',
+                         'VSS', 'VCC', 'PCLKT0', 'PCLKT1', 'PCLKB0', 'PCLKB1',
+                         'PCLKL0', 'PCLKL1','PCLKR0', 'PCLKR1',
+                         'TBDHCLK0', 'TBDHCLK1', 'TBDHCLK2', 'TBDHCLK3', 'BBDHCLK0',
+                         'BBDHCLK1', 'BBDHCLK2', 'BBDHCLK3', 'LBDHCLK0', 'LBDHCLK1',
+                         'LBDHCLK2', 'LBDHCLK3', 'RBDHCLK0', 'RBDHCLK1', 'RBDHCLK2',
+                         'RBDHCLK3',
+                         }
+# Some chips at least -9C treat these wires as the same
+_xxx_hclk_wires = {'SPINE16': 'SPINE2', 'SPINE18': 'SPINE4'}
+def fse_hclk_pips(fse, ttyp, aliases):
+    pips = fse_pips(fse, ttyp, table = 48, wn = clknames)
+    res = {}
+    for dest, src_fuses in pips.items():
+        if dest not in _supported_hclk_wires:
+            continue
+        for src, fuses in src_fuses.items():
+            if src in _supported_hclk_wires:
+                res.setdefault(dest, {})[src] = fuses
+                if src in _xxx_hclk_wires.keys():
+                    aliases.update({src: _xxx_hclk_wires[src]})
+    return res
+
 def fse_alonenode(fse, ttyp, table = 6):
     pips = {}
     if 'alonenode' in fse[ttyp].keys():
@@ -401,6 +425,7 @@ _known_logic_tables = {
 _known_tables = {
              4: 'CONST',
              5: 'LUT',
+            20: 'GSR',
             21: 'IOLOGICA',
             22: 'IOLOGICB',
             23: 'IOBA',
@@ -460,6 +485,210 @@ def fse_fill_logic_tables(dev, fse):
                 for f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, *fuses in fse[ttyp]['longval'][ltable]:
                     table[(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15)] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
 
+_hclk_in = {
+            'TBDHCLK0': 0,  'TBDHCLK1': 1,  'TBDHCLK2': 2,  'TBDHCLK3': 3,
+            'BBDHCLK0': 4,  'BBDHCLK1': 5,  'BBDHCLK2': 6,  'BBDHCLK3': 7,
+            'LBDHCLK0': 8,  'LBDHCLK1': 9,  'LBDHCLK2': 10, 'LBDHCLK3': 11,
+            'RBDHCLK0': 12, 'RBDHCLK1': 13, 'RBDHCLK2': 14, 'RBDHCLK3': 15}
+def fse_create_hclk_aliases(db, device, dat):
+    for row in range(db.rows):
+        for col in range(db.cols):
+            for src_fuses in db.grid[row][col].clock_pips.values():
+                for src in src_fuses.keys():
+                    if src in _hclk_in.keys():
+                        source = dat['CmuxIns'][str(90 + _hclk_in[src])]
+                        db.aliases[(row, col, src)] = (source[0] - 1, source[1] - 1, wirenames[source[2]])
+    # hclk->fclk
+    # top
+    row = 0
+    if device == 'GW1N-1':
+        for col in range(1, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+    elif device in {'GW1NZ-1'}:
+        for col in range(1, 10):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (0, 5, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (0, 5, 'SPINE12')
+        for col in range(10, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (0, 5, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (0, 5, 'SPINE13')
+    elif device in {'GW1N-4'}:
+        for col in range(1, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+    elif device in {'GW1NS-4'}:
+        for col in range(1, 11):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 18, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, 18, 'SPINE12')
+        for col in range(11, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 18, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, 18, 'SPINE13')
+    elif device in {'GW1N-9'}:
+        for col in range(1, 28):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE12')
+        for col in range(28, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
+    elif device in {'GW1N-9C'}:
+        for col in range(1, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (0, db.cols - 1, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (0, db.cols - 1, 'SPINE13')
+
+    # right
+    col = db.cols - 1
+    if device == 'GW1N-1':
+        for row in range(1, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+    elif device in {'GW1NZ-1'}:
+        for row in range(1, 5):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (5, col, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (5, col, 'SPINE12')
+        for row in range(6, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (5, col, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (5, col, 'SPINE13')
+    elif device in {'GW1N-4'}:
+        for row in range(1, db.rows - 1):
+            if row not in {8, 9, 10, 11}:
+                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+        for row in range(1, 9):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE12')
+        for row in range(10, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE13')
+    elif device in {'GW1NS-4'}:
+        for row in range(1, 9):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (9, col, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE12')
+        for row in range(9, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (9, col, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE13')
+    elif device in {'GW1N-9'}:
+        for row in range(1, 19):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE12')
+        for row in range(19, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE13')
+    elif device in {'GW1N-9C'}:
+        for row in range(1, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE13')
+
+    # left
+    col = 0
+    if device == 'GW1N-1':
+        for row in range(1, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+    elif device in {'GW1N-4'}:
+        for row in range(1, db.rows - 1):
+            if row not in {8, 9, 10, 11}:
+                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+        for row in range(1, 9):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE12')
+        for row in range(10, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE13')
+    elif device in {'GW1N-9'}:
+        for row in range(1, 19):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE12')
+        for row in range(19, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE13')
+    elif device in {'GW1N-9C'}:
+        for row in range(1, db.rows - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (18, 0, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (18, 0, 'SPINE13')
+
+    # bottom
+    row = db.rows - 1
+    if device == 'GW1N-1':
+        for col in range(1, 10):
+            if col not in {8, 9}:
+                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols -1, 'SPINE12')
+        for col in range(10, db.cols - 1):
+            if col not in {10, 11}:
+                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
+    elif device in {'GW1N-4'}:
+        for col in range(1, 19):
+            if col not in {17, 18}:
+                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols -1, 'SPINE12')
+        for col in range(19, db.cols - 1):
+            if col not in {19, 20}:
+                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
+    elif device in {'GW1NS-4'}:
+        db.aliases[(row, 17, 'SPINE2')] = (row, 16, 'SPINE2')
+        for col in range(1, 16):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 17, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, 20, 'SPINE12')
+        for col in range(21, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 17, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, 20, 'SPINE13')
+    elif device in {'GW1N-9'}:
+        for col in range(1, 28):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE10')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE12')
+        for col in range(28, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
+    elif device in {'GW1N-9C'}:
+        for col in range(1, db.cols - 1):
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
+            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE11')
+            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
+            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
+
 _pll_loc = {
  'GW1N-1':
    {'TRPLL0CLK0': (0, 17, 'F4'), 'TRPLL0CLK1': (0, 17, 'F5'),
@@ -503,7 +732,23 @@ def fse_create_pll_clock_aliases(db, device):
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
 
-def from_fse(device, fse):
+def fse_iologic(device, fse, ttyp):
+    bels = {}
+    # some iocells nave no iologic
+    if ttyp in {48, 49, 50, 51}:
+        return bels
+    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1N-4', 'GW1NS-4'} and ttyp in {86, 87}:
+        return bels
+    if device in {'GW1NS-4'} and ttyp in {86, 87, 135, 136, 137, 138}:
+        return bels
+    if 'shortval' in fse[ttyp].keys():
+        if 21 in fse[ttyp]['shortval'].keys():
+            bels['IOLOGICA'] = Bel()
+        if 22 in fse[ttyp]['shortval'].keys():
+            bels['IOLOGICB'] = Bel()
+    return bels
+
+def from_fse(device, fse, dat):
     dev = Device()
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
     tiles = {}
@@ -513,6 +758,7 @@ def from_fse(device, fse):
         tile = Tile(w, h, ttyp)
         tile.pips = fse_pips(fse, ttyp, 2, wirenames)
         tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
+        tile.clock_pips.update(fse_hclk_pips(fse, ttyp, tile.aliases))
         tile.alonenode_6 = fse_alonenode(fse, ttyp, 6)
         if 5 in fse[ttyp]['shortval']:
             tile.bels = fse_luts(fse, ttyp)
@@ -520,11 +766,13 @@ def from_fse(device, fse):
             tile.bels = fse_osc(device, fse, ttyp)
         if ttyp in [74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
+        tile.bels.update(fse_iologic(device, fse, ttyp))
         tiles[ttyp] = tile
 
     fse_fill_logic_tables(dev, fse)
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     fse_create_pll_clock_aliases(dev, device)
+    fse_create_hclk_aliases(dev, device, dat)
     return dev
 
 # get fuses for attr/val set using short/longval table
@@ -532,7 +780,7 @@ def from_fse(device, fse):
 def get_table_fuses(attrs, table):
     bits = set()
     for key, fuses in table.items():
-        # all 16 "features" must be present to be able to use a set of bits from the record
+        # all 2/16 "features" must be present to be able to use a set of bits from the record
         have_full_key = True
         for attrval in key:
             if attrval == 0: # no "feature"
@@ -669,6 +917,20 @@ _pll_inputs = [(5, 'CLKFB'), (6, 'FBDSEL0'), (7, 'FBDSEL1'), (8, 'FBDSEL2'), (9,
                (28, 'DUTYDA0'), (29, 'DUTYDA1'), (30, 'DUTYDA2'), (31, 'DUTYDA3'),
                (32, 'FDLY0'), (33, 'FDLY1'), (34, 'FDLY2'), (35, 'FDLY3')]
 _pll_outputs = [(0, 'CLKOUT'), (1, 'LOCK'), (2, 'CLKOUTP'), (3, 'CLKOUTD'), (4, 'CLKOUTD3')]
+_iologic_inputs =  [(0, 'D'), (1, 'D0'), (2, 'D1'), (3, 'D2'), (4, 'D3'), (5, 'D4'),
+                    (6, 'D5'), (7, 'D6'), (8, 'D7'), (9, 'D8'), (10, 'D9'), (11, 'D10'),
+                    (12, 'D11'), (13, 'D12'), (14, 'D13'), (15, 'D14'), (16, 'D15'),
+                    (17, 'CLK'), (18, 'ICLK'), (19, 'PCLK'), (20, 'FCLK'), (21, 'TCLK'),
+                    (22, 'MCLK'), (23, 'SET'), (24, 'RESET'), (25, 'PRESET'), (26, 'CLEAR'),
+                    (27, 'TX'), (28, 'TX0'), (29, 'TX1'), (30, 'TX2'), (31, 'TX3'),
+                    (32, 'WADDR0'), (33, 'WADDR1'), (34, 'WADDR2'), (35, 'RADDR0'),
+                    (36, 'RADDR1'), (37, 'RADDR2'), (38, 'CALIB'), (39, 'DI'), (40, 'SETN'),
+                    (41, 'SDTAP'), (42, 'VALUE'), (43, 'DASEL'), (44, 'DASEL0'), (45, 'DASEL1'),
+                    (46, 'DAADJ'), (47, 'DAADJ0'), (48, 'DAADJ1')]
+_iologic_outputs = [(0, 'Q'),  (1, 'Q0'), (2, 'Q1'), (3, 'Q2'), (4, 'Q3'), (5, 'Q4'),
+                    (6, 'Q5'), (7, 'Q6'), (8, 'Q7'), (9, 'Q8'), (10, 'Q9'), (11, 'Q10'),
+                    (12, 'Q11'), (13, 'Q12'), (14, 'Q13'), (15, 'Q14'), (16, 'Q15'),
+                    (17, 'DO'), (18, 'DF'), (19, 'LAG'), (20, 'LEAD'), (21, 'DAO')]
 def dat_portmap(dat, dev, device):
     for row, row_dat in enumerate(dev.grid):
         for col, tile in enumerate(row_dat):
@@ -698,6 +960,19 @@ def dat_portmap(dat, dev, device):
                         bel.portmap['D1'] = d1
                         tx = wirenames[dat[f'Iologic{pin}In'][27]]
                         bel.portmap['TX'] = tx
+                elif name.startswith("IOLOGIC"):
+                    buf = name[-1]
+                    for idx, nam in _iologic_inputs:
+                        w_idx = dat[f'Iologic{buf}In'][idx]
+                        if w_idx >= 0:
+                            bel.portmap[nam] = wirenames[w_idx]
+                        elif nam == 'FCLK':
+                            # dummy Input, we'll make a special pips for it
+                            bel.portmap[nam] = "FCLK"
+                    for idx, nam in _iologic_outputs:
+                        w_idx = dat[f'Iologic{buf}Out'][idx]
+                        if w_idx >= 0:
+                            bel.portmap[nam] = wirenames[w_idx]
                 elif name == 'RPLLA':
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.

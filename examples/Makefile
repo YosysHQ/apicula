@@ -3,6 +3,8 @@ NEXTPNR ?= nextpnr-gowin
 
 .DEFAULT_GOAL := all
 
+include deser/Makefile
+
 all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs \
@@ -20,7 +22,8 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	pll-54-tangnano1k.fs pll-81-tangnano1k.fs \
 	pll-dyn-tangnano.fs pll-dyn-tangnano1k.fs \
 	pll-tangnano4k.fs pll2-tangnano9k.fs pll2-tec0117.fs pll2-runber.fs pll-dyn-honeycomb.fs \
-	pll-nanolcd-tangnano.fs pll-nanolcd-tangnano9k.fs
+	pll-nanolcd-tangnano.fs pll-nanolcd-tangnano9k.fs \
+	all_deser
 
 unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-unpacked.v blinky-runber-unpacked.v \
 	blinky-tangnano-unpacked.v blinky-honeycomb-unpacked.v shift-tec0117-unpacked.v shift-runber-unpacked.v \
@@ -40,12 +43,13 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	pll-54-tangnano1k-unpacked.v pll-81-tangnano1k-unpacked.v \
 	pll-dyn-tangnano-unpacked.v pll-dyn-tangnano1k-unpacked.v \
 	pll2-tangnano9k-unpacked.v pll2-tec0117-unpacked.v pll2-runber-unpacked.v pll-dyn-honeycomb-unpacked.v \
-	pll-nanolcd-tangnano-unpacked.v pll-nanolcd-tangnano9k-unpacked.v pll-tangnano4k-unpacked.v
+	pll-nanolcd-tangnano-unpacked.v pll-nanolcd-tangnano9k-unpacked.v pll-tangnano4k-unpacked.v \
+	unpacked_deser
 	
-clean: 
+clean: clean_deser
 	rm -f *.json *.fs *-unpacked.v
 	
-.PHONY: all clean
+.PHONY: all unpacked clean
 
 %-tec0117.fs: %-tec0117.json
 	gowin_pack -d GW1N-9 -o $@ $<
@@ -66,7 +70,7 @@ blinky-oddr-runber.json: blinky-oddr-runber-synth.json runber-tlvds.cst
 	gowin_pack -d GW1N-1 -o $@ $^
 
 %-tangnano.json: %-tangnano-synth.json tangnano.cst
-	$(NEXTPNR) --json $< --write $@ --device GW1N-LV1QN48C6/I5 --cst tangnano.cst
+	$(NEXTPNR) -v --debug --json $< --write $@ --device GW1N-LV1QN48C6/I5 --cst tangnano.cst
 
 %-tangnano1k.fs: %-tangnano1k.json
 	gowin_pack -d GW1NZ-1 -o $@ $^
@@ -96,7 +100,7 @@ pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
 	gowin_pack -d GW1NS-2 -o $@ $<
 
 %-honeycomb.json: %-honeycomb-synth.json honeycomb.cst
-	$(NEXTPNR) -v --debug --json $< --write $@ --device GW1NS-UX2CQN48C5/I4 --cst honeycomb.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NS-UX2CQN48C5/I4 --cst honeycomb.cst
 
 attosoc-tec0117-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
