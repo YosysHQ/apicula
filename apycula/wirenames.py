@@ -76,7 +76,15 @@ clknames.update({
 })
 clknames.update({n: f"UNK{n}" for n in range(129, 153)})
 clknames[153] = 'VCC'
-clknames.update({n: f"UNK{n}" for n in range(154, 186)})
+clknames.update({n: f"UNK{n}" for n in range(154, 170)})
+
+# HCLK?
+clknames.update({
+    170: 'TBDHCLK0', 171: 'TBDHCLK1', 172: 'TBDHCLK2', 173: 'TBDHCLK3', 174: 'BBDHCLK0',
+    175: 'BBDHCLK1', 176: 'BBDHCLK2', 177: 'BBDHCLK3', 178: 'LBDHCLK0', 179: 'LBDHCLK1',
+    180: 'LBDHCLK2', 181: 'LBDHCLK3', 182: 'RBDHCLK0', 183: 'RBDHCLK1', 184: 'RBDHCLK2',
+    185: 'RBDHCLK3'
+})
 # These wires are a mystery, they are a copy of P10-P15 etc, there is no reason
 # to have another number for the output, but it is these numbers that are
 # listed in tables 38, although the internal routes are routed to the

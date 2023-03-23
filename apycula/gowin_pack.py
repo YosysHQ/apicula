@@ -13,7 +13,7 @@ from apycula import codegen
 from apycula import chipdb
 from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses
 from apycula import attrids
-from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals
+from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals, iologic_attrids, iologic_attrvals
 from apycula import bslib
 from apycula import attrids
 from apycula.wirenames import wirenames, wirenumbers
@@ -49,7 +49,7 @@ def extra_pll_bels(cell, row, col, num, cellname):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|rPLL|PLLVR)(\w*)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') :
             continue
@@ -324,6 +324,52 @@ def set_pll_attrs(db, typ, idx, attrs):
     #print(fin_attrs)
     return fin_attrs
 
+_iologic_default_attrs = {
+        'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
+        'OSER8': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
+        'OSER10': { 'GSREN': 'false', 'LSREN': 'true'},
+        'OVIDEO': { 'GSREN': 'false', 'LSREN': 'true'},
+        }
+def iologic_mod_attrs(attrs):
+    if 'TXCLK_POL' in attrs.keys():
+        if int(attrs['TXCLK_POL']) == 0:
+            attrs['TSHX'] = 'SIG'
+        else:
+            attrs['TSHX'] = 'INV'
+        del attrs['TXCLK_POL']
+    if 'HWL' in attrs.keys():
+        if attrs['HWL'] == 'true':
+            attrs['UPDATE'] = 'SAME'
+        del attrs['HWL']
+    # XXX In my test compilations, the images did not differ in any bit in any
+    # of the 4 combinations of these attributes. We ignore them for now.
+    # Here it may also matter if the RESET port is connected to anything.
+    attrs.pop('GSREN', None)
+    attrs.pop('LSREN', None)
+
+def set_iologic_attrs(db, attrs, param):
+    in_attrs = {}
+    if 'IOLOGIC_TYPE' in param.keys():
+        in_attrs = _iologic_default_attrs[param['IOLOGIC_TYPE']].copy()
+    in_attrs.update(attrs)
+    iologic_mod_attrs(in_attrs)
+    fin_attrs = set()
+    if 'OUTMODE' in attrs.keys() and attrs['OUTMODE'] == 'DDRENABLE':
+        in_attrs['ISI'] = 'ENABLE';
+    in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0';
+    in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0';
+    if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
+        in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1';
+    in_attrs['CLKOMUX'] = 'ENABLE';
+    in_attrs['LSROMUX_0'] = '0';
+    in_attrs['LSRIMUX_0'] = '0';
+    for k, val in in_attrs.items():
+        if k not in iologic_attrids.keys():
+            print(f'XXX add {k} key handle')
+        else:
+            add_attr_val(db, 'IOLOGIC', fin_attrs, iologic_attrids[k], iologic_attrvals[val])
+    return fin_attrs
+
 iostd_alias = {
         "HSTL18_II"  : "HSTL18_I",
         "SSTL18_I"   : "HSTL18_I",
@@ -381,6 +427,8 @@ def place(db, tilemap, bels, cst, args):
                     bits = alu_bel.modes[mode]
                 else:
                     bits = alu_bel.modes[str(int(mode, 2))]
+                    #if int(mode, 2) == 2:
+                    #print('ALU mode:', int(mode, 2), ' bits:', bits)
                 for r, c in bits:
                     tile[r][c] = 1
             else:
@@ -545,6 +593,14 @@ def place(db, tilemap, bels, cst, args):
             #print(typ, bits)
             for r, c in bits:
                 tile[r][c] = 1
+        elif typ ==  'IOLOGIC':
+            iologic_attrs = set_iologic_attrs(db, parms, attrs)
+            bits = set()
+            table_type = f'IOLOGIC{num}'
+            if table_type in db.shortval[tiledata.ttyp].keys():
+                bits = get_shortval_fuses(db, tiledata.ttyp, iologic_attrs, table_type)
+            for r, c in bits:
+                tile[r][c] = 1
         elif typ.startswith('RPLL'):
             pll_attrs = set_pll_attrs(db, 'RPLL', 0,  parms)
             bits = set()
@@ -568,8 +624,6 @@ def place(db, tilemap, bels, cst, args):
             cfg_tile = tilemap[(0, 37)]
             for r, c in bits:
                 cfg_tile[r][c] = 1
-
-
         else:
             print("unknown type", typ)
 

@@ -1,0 +1,27 @@
+//Part Number: GW1NR-LV9QN88PC6/I5
+
+IO_LOC "clk_i" 52;
+
+IO_LOC "q_o[0]" 25;
+IO_PORT "q_o[0]" IO_TYPE=LVCMOS25;
+IO_LOC "q_o[1]" 26;
+IO_PORT "q_o[1]" IO_TYPE=LVCMOS25;
+IO_LOC "q_o[2]" 27;
+IO_PORT "q_o[2]" IO_TYPE=LVCMOS25;
+IO_LOC "q_o[3]" 28;
+IO_PORT "q_o[3]" IO_TYPE=LVCMOS25;
+IO_LOC "q_o[4]" 29;
+IO_PORT "q_o[4]" IO_TYPE=LVCMOS25;
+IO_LOC "q_o[5]" 30;
+IO_PORT "q_o[5]" IO_TYPE=LVCMOS25;
+IO_LOC "q_o[6]" 19;
+IO_PORT "q_o[6]" IO_TYPE=LVCMOS25;
+IO_LOC "q_o[7]" 20;
+IO_PORT "q_o[7]" IO_TYPE=LVCMOS25;
+
+// pclk_o - low frequency, fclk_o - high frequency
+IO_LOC "pclk_o" 31;
+IO_PORT "pclk_o" IO_TYPE=LVCMOS25;
+IO_LOC "fclk_o" 32;
+IO_PORT "fclk_o" IO_TYPE=LVCMOS25;
+
