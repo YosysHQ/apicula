@@ -644,8 +644,8 @@ def fse_iologic(fse, db, pin_locations):
                 # the purpose is not clear, but must be connected.
                 if dat[f'Iologic{bel_idx}In'][47] != -1:
                     bel.portmap.update({
-                        'XXX_VSS': wirenames[dat[f'Iologic{bel_idx}In'][47]],
-                        'XXX_VCC': wirenames[dat[f'Iologic{bel_idx}In'][48]]
+                        'ODDR_ALWAYS_LOW':  wirenames[dat[f'Iologic{bel_idx}In'][47]],
+                        'ODDR_ALWAYS_HIGH': wirenames[dat[f'Iologic{bel_idx}In'][48]]
                         })
 
 # IOB fuzzer
@@ -1056,8 +1056,8 @@ if __name__ == "__main__":
     if device == 'GW1N-9' :
         loc = locations[52][0]
         bel = db.grid[loc[0]][loc[1]].bels['IOBA']
-        bel.portmap['XXX_VSS0'] = wirenames[dat[f'IologicAIn'][40]]
-        bel.portmap['XXX_VSS1'] = wirenames[dat[f'IologicAIn'][42]]
+        bel.portmap['GW9_ALWAYS_LOW0'] = wirenames[dat[f'IologicAIn'][40]]
+        bel.portmap['GW9_ALWAYS_LOW1'] = wirenames[dat[f'IologicAIn'][42]]
     chipdb.dat_aliases(dat, db)
     chipdb.diff2flag(db)
 
