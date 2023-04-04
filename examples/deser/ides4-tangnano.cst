@@ -1,0 +1,37 @@
+//Part Number: GW1N-LV1QN48C6/I5
+
+IO_LOC "clk_i" 35;
+IO_PORT "clk_i" IO_TYPE=LVCMOS33;
+
+IO_LOC "nrst_i" 14;
+IO_PORT "nrst_i" IO_TYPE=LVCMOS33;
+
+IO_LOC "pclk_o" 16;
+IO_PORT "pclk_o" IO_TYPE=LVCMOS33;
+
+IO_LOC "q_o[0]" 41;
+IO_LOC "q_o[1]" 24;
+IO_LOC "q_o[2]" 20;
+IO_LOC "q_o[3]" 21;
+IO_LOC "q_o[4]" 38;
+IO_LOC "q_o[5]" 43;
+IO_LOC "q_o[6]" 42;
+IO_LOC "q_o[7]" 40;
+
+IO_PORT "q_o[0]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[1]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[2]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[3]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[4]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[5]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[6]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[7]" IO_TYPE=LVCMOS33;
+
+// pclk_o - low frequency, fclk_o - high frequency
+//IO_LOC "pclk_o" 46;
+IO_LOC "fclk_i" 13;
+IO_LOC "data_i" IOB10A;
+
+IO_PORT "fclk_i" IO_TYPE=LVCMOS33;
+IO_PORT "data_i" IO_TYPE=LVCMOS33;
+
