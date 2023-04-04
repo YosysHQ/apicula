@@ -1,0 +1,41 @@
+//Part Number: GW1N-LV1QN48C6/I5
+
+IO_LOC "clk_i" 47;
+IO_PORT "clk_i" IO_TYPE=LVCMOS33;
+
+IO_LOC "nrst_i" 13;
+IO_PORT "nrst_i" IO_TYPE=LVCMOS33;
+
+IO_LOC "pclk_o" 27;
+IO_PORT "pclk_o" IO_TYPE=LVCMOS33;
+
+IO_LOC "q_o[0]" 18;
+IO_LOC "q_o[1]" 17;
+IO_LOC "q_o[2]" 16;
+IO_LOC "q_o[3]" 15;
+IO_LOC "q_o[4]" 19;
+IO_LOC "q_o[5]" 29;
+IO_LOC "q_o[6]" 20;
+IO_LOC "q_o[7]" 31;
+IO_LOC "q_o[8]" 42;
+IO_LOC "q_o[9]" 35;
+
+IO_PORT "q_o[0]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[1]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[2]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[3]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[4]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[5]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[6]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[7]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[8]" IO_TYPE=LVCMOS33;
+IO_PORT "q_o[9]" IO_TYPE=LVCMOS33;
+
+// pclk_o - low frequency, fclk_o - high frequency
+//IO_LOC "pclk_o" 46;
+IO_LOC "fclk_i" 28;
+IO_LOC "data_i" 11;
+
+IO_PORT "fclk_i" IO_TYPE=LVCMOS33;
+IO_PORT "data_i" IO_TYPE=LVCMOS33;
+

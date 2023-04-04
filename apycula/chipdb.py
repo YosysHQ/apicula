@@ -970,6 +970,7 @@ def dat_portmap(dat, dev, device):
                             # dummy Input, we'll make a special pips for it
                             bel.portmap[nam] = "FCLK"
                     for idx, nam in _iologic_outputs:
+                        # outputs are placed in neighbor bel
                         w_idx = dat[f'Iologic{buf}Out'][idx]
                         if w_idx >= 0:
                             bel.portmap[nam] = wirenames[w_idx]

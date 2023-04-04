@@ -329,6 +329,10 @@ _iologic_default_attrs = {
         'OSER8': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER10': { 'GSREN': 'false', 'LSREN': 'true'},
         'OVIDEO': { 'GSREN': 'false', 'LSREN': 'true'},
+        'IDES4': { 'GSREN': 'false', 'LSREN': 'true'},
+        'IDES8': { 'GSREN': 'false', 'LSREN': 'true'},
+        'IDES10': { 'GSREN': 'false', 'LSREN': 'true'},
+        'IVIDEO': { 'GSREN': 'false', 'LSREN': 'true'},
         }
 def iologic_mod_attrs(attrs):
     if 'TXCLK_POL' in attrs.keys():
@@ -341,10 +345,11 @@ def iologic_mod_attrs(attrs):
         if attrs['HWL'] == 'true':
             attrs['UPDATE'] = 'SAME'
         del attrs['HWL']
-    # XXX In my test compilations, the images did not differ in any bit in any
-    # of the 4 combinations of these attributes. We ignore them for now.
-    # Here it may also matter if the RESET port is connected to anything.
-    attrs.pop('GSREN', None)
+    if 'GSREN' in attrs.keys():
+        if attrs['GSREN'] == 'true':
+            attrs['GSR'] = 'ENGSR'
+        del attrs['GSREN']
+    # XXX ignore for now
     attrs.pop('LSREN', None)
 
 def set_iologic_attrs(db, attrs, param):
@@ -354,15 +359,28 @@ def set_iologic_attrs(db, attrs, param):
     in_attrs.update(attrs)
     iologic_mod_attrs(in_attrs)
     fin_attrs = set()
-    if 'OUTMODE' in attrs.keys() and attrs['OUTMODE'] == 'DDRENABLE':
-        in_attrs['ISI'] = 'ENABLE';
-    in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0';
-    in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0';
-    if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
-        in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1';
-    in_attrs['CLKOMUX'] = 'ENABLE';
-    in_attrs['LSROMUX_0'] = '0';
-    in_attrs['LSRIMUX_0'] = '0';
+    if 'OUTMODE' in attrs.keys():
+        if attrs['OUTMODE'] == 'DDRENABLE':
+            in_attrs['ISI'] = 'ENABLE';
+        in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0';
+        in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0';
+        if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
+            in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1';
+        in_attrs['CLKOMUX'] = 'ENABLE';
+        in_attrs['LSROMUX_0'] = '1';
+        in_attrs['LSRIMUX_0'] = '0';
+        #in_attrs['LSRMUX_LSR'] = 'INV';
+    if 'INMODE' in attrs.keys():
+        if attrs['INMODE'] == 'DDRENABLE':
+            in_attrs['ISI'] = 'ENABLE';
+        in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK0';
+        if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
+            in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK1';
+        in_attrs['CLKIMUX'] = 'ENABLE';
+        in_attrs['LSROMUX_0'] = '0';
+        in_attrs['LSRIMUX_0'] = '1';
+        #in_attrs['LSRMUX_LSR'] = 'INV';
+
     for k, val in in_attrs.items():
         if k not in iologic_attrids.keys():
             print(f'XXX add {k} key handle')

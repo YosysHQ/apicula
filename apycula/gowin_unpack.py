@@ -218,6 +218,9 @@ _iologic_mode = {
         'MODDRX4': 'OSER8',  'ODDRX4': 'OSER8',
         'MODDRX5': 'OSER10', 'ODDRX5': 'OSER10',
         'VIDEORX': 'OVIDEO',
+        'MIDDRX2': 'IDES4',  'IDDRX2': 'IDES4',
+        'MIDDRX4': 'IDES8',  'IDDRX4': 'IDES8',
+        'MIDDRX5': 'IDES10', 'IDDRX5': 'IDES10',
         }
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
@@ -253,19 +256,29 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("IOLOGIC"):
             idx = name[-1]
             attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids)
+            print(row, col, attrvals)
             if not attrvals:
                 continue
-            # XXX skip oddr
-            if attrvals['OUTMODE'] == attrids.iologic_attrvals['MODDRX1']:
-                continue
-            # skip aux cells
-            if attrvals['OUTMODE'] == attrids.iologic_attrvals['DDRENABLE']:
-                continue
-            if attrids.iologic_num2val[attrvals['OUTMODE']] in _iologic_mode.keys():
-                bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['OUTMODE']]]}")
+            if 'OUTMODE' in attrvals.keys():
+                # XXX skip oddr
+                if attrvals['OUTMODE'] == attrids.iologic_attrvals['MODDRX1']:
+                    continue
+                # skip aux cells
+                if attrvals['OUTMODE'] == attrids.iologic_attrvals['DDRENABLE']:
+                    continue
+                if attrids.iologic_num2val[attrvals['OUTMODE']] in _iologic_mode.keys():
+                    bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['OUTMODE']]]}")
+            elif 'INMODE' in attrvals.keys():
+                # XXX skip oddr
+                if attrvals['INMODE'] == attrids.iologic_attrvals['MIDDRX1']:
+                    continue
+                # skip aux cells
+                if attrvals['INMODE'] == attrids.iologic_attrvals['DDRENABLE']:
+                    continue
+                if attrids.iologic_num2val[attrvals['INMODE']] in _iologic_mode.keys():
+                    bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['INMODE']]]}")
             if 'CLKODDRMUX_ECLK' in attrvals.keys():
-                bels[name].add(f"CLKODDRMUX_ECLK={attrids.iologic_num2val[attrvals['CLKODDRMUX_ECLK']]}")
-
+                bels.setdefault(name, set()).add(f"CLKODDRMUX_ECLK={attrids.iologic_num2val[attrvals['CLKODDRMUX_ECLK']]}")
         if name.startswith("DFF"):
             idx = int(name[3])
             attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids)
@@ -581,6 +594,10 @@ _iologic_ports = {
         'OSER8': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'Q0', 'Q1', 'RESET', 'TX0', 'TX1', 'TX2', 'TX3', 'PCLK', 'FCLK'},
         'OVIDEO': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'Q', 'RESET', 'PCLK', 'FCLK'},
         'OSER10': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'Q', 'RESET', 'PCLK', 'FCLK'},
+        'IDES4': {'D', 'Q0', 'Q1', 'Q2', 'Q3', 'RESET', 'CALIB', 'PCLK', 'FCLK'},
+        'IDES8': {'D', 'Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'RESET', 'CALIB', 'PCLK', 'FCLK'},
+        'IVIDEO': {'D', 'Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'RESET', 'CALIB', 'PCLK', 'FCLK'},
+        'IDES10': {'D', 'Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'RESET', 'CALIB', 'PCLK', 'FCLK'},
 }
 def iologic_ports_by_type(typ, portmap):
     return { (port, wire) for port, wire in portmap.items() if port in _iologic_ports[typ] }
@@ -624,10 +641,11 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             make_muxes(row, col, idx, db, mod)
         elif typ.startswith("IOLOGIC"):
             iologic_detected.add(idx)
-            iol_mode = 'OSER4'
+            iol_mode = 'IVIDEO' #XXX
             disable_oddr = True
-            eclk = 'HCLK1'
+            eclk = 'HCLK0'
             iol_params = {}
+            print(flags)
             for paramval in flags:
                 param, _, val = paramval.partition('=')
                 if param == 'MODE':
@@ -638,14 +656,18 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                 if param == 'CLKODDRMUX_ECLK':
                     eclk == val
                     continue
+                if param == 'CLKIDDRMUX_ECLK':
+                    eclk == val
+                    continue
                 iol_params[param] = val
             name = f"R{row}C{col}_{iol_mode}_{idx}"
             iol = mod.primitives.setdefault(name, codegen.Primitive(iol_mode, name))
             iol.params.update(iol_params)
+            iol_oser = iol_mode in {'OSER4', 'OVIDEO', 'OSER8', 'OSER10'}
 
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
             for port, wname in iologic_ports_by_type(iol_mode, portmap):
-                if port in _iologic_ports[iol_mode]:
+                if iol_oser:
                     if port in {'Q', 'Q0', 'Q1'}:
                         if port == 'Q1':
                             iol.portmap[port] = f"R{row}C{col}_{portmap['TX0']}_IOL"
@@ -653,11 +675,23 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                             iol.portmap[port] = f"R{row}C{col}_{portmap['D0']}_IOL"
                     elif port == 'FCLK':
                         wname = eclk
-                        if eclk == 'HCLK0' and device in {'GW1N-1'}:
+                        if eclk == 'HCLK0' and _device in {'GW1N-1'}:
                             wname = 'CLK2'
                         iol.portmap[port] = f"R{row}C{col}_{wname}"
                     else:
                         iol.portmap[port] = f"R{row}C{col}_{wname}"
+                else: # IDES
+                    if port in {'D'}:
+                        iol.portmap[port] = f"R{row}C{col}_{portmap['D']}_IOL"
+                    #elif port[0] == 'Q':
+                    #    iol.portmap[port] = f"R{row}C{col}_{portmap[port]}"
+                    else:
+                        iol.portmap[port] = f"R{row}C{col}_{wname}"
+                if port == 'FCLK':
+                    wname = eclk
+                    if eclk == 'HCLK0' and _device in {'GW1N-1'}:
+                        wname = 'CLK2'
+                    iol.portmap[port] = f"R{row}C{col}_{wname}"
 
         elif typ.startswith("RPLL"):
             name = f"PLL_{idx}"

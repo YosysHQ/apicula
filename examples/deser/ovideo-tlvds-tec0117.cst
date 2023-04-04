@@ -14,11 +14,11 @@ IO_PORT "sd_out" IO_TYPE=LVCMOS33;
 
 IO_LOC "q_o[0]" 29;
 IO_PORT "q_o[0]" IO_TYPE=LVCMOS33;
-IO_LOC "q_o[1]" 31;
+IO_LOC "q_o[1]" 30;
 IO_PORT "q_o[1]" IO_TYPE=LVCMOS33;
-IO_LOC "q_o[2]" 33;
+IO_LOC "q_o[2]" 31;
 IO_PORT "q_o[2]" IO_TYPE=LVCMOS33;
-IO_LOC "q_o[3]" 37;
+IO_LOC "q_o[3]" 32;
 IO_PORT "q_o[3]" IO_TYPE=LVCMOS33;
 
 IO_LOC "pclk_o" 39;
