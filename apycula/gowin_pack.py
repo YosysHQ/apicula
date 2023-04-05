@@ -325,6 +325,7 @@ def set_pll_attrs(db, typ, idx, attrs):
     return fin_attrs
 
 _iologic_default_attrs = {
+        'DUMMY': {},
         'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER8': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER10': { 'GSREN': 'false', 'LSREN': 'true'},
@@ -333,6 +334,8 @@ _iologic_default_attrs = {
         'IDES8': { 'GSREN': 'false', 'LSREN': 'true'},
         'IDES10': { 'GSREN': 'false', 'LSREN': 'true'},
         'IVIDEO': { 'GSREN': 'false', 'LSREN': 'true'},
+        'IDDR' :  {'CLKIMUX': 'ENABLE', 'LSRIMUX_0': '0', 'LSROMUX_0': '0'},
+        'IDDRC' : {'CLKIMUX': 'ENABLE', 'LSRIMUX_0': '1', 'LSROMUX_0': '0'},
         }
 def iologic_mod_attrs(attrs):
     if 'TXCLK_POL' in attrs.keys():
@@ -351,11 +354,11 @@ def iologic_mod_attrs(attrs):
         del attrs['GSREN']
     # XXX ignore for now
     attrs.pop('LSREN', None)
+    attrs.pop('Q0_INIT', None)
+    attrs.pop('Q1_INIT', None)
 
 def set_iologic_attrs(db, attrs, param):
-    in_attrs = {}
-    if 'IOLOGIC_TYPE' in param.keys():
-        in_attrs = _iologic_default_attrs[param['IOLOGIC_TYPE']].copy()
+    in_attrs = _iologic_default_attrs[param['IOLOGIC_TYPE']].copy()
     in_attrs.update(attrs)
     iologic_mod_attrs(in_attrs)
     fin_attrs = set()
@@ -371,15 +374,15 @@ def set_iologic_attrs(db, attrs, param):
         in_attrs['LSRIMUX_0'] = '0';
         #in_attrs['LSRMUX_LSR'] = 'INV';
     if 'INMODE' in attrs.keys():
-        if attrs['INMODE'] == 'DDRENABLE':
-            in_attrs['ISI'] = 'ENABLE';
-        in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK0';
-        if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
-            in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK1';
-        in_attrs['CLKIMUX'] = 'ENABLE';
-        in_attrs['LSROMUX_0'] = '0';
-        in_attrs['LSRIMUX_0'] = '1';
-        #in_attrs['LSRMUX_LSR'] = 'INV';
+        if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
+            if attrs['INMODE'] == 'DDRENABLE':
+                in_attrs['ISI'] = 'ENABLE';
+            in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK0';
+            if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
+                in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK1';
+            in_attrs['CLKIMUX'] = 'ENABLE';
+            in_attrs['LSROMUX_0'] = '0';
+            in_attrs['LSRIMUX_0'] = '1';
 
     for k, val in in_attrs.items():
         if k not in iologic_attrids.keys():

@@ -25,7 +25,12 @@ all_deser: deser-oser4-tangnano.fs deser-oser8-tangnano.fs \
 	deser-ides4-tangnano9k.fs deser-ivideo-tangnano9k.fs deser-ides10-tangnano9k.fs \
 	deser-ides8-tangnano9k.fs \
 	deser-ides4-szfpga.fs deser-ivideo-szfpga.fs deser-ides10-szfpga.fs \
-	deser-ides8-szfpga.fs
+	deser-ides8-szfpga.fs \
+	deser-iddr-tangnano.fs deser-iddrc-tangnano.fs \
+	deser-iddr-tangnano1k.fs deser-iddrc-tangnano1k.fs \
+	deser-iddr-tangnano4k.fs deser-iddrc-tangnano4k.fs \
+	deser-iddr-tangnano9k.fs deser-iddrc-tangnano9k.fs \
+	deser-iddr-szfpga.fs deser-iddrc-szfpga.fs \
 
 unpacked_deser:	deser-oser4-tangnano-unpacked.v deser-oser8-tangnano-unpacked.v \
 	deser-ovideo-tangnano-unpacked.v deser-oser10-tangnano-unpacked.v \
@@ -50,14 +55,19 @@ unpacked_deser:	deser-oser4-tangnano-unpacked.v deser-oser8-tangnano-unpacked.v 
 	deser-ides4-tangnano9k-unpacked.v deser-ivideo-tangnano9k-unpacked.v \
 	deser-ides10-tangnano9k-unpacked.v deser-ides8-tangnano9k-unpacked.v \
 	deser-ides4-szfpga-unpacked.v deser-ivideo-szfpga-unpacked.v \
-	deser-ides10-szfpga-unpacked.v deser-ides8-szfpga-unpacked.v 
+	deser-ides10-szfpga-unpacked.v deser-ides8-szfpga-unpacked.v \
+	deser-iddr-tangnano-unpacked.v deser-iddrc-tangnano-unpacked.v \
+	deser-iddr-tangnano1k-unpacked.v deser-iddrc-tangnano1k-unpacked.v \
+	deser-iddr-tangnano4k-unpacked.v deser-iddrc-tangnano4k-unpacked.v \
+	deser-iddr-tangnano9k-unpacked.v deser-iddrc-tangnano9k-unpacked.v \
+	deser-iddr-szfpga-unpacked.v deser-iddrc-szfpga-unpacked.v
 
 clean_deser: 
 	
 .PHONY: all-deser unpacked-deser clean-deser
 
 deser-%-tec0117.json: deser-%-tec0117-synth.json $(WRK_PATH)/%-tec0117.cst
-	$(NEXTPNR) -v --debug --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --cst $(WRK_PATH)/$*-tec0117.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --cst $(WRK_PATH)/$*-tec0117.cst
 
 deser-%-tec0117-synth.json: $(WRK_PATH)/%.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
@@ -87,6 +97,9 @@ deser-%-tangnano9k-synth.json: $(WRK_PATH)/%.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
 ######################################################
+%-szfpga-unpacked.v: %-szfpga.fs
+	gowin_unpack -d GW1N-9 -o $@ $^
+
 deser-%-szfpga.json: deser-%-szfpga-synth.json $(WRK_PATH)/%-szfpga.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --cst $(WRK_PATH)/$*-szfpga.cst
 
