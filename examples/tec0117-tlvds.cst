@@ -1,0 +1,33 @@
+//Copyright (C)2014-2019 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//GOWIN Version: V1.9.1.01Beta
+//Part Number: GW1N-LV1QN48C6/I5
+//Created Time: Sun Dec 15 11:40:09 2019
+
+IO_LOC "clk" 35;
+IO_PORT "clk" IO_TYPE=LVCMOS33;
+IO_LOC "rst" 77;
+IO_LOC "sd_out" 47; // PMOD header pin 1
+IO_PORT "sd_out" IO_TYPE=LVCMOS33;
+IO_LOC "led[0]" 86;
+IO_LOC "led[1]" 85;
+IO_LOC "led[2]" 84;
+IO_LOC "led[3]" 83;
+IO_LOC "led[4]" 82;
+IO_LOC "led[5]" 81;
+IO_LOC "led[6]" 80;
+IO_LOC "led[7]" 79;
+
+CLOCK_LOC "led[0]" BUFS;
+CLOCK_LOC "led[1]" BUFS;
+CLOCK_LOC "led[2]" BUFS;
+CLOCK_LOC "led[3]" BUFS;
+CLOCK_LOC "led[4]" BUFS;
+CLOCK_LOC "led[5]" BUFS;
+CLOCK_LOC "led[6]" BUFS;
+CLOCK_LOC "led[7]" BUFS;
+
+// true LVDS pins
+IO_LOC "tlvds_p" 29,30;
+IO_PORT "tlvds_p" IO_TYPE=LVCMOS33;

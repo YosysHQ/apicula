@@ -261,7 +261,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 continue
             if 'OUTMODE' in attrvals.keys():
                 # XXX skip oddr
-                if attrvals['OUTMODE'] == attrids.iologic_attrvals['MODDRX1']:
+                if attrvals['OUTMODE'] == attrids.iologic_attrvals['ODDRX1']:
                     continue
                 # skip aux cells
                 if attrvals['OUTMODE'] == attrids.iologic_attrvals['DDRENABLE']:
@@ -269,14 +269,22 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 if attrids.iologic_num2val[attrvals['OUTMODE']] in _iologic_mode.keys():
                     bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['OUTMODE']]]}")
             elif 'INMODE' in attrvals.keys():
-                # XXX skip oddr
-                if attrvals['INMODE'] == attrids.iologic_attrvals['MIDDRX1']:
+                if attrvals['INMODE'] == attrids.iologic_attrvals['IDDRX1']:
+                    if 'LSRIMUX_0' in attrvals.keys():
+                        bels.setdefault(name, set()).add(f"MODE=IDDRC")
+                    else:
+                        bels.setdefault(name, set()).add(f"MODE=IDDR")
                     continue
                 # skip aux cells
                 if attrvals['INMODE'] == attrids.iologic_attrvals['DDRENABLE']:
                     continue
                 if attrids.iologic_num2val[attrvals['INMODE']] in _iologic_mode.keys():
-                    bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['INMODE']]]}")
+                    in_mode = _iologic_mode[attrids.iologic_num2val[attrvals['INMODE']]]
+                    if in_mode == 'OVIDEO':
+                        in_mode = 'IVIDEO'
+                    bels.setdefault(name, set()).add(f"MODE={in_mode}")
+            else:
+                continue
             if 'CLKODDRMUX_ECLK' in attrvals.keys():
                 bels.setdefault(name, set()).add(f"CLKODDRMUX_ECLK={attrids.iologic_num2val[attrvals['CLKODDRMUX_ECLK']]}")
         if name.startswith("DFF"):
@@ -590,17 +598,36 @@ def modify_pll_inputs(db, pll):
         del pll.params['FBSEL']
 
 _iologic_ports = {
-        'OSER4': {'D0', 'D1', 'D2', 'D3', 'Q0', 'Q1', 'RESET', 'TX0', 'TX1', 'PCLK', 'FCLK'},
-        'OSER8': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'Q0', 'Q1', 'RESET', 'TX0', 'TX1', 'TX2', 'TX3', 'PCLK', 'FCLK'},
-        'OVIDEO': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'Q', 'RESET', 'PCLK', 'FCLK'},
-        'OSER10': {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9', 'Q', 'RESET', 'PCLK', 'FCLK'},
-        'IDES4': {'D', 'Q0', 'Q1', 'Q2', 'Q3', 'RESET', 'CALIB', 'PCLK', 'FCLK'},
-        'IDES8': {'D', 'Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'RESET', 'CALIB', 'PCLK', 'FCLK'},
-        'IVIDEO': {'D', 'Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'RESET', 'CALIB', 'PCLK', 'FCLK'},
-        'IDES10': {'D', 'Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'RESET', 'CALIB', 'PCLK', 'FCLK'},
+        'OSER4': {'D0': 'D0', 'D1': 'D1', 'D2': 'D2', 'D3': 'D3',
+                  'Q0': 'Q0', 'Q1': 'Q1', 'RESET': 'RESET', 'TX0': 'TX0',
+                  'TX1': 'TX1', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'OSER8': {'D0': 'D0', 'D1': 'D1', 'D2': 'D2', 'D3': 'D3',
+                  'D4': 'D4', 'D5': 'D5', 'D6': 'D6', 'D7': 'D7',
+                  'Q0': 'Q0', 'Q1': 'Q1', 'RESET': 'RESET', 'TX0': 'TX90',
+                  'TX1': 'TX1', 'TX2': 'TX2', 'TX3': 'TX3',
+                  'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'OVIDEO':{'D0': 'D0', 'D1': 'D1', 'D2': 'D2', 'D3': 'D3',
+                  'D4': 'D4', 'D5': 'D5', 'D6': 'D6', 'Q': 'Q',
+                  'RESET': 'RESET', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'OSER10': {'D0': 'D0', 'D1': 'D1', 'D2': 'D2', 'D3': 'D3',
+                   'D4': 'D4', 'D5': 'D5', 'D6': 'D6', 'D7': 'D7', 'D8': 'D8', 'D9': 'D9',
+                   'Q': 'Q', 'RESET': 'RESET', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'IDDR' :  {'D': 'D', 'Q8': 'Q0', 'Q9': 'Q1', 'CLK': 'CLK'},
+        'IDDRC' : {'D': 'D', 'Q8': 'Q0', 'Q9': 'Q1', 'CLK': 'CLK', 'CLEAR': 'CLEAR'},
+        'IDES4':  {'D': 'D', 'Q6': 'Q0', 'Q7': 'Q1', 'Q8': 'Q2', 'Q9': 'Q3',
+                   'RESET': 'RESET', 'CALIB': 'CALIB', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'IDES8': {'D': 'D', 'Q2': 'Q0', 'Q3': 'Q1', 'Q4': 'Q2', 'Q5': 'Q3', 'Q6': 'Q4',
+                  'Q7': 'Q5', 'Q8': 'Q6', 'Q9': 'Q7',
+                  'RESET': 'RESET', 'CALIB': 'CALIB', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'IVIDEO': {'D': 'D', 'Q3': 'Q0', 'Q4': 'Q1', 'Q5': 'Q2', 'Q6': 'Q3', 'Q7': 'Q4',
+                   'Q8': 'Q5', 'Q9': 'Q6',
+                   'RESET': 'RESET', 'CALIB': 'CALIB', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'IDES10': {'D': 'D', 'Q0': 'Q0', 'Q1': 'Q1', 'Q2': 'Q2', 'Q3': 'Q3', 'Q4': 'Q4',
+                   'Q5': 'Q5', 'Q6': 'Q6', 'Q7': 'Q7', 'Q8': 'Q8', 'Q9': 'Q9',
+                   'RESET': 'RESET', 'CALIB': 'CALIB', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
 }
 def iologic_ports_by_type(typ, portmap):
-    return { (port, wire) for port, wire in portmap.items() if port in _iologic_ports[typ] }
+    return { (_iologic_ports[typ][port], wire) for port, wire in portmap.items() if port in _iologic_ports[typ].keys() }
 
 _sides = "AB"
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
@@ -645,7 +672,6 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             disable_oddr = True
             eclk = 'HCLK0'
             iol_params = {}
-            print(flags)
             for paramval in flags:
                 param, _, val = paramval.partition('=')
                 if param == 'MODE':
@@ -956,7 +982,7 @@ def main():
         #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
         #    breakpoint()
         bels, pips, clock_pips = parse_tile_(db, row, col, t, noiostd = False)
-        #print(bels)
+        #print(idx, bels)
         #print(pips)
         #print(clock_pips)
         if args.noalu:
