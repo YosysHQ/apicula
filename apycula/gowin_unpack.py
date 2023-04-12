@@ -217,10 +217,11 @@ _iologic_mode = {
         'MODDRX2': 'OSER4',  'ODDRX2': 'OSER4',
         'MODDRX4': 'OSER8',  'ODDRX4': 'OSER8',
         'MODDRX5': 'OSER10', 'ODDRX5': 'OSER10',
-        'VIDEORX': 'OVIDEO',
+        'VIDEORX': 'OVIDEO', 'ODDRX8': 'OSER16',
         'MIDDRX2': 'IDES4',  'IDDRX2': 'IDES4',
         'MIDDRX4': 'IDES8',  'IDDRX4': 'IDES8',
         'MIDDRX5': 'IDES10', 'IDDRX5': 'IDES10',
+        'IDDRX8': 'IDES16',
         }
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
@@ -256,7 +257,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("IOLOGIC"):
             idx = name[-1]
             attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids)
-            print(row, col, attrvals)
+            #print(row, col, attrvals)
             if not attrvals:
                 continue
             if 'OUTMODE' in attrvals.keys():
@@ -612,6 +613,10 @@ _iologic_ports = {
         'OSER10': {'D0': 'D0', 'D1': 'D1', 'D2': 'D2', 'D3': 'D3',
                    'D4': 'D4', 'D5': 'D5', 'D6': 'D6', 'D7': 'D7', 'D8': 'D8', 'D9': 'D9',
                    'Q': 'Q', 'RESET': 'RESET', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'OSER16': {'D0': 'A0', 'D1': 'A1', 'D2': 'A2', 'D3': 'A3',
+                   'D4': 'C1', 'D5': 'C0', 'D6': 'D1', 'D7': 'D0', 'D8': 'C3', 'D9': 'C2',
+                   'D10': 'B4', 'D11': 'B5', 'D12': 'A0', 'D13': 'A1', 'D14': 'A2',
+                   'D15': 'A3',},
         'IDDR' :  {'D': 'D', 'Q8': 'Q0', 'Q9': 'Q1', 'CLK': 'CLK'},
         'IDDRC' : {'D': 'D', 'Q8': 'Q0', 'Q9': 'Q1', 'CLK': 'CLK', 'CLEAR': 'CLEAR'},
         'IDES4':  {'D': 'D', 'Q6': 'Q0', 'Q7': 'Q1', 'Q8': 'Q2', 'Q9': 'Q3',
@@ -625,9 +630,24 @@ _iologic_ports = {
         'IDES10': {'D': 'D', 'Q0': 'Q0', 'Q1': 'Q1', 'Q2': 'Q2', 'Q3': 'Q3', 'Q4': 'Q4',
                    'Q5': 'Q5', 'Q6': 'Q6', 'Q7': 'Q7', 'Q8': 'Q8', 'Q9': 'Q9',
                    'RESET': 'RESET', 'CALIB': 'CALIB', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
+        'IDES16': {'Q0': 'F2', 'Q1': 'F3', 'Q2': 'F4', 'Q3': 'F5', 'Q4': 'Q0', 'Q5': 'Q1',
+                   'Q6': 'Q2', 'Q7': 'Q3', 'Q8': 'Q4', 'Q9': 'Q5', 'Q10': 'F0',
+                   'Q11': 'F1', 'Q12': 'F2', 'Q13': 'F3', 'Q14': 'F4', 'Q15': 'F5' },
 }
 def iologic_ports_by_type(typ, portmap):
-    return { (_iologic_ports[typ][port], wire) for port, wire in portmap.items() if port in _iologic_ports[typ].keys() }
+    if typ not in {'IDES16', 'OSER16'}:
+        return { (_iologic_ports[typ][port], wire) for port, wire in portmap.items() if port in _iologic_ports[typ].keys() }
+    elif typ in {'OSER16', 'IDES16'}:
+        ports = { (port, wire) for port, wire in _iologic_ports[typ].items()}
+        ports.add(('RESET', portmap['RESET']))
+        ports.add(('PCLK', portmap['PCLK']))
+        ports.add(('FCLK', portmap['FCLK']))
+        if typ == 'IDES16':
+            ports.add(('CALIB', portmap['CALIB']))
+            ports.add(('D', portmap['D']))
+        else:
+            ports.add(('Q', portmap['Q']))
+        return ports
 
 _sides = "AB"
 def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
@@ -689,7 +709,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             name = f"R{row}C{col}_{iol_mode}_{idx}"
             iol = mod.primitives.setdefault(name, codegen.Primitive(iol_mode, name))
             iol.params.update(iol_params)
-            iol_oser = iol_mode in {'OSER4', 'OVIDEO', 'OSER8', 'OSER10'}
+            iol_oser = iol_mode in {'OSER4', 'OVIDEO', 'OSER8', 'OSER10', 'OSER16'}
 
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
             for port, wname in iologic_ports_by_type(iol_mode, portmap):
@@ -705,14 +725,27 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                             wname = 'CLK2'
                         iol.portmap[port] = f"R{row}C{col}_{wname}"
                     else:
-                        iol.portmap[port] = f"R{row}C{col}_{wname}"
+                        if iol_mode != 'OSER16' or port not in {'D12', 'D13', 'D14', 'D15'}:
+                            iol.portmap[port] = f"R{row}C{col}_{wname}"
+                        else:
+                            if row == 1 or row == db.rows:
+                                iol.portmap[port] = f"R{row}C{col + 1}_{wname}"
+                            else:
+                                iol.portmap[port] = f"R{row + 1}C{col}_{wname}"
                 else: # IDES
                     if port in {'D'}:
                         iol.portmap[port] = f"R{row}C{col}_{portmap['D']}_IOL"
-                    #elif port[0] == 'Q':
-                    #    iol.portmap[port] = f"R{row}C{col}_{portmap[port]}"
                     else:
-                        iol.portmap[port] = f"R{row}C{col}_{wname}"
+                        if iol_mode != 'IDES16':
+                            iol.portmap[port] = f"R{row}C{col}_{wname}"
+                        else:
+                            if port not in {'Q0', 'Q1', 'Q2', 'Q3'}:
+                                iol.portmap[port] = f"R{row}C{col}_{wname}"
+                            else:
+                                if row == 1 or row == db.rows:
+                                    iol.portmap[port] = f"R{row}C{col + 1}_{wname}"
+                                else:
+                                    iol.portmap[port] = f"R{row + 1}C{col}_{wname}"
                 if port == 'FCLK':
                     wname = eclk
                     if eclk == 'HCLK0' and _device in {'GW1N-1'}:

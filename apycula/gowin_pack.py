@@ -35,7 +35,7 @@ def sanitize_name(name):
 
 def extra_pll_bels(cell, row, col, num, cellname):
     # rPLL can occupy several cells, add them depending on the chip
-    offx = 1;
+    offx = 1
     if device in {'GW1N-9C', 'GW1N-9'}:
         if int(col) > 28:
             offx = -1
@@ -51,7 +51,7 @@ def get_bels(data):
     later = []
     belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
-        if cell['type'].startswith('DUMMY_') :
+        if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'}:
             continue
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
@@ -329,6 +329,7 @@ _iologic_default_attrs = {
         'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER8': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER10': { 'GSREN': 'false', 'LSREN': 'true'},
+        'OSER16': { 'GSREN': 'false', 'LSREN': 'true', 'CLKOMUX': 'ENABLE'},
         'OVIDEO': { 'GSREN': 'false', 'LSREN': 'true'},
         'IDES4': { 'GSREN': 'false', 'LSREN': 'true'},
         'IDES8': { 'GSREN': 'false', 'LSREN': 'true'},
@@ -336,6 +337,7 @@ _iologic_default_attrs = {
         'IVIDEO': { 'GSREN': 'false', 'LSREN': 'true'},
         'IDDR' :  {'CLKIMUX': 'ENABLE', 'LSRIMUX_0': '0', 'LSROMUX_0': '0'},
         'IDDRC' : {'CLKIMUX': 'ENABLE', 'LSRIMUX_0': '1', 'LSROMUX_0': '0'},
+        'IDES16': { 'GSREN': 'false', 'LSREN': 'true', 'CLKIMUX': 'ENABLE'},
         }
 def iologic_mod_attrs(attrs):
     if 'TXCLK_POL' in attrs.keys():
@@ -363,26 +365,41 @@ def set_iologic_attrs(db, attrs, param):
     iologic_mod_attrs(in_attrs)
     fin_attrs = set()
     if 'OUTMODE' in attrs.keys():
-        if attrs['OUTMODE'] == 'DDRENABLE':
-            in_attrs['ISI'] = 'ENABLE';
-        in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0';
-        in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0';
+        in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+        in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
         if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
-            in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1';
-        in_attrs['CLKOMUX'] = 'ENABLE';
-        in_attrs['LSROMUX_0'] = '1';
-        in_attrs['LSRIMUX_0'] = '0';
-        #in_attrs['LSRMUX_LSR'] = 'INV';
+            in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1'
+        elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
+            in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0'
+        in_attrs['LSROMUX_0'] = '1'
+        if attrs['OUTMODE'] == 'ODDRX8' or attrs['OUTMODE'] == 'DDRENABLE16':
+            in_attrs['LSROMUX_0'] = '0'
+        if attrs['OUTMODE'] == 'DDRENABLE16':
+            in_attrs['OUTMODE'] = 'DDRENABLE'
+            in_attrs['ISI'] = 'ENABLE'
+        if attrs['OUTMODE'] == 'DDRENABLE':
+            in_attrs['ISI'] = 'ENABLE'
+        in_attrs['LSRIMUX_0'] = '0'
+        in_attrs['CLKOMUX'] = 'ENABLE'
+        #in_attrs['LSRMUX_LSR'] = 'INV'
     if 'INMODE' in attrs.keys():
         if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
-            if attrs['INMODE'] == 'DDRENABLE':
-                in_attrs['ISI'] = 'ENABLE';
-            in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK0';
+            in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+            in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
             if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
-                in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK1';
-            in_attrs['CLKIMUX'] = 'ENABLE';
-            in_attrs['LSROMUX_0'] = '0';
-            in_attrs['LSRIMUX_0'] = '1';
+                in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK1'
+            elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
+                in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0'
+            in_attrs['LSRIMUX_0'] = '1'
+            if attrs['INMODE'] == 'IDDRX8' or attrs['INMODE'] == 'DDRENABLE16':
+                in_attrs['LSROMUX_0'] = '0'
+            if attrs['INMODE'] == 'DDRENABLE16':
+                in_attrs['INMODE'] = 'DDRENABLE'
+                in_attrs['ISI'] = 'ENABLE'
+            if attrs['INMODE'] == 'DDRENABLE':
+                in_attrs['ISI'] = 'ENABLE'
+            in_attrs['LSROMUX_0'] = '0'
+            in_attrs['CLKIMUX'] = 'ENABLE'
 
     for k, val in in_attrs.items():
         if k not in iologic_attrids.keys():
@@ -497,7 +514,7 @@ def place(db, tilemap, bels, cst, args):
                 if attrs['DIFF_TYPE'] == 'TLVDS_OBUF' and attrs['DIFF'] == 'N':
                     continue
             edge = 'T'
-            idx = col;
+            idx = col
             if row == db.rows:
                 edge = 'B'
             elif col == 1:

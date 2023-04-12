@@ -31,6 +31,8 @@ all_deser: deser-oser4-tangnano.fs deser-oser8-tangnano.fs \
 	deser-iddr-tangnano4k.fs deser-iddrc-tangnano4k.fs \
 	deser-iddr-tangnano9k.fs deser-iddrc-tangnano9k.fs \
 	deser-iddr-szfpga.fs deser-iddrc-szfpga.fs \
+	deser-oser16-tangnano4k.fs deser-oser16-tangnano9k.fs deser-oser16-szfpga.fs \
+	deser-ides16-tangnano4k.fs deser-ides16-tangnano9k.fs deser-ides16-szfpga.fs
 
 unpacked_deser:	deser-oser4-tangnano-unpacked.v deser-oser8-tangnano-unpacked.v \
 	deser-ovideo-tangnano-unpacked.v deser-oser10-tangnano-unpacked.v \
@@ -60,7 +62,10 @@ unpacked_deser:	deser-oser4-tangnano-unpacked.v deser-oser8-tangnano-unpacked.v 
 	deser-iddr-tangnano1k-unpacked.v deser-iddrc-tangnano1k-unpacked.v \
 	deser-iddr-tangnano4k-unpacked.v deser-iddrc-tangnano4k-unpacked.v \
 	deser-iddr-tangnano9k-unpacked.v deser-iddrc-tangnano9k-unpacked.v \
-	deser-iddr-szfpga-unpacked.v deser-iddrc-szfpga-unpacked.v
+	deser-iddr-szfpga-unpacked.v deser-iddrc-szfpga-unpacked.v \
+	deser-oser16-tangnano4k-unpacked.v deser-oser16-tangnano9k-unpacked.v \
+	deser-oser16-tangnano4k-unpacked.v \
+	deser-ides16-tangnano4k-unpacked.v deser-ides16-tangnano9k-unpacked.v deser-ides16-szfpga-unpacked.v
 
 clean_deser: 
 	

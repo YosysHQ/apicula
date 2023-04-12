@@ -17,7 +17,7 @@ module top(input wire clk_i,
 	defparam id.Q1_INIT=1'b0;
 
 	// dummy DFF
-	assign q_o[3] = dummy_r;
+	assign q_o[4] = dummy_r;
 	reg dummy_r;
 	always @(posedge fclk_i) begin
 		dummy_r <= !dummy_r;

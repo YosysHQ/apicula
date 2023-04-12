@@ -746,6 +746,13 @@ def fse_iologic(device, fse, ttyp):
             bels['IOLOGICA'] = Bel()
         if 22 in fse[ttyp]['shortval'].keys():
             bels['IOLOGICB'] = Bel()
+    # 16bit
+    if device in {'GW1NS-4'} and ttyp in {142, 144, 59}:
+            bels['OSER16'] = Bel()
+            bels['IDES16'] = Bel()
+    if device in {'GW1N-9', 'GW1N-9C'} and ttyp in {52, 66}:
+            bels['OSER16'] = Bel()
+            bels['IDES16'] = Bel()
     return bels
 
 def from_fse(device, fse, dat):
@@ -931,6 +938,16 @@ _iologic_outputs = [(0, 'Q'),  (1, 'Q0'), (2, 'Q1'), (3, 'Q2'), (4, 'Q3'), (5, '
                     (6, 'Q5'), (7, 'Q6'), (8, 'Q7'), (9, 'Q8'), (10, 'Q9'), (11, 'Q10'),
                     (12, 'Q11'), (13, 'Q12'), (14, 'Q13'), (15, 'Q14'), (16, 'Q15'),
                     (17, 'DO'), (18, 'DF'), (19, 'LAG'), (20, 'LEAD'), (21, 'DAO')]
+_oser16_inputs =  [(19, 'PCLK'), (20, 'FCLK'), (25, 'RESET')]
+_oser16_fixed_inputs = {'D0': 'A0', 'D1': 'A1', 'D2': 'A2', 'D3': 'A3', 'D4': 'C1',
+                        'D5': 'C0', 'D6': 'D1', 'D7': 'D0', 'D8': 'C3', 'D9': 'C2',
+                        'D10': 'B4', 'D11': 'B5', 'D12': 'A0', 'D13': 'A1', 'D14': 'A2',
+                        'D15': 'A3'}
+_oser16_outputs = [(1, 'Q0')]
+_ides16_inputs = [(19, 'PCLK'), (20, 'FCLK'), (38, 'CALIB'), (25, 'RESET'), (0, 'D')]
+_ides16_fixed_outputs = { 'Q0': 'F2', 'Q1': 'F3', 'Q2': 'F4', 'Q3': 'F5', 'Q4': 'Q0',
+                          'Q5': 'Q1', 'Q6': 'Q2', 'Q7': 'Q3', 'Q8': 'Q4', 'Q9': 'Q5', 'Q10': 'F0',
+                         'Q11': 'F1', 'Q12': 'F2', 'Q13': 'F3', 'Q14': 'F4', 'Q15': 'F5'}
 def dat_portmap(dat, dev, device):
     for row, row_dat in enumerate(dev.grid):
         for col, tile in enumerate(row_dat):
@@ -970,10 +987,31 @@ def dat_portmap(dat, dev, device):
                             # dummy Input, we'll make a special pips for it
                             bel.portmap[nam] = "FCLK"
                     for idx, nam in _iologic_outputs:
-                        # outputs are placed in neighbor bel
                         w_idx = dat[f'Iologic{buf}Out'][idx]
                         if w_idx >= 0:
                             bel.portmap[nam] = wirenames[w_idx]
+                elif name.startswith("OSER16"):
+                    for idx, nam in _oser16_inputs:
+                        w_idx = dat[f'IologicAIn'][idx]
+                        if w_idx >= 0:
+                            bel.portmap[nam] = wirenames[w_idx]
+                        elif nam == 'FCLK':
+                            # dummy Input, we'll make a special pips for it
+                            bel.portmap[nam] = "FCLK"
+                    for idx, nam in _oser16_outputs:
+                        w_idx = dat[f'IologicAOut'][idx]
+                        if w_idx >= 0:
+                            bel.portmap[nam] = wirenames[w_idx]
+                    bel.portmap.update(_oser16_fixed_inputs)
+                elif name.startswith("IDES16"):
+                    for idx, nam in _ides16_inputs:
+                        w_idx = dat[f'IologicAIn'][idx]
+                        if w_idx >= 0:
+                            bel.portmap[nam] = wirenames[w_idx]
+                        elif nam == 'FCLK':
+                            # dummy Input, we'll make a special pips for it
+                            bel.portmap[nam] = "FCLK"
+                    bel.portmap.update(_ides16_fixed_outputs)
                 elif name == 'RPLLA':
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.
