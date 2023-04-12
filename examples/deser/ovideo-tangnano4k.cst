@@ -1,11 +1,12 @@
 // these are the HDMI pins!
-IO_LOC "q_o[0]" 27;
-IO_LOC "q_o[1]" 29;
+IO_LOC "q_o[0]" 48;
+IO_LOC "q_o[1]" 40;
 IO_LOC "q_o[2]" 20;
 IO_LOC "q_o[3]" 22;
-IO_LOC "q_o[4]" 16;
-IO_LOC "q_o[5]" 18;
+IO_LOC "q_o[4]" 39;
+IO_LOC "q_o[5]" 17;
 IO_LOC "q_o[6]" 1;
+IO_LOC "q_o[7]" 19;
 
 IO_LOC "pclk_o" 44;
 IO_LOC "fclk_o" 46;
