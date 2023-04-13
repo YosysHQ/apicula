@@ -1,0 +1,21 @@
+//File Title: Physical Constraints file
+//Part Number: GW1NR-LV9LQ144PC6/I5
+
+IO_LOC "clk_i" 98;
+
+IO_LOC "nrst_i" 27;	// key0
+IO_LOC "key" 28;
+
+IO_LOC "q_o[0]" 62; //42;
+IO_LOC "q_o[1]" 121; //43;
+IO_LOC "q_o[2]" 47; //44;
+IO_LOC "q_o[3]" 45; //45;
+IO_LOC "q_o[4]" 64; //46;
+IO_LOC "q_o[5]" 128; //47;
+IO_LOC "q_o[6]" 124; //48;
+IO_LOC "q_o[7]" 126; //49;
+
+// pclk_o - low frequency, fclk_o - high frequency
+IO_LOC "pclk_o" 66;
+IO_LOC "fclk_o" 119;
+
