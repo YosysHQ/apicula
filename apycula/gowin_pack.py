@@ -326,6 +326,8 @@ def set_pll_attrs(db, typ, idx, attrs):
 
 _iologic_default_attrs = {
         'DUMMY': {},
+        'ODDR': { 'TXCLK_POL': '0'},
+        'ODDRC': { 'TXCLK_POL': '0'},
         'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER8': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER10': { 'GSREN': 'false', 'LSREN': 'true'},
@@ -365,13 +367,17 @@ def set_iologic_attrs(db, attrs, param):
     iologic_mod_attrs(in_attrs)
     fin_attrs = set()
     if 'OUTMODE' in attrs.keys():
-        in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+        if attrs['OUTMODE'] != 'ODDRX1':
+            in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+        if attrs['OUTMODE'] != 'ODDRX1' or param['IOLOGIC_TYPE'] == 'ODDRC':
+            in_attrs['LSROMUX_0'] = '1'
+        else:
+            in_attrs['LSROMUX_0'] = '0'
         in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
         if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
             in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1'
         elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
             in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0'
-        in_attrs['LSROMUX_0'] = '1'
         if attrs['OUTMODE'] == 'ODDRX8' or attrs['OUTMODE'] == 'DDRENABLE16':
             in_attrs['LSROMUX_0'] = '0'
         if attrs['OUTMODE'] == 'DDRENABLE16':
@@ -618,13 +624,6 @@ def place(db, tilemap, bels, cst, args):
 
             if pinless_io:
                 return
-        elif typ == "ODDR":
-            bel = tiledata.bels[f'ODDR{num}']
-            bits = bel.modes['ENABLE'].copy()
-            if int(attrs["IOBUF"], 2):
-                bits.update(bel.flags['IOBUF'])
-            for r, c in bits:
-                tile[r][c] = 1
         elif typ == "RAMW":
             bel = tiledata.bels['RAM16']
             bits = bel.modes['0']

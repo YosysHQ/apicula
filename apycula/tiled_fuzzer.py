@@ -602,51 +602,6 @@ def fse_diff_iob(fse, db, pin_locations, diff_cap_info):
                 # emulated LVDS
                 pass
 
-# make IOLogic bels
-_iologic_table = {'A' : 21, 'B' : 22}
-_oddr_keys = {
-        'GW1N-1'  : [[9, 0],  [88, 0]],
-        'GW1NZ-1' : [[9, 0],  [88, 0]],
-        'GW1NS-2' : [[10, 0], [90, 0]],
-        'GW1N-4'  : [[9, 0],  [88, 0]],
-        'GW1NS-4' : [[10, 0], [-39, 0], [91, 0]],
-        'GW1N-9'  : [[10, 0], [91, 0]],
-        'GW1N-9C' : [[10, 0], [91, 0]],
-        }
-_oddr_io_key = {89}
-def fse_iologic(fse, db, pin_locations):
-    for ttyp, tiles in pin_locations.items():
-        pin_loc = list(tiles.keys())[0]
-        side, num = _tbrlre.match(pin_loc).groups()
-        row, col = tbrl2rc(fse, side, num)
-        bels = {name[-1] for loc in tiles.values() for name in loc}
-        for bel_idx in bels:
-            if bel_idx not in {'A', 'B'}:
-                continue
-            if 'shortval' in fse[ttyp] and _iologic_table[bel_idx] in fse[ttyp]['shortval']:
-                bel = db.grid[row][col].bels.setdefault(f"ODDR{bel_idx}", chipdb.Bel())
-                loc = set()
-                for fs in _oddr_keys[device] :
-                    loc.update(get_shortval(fse, ttyp, _iologic_table[bel_idx], fs))
-                bel.modes.setdefault('ENABLE', loc)
-                # iobuf
-                # XXX not supporting T/IOBUF yet
-                #loc = get_longval(fse, ttyp, _pin_mode_longval[bel_idx],
-                #        recode_key(_oddr_io_key))
-                #bel.flags.setdefault('IOBUF', loc)
-                bel.portmap = {
-                    'D0':  wirenames[dat[f'Iologic{bel_idx}In'][1]],
-                    'D1':  wirenames[dat[f'Iologic{bel_idx}In'][2]],
-                    'CLK': wirenames[dat[f'Iologic{bel_idx}In'][17]],
-                    'TX':  wirenames[dat[f'Iologic{bel_idx}In'][27]],
-                }
-                # These two inputs are so far only found in the GW1N-9C,
-                # the purpose is not clear, but must be connected.
-                if dat[f'Iologic{bel_idx}In'][47] != -1:
-                    bel.portmap.update({
-                        'ODDR_ALWAYS_LOW':  wirenames[dat[f'Iologic{bel_idx}In'][47]],
-                        'ODDR_ALWAYS_HIGH': wirenames[dat[f'Iologic{bel_idx}In'][48]]
-                        })
 
 # IOB fuzzer
 def find_next_loc(pin, locs):
@@ -1042,7 +997,6 @@ if __name__ == "__main__":
     fse_slew_rate(fse, db, pin_locations)
     fse_hysteresis(fse, db, pin_locations)
     fse_drive(fse, db, pin_locations)
-    fse_iologic(fse, db, pin_locations)
 
     # diff IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)

@@ -13,7 +13,7 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	tlvds-tangnano4k.fs tlvds-tangnano9k.fs tlvds-tec0117.fs \
 	tlvds-oddr-tangnano4k.fs tlvds-oddr-tangnano9k.fs tlvds-oddr-tec0117.fs \
 	blinky-oddr-tec0117.fs blinky-oddr-runber.fs \
-	blinky-oddr-tangnano.fs blinky-oddr-honeycomb.fs \
+	blinky-oddr-tangnano.fs blinky-oddr-tangnano1k.fs blinky-oddr-honeycomb.fs \
 	blinky-oddr-tangnano4k.fs blinky-oddr-tangnano9k.fs \
 	blinky-osc-tec0117.fs blinky-osc-runber.fs blinky-osc-tangnano.fs  \
 	blinky-osc-honeycomb.fs \

@@ -3,6 +3,7 @@
 */
 module top (
 	input clk,
+	input key,
 	output [`LEDS_NR-1:0] led
 );
 
@@ -18,13 +19,14 @@ assign ctr_d = ctr_q + 1'b1;
 assign led[`LEDS_NR-1:2] = {(`LEDS_NR - 2){1'b1}};
 assign led[0] = ctr_q[24:24];
 
-ODDR oddr_0(
+ODDRC oddr_0(
 	.D0(1'b0),
 	.D1(1'b1),
 	.CLK(ctr_q[24:24]),
 	.Q0(led[1]),
 	.Q1(),
-	.TX()
+	.TX(1'b1),
+	.CLEAR(!key)
 );
 
 endmodule
