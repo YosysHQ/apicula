@@ -912,8 +912,6 @@ def json_pinout(device):
     else:
         raise Exception("unsupported device")
 
-
-
 _pll_inputs = [(5, 'CLKFB'), (6, 'FBDSEL0'), (7, 'FBDSEL1'), (8, 'FBDSEL2'), (9, 'FBDSEL3'),
                (10, 'FBDSEL4'), (11, 'FBDSEL5'),
                (12, 'IDSEL0'), (13, 'IDSEL1'), (14, 'IDSEL2'), (15, 'IDSEL3'), (16, 'IDSEL4'),
@@ -970,13 +968,6 @@ def dat_portmap(dat, dev, device):
                         bel.portmap['I'] = out
                         oe = wirenames[dat[f'Iobuf{pin}OE']]
                         bel.portmap['OE'] = oe
-                elif name.startswith("ODDR"):
-                        d0 = wirenames[dat[f'Iologic{pin}In'][1]]
-                        bel.portmap['D0'] = d0
-                        d1 = wirenames[dat[f'Iologic{pin}In'][2]]
-                        bel.portmap['D1'] = d1
-                        tx = wirenames[dat[f'Iologic{pin}In'][27]]
-                        bel.portmap['TX'] = tx
                 elif name.startswith("IOLOGIC"):
                     buf = name[-1]
                     for idx, nam in _iologic_inputs:

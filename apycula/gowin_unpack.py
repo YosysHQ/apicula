@@ -262,7 +262,12 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 continue
             if 'OUTMODE' in attrvals.keys():
                 # XXX skip oddr
-                if attrvals['OUTMODE'] == attrids.iologic_attrvals['ODDRX1']:
+                if attrvals['OUTMODE'] == attrids.iologic_attrvals['MODDRX1']:
+                    if 'LSROMUX_0' in attrvals.keys():
+                        bels.setdefault(name, set()).add(f"MODE=ODDRC")
+                        print(bels)
+                    else:
+                        bels.setdefault(name, set()).add(f"MODE=ODDR")
                     continue
                 # skip aux cells
                 if attrvals['OUTMODE'] == attrids.iologic_attrvals['DDRENABLE']:
@@ -270,7 +275,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 if attrids.iologic_num2val[attrvals['OUTMODE']] in _iologic_mode.keys():
                     bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['OUTMODE']]]}")
             elif 'INMODE' in attrvals.keys():
-                if attrvals['INMODE'] == attrids.iologic_attrvals['IDDRX1']:
+                if attrvals['INMODE'] == attrids.iologic_attrvals['MIDDRX1']:
                     if 'LSRIMUX_0' in attrvals.keys():
                         bels.setdefault(name, set()).add(f"MODE=IDDRC")
                     else:
@@ -599,6 +604,8 @@ def modify_pll_inputs(db, pll):
         del pll.params['FBSEL']
 
 _iologic_ports = {
+        'ODDR' :  {'D0': 'D0', 'D1': 'D1', 'Q0': 'Q0', 'Q1': 'Q1', 'CLK': 'CLK'},
+        'ODDRC' : {'D0': 'D0', 'D1': 'D1', 'Q0': 'Q0', 'Q1': 'Q1', 'CLK': 'CLK', 'CLEAR': 'CLEAR'},
         'OSER4': {'D0': 'D0', 'D1': 'D1', 'D2': 'D2', 'D3': 'D3',
                   'Q0': 'Q0', 'Q1': 'Q1', 'RESET': 'RESET', 'TX0': 'TX0',
                   'TX1': 'TX1', 'PCLK': 'PCLK', 'FCLK': 'FCLK'},
@@ -709,7 +716,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             name = f"R{row}C{col}_{iol_mode}_{idx}"
             iol = mod.primitives.setdefault(name, codegen.Primitive(iol_mode, name))
             iol.params.update(iol_params)
-            iol_oser = iol_mode in {'OSER4', 'OVIDEO', 'OSER8', 'OSER10', 'OSER16'}
+            iol_oser = iol_mode in {'ODDR', 'ODDRC', 'OSER4', 'OVIDEO', 'OSER8', 'OSER10', 'OSER16'}
 
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
             for port, wname in iologic_ports_by_type(iol_mode, portmap):
