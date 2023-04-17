@@ -56,6 +56,16 @@ gowin_pack -d $DEVICE -o pack.fs pnrblinky.json # chango to your device
 openFPGALoader -b $BOARD pack.fs
 ```
 
+For the Tangnano9k board, you need to call nextpnr and gowin_pack with the chip family as follows:
+```
+nextpnr-gowin --json blinky.json \
+              --write pnrblinky.json \
+              --device $DEVICE \
+              --family GW1N-9C \
+              --cst $BOARD.cst
+gowin_pack -d GW1N-9C -o pack.fs pnrblinky.json
+```
+
 ## Getting started for contributors
 
 In addition to the above, to run the fuzzers and build the ChipDB, the following additional dependencies are needed.
