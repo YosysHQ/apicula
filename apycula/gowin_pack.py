@@ -489,9 +489,9 @@ def place(db, tilemap, bels, cst, args):
                 dff_attrs = set()
                 add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['REGMODE'], cls_attrvals['FF'])
                 # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
-                if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC'}:
+                if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC', 'DFF', 'DFFN'}:
                     add_attr_val(db, 'SLICE', dff_attrs, cls_attrids[f'REG{int(num) % 2}_REGSET'], cls_attrvals['RESET'])
-                elif mode not in {'DFF', 'DFFN'}:
+                else:
                     add_attr_val(db, 'SLICE', dff_attrs, cls_attrids[f'REG{int(num) % 2}_REGSET'], cls_attrvals['SET'])
                 # are set/reset/clear/preset port needed?
                 if mode not in {'DFF', 'DFFN'}:
