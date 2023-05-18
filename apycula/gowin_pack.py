@@ -12,8 +12,7 @@ from collections import namedtuple
 from apycula import codegen
 from apycula import chipdb
 from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses
-from apycula import attrids
-from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals, iologic_attrids, iologic_attrvals
+from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals, osc_attrids, osc_attrvals, iologic_attrids, iologic_attrvals
 from apycula import bslib
 from apycula import attrids
 from apycula.wirenames import wirenames, wirenumbers
@@ -49,7 +48,7 @@ def extra_pll_bels(cell, row, col, num, cellname):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFH]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'}:
             continue
@@ -324,6 +323,32 @@ def set_pll_attrs(db, typ, idx, attrs):
     #print(fin_attrs)
     return fin_attrs
 
+def set_osc_attrs(db, typ, params):
+    osc_attrs = dict()
+    for param, val in params.items():
+        if param == 'FREQ_DIV':
+            fdiv = int(val, 2)
+            if fdiv % 2 == 1:
+                raise Exception(f"Divisor of {typ} must be even")
+            osc_attrs['MCLKCIB'] = fdiv
+            osc_attrs['MCLKCIB_EN'] = "ENABLE"
+            osc_attrs['NORMAL'] = "ENABLE"
+            if typ not in {'OSC', 'OSCW'}:
+                osc_attrs['USERPOWER_SAVE'] = 'ENABLE'
+            continue
+        if param == 'REGULATOR_EN':
+            reg = int(val, 2)
+            if reg == 1:
+                osc_attrs['OSCREG'] = "ENABLE"
+            continue
+
+    fin_attrs = set()
+    for attr, val in osc_attrs.items():
+        if isinstance(val, str):
+            val = attrids.osc_attrvals[val]
+        add_attr_val(db, 'OSC', fin_attrs, attrids.osc_attrids[attr], val)
+    return fin_attrs
+
 _iologic_default_attrs = {
         'DUMMY': {},
         'ODDR': { 'TXCLK_POL': '0'},
@@ -449,15 +474,23 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits2zero:
                 tile[r][c] = 0
 
-        elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH'}:
-            divisor = int(parms['FREQ_DIV'], 2)
-            if divisor % 2 == 1:
-                raise Exception(f"Divisor of {typ} must be even")
-            divisor //= 2
-            if divisor in tiledata.bels[typ].modes:
-                bits = tiledata.bels[typ].modes[divisor]
-                for r, c in bits:
-                    tile[r][c] = 1
+        elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH', 'OSCW', 'OSCO'}:
+            # XXX turn on (GW1NZ-1)
+            if device == 'GW1NZ-1':
+                en_tiledata = db.grid[db.rows - 1][db.cols - 1]
+                en_tile = tilemap[(db.rows - 1, db.cols - 1)]
+                en_tile[23][63] = 0
+            # clear powersave fuses
+            clear_attrs = set()
+            add_attr_val(db, 'OSC', clear_attrs, attrids.osc_attrids['POWER_SAVE'], attrids.osc_attrvals['ENABLE'])
+            bits = get_shortval_fuses(db, tiledata.ttyp, clear_attrs, 'OSC')
+            for r, c in bits:
+                tile[r][c] = 0
+
+            osc_attrs = set_osc_attrs(db, typ, parms)
+            bits = get_shortval_fuses(db, tiledata.ttyp, osc_attrs, 'OSC')
+            for r, c in bits:
+                tile[r][c] = 1
         elif typ == "SLICE":
             lutmap = tiledata.bels[f'LUT{num}'].flags
 

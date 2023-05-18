@@ -116,9 +116,10 @@ iob_attrvals = {
             'RSDS_E':           54,
             'MINILVDS':         55,
             'PPLVDS':           56,
-            #
+            # vref
             'VREF1_DRIVER':     57,
             'VREF2_DRIVER':     58,
+            #
             'LVCMOS33OD25':     59,
             'LVCMOS33OD18':     60,
             'LVCMOS33OD15':     61,
@@ -188,7 +189,7 @@ iob_attrvals = {
             # slew
             'FAST':             117,
             'SLOW':             118,
-            #
+            # ?IO_BANK?
             'I45':              119,
             'I50':              120,
             'I55':              121,
@@ -600,6 +601,25 @@ pll_attrvals = {
         'ICLK':             46,
         'FCLK':             47,
         'CLKOUT':           48
+    }
+
+#OSCillator
+osc_attrids = {
+        'MCLKCIB':          0,
+        'NORMAL':           1,
+        'POWER_SAVE':       2,
+        'USERPOWER_SAVE':   3,
+        'MCLKCIB_EN':       4,
+        'TRIM':             5,
+        'OSCREG':           6, # I guess it is REGULATOR_EN
+        'MCK2PLL':          7,
+        'USED_FLAG':        10
+    }
+
+osc_attrvals = {
+        'UNKNOWN':          0,
+        'ENABLE':           1,
+        'ON':               2
     }
 
 # config

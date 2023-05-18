@@ -367,35 +367,13 @@ def fse_osc(device, fse, ttyp):
         bel = osc.setdefault(f"OSCF", Bel())
     elif device == 'GW1N-1':
         bel = osc.setdefault(f"OSCH", Bel())
+    elif device == 'GW2AN-18':
+        bel = osc.setdefault(f"OSCW", Bel())
+    elif device == 'GW1N-2':
+        bel = osc.setdefault(f"OSCO", Bel())
     else:
         raise Exception(f"Oscillator not yet supported on {device}")
-
     bel.portmap = {}
-
-    if device in {'GW1N-1', 'GW1N-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NS-4'}:
-        bel.portmap['OSCOUT'] = "Q4"
-    elif device == 'GW1NZ-1':
-        bel.portmap['OSCOUT'] = "OF3"
-
-    if device == 'GW1NS-2':
-        bel.portmap['OSCEN'] = "B3"
-    elif device == 'GW1NS-4':
-        bel.portmap['OSCEN'] = "D6"
-    elif device == 'GW1NZ-1':
-        bel.portmap['OSCEN'] = "A6"
-
-    data = fse[ttyp]['shortval'][51]
-
-    for i in range(64):
-        bel.modes.setdefault(i+1, set())
-
-    for key0, key1, *fuses in data:
-        if key0 <= 64 and key1 == 0:
-            mode = bel.modes[key0]
-            for f in (f for f in fuses if f != -1):
-                coord = fuse.fuse_lookup(fse, ttyp, f)
-                mode.update({coord})
-
     return osc
 
 def set_banks(fse, db):
@@ -419,7 +397,8 @@ _known_logic_tables = {
             14: 'DSP',
             15: 'PLL',
             59: 'CFG',
-            62: 'USB',
+            62: 'OSC',
+            63: 'USB',
         }
 
 _known_tables = {
@@ -444,6 +423,7 @@ _known_tables = {
             45: 'IOBH',
             46: 'IOBI',
             47: 'IOBJ',
+            51: 'OSC',
             53: 'DLLDEL0',
             54: 'DLLDEL1',
             56: 'DLL0',
@@ -946,6 +926,18 @@ _ides16_inputs = [(19, 'PCLK'), (20, 'FCLK'), (38, 'CALIB'), (25, 'RESET'), (0, 
 _ides16_fixed_outputs = { 'Q0': 'F2', 'Q1': 'F3', 'Q2': 'F4', 'Q3': 'F5', 'Q4': 'Q0',
                           'Q5': 'Q1', 'Q6': 'Q2', 'Q7': 'Q3', 'Q8': 'Q4', 'Q9': 'Q5', 'Q10': 'F0',
                          'Q11': 'F1', 'Q12': 'F2', 'Q13': 'F3', 'Q14': 'F4', 'Q15': 'F5'}
+# (osc-type, devices) : ({local-ports}, {aliases})
+_osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 2, 'A6')}),
+              ('OSCZ', 'GW1NS-4'): ({'OSCOUT': 'Q4', 'OSCEN': 'D6'}, {}),
+              ('OSCF', 'GW1NS-2'): ({}, {'OSCOUT': (10, 19, 'Q4'), 'OSCEN': (13, 19, 'B3')}),
+              ('OSCH', 'GW1N-1'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSC',  'GW1N-4'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSC',  'GW1N-9'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSC',  'GW1N-9C'):  ({'OSCOUT': 'Q4'}, {}),
+              # XXX unsupported boards, pure theorizing
+              ('OSCO', 'GW1N-2'):  ({'OSCOUT': 'Q7'}, {'OSCEN': (9, 1, 'B4')}),
+              ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
+              }
 def dat_portmap(dat, dev, device):
     for row, row_dat in enumerate(dev.grid):
         for col, tile in enumerate(row_dat):
@@ -1076,6 +1068,13 @@ def dat_portmap(dat, dev, device):
                         vren = 'B0'
                     bel.portmap['VREN'] = f'PLLVRV{vren}'
                     dev.aliases[row, col, f'PLLVRV{vren}'] = (0, 37, vren)
+                if name.startswith('OSC'):
+                    # local ports
+                    local_ports, aliases = _osc_ports[name, device]
+                    bel.portmap.update(local_ports)
+                    for port, alias in aliases.items():
+                        bel.portmap[port] = port
+                        dev.aliases[row, col, port] = alias
 
 def dat_aliases(dat, dev):
     for row in dev.grid:

@@ -111,6 +111,28 @@ def pll_attrs_refine(in_attrs):
         res.add(f'{attr}={new_val}')
     return res
 
+_osc_attrs = {
+        'MCLKCIB': 'FREQ_DIV',
+        'OSCREG': 'REGULATOR_EN'
+}
+
+def osc_attrs_refine(in_attrs):
+    res = set()
+    for attr, val in in_attrs.items():
+        if attr not in _osc_attrs.keys():
+            continue
+        attr = _osc_attrs[attr]
+        if attr == 'FREQ_DIV':
+            new_val = val
+        else:
+            attrvals = [ name for name, vl in osc_attrvals.items() if vl == val ]
+            if attrvals[0] in osc_attrvals.keys():
+                new_val = attrvals[0]
+            new_val = f'"{new_val}"'
+        res.add(f'{attr}={new_val}')
+    if 'MCLKCIB' not in in_attrs.keys() and 'MCLKCIB_EN' in in_attrs.keys():
+        res.add('FREQ_DIV=128')
+    return res
 
 # {(REGSET, LSRONMUX, CLKMUX_CLK, SRMODE) : dff_type}
 _dff_types = {
@@ -253,6 +275,14 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 modes.add(attrval)
             if modes:
                 bels[f'{name}{idx}'] = modes
+            continue
+        if name.startswith("OSC"):
+            attrvals = osc_attrs_refine(parse_attrvals(tile, db.logicinfo['OSC'], db.shortval[tiledata.ttyp]['OSC'], attrids.osc_attrids))
+            modes = set()
+            for attrval in attrvals:
+                modes.add(attrval)
+            if modes:
+                bels[name] = modes
             continue
         if name.startswith("IOLOGIC"):
             idx = name[-1]
@@ -668,7 +698,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFH]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC)(\w*)")
     bels_items = move_iologic(bels)
 
     iologic_detected = set()
@@ -825,11 +855,12 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             ram16.portmap['DO'] = [f"R{row}C{col}_F{x}" for x in range(4)]
             mod.wires.update(chain.from_iterable([x if isinstance(x, list) else [x] for x in ram16.portmap.values()]))
             mod.primitives[name] = ram16
-        elif typ in {"OSC", "OSCZ", "OSCF", "OSCH"}:
+        elif typ in {"OSC", "OSCZ", "OSCF", "OSCH", "OSCW", "OSCO"}:
             name = f"R{row}C{col}_{typ}"
             osc = codegen.Primitive(typ, name)
-            divisor, = flags
-            osc.params["FREQ_DIV"] = f"{divisor*2}"
+            for paramval in flags:
+                param, _, val = paramval.partition('=')
+                osc.params[param] = val
             portmap = db.grid[dbrow][dbcol].bels[bel].portmap
             for port, wname in portmap.items():
                 osc.portmap[port] = f"R{row}C{col}_{wname}"
