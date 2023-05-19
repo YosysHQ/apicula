@@ -11,13 +11,42 @@ import importlib.resources
 from collections import namedtuple
 from apycula import codegen
 from apycula import chipdb
-from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses
-from apycula.attrids import pll_attrids, pll_attrvals, cls_attrids, cls_attrvals, osc_attrids, osc_attrvals, iologic_attrids, iologic_attrvals
-from apycula import bslib
+from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses
 from apycula import attrids
+from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
 
 device = ""
+
+# Sometimes it is convenient to know where a port is connected to enable
+# special fuses for VCC/VSS cases.
+
+# This is not the optimal place for it - resources for routing are taken anyway
+# and it should be done in nextpnr (as well as at yosys level to identify
+# inverters since we can invert inputs without LUT in many cases), but for now
+# let it be here to work out the mechanisms.
+# Do not use for IOBs - their wires may be disconnected by IOLOGIC
+_vcc_net = []
+_gnd_net = []
+
+def is_gnd_net(wire):
+    return wire in _gnd_net
+
+def is_vcc_net(wire):
+    return wire in _vcc_net
+
+def is_connected(wire, connections):
+    return len(connections[wire]) != 0
+
+### IOB
+def iob_is_gnd_net(flags, wire):
+    return flags.get(f'NET_{wire}', False) == 'GND'
+
+def iob_is_vcc_net(flags, wire):
+    return flags.get(f'NET_{wire}', False) == 'VCC'
+
+def iob_is_connected(flags, wire):
+    return f'NET_{wire}' in flags.keys()
 
 _verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
 def sanitize_name(name):
@@ -40,11 +69,11 @@ def extra_pll_bels(cell, row, col, num, cellname):
             offx = -1
         for off in [1, 2, 3]:
             yield ('RPLLB', int(row), int(col) + offx * off, num,
-                cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}')
+                cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}', cell)
     elif device in {'GW1N-1', 'GW1NZ-1', 'GW1N-4'}:
         for off in [1]:
             yield ('RPLLB', int(row), int(col) + offx * off, num,
-                cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}')
+                cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}', cell)
 
 def get_bels(data):
     later = []
@@ -69,12 +98,12 @@ def get_bels(data):
             cell_type = 'RPLLA'
             yield from extra_pll_bels(cell, row, col, num, cellname)
         yield (cell_type, int(row), int(col), num,
-                cell['parameters'], cell['attributes'], sanitize_name(cellname))
+                cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
     # diff iobs
     for cellname, cell, row, col, num in later:
         yield (cell['type'], int(row), int(col), num,
-                cell['parameters'], cell['attributes'], sanitize_name(cellname))
+                cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
 def get_pips(data):
     pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
@@ -318,8 +347,8 @@ def set_pll_attrs(db, typ, idx, attrs):
     fin_attrs = set()
     for attr, val in pll_attrs.items():
         if isinstance(val, str):
-            val = pll_attrvals[val]
-        add_attr_val(db, 'PLL', fin_attrs, pll_attrids[attr], val)
+            val = attrids.pll_attrvals[val]
+        add_attr_val(db, 'PLL', fin_attrs, attrids.pll_attrids[attr], val)
     #print(fin_attrs)
     return fin_attrs
 
@@ -433,21 +462,31 @@ def set_iologic_attrs(db, attrs, param):
             in_attrs['CLKIMUX'] = 'ENABLE'
 
     for k, val in in_attrs.items():
-        if k not in iologic_attrids.keys():
-            print(f'XXX add {k} key handle')
+        if k not in attrids.iologic_attrids.keys():
+            print(f'XXX IOLOGIC: add {k} key handle')
         else:
-            add_attr_val(db, 'IOLOGIC', fin_attrs, iologic_attrids[k], iologic_attrvals[val])
+            add_attr_val(db, 'IOLOGIC', fin_attrs, attrids.iologic_attrids[k], attrids.iologic_attrvals[val])
     return fin_attrs
 
-iostd_alias = {
-        "HSTL18_II"  : "HSTL18_I",
-        "SSTL18_I"   : "HSTL18_I",
-        "SSTL18_II"  : "HSTL18_I",
-        "HSTL15_I"   : "SSTL15",
-        "SSTL25_II"  : "SSTL25_I",
-        "SSTL33_II"  : "SSTL33_I",
-        "LVTTL33"    : "LVCMOS33",
+_iostd_alias = {
+        frozenset({"BLVDS25E"}): "BLVDS_E",
+        frozenset({"LVTTL33"}): "LVCMOS33",
+        frozenset({"LVCMOS12D", "LVCMOS15D", "LVCMOS18D", "LVCMOS25D", "LVCMOS33D", }): "LVCMOS_D",
+        frozenset({"HSTL15", "HSTL18_I", "HSTL18_II"}): "HSTL",
+        frozenset({"SSTL15", "SSTL18_I", "SSTL18_II", "SSTL25_I", "SSTL25_II", "SSTL33_I", "SSTL33_II"}): "SSTL",
+        frozenset({"MLVDS25E"}): "MLVDS_E",
+        frozenset({"SSTL15D", "SSTL18D_I", "SSTL18D_II", "SSTL25D_I", "SSTL25D_II", "SSTL33D_I", "SSTL33D_II"}): "SSTL_D",
+        frozenset({"HSTL15D", "HSTL18D_I", "HSTL18D_II"}): "HSTL_D",
+        frozenset({"RSDS"}): "RSDS25",
+        frozenset({"RSDS25E"}): "RSDS_E",
         }
+def get_iostd_alias(iostd):
+    for k, v in _iostd_alias.items():
+        if iostd in k:
+            iostd = v
+            break
+    return iostd
+
 # For each bank, remember the Bels used, mark whether Outs were among them and the standard.
 class BankDesc:
     def __init__(self, iostd, inputs_only, bels_tiles, true_lvds_drive):
@@ -457,9 +496,48 @@ class BankDesc:
         self.true_lvds_drive = true_lvds_drive
 
 _banks = {}
+
+# IO encode in two passes: the first collect the IO attributes and place them
+# according to the banks, the second after processing actually forms the fuses.
+class IOBelDesc:
+    def __init__(self, row, col, idx, attrs, flags, connections):
+        self.pos = (row, col, idx)
+        self.attrs = attrs  # standard attributes
+        self.flags = flags  # aux special flags
+        self.connections = connections
+_io_bels = {}
+_default_iostd = {
+        'IBUF': 'LVCMOS18', 'OBUF': 'LVCMOS18', 'TBUF': 'LVCMOS18', 'IOBUF': 'LVCMOS18',
+        'TLVDS_IBUF': 'LVDS25', 'TLVDS_OBUF': 'LVDS25', 'TLVDS_TBUF': 'LVDS25',
+        'TLVDS_IOBUF': 'LVDS25',
+        'ELVDS_IBUF': 'LVCMOS33D', 'ELVDS_OBUF': 'LVCMOS33D', 'ELVDS_TBUF': 'LVCMOS33D',
+        'ELVDS_IOBUF': 'LVCMOS33D',
+        }
+_vcc_ios = {'LVCMOS12': '1.2', 'LVCMOS15': '1.5', 'LVCMOS18': '1.8', 'LVCMOS25': '2.5',
+        'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3'}
+_init_io_attrs = {
+        'IBUF': {'PADDI': 'PADDI', 'HYSTERESIS': 'NONE', 'PULLMODE': 'UP', 'SLEWRATE': 'SLOW',
+                 'DRIVE': '0', 'OPENDRAIN': 'OFF', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
+                 'VREF': 'OFF', 'LVDS_OUT': 'OFF'},
+        'OBUF': {'ODMUX_1': '1', 'OPENDRAIN': 'OFF', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
+                 'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
+                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA', 'TO': 'INV'},
+        'TBUF': {'ODMUX_1': 'UNKNOWN', 'OPENDRAIN': 'OFF', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
+                 'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
+                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
+                 'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX'},
+        'IOBUF': {'ODMUX_1': 'UNKNOWN', 'OPENDRAIN': 'OFF', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
+                 'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
+                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
+                 'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'PADDI': 'PADDI'},
+        }
+_refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE'}
+def refine_io_attrs(attr):
+    return _refine_attrs.get(attr, attr)
+
 _sides = "AB"
 def place(db, tilemap, bels, cst, args):
-    for typ, row, col, num, parms, attrs, cellname in bels:
+    for typ, row, col, num, parms, attrs, cellname, cell in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
         if typ == "GSR":
@@ -520,24 +598,24 @@ def place(db, tilemap, bels, cst, args):
             if int(num) < 6 and int(parms['FF_USED'], 2):
                 mode = str(parms['FF_TYPE']).strip('E')
                 dff_attrs = set()
-                add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['REGMODE'], cls_attrvals['FF'])
+                add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['REGMODE'], attrids.cls_attrvals['FF'])
                 # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
                 if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC', 'DFF', 'DFFN'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids[f'REG{int(num) % 2}_REGSET'], cls_attrvals['RESET'])
+                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['RESET'])
                 else:
-                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids[f'REG{int(num) % 2}_REGSET'], cls_attrvals['SET'])
+                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['SET'])
                 # are set/reset/clear/preset port needed?
                 if mode not in {'DFF', 'DFFN'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['LSRONMUX'], cls_attrvals['LSRMUX'])
+                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['LSRONMUX'], attrids.cls_attrvals['LSRMUX'])
                 # invert clock?
                 if mode in {'DFFN', 'DFFNR', 'DFFNC', 'DFFNP', 'DFFNS'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['CLKMUX_CLK'], cls_attrvals['INV'])
+                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['INV'])
                 else:
-                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['CLKMUX_CLK'], cls_attrvals['SIG'])
+                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['SIG'])
 
                 # async option?
                 if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, cls_attrids['SRMODE'], cls_attrvals['ASYNC'])
+                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['SRMODE'], attrids.cls_attrvals['ASYNC'])
 
                 dffbits = get_shortval_fuses(db, tiledata.ttyp, dff_attrs, f'CLS{int(num) // 2}')
                 #print(f'({row - 1}, {col - 1}) mode:{mode}, num{num}, attrs:{dff_attrs}, bits:{dffbits}')
@@ -548,10 +626,6 @@ def place(db, tilemap, bels, cst, args):
             if not cellname.startswith('\$PACKER'):
                 cst.cells[cellname] = (row, col, int(num) // 2, _sides[int(num) % 2])
         elif typ[:3] == "IOB":
-            # skip B for true lvds
-            if 'DIFF' in attrs.keys():
-                if attrs['DIFF_TYPE'] == 'TLVDS_OBUF' and attrs['DIFF'] == 'N':
-                    continue
             edge = 'T'
             idx = col
             if row == db.rows:
@@ -562,14 +636,29 @@ def place(db, tilemap, bels, cst, args):
             elif col == db.cols:
                 edge = 'R'
                 idx = row
-            cst.ports[cellname] = f"IO{edge}{idx}{num}"
+            bel_name = f"IO{edge}{idx}{num}"
+            cst.ports[cellname] = bel_name
             iob = tiledata.bels[f'IOB{num}']
-            if 'DIFF' in attrs.keys():
-                mode = attrs['DIFF_TYPE']
+            if 'DIFF' in parms.keys():
+                # skip negative pin for lvds
+                if parms['DIFF'] == 'N':
+                    continue
+                # valid pin?
+                if not iob.is_diff:
+                    raise ValueError(f"Cannot place {cellname} at {bel_name} - not a diff pin")
+                if not iob.is_diff_p:
+                    raise ValueError(f"Cannot place {cellname} at {bel_name} - not a P pin")
+                mode = parms['DIFF_TYPE']
+                if iob.is_true_lvds and mode[0] != 'T':
+                    raise ValueError(f"Cannot place {cellname} at {bel_name} - it is a true lvds pin")
+                if not iob.is_true_lvds and mode[0] == 'T':
+                    raise ValueError(f"Cannot place {cellname} at {bel_name} - it is an emulated lvds pin")
             else:
-                if int(parms["ENABLE_USED"], 2) and int(parms["OUTPUT_USED"], 2):
-                    # TBUF = IOBUF - O
-                    mode = "IOBUF"
+                if int(parms["ENABLE_USED"], 2):
+                    if int(parms["INPUT_USED"], 2):
+                        mode = "IOBUF"
+                    else:
+                        mode = "TBUF"
                 elif int(parms["INPUT_USED"], 2):
                     mode = "IBUF"
                 elif int(parms["OUTPUT_USED"], 2):
@@ -587,7 +676,16 @@ def place(db, tilemap, bels, cst, args):
                 pinless_io = True
                 iostd = None
 
+            flags = {'mode': mode}
+            flags.update({port: net for port, net in parms.items() if port.startswith('NET_')})
+            if int(parms.get("IOLOGIC_IOB", "0")):
+                flags['USED_BY_IOLOGIC'] = True
+
+            io_desc = _io_bels.setdefault(bank, {})[bel_name] = IOBelDesc(row - 1, col - 1, num, {}, flags, cell['connections'])
+
             # find io standard
+            iostd = _default_iostd[mode]
+            io_desc.attrs['IO_TYPE'] = iostd
             for flag in attrs.keys():
                 flag_name_val = flag.split("=")
                 if len(flag_name_val) < 2:
@@ -595,66 +693,8 @@ def place(db, tilemap, bels, cst, args):
                 if flag[0] != chipdb.mode_attr_sep:
                     continue
                 if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
-                    if iostd and iostd != flag_name_val[1]:
-                        raise Exception(f"Different I/O modes for the same bank {bank} were specified: {iostd} and {flag_name_val[1]}")
-                    iostd = iostd_alias.get(flag_name_val[1], flag_name_val[1])
-
-            # first used pin sets bank's iostd
-            # XXX default io standard may be board-dependent!
-            if not iostd:
-                if 'DIFF' in attrs.keys():
-                    iostd = "LVCMOS25"
-                else:
-                    iostd = "LVCMOS18"
-            if not pinless_io:
-                _banks[bank].iostd = iostd
-                if mode == 'IBUF':
-                    _banks[bank].bels_tiles.append((iob, tile))
-                else:
-                    _banks[bank].inputs_only = False
-
-            if 'DIFF' in attrs.keys():
-                _banks[bank].true_lvds_drive = "3.5"
-            cst.attrs.setdefault(cellname, {}).update({"IO_TYPE": iostd})
-
-            # collect flag bits
-            if iostd not in iob.iob_flags.keys():
-                print(f"Warning: {iostd} isn't allowed for IO{edge}{idx}{num}. Set LVCMOS18 instead.")
-                iostd = 'LVCMOS18'
-            if mode not in iob.iob_flags[iostd].keys() :
-                    raise Exception(f"IO{edge}{idx}{num}. {mode} is not allowed for a given io standard {iostd}")
-            bits = iob.iob_flags[iostd][mode].encode_bits.copy()
-            # XXX OPEN_DRAIN must be after DRIVE
-            attrs_keys = attrs.keys()
-            if 'DIFF' not in attrs_keys:
-                if 'OPEN_DRAIN=ON' in attrs_keys:
-                    attrs_keys = itertools.chain(attrs_keys, ['OPEN_DRAIN=ON'])
-                for flag in attrs.keys():
-                    flag_name_val = flag.split("=")
-                    if len(flag_name_val) < 2:
-                        continue
-                    if flag[0] != chipdb.mode_attr_sep:
-                        continue
-                    if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
-                        continue
-                    # skip OPEN_DRAIN=OFF can't clear by mask and OFF is the default
-                    if flag_name_val[0] == chipdb.mode_attr_sep + "OPEN_DRAIN" \
-                            and flag_name_val[1] == 'OFF':
-                                continue
-                    # set flag
-                    mode_desc = iob.iob_flags[iostd][mode]
-                    try:
-                       flag_desc = mode_desc.flags[flag_name_val[0][1:]]
-                       flag_bits = flag_desc.options[flag_name_val[1]]
-                    except KeyError:
-                        raise Exception(
-                                f"Incorrect attribute {flag[1:]} (iostd:\"{iostd}\", mode:{mode})")
-                    bits -= flag_desc.mask
-                    bits.update(flag_bits)
-                    cst.attrs[cellname].update({flag_name_val[0][1:] : flag_name_val[1]})
-            for r, c in bits:
-                tile[r][c] = 1
-
+                    iostd = _iostd_alias.get(flag_name_val[1], flag_name_val[1])
+            io_desc.attrs['IO_TYPE'] = iostd
             if pinless_io:
                 return
         elif typ == "RAMW":
@@ -667,8 +707,7 @@ def place(db, tilemap, bels, cst, args):
             iologic_attrs = set_iologic_attrs(db, parms, attrs)
             bits = set()
             table_type = f'IOLOGIC{num}'
-            if table_type in db.shortval[tiledata.ttyp].keys():
-                bits = get_shortval_fuses(db, tiledata.ttyp, iologic_attrs, table_type)
+            bits = get_shortval_fuses(db, tiledata.ttyp, iologic_attrs, table_type)
             for r, c in bits:
                 tile[r][c] = 1
         elif typ.startswith('RPLL'):
@@ -697,33 +736,137 @@ def place(db, tilemap, bels, cst, args):
         else:
             print("unknown type", typ)
 
-    # If the entire bank has only inputs, the LVCMOS12/15/18 bit is set
-    # in each IBUF regardless of the actual I/O standard.
-    for bank, bank_desc in _banks.items():
-        #bank enable
+    # second IO pass
+    for bank, ios in _io_bels.items():
+        # check IO standard
+        # IBUFs do not affect bank io
+        iostds = {iob.attrs['IO_TYPE'] for iob in ios.values() if iob.flags['mode'] != 'IBUF'}
+        iostds = set()
+        for iob in ios.values():
+            if iob.flags['mode'] in {'IBUF', 'IOBUF', 'TLVDS_IBUF', 'TLVDS_IOBUF', 'ELVDS_IBUF', 'ELVDS_IOBUF'}:
+                iob.attrs['IO_TYPE'] = get_iostd_alias(iob.attrs['IO_TYPE'])
+                if iob.attrs.get('SINGLERESISTOR', 'OFF') != 'OFF':
+                    iob.attrs['DDR_DYNTERM'] = 'ON'
+                if iob.flags['mode'] in {'IOBUF', 'TLVDS_IOBUF', 'ELVDS_IOBUF'}:
+                    iostds.add(iob.attrs['IO_TYPE'])
+            else: # TBUF and OBUF
+                iostds.add(iob.attrs['IO_TYPE'])
+
+        if len(iostds) >= 2:
+            conflict_std = list(iostds)
+            fst = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == conflict_std[0]][0]
+            snd = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == conflict_std[1]][0]
+            raise Exception(f"Different IO standard for bank {bank}: {fst} sets {conflict_std[0]}, {snd} sets {conflict_std[1]}.")
+        if len(iostds) == 0:
+            iostds.add('LVCMOS12')
+        iostd = list(iostds)[0]
+
+        in_bank_attrs = {}
+        in_bank_attrs['VCCIO'] = _vcc_ios[iostd]
+
+        # set io bits
+        for name, iob in ios.items():
+            row, col, idx = iob.pos
+            tiledata = db.grid[row][col]
+
+            mode_for_attrs = iob.flags['mode']
+            lvds_attrs = {}
+            if mode_for_attrs.startswith('TLVDS_') or mode_for_attrs.startswith('ELVDS_'):
+                mode_for_attrs = mode_for_attrs[6:]
+                lvds_attrs = {'HYSTERESIS': 'NA', 'PULLMODE': 'NONE', 'OPENDRAIN': 'OFF'}
+
+            in_iob_attrs = _init_io_attrs[mode_for_attrs].copy()
+            in_iob_attrs.update(lvds_attrs)
+
+            # constant OEN connections lead to the use of special fuses
+            if iob.flags['mode'] not in {'IBUF', 'TLVDS_IBUF', 'ELVDS_IBUF'}:
+                if iob_is_connected(iob.flags, 'OEN'):
+                    if iob_is_gnd_net(iob.flags, 'OEN'):
+                        in_iob_attrs['TRIMUX_PADDT'] = 'SIG'
+                    elif iob_is_vcc_net(iob.flags, 'OEN'):
+                        in_iob_attrs['ODMUX_1'] = '0'
+                    else:
+                        in_iob_attrs['TRIMUX_PADDT'] = 'SIG'
+                        in_iob_attrs['TO'] = 'SIG'
+                else:
+                    in_iob_attrs['ODMUX_1'] = '1'
+
+            #
+            for k, val in iob.attrs.items():
+                k = refine_io_attrs(k)
+                in_iob_attrs[k] = val
+            in_iob_attrs['VCCIO'] = in_bank_attrs['VCCIO']
+
+            # lvds
+            if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
+                in_iob_attrs.update({'LVDS_OUT': 'ON', 'ODMUX_1': 'UNKNOWN', 'ODMUX': 'TRIMUX',
+                    'SLEWRATE': 'FAST', 'DRIVE': '0', 'PERSISTENT': 'OFF'})
+            elif iob.flags['mode'] in {'ELVDS_OBUF', 'ELVDS_TBUF', 'ELVDS_IOBUF'}:
+                in_iob_attrs.update({'ODMUX_1': 'UNKNOWN', 'ODMUX': 'TRIMUX',
+                    'PERSISTENT': 'OFF'})
+                in_iob_attrs['IO_TYPE'] = get_iostd_alias(in_iob_attrs['IO_TYPE'])
+            if iob.flags['mode'] in {'TLVDS_IBUF', 'ELVDS_IBUF'}:
+                in_iob_attrs['ODMUX_1'] = 'UNKNOWN'
+                in_iob_attrs.pop('VCCIO', None)
+
+            # XXX may be here do GW9 pins also
+            if device == 'GW1N-1':
+                if row == 5 and mode_for_attrs == 'OBUF':
+                    in_iob_attrs['TO'] = 'UNKNOWN'
+            if device not in {'GW1N-4', 'GW1NS-4'}:
+                if mode[1:].startswith('LVDS') and in_iob_attrs['DRIVE'] != '0':
+                    in_iob_attrs['DRIVE'] = 'UNKNOWN'
+            in_iob_b_attrs = {}
+            if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
+                in_iob_b_attrs = in_iob_attrs.copy()
+            elif iob.flags['mode'] in {'TLVDS_IBUF', 'ELVDS_IBUF'}:
+                in_iob_b_attrs = in_iob_attrs.copy()
+                if iob.flags['mode'] in {'ELVDS_IBUF'}:
+                    in_iob_attrs['PULLMODE'] = 'UP'
+                    in_iob_b_attrs['PULLMODE'] = 'NONE'
+                in_iob_b_attrs['IO_TYPE'] = in_iob_attrs.get('IO_TYPE', 'UNKNOWN')
+                in_iob_b_attrs['DIFFRESISTOR'] = in_iob_attrs.get('DIFFRESISTOR', 'OFF')
+            elif iob.flags['mode'] in {'ELVDS_OBUF', 'ELVDS_TBUF', 'ELVDS_IOBUF'}:
+                if iob.flags['mode'] in {'ELVDS_IOBUF'}:
+                    in_iob_attrs['PULLMODE'] = 'UP'
+                    in_iob_b_attrs['PULLMODE'] = 'UP'
+                in_iob_b_attrs = in_iob_attrs.copy()
+
+            for iob_idx, atr in [(idx, in_iob_attrs), ('B', in_iob_b_attrs)]:
+                iob_attrs = set()
+                for k, val in atr.items():
+                    if k not in attrids.iob_attrids.keys():
+                        print(f'XXX IO: add {k} key handle')
+                    else:
+                        add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
+                        if k in {'VCCIO'}:
+                            continue
+                        if k == 'LVDS_OUT' and val not in {'ENABLE', 'ON'}:
+                            continue
+                        in_bank_attrs[k] = val
+                bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
+                tile = tilemap[(row, col)]
+                for row_, col_ in bits:
+                    tile[row_][col_] = 1
+
+        # bank bits
         brow, bcol = db.bank_tiles[bank]
         tiledata = db.grid[brow][bcol]
+
+        bank_attrs = set()
+        for k, val in in_bank_attrs.items():
+            if k not in attrids.iob_attrids.keys():
+                print(f'XXX BANK: add {k} key handle')
+            else:
+                add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
+        bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, 'BANK', int(bank))
         btile = tilemap[(brow, bcol)]
-        bank_bel = tiledata.bels['BANK' + bank]
-        bits = bank_bel.modes['ENABLE'].copy()
-        iostd = bank_desc.iostd
-        if bank_desc.inputs_only:
-            if bank_desc.iostd in {'LVCMOS33', 'LVCMOS25'}:
-                for bel, tile in bank_desc.bels_tiles:
-                    for row, col in bel.lvcmos121518_bits:
-                        tile[row][col] = 1
-            iostd = bank_bel.bank_input_only_modes[bank_desc.iostd]
-        # iostd flag
-        bits |= bank_bel.bank_flags[iostd]
-        if bank_desc.true_lvds_drive:
-            # XXX set drive
-            comb_mode = f'LVDS25#{iostd}'
-            if comb_mode not in bank_bel.bank_flags.keys():
-                    raise Exception(
-                            f'Incorrect iostd "{iostd}" for bank with "LVDS25" pin')
-            bits |= bank_bel.bank_flags[comb_mode]
         for row, col in bits:
             btile[row][col] = 1
+
+    #for k, v in _io_bels.items():
+    #    for io, bl in v.items():
+    #        print(k, io, vars(bl))
 
 # The vertical columns of long wires can receive a signal from either the upper
 # or the lower end of the column.
@@ -817,7 +960,7 @@ def main():
     parser.add_argument('netlist')
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-o', '--output', default='pack.fs')
-    parser.add_argument('-c', '--compress', default=False, action='store_true')
+    parser.add_argument('-c', '--compress', action='store_true')
     parser.add_argument('-s', '--cst', default = None)
     parser.add_argument('--allow_pinless_io', action = 'store_true')
     parser.add_argument('--jtag_as_gpio', action = 'store_true')
@@ -842,6 +985,9 @@ def main():
         db = pickle.load(f)
     with open(args.netlist) as f:
         pnr = json.load(f)
+
+    _vcc_net = pnr['modules']['top']['netnames']['$PACKER_VCC_NET']['bits']
+    _gnd_net = pnr['modules']['top']['netnames']['$PACKER_GND_NET']['bits']
 
     tilemap = chipdb.tile_bitmap(db, db.template, empty=True)
     cst = codegen.Constraints()

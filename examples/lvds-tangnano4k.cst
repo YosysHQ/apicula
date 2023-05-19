@@ -1,0 +1,19 @@
+// these are the HDMI pins!
+IO_LOC "led[0]" 34;
+IO_LOC "led[1]" 35;
+IO_LOC "led[2]" 31;
+IO_LOC "led[3]" 32;
+IO_LOC "key" 15;
+IO_LOC "rst" 14;
+IO_LOC "clk" 45;
+
+// emulated lvds pins
+IO_LOC "elvds_p" 39,40;
+
+// true LVDS pins
+IO_LOC "tlvds_p" 30,29;
+
+IO_PORT "led[0]" IO_TYPE=LVCMOS33;
+IO_PORT "led[1]" IO_TYPE=LVCMOS33;
+IO_PORT "led[2]" IO_TYPE=LVCMOS33;
+IO_PORT "led[3]" IO_TYPE=LVCMOS33;

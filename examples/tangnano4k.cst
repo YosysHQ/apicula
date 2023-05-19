@@ -1,6 +1,6 @@
 // these are the HDMI pins!
-IO_LOC "led[0]" 27;
-IO_LOC "led[1]" 28;
+IO_LOC "led[0]" 34;
+IO_LOC "led[1]" 35;
 IO_LOC "led[2]" 29;
 IO_LOC "led[3]" 30;
 IO_LOC "led[4]" 31;
@@ -11,4 +11,4 @@ IO_LOC "clk" 45;
 
 
 // true LVDS pins
-IO_LOC "tlvds_p" 35,34;
+IO_LOC "tlvds_p" 28,27;

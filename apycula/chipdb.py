@@ -16,22 +16,6 @@ mode_attr_sep = '&'
 # can be either tiles or bits within tiles
 Coord = Tuple[int, int]
 
-# IOB flag descriptor
-# bitmask and possible values
-@dataclass
-class IOBFlag:
-    mask: Set[Coord] = field(default_factory = set)
-    options: Dict[str, Set[Coord]] = field(default_factory = dict)
-
-# IOB mode descriptor
-# bits and flags
-# encode bits include all default flag values
-@dataclass
-class IOBMode:
-    encode_bits: Set[Coord] = field(default_factory = set)
-    decode_bits: Set[Coord] = field(default_factory = set)
-    flags: Dict[str, IOBFlag] = field(default_factory = dict)
-
 @dataclass
 class Bel:
     """Respresents a Basic ELement
@@ -39,18 +23,12 @@ class Bel:
     and the specified portmap"""
     # there can be zero or more flags
     flags: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
-    # { iostd: { mode : IOBMode}}
-    iob_flags: Dict[str, Dict[str, IOBMode]] = field(default_factory=dict)
-    lvcmos121518_bits: Set[Coord] = field(default_factory = set)
     # this Bel is IOBUF and needs routing to become IBUF or OBUF
     simplified_iob: bool = field(default = False)
     # differential signal capabilities info
     is_diff:      bool = field(default = False)
     is_true_lvds: bool = field(default = False)
-    # banks
-    bank_mask: Set[Coord] = field(default_factory=set)
-    bank_flags: Dict[str, Set[Coord]] = field(default_factory=dict)
-    bank_input_only_modes: Dict[str, str] = field(default_factory=dict)
+    is_diff_p:    bool = field(default = False)
     # there can be only one mode, modes are exclusive
     modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     portmap: Dict[str, str] = field(default_factory=dict)
@@ -432,6 +410,7 @@ _known_tables = {
             66: 'EFLASH',
             68: 'ADC',
             80: 'DLL1',
+            82: 'POWERSAVE',
         }
 
 def fse_fill_logic_tables(dev, fse):
@@ -771,7 +750,7 @@ def get_table_fuses(attrs, table):
         have_full_key = True
         for attrval in key:
             if attrval == 0: # no "feature"
-                continue
+                break
             if attrval > 0:
                 # this "feature" must present
                 if attrval not in attrs:
@@ -797,6 +776,12 @@ def get_shortval_fuses(dev, ttyp, attrs, table_name):
 # returns a bit set
 def get_longval_fuses(dev, ttyp, attrs, table_name):
     return get_table_fuses(attrs, dev.longval[ttyp][table_name])
+
+# get bank fuses
+# The table for banks is different in that the first element in it is the
+# number of the bank, thus allowing the repetition of elements in the key
+def get_bank_fuses(dev, ttyp, attrs, table_name, bank_num):
+    return get_table_fuses(attrs, {k[1:]:val for k, val in dev.longval[ttyp][table_name].items() if k[0] == bank_num})
 
 # add the attribute/value pair into an set, which is then passed to
 # get_longval_fuses() and get_shortval_fuses()
@@ -1145,8 +1130,9 @@ def get_route_bits(db, row, col):
             bits.update(v)
     return bits
 
+"""
 def diff2flag(dev):
-    """ Minimize bits for flag values and calc flag bitmask"""
+    " Minimize bits for flag values and calc flag bitmask"
     seen_bels = []
     for idx, row in enumerate(dev.grid):
         for jdx, td in enumerate(row):
@@ -1197,6 +1183,7 @@ def diff2flag(dev):
                     bel.modes['ENABLE'] -= mask
                 else:
                     continue
+"""
 
 uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 dirlut = {'N': (1, 0),

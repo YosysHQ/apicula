@@ -9,9 +9,16 @@ all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
 	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs \
 	tonegen-tec0117.fs blinky-tangnano9k.fs blinky-tangnano1k.fs blinky-tangnano4k.fs \
+	blinky-tbuf-tangnano.fs blinky-tbuf-tangnano1k.fs blinky-tbuf-tangnano4k.fs \
+	blinky-tbuf-tangnano9k.fs blinky-tbuf-tec0117.fs blinky-tbuf-runber.fs \
+	blinky-tbuf-honeycomb.fs \
 	shift-tangnano9k.fs shift-tangnano1k.fs shift-tangnano4k.fs \
-	tlvds-tangnano4k.fs tlvds-tangnano9k.fs tlvds-tec0117.fs \
-	tlvds-oddr-tangnano4k.fs tlvds-oddr-tangnano9k.fs tlvds-oddr-tec0117.fs \
+	tlvds-tangnano4k.fs tlvds-tangnano9k.fs tlvds-tec0117.fs tlvds-szfpga.fs \
+	elvds-tangnano4k.fs elvds-tangnano9k.fs elvds-tec0117.fs elvds-szfpga.fs \
+	elvds-tangnano.fs elvds-tangnano1k.fs \
+	oddr-tlvds-tangnano4k.fs oddr-tlvds-tangnano9k.fs oddr-tlvds-tec0117.fs \
+	oddr-elvds-tangnano4k.fs oddr-elvds-tangnano9k.fs oddr-elvds-tec0117.fs oddr-elvds-szfpga.fs \
+	oddr-elvds-tangnano.fs oddr-elvds-tangnano1k.fs \
 	blinky-oddr-tec0117.fs blinky-oddr-runber.fs \
 	blinky-oddr-tangnano.fs blinky-oddr-tangnano1k.fs blinky-oddr-honeycomb.fs \
 	blinky-oddr-tangnano4k.fs blinky-oddr-tangnano9k.fs \
@@ -31,7 +38,14 @@ unpacked: attosoc-tec0117-unpacked.v nanolcd-tangnano-unpacked.v blinky-tec0117-
 	tonegen-tec0117-unpacked.v blinky-tangnano9k-unpacked.v blinky-tangnano1k-unpacked.v blinky-tangnano4k-unpacked.v \
 	shift-tangnano9k-unpacked.v shift-tangnano1k-unpacked.v shift-tangnano4k-unpacked.v \
 	tlvds-tangnano4k-unpacked.v tlvds-tangnano9k-unpacked.v tlvds-tec0117-unpacked.v \
-	tlvds-oddr-tangnano4k-unpacked.v tlvds-oddr-tangnano9k-unpacked.v tlvds-oddr-tec0117-unpacked.v \
+	elvds-tangnano4k-unpacked.v elvds-tangnano9k-unpacked.v elvds-tec0117-unpacked.v \
+	elvds-tangnano-unpacked.v elvds-tangnano1k-unpacked.v \
+	blinky-tbuf-tangnano-unpacked.v blinky-tbuf-tangnano1k-unpacked.v \
+	blinky-tbuf-tangnano4k-unpacked.v blinky-tbuf-tangnano9k-unpacked.v \
+	blinky-tbuf-tec0117-unpacked.v blinky-tbuf-runber-unpacked.v blinky-tbuf-honeycomb-unpacked.v \
+	oddr-tlvds-tangnano4k-unpacked.v oddr-tlvds-tangnano9k-unpacked.v oddr-tlvds-tec0117-unpacked.v \
+	oddr-elvds-tangnano4k-unpacked.v oddr-elvds-tangnano9k-unpacked.v oddr-elvds-tec0117-unpacked.v \
+	oddr-elvds-tangnano-unpacked.v oddr-elvds-tangnano1k-unpacked.v oddr-elvds-szfpga-unpacked.v \
 	blinky-oddr-tec0117-unpacked.v blinky-oddr-runber-unpacked.v \
 	blinky-oddr-tangnano-unpacked.v blinky-oddr-honeycomb-unpacked.v \
 	blinky-oddr-tangnano-unpacked.v blinky-oddr-honeycomb-unpacked.v \
@@ -57,6 +71,9 @@ clean: clean_deser
 %-tec0117.json: %-tec0117-synth.json tec0117.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --cst tec0117.cst
 
+%lvds-tec0117.json: %lvds-tec0117-synth.json lvds-tec0117.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --cst lvds-tec0117.cst
+
 %-runber.fs: %-runber.json
 	gowin_pack -d GW1N-4 -o $@ $<
 
@@ -69,6 +86,9 @@ blinky-oddr-runber.json: blinky-oddr-runber-synth.json runber-tlvds.cst
 %-tangnano.fs: %-tangnano.json
 	gowin_pack -d GW1N-1 -o $@ $^
 
+%lvds-tangnano.json: %lvds-tangnano-synth.json lvds-tangnano.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1N-LV1QN48C6/I5 --cst lvds-tangnano.cst
+
 %-tangnano.json: %-tangnano-synth.json tangnano.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1N-LV1QN48C6/I5 --cst tangnano.cst
 
@@ -78,11 +98,17 @@ blinky-oddr-runber.json: blinky-oddr-runber-synth.json runber-tlvds.cst
 %-tangnano1k.json: %-tangnano1k-synth.json tangnano1k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NZ-LV1QN48C6/I5 --family GW1NZ-1 --cst tangnano1k.cst
 
+%lvds-tangnano1k.json: %lvds-tangnano1k-synth.json lvds-tangnano1k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NZ-LV1QN48C6/I5 --family GW1NZ-1 --cst lvds-tangnano1k.cst
+
 %-tangnano4k.fs: %-tangnano4k.json
 	gowin_pack -d GW1NS-4 -o $@ $^
 
 %-tangnano4k.json: %-tangnano4k-synth.json tangnano4k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --cst tangnano4k.cst
+
+%lvds-tangnano4k.json: %lvds-tangnano4k-synth.json lvds-tangnano4k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --cst lvds-tangnano4k.cst
 
 pll-tangnano4k.json: pll-tangnano4k-synth.json tangnano4k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --cst tangnano4k.cst
@@ -95,6 +121,9 @@ pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
 
 %-tangnano9k.json: %-tangnano9k-synth.json tangnano9k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --family GW1N-9C --cst tangnano9k.cst
+
+%lvds-tangnano9k.json: %lvds-tangnano9k-synth.json lvds-tangnano9k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --family GW1N-9C --cst lvds-tangnano9k.cst
 
 %-honeycomb.fs: %-honeycomb.json
 	gowin_pack -d GW1NS-2 -o $@ $<
@@ -115,7 +144,7 @@ tonegen-tec0117-synth.json: tonegen/top.v tonegen/sddac.v tonegen/cordic.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
 nanolcd-tangnano-synth.json: nanolcd/TOP.v nanolcd/VGAMod.v
-	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -p "read_verilog $^; synth_gowin -noalu -json $@"
 
 pll-nanolcd-tangnano-synth.json: pll/GW1N-1-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -noalu -json $@"
@@ -200,6 +229,18 @@ pll-%-honeycomb-synth.json: pll/GW1NS-2C-%.vh pll.v pll/rpll.v
 
 %-honeycomb-unpacked.v: %-honeycomb.fs
 	gowin_unpack -d GW1NS-2 -o $@ $<
+
+%-szfpga-unpacked.v: %-szfpga.fs
+	gowin_unpack -d GW1N-9 -o $@ $^
+
+%lvds-szfpga.json: %lvds-szfpga-synth.json lvds-szfpga.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --cst lvds-szfpga.cst
+
+%-szfpga-synth.json: %.v
+	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
+
+%-szfpga.fs: %-szfpga.json
+	gowin_pack -d GW1N-9 -o $@ $<
 
 #############
 # long wires

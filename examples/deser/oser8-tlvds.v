@@ -62,8 +62,8 @@ module top(input wire clk_i,
 
 	// Combinational code (boolean logic)
 	assign ctr_d = ctr_q + 1'b1;
-	//assign i_tick = |ctr_q[24:23];
-	assign tick_w = ctr_q[10];
+	assign tick_w = |ctr_q[24:23];
+	//assign tick_w = ctr_q[10];
 
 
     reg [1:0]pclk_r;

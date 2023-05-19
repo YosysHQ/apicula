@@ -24,6 +24,11 @@ _packages = {
 # XXX default io standard may be board-dependent!
 _banks = {'0': "LVCMOS18", '1': "LVCMOS18", '2': "LVCMOS18", '3': "LVCMOS18"}
 
+# bank fuse tables. They are created here from the standard 'longval' because for
+# banks the key of these tables starts with the bank number and unpack is not
+# called so often that one can make 'right' tables on the fly.
+_bank_fuse_tables = {}
+
 # for a given mode returns a mask of zero bits
 def zero_bits(mode, all_modes):
     res = set()
@@ -136,16 +141,16 @@ def osc_attrs_refine(in_attrs):
 
 # {(REGSET, LSRONMUX, CLKMUX_CLK, SRMODE) : dff_type}
 _dff_types = {
-   ('RESET', 'LSRMUX', 'SIG', '') :      'DFF',
-   ('RESET', 'LSRMUX', 'INV', '') :      'DFFN',
-   ('RESET', '',       'SIG', 'ASYNC') : 'DFFC',
-   ('RESET', '',       'INV', 'ASYNC') : 'DFFNC',
-   ('RESET', '',       'SIG', '') :      'DFFR',
-   ('RESET', '',       'INV', '') :      'DFFNR',
-   ('SET',   '',       'SIG', 'ASYNC') : 'DFFP',
-   ('SET',   '',       'INV', 'ASYNC') : 'DFFNP',
-   ('SET',   '',       'SIG', '') :      'DFFS',
-   ('SET',   '',       'INV', '') :      'DFFNS',
+   ('RESET', '',       'SIG', '') :      'DFF',
+   ('RESET', '',       'INV', '') :      'DFFN',
+   ('RESET', 'LSRMUX', 'SIG', 'ASYNC') : 'DFFC',
+   ('RESET', 'LSRMUX', 'INV', 'ASYNC') : 'DFFNC',
+   ('RESET', 'LSRMUX', 'SIG', '') :      'DFFR',
+   ('RESET', 'LSRMUX', 'INV', '') :      'DFFNR',
+   ('SET',   'LSRMUX', 'SIG', 'ASYNC') : 'DFFP',
+   ('SET',   'LSRMUX', 'INV', 'ASYNC') : 'DFFNP',
+   ('SET',   'LSRMUX', 'SIG', '') :      'DFFS',
+   ('SET',   'LSRMUX', 'INV', '') :      'DFFNS',
 }
 
 def get_dff_type(dff_idx, in_attrs):
@@ -171,8 +176,7 @@ def get_dff_type(dff_idx, in_attrs):
     if f'REG{dff_idx % 2}_REGSET' in in_attrs.keys():
         attrs['REGSET'] = get_attrval_name(in_attrs[f'REG{dff_idx % 2}_REGSET'])
     else:
-        attrs['REGSET'] = 'RESET'
-
+        attrs['REGSET'] = 'SET'
     return _dff_types.get((attrs['REGSET'], attrs['LSRONMUX'], attrs['CLKMUX_CLK'], attrs['SRMODE']))
 
 # parse attributes and values use 'logicinfo' table
@@ -188,6 +192,12 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
     def is_pos_key(key):
         return not is_neg_key(key)
 
+    def get_positive(av):
+        return {a for a in av if a > 0}
+
+    def get_negative(av):
+        return {abs(a) for a in av if a < 0}
+
     res = {}
     set_mask = set()
     zero_mask = set()
@@ -198,24 +208,60 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
         else:
             set_mask.update(bits)
     set_bits =  {(row, col) for row, col in set_mask if tile[row][col] == 1}
-    zero_bits = {(row, col) for row, col in zero_mask if tile[row][col] == 1}
+    neg_bits = {(row, col) for row, col in zero_mask if tile[row][col] == 1}
+
     # find candidates from fuse table
+    # the set bits are more unique
     attrvals = set()
-    for raw_bits, test_fn in [(zero_bits, is_neg_key), (set_bits, is_pos_key)]:
-        cnd = { av: bits for av, bits in fuse_table.items() if test_fn(av) and bits.issubset(raw_bits)}
-        for av, bits in cnd.items():
-            keep = True
-            for bt in cnd.values():
-                if bits !=  bt and bits.issubset(bt):
+    cnd = {av: bits for av, bits in fuse_table.items() if is_pos_key(av) and bits.issubset(set_bits)}
+    for av, bits in cnd.items():
+        keep = True
+        for bt in cnd.values():
+            if bits != bt and bits.issubset(bt):
+                keep = False
+                break
+        if keep:
+            clean_av = get_positive(av)
+            attrvals.update(clean_av) # set attributes
+            for idx in clean_av:
+                attr, val = logicinfo_table[idx]
+                res[get_attr_name(attrname_table, attr)] = val
+
+    # records with a negative keys and used fuses
+    neg_attrvals = set()
+    ignore_attrs = set()
+    cnd = {av: bits for av, bits in fuse_table.items() if is_neg_key(av) and bits.issubset(neg_bits)}
+    for av, bits in cnd.items():
+        keep = True
+        for bt in cnd.values():
+            if bits != bt and bits.issubset(bt):
+                keep = False
+                break
+            for idx in av:
+                attr, _ = logicinfo_table[idx]
+                if attr in res.keys():
                     keep = False
                     break
-            if keep:
-                attrvals.add(av)
+        if keep:
+            neg_attrvals.update(get_positive(av))
+            ignore_attrs.update(get_negative(av))
 
-    for key in attrvals:
-        for av in [abs(a) for a in key if a != 0]:
-            attr, val = logicinfo_table[av]
-            res[get_attr_name(attrname_table, attr)] = val
+    for idx in neg_attrvals:
+        attr, val = logicinfo_table[idx]
+        res[get_attr_name(attrname_table, attr)] = val
+
+    # records with a negative keys and unused fuses
+    cnd = {av for av, bits in fuse_table.items() if is_neg_key(av) and not bits.issubset(neg_bits)}
+    for av in cnd:
+        keep = True
+        for idx in get_negative(av):
+            if idx in ignore_attrs or not get_positive(av).issubset(attrvals):
+                keep = False
+                break
+        if keep:
+            for idx in get_negative(av):
+                attr, val = logicinfo_table[idx]
+                res[get_attr_name(attrname_table, attr)] = val
     return res
 
 # { (row, col, type) : idx}
@@ -223,7 +269,6 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
 _pll_cells = {}
 
 # returns the A cell of the PLL
-# GW1N(Z)-1
 def get_pll_A(db, row, col, typ):
     if typ == 'B':
         if _device in {"GW1N-9C", "GW1N-9"}:
@@ -250,6 +295,13 @@ _iologic_mode = {
 # With normal gowin_unpack io standard is determined first and it is known.
 # (bels, pips, clock_pips)
 def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True):
+    if not _bank_fuse_tables:
+        # create bank fuse table
+        for ttyp in db.longval.keys():
+            if 'BANK' in db.longval[ttyp].keys():
+                for key, val in db.longval[ttyp]['BANK'].items():
+                    _bank_fuse_tables.setdefault(ttyp, {}).setdefault(f'BANK{key[0]}', {})[key[1:]] = val
+
     # TLVDS takes two BUF bels, so skip the B bels.
     skip_bels = set()
     #print((row, col))
@@ -292,10 +344,9 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 continue
             if 'OUTMODE' in attrvals.keys():
                 # XXX skip oddr
-                if attrvals['OUTMODE'] == attrids.iologic_attrvals['MODDRX1']:
+                if attrvals['OUTMODE'] in {attrids.iologic_attrvals['MODDRX1'], attrids.iologic_attrvals['ODDRX1']}:
                     if 'LSROMUX_0' in attrvals.keys():
                         bels.setdefault(name, set()).add(f"MODE=ODDRC")
-                        print(bels)
                     else:
                         bels.setdefault(name, set()).add(f"MODE=ODDR")
                     continue
@@ -305,7 +356,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 if attrids.iologic_num2val[attrvals['OUTMODE']] in _iologic_mode.keys():
                     bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['OUTMODE']]]}")
             elif 'INMODE' in attrvals.keys():
-                if attrvals['INMODE'] == attrids.iologic_attrvals['MIDDRX1']:
+                if attrvals['INMODE'] in {attrids.iologic_attrvals['MIDDRX1'], attrids.iologic_attrvals['IDDRX1']}:
                     if 'LSRIMUX_0' in attrvals.keys():
                         bels.setdefault(name, set()).add(f"MODE=IDDRC")
                     else:
@@ -326,6 +377,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("DFF"):
             idx = int(name[3])
             attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids)
+            #print(row, col, attrvals)
             # skip ALU and unsupported modes
             if attrvals.get('MODE') == attrids.cls_attrvals['SSRAM']:
                 continue
@@ -334,43 +386,41 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 bels[f'{name}'] = {dff_type}
             continue
         if name.startswith("IOB"):
-            #print(name)
-            if noiostd:
-                iostd = ''
-            else:
-                try: # we can ask for invalid pin here because the IOBs share some stuff
-                    iostd = _banks[chipdb.loc2bank(db, row, col)]
-                except KeyError:
-                    iostd = ''
-            # Here we don't use a mask common to all modes (it didn't work),
-            # instead we try the longest bit sequence first.
-            for mode, mode_rec in sorted(bel.iob_flags[iostd].items(),
-                key = _io_mode_sort_func, reverse = True):
-                #print(mode, mode_rec.decode_bits)
-                mode_bits = {(row, col)
-                             for row, col in mode_rec.decode_bits
-                             if tile[row][col] == 1}
-                #print("read", mode_bits)
-                if mode_rec.decode_bits == mode_bits:
-                    zeros = zero_bits(mode, bel.iob_flags[iostd])
-                    #print("zeros", zeros)
-                    used_bits = {tile[row][col] for row, col in zeros}
-                    if not any(used_bits):
-                        bels.setdefault(name, set()).add(mode)
-                        #print(f"found: {mode}")
-                        # mode found
-                        break
+            idx = name[-1]
+            attrvals = parse_attrvals(tile, db.logicinfo['IOB'], db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids)
+            try: # we can ask for invalid pin here because the IOBs share some stuff
+                bank = chipdb.loc2bank(db, row, col)
+            except KeyError:
+                bank = None
+            if attrvals:
+                mode = 'IBUF'
+                if attrvals.get('PERSISTENT', None) == attrids.iob_attrvals['OFF']:
+                    mode = 'IOBUF'
+                elif 'ODMUX' in attrvals.keys() or 'ODMUX_1' in attrvals.keys():
+                    mode = 'OBUF'
+                # Z-1 row 6
+                if _device in {'GW1NZ-1', 'GW1N-1'} and row == 5:
+                    mode = 'IOBUF'
+                if 'LVDS_OUT' in attrvals.keys():
+                    if mode == 'IOBUF':
+                        mode = 'TBUF'
+                    mode = f'TLVDS_{mode}'
+                    # skip B bel
+                    skip_bels.update({name[:-1] + 'B'})
+                elif idx == 'B' and 'DRIVE' not in attrvals.keys() and 'IO_TYPE' in attrvals.keys():
+                    mode = f'ELVDS_{mode}'
+                    # skip B bel
+                    skip_bels.update({name})
+                elif 'IOBUF_MIPI_LP' in attrvals.keys():
+                    mode = f'ELVDS_{mode}'
+                    # skip B bel
+                    skip_bels.update({name[:-1] + 'B'})
 
-            for flag, flag_parm in bel.iob_flags[iostd][mode].flags.items():
-                flag_bits = {(row, col)
-                              for row, col in flag_parm.mask
-                              if tile[row][col] == 1}
-                for opt, bits in flag_parm.options.items():
-                    if bits == flag_bits:
-                        bels.setdefault(name, set()).add(f"{flag}={opt}")
-            # skip B bel
-            if mode.startswith('TLVDS'):
-                skip_bels.update({name[:-1] + 'B'})
+                bels.setdefault(name, set()).add(mode)
+        if name.startswith("BANK"):
+            attrvals = parse_attrvals(tile, db.logicinfo['IOB'], _bank_fuse_tables[tiledata.ttyp][name], attrids.iob_attrids)
+            for a, v in attrvals.items():
+                bels.setdefault(name, set()).add(f'{a}={attrids.iob_num2val[v]}')
         else:
             mode_bits = {(row, col)
                          for row, col in bel.mode_bits
@@ -381,19 +431,6 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 #print(mode, sorted(bits))
                 if bits == mode_bits and (default or bits):
                     bels.setdefault(name, set()).add(mode)
-                    if name[0:4] == "BANK":
-                        # set iostd for bank
-                        flag_bits = {(row, col)
-                                      for row, col in bel.bank_mask
-                                      if tile[row][col] == 1}
-                        for iostd, bits in bel.bank_flags.items():
-                            if bits == flag_bits:
-                                if iostd.startswith('LVDS25'):
-                                    iostd = iostd[7:]
-                                _banks[name[4:]] = iostd
-                                break
-                        # mode found
-                        break
         # simple flags
         for flag, bits in bel.flags.items():
             used_bits = {tile[row][col] for row, col in bits}
@@ -435,6 +472,17 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             if bits == used_bits and (noalias or (row, col, src) in db.aliases or (src.startswith('SPINE') and dest.startswith('SPINE'))):
                 clock_pips[dest] = src
 
+    # elvds IO uses the B bel bits
+    for name in skip_bels:
+        bel_a = bels[f'{name[:-1]}A']
+        if not bel_a.intersection({'ELVDS_IBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF', 'ELVDS_TBUF',
+                                   'TLVDS_IBUF', 'TLVDS_OBUF', 'TLVDS_IOBUF', 'TLVDS_TBUF'}):
+            mode = bels[name].intersection({'ELVDS_IBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF', 'ELVDS_TBUF'})
+            if mode:
+                old_mode = bel_a.intersection({'IBUF', 'OBUF', 'IOBUF', 'TBUF'})
+                bel_a -= old_mode
+                bel_a.update(mode)
+
     return {name: bel for name, bel in bels.items() if name not in skip_bels}, pips, clock_pips
 
 dffmap = {
@@ -452,8 +500,15 @@ dffmap = {
 iobmap = {
     "IBUF": {"wires": ["O"], "inputs": ["I"]},
     "OBUF": {"wires": ["I"], "outputs": ["O"]},
+    "TBUF": {"wires": ["I", "OE"], "outputs": ["O"]},
     "IOBUF": {"wires": ["I", "O", "OE"], "inouts": ["IO"]},
     "TLVDS_OBUF": {"wires": ["I"], "outputs": ["O", "OB"]},
+    "TLVDS_TBUF": {"wires": ["I", "OE"], "outputs": ["O", "OB"]},
+    "TLVDS_IBUF": {"wires": ["O"], "inputs": ["I", "IB"]},
+    "ELVDS_OBUF": {"wires": ["I"], "outputs": ["O", "OB"]},
+    "ELVDS_TBUF": {"wires": ["I", "OE"], "outputs": ["O", "OB"]},
+    "ELVDS_IBUF": {"wires": ["O"], "inputs": ["I", "IB"]},
+    "ELVDS_IOBUF": {"wires": ["I", "O", "OE"], "inouts": ["IO", "IOB"]},
 }
 
 # OE -> OEN
@@ -883,22 +938,6 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             mod.wires.update(dff.portmap.values())
             mod.primitives[name] = dff
             cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
-        elif typ == "ODDR":
-            if disable_oddr:
-                continue
-            iologic_detected.add(idx)
-            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
-            name = f"R{row}C{col}_ODDR{idx}"
-            oddr = codegen.Primitive("ODDR", name)
-            for port in {'TX', 'D0', 'D1', 'CLK'}:
-                wname = portmap[port]
-                oddr.portmap[port] = f"R{row}C{col}_{wname}"
-            oddr.portmap['Q0'] = f"R{row}C{col}_{portmap['D0']}_IOL"
-            #oddr.portmap['Q1'] = f"R{row}C{col}_{portmap['Q1']}_IOL"
-            mod.wires.update(oddr.portmap.values())
-            # XXX implement ODDR with TBUF
-            oddr.portmap['Q1'] = ""
-            mod.primitives[name] = oddr
         elif typ == "IOB":
             try:
                 kind, = flags.intersection(iobmap.keys())
@@ -935,9 +974,9 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             cst.ports[name] = f"{pos}{idx}"
             if kind[0:5] == 'TLVDS':
                 cst.ports[name] = f"{pos}{idx},{pos}{chr(ord(idx) + 1)}"
-            iostd = _banks.get(bank)
-            if iostd:
-                cst.attrs.setdefault(name, {}).update({"IO_TYPE" : iostd})
+            #iostd = _banks.get(bank)
+            #if iostd:
+            #    cst.attrs.setdefault(name, {}).update({"IO_TYPE" : iostd})
             for flg in flags:
                 name_val = flg.split('=')
                 cst.attrs.setdefault(name, {}).update({name_val[0] : name_val[1]})
@@ -1039,6 +1078,7 @@ def main():
         except KeyError:
             continue
         bels, pips, clock_pips = parse_tile_(db, row, col, t)
+        #print("bels:", bels)
         tile2verilog(row, col, bels, pips, clock_pips, mod, cst, db)
 
     for idx, t in bm.items():
@@ -1053,7 +1093,7 @@ def main():
         #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
         #    breakpoint()
         bels, pips, clock_pips = parse_tile_(db, row, col, t, noiostd = False)
-        #print(idx, bels)
+        #print("bels:", idx, bels)
         #print(pips)
         #print(clock_pips)
         if args.noalu:
