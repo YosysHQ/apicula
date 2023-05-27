@@ -1130,61 +1130,6 @@ def get_route_bits(db, row, col):
             bits.update(v)
     return bits
 
-"""
-def diff2flag(dev):
-    " Minimize bits for flag values and calc flag bitmask"
-    seen_bels = []
-    for idx, row in enumerate(dev.grid):
-        for jdx, td in enumerate(row):
-            for name, bel in td.bels.items():
-                if name[0:3] == "IOB":
-                    if not bel.iob_flags or bel in seen_bels:
-                        continue
-                    seen_bels.append(bel)
-                    # get routing bits for cell
-                    rbits = get_route_bits(dev, idx, jdx)
-                    # If for a given mode all possible values of one flag
-                    # contain some bit, then this bit is "noise" --- this bit
-                    # belongs to the default value of another flag. Remove.
-                    for iostd, iostd_rec in bel.iob_flags.items():
-                        for mode, mode_rec in iostd_rec.items():
-                            # if encoding has routing
-                            r_encoding = mode_rec.encode_bits & rbits
-                            mode_rec.encode_bits -= rbits
-                            if r_encoding and mode != 'IOBUF':
-                                bel.simplified_iob = True
-                            mode_rec.decode_bits = mode_rec.encode_bits.copy()
-                            for flag, flag_rec in mode_rec.flags.items():
-                                noise_bits = None
-                                for bits in flag_rec.options.values():
-                                    if noise_bits != None:
-                                        noise_bits &= bits
-                                    else:
-                                        noise_bits = bits.copy()
-                                # remove noise
-                                for bits in flag_rec.options.values():
-                                    bits -= noise_bits
-                                    flag_rec.mask |= bits
-                            # decode bits don't include flags
-                            for _, flag_rec in mode_rec.flags.items():
-                                mode_rec.decode_bits -= flag_rec.mask
-                elif name[0:4] == "BANK":
-                    noise_bits = None
-                    for bits in bel.bank_flags.values():
-                        if noise_bits != None:
-                            noise_bits &= bits
-                        else:
-                            noise_bits = bits.copy()
-                    mask = set()
-                    for bits in bel.bank_flags.values():
-                        bits -= noise_bits
-                        mask |= bits
-                    bel.bank_mask = mask
-                    bel.modes['ENABLE'] -= mask
-                else:
-                    continue
-"""
-
 uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
 dirlut = {'N': (1, 0),
           'E': (0, -1),
