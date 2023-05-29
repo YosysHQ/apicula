@@ -109,19 +109,19 @@ def get_diff_cap_info(device, package, special_pins=False):
         is_diff = 'DIFF' in pin.keys()
         if not is_diff:
             res[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive)
-            cotinue
+            continue
         is_true_lvds = 'TRUELVDS' in pin.keys()
         if pin['DIFF'] == 'P':
             is_positive = True
-            positive[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive)
+            positive[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive, str(pin['PAIR']))
         else:
             is_positive = False
             negative[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive)
     # check the pairs
     for pos_name, pos_flags in positive.items():
-        neg_name = pos_name[:-1] + 'B'
+        neg_name = pos_flags[-1]
         if neg_name in negative.keys():
-            res.update({pos_name : pos_flags})
+            res.update({pos_name : pos_flags[0:-1]})
             res.update({neg_name : negative[neg_name]})
     return res
 

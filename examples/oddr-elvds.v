@@ -4,8 +4,9 @@
 */
 module top (
     input clk,
-    output tlvds_p,
-    output tlvds_n
+	input key,
+    output elvds_p,
+    output elvds_n
 );
 
 reg [24:0] ctr_q;
@@ -30,9 +31,10 @@ ODDR oddr_0(
 	.TX()
 );
 
-TLVDS_OBUF diff_buf(
-        .O(tlvds_p),
-        .OB(tlvds_n),
+ELVDS_TBUF diff_buf(
+		.OEN(~key),
+        .O(elvds_p),
+        .OB(elvds_n),
         .I(w_ddr)
     );
 

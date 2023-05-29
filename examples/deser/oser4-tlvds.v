@@ -23,8 +23,8 @@ module top(input wire clk_i,
 			.FCLK(fclk_w),
 			.PCLK(pclk_w),
 			.RESET(1'b0),
-			.TX0(1'b1),
-			.TX1(1'b1),
+			.TX0(1'b0),
+			.TX1(1'b0),
 			.Q0(dso_w)
 		);
 		wire dso_w;
@@ -56,8 +56,8 @@ module top(input wire clk_i,
 
 	// Combinational code (boolean logic)
 	assign ctr_d = ctr_q + 1'b1;
-	//assign i_tick = |ctr_q[24:23];
-	assign tick_w = ctr_q[10];
+	assign tick_w = |ctr_q[24:23];
+	//assign tick_w = ctr_q[10];
 
 
     reg [1:0]pclk_r;

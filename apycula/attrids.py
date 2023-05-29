@@ -625,6 +625,14 @@ osc_attrvals = {
 # config
 cfg_attrids = {
         'GSR':              2,
+        'DONE_AS_GPIO':     4,
+        'JTAG_AS_GPIO':     6,
+        'READY_AS_GPIO':    7,
+        'MSPI_AS_GPIO':     8,
+        'RECONFIG_AS_GPIO': 9,
+        'SSPI_AS_GPIO':     10,
+        'I2C_AS_GPIO':      20,
+        'JTAG_EN':          21,
         'POR':              24, # power on reset
     }
 
@@ -793,4 +801,5 @@ iologic_attrvals = {
 
 # num -> attr name
 iologic_num2val = {v: k for k, v in iologic_attrvals.items()}
+iob_num2val = {v: k for k, v in iob_attrvals.items()}
 

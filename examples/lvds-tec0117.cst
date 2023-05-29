@@ -28,6 +28,11 @@ CLOCK_LOC "led[5]" BUFS;
 CLOCK_LOC "led[6]" BUFS;
 CLOCK_LOC "led[7]" BUFS;
 
+// emulated lvds pins
+IO_LOC "elvds_p" 71,70;
+
 // true LVDS pins
 IO_LOC "tlvds_p" 29,30;
 IO_PORT "tlvds_p" IO_TYPE=LVCMOS33;
+
+
