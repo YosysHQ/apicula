@@ -71,8 +71,6 @@ for IDIV_SEL in range(64):
                 }
 
 
-print(setup)
-
 if setup:
     pll_v = f"""
 module {args.module_name}(
