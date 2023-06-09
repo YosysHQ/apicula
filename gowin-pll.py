@@ -60,16 +60,19 @@ for IDIV_SEL in range(64):
             diff = abs(args.output_freq_mhz - CLKOUT)
             if diff < min_diff:
                 min_diff = diff
+                print("##########", IDIV_SEL, )
                 setup = {
                     "IDIV_SEL": IDIV_SEL,
-                    "FBDIV_SEL": IDIV_SEL,
-                    "ODIV_SEL": IDIV_SEL,
+                    "FBDIV_SEL": FBDIV_SEL,
+                    "ODIV_SEL": ODIV_SEL,
                     "PFD": PFD,
                     "CLKOUT": CLKOUT,
                     "VCO": VCO,
                     "ERROR": diff,
                 }
 
+
+print(setup)
 
 if setup:
     pll_v = f"""
