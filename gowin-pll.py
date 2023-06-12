@@ -6,6 +6,7 @@
 #
 
 import sys
+import re
 import argparse
 
 
@@ -34,6 +35,14 @@ parser.add_argument(
 parser.add_argument("-l", "--list-devices", help="list device", action="store_true")
 
 args = parser.parse_args()
+
+device_name = args.device
+match = re.search(
+    r"(GW1[A-Z]{1,3})-[A-Z]{1,2}([0-9])[A-Z]{1,3}[0-9]{1,3}P*(C[0-9]/I[0-9])",
+    device_name,
+)
+if match:
+    device_name = f"{match.group(1)}-{match.group(2)} {match.group(3)}"
 
 device_limits = {
     "GW1NR-1 C6/I5": {
@@ -106,7 +115,7 @@ device_limits = {
         "clkout_min": 2.5,
         "clkout_max": 400,
     },
-    "GW1NSR-4(C) C7/I6": {
+    "GW1NSR-4 C7/I6": {
         "comment": "Untested",
         "pll_name": "PLLVR",
         "pfd_min": 3,
@@ -116,7 +125,7 @@ device_limits = {
         "clkout_min": 3.125,
         "clkout_max": 600,
     },
-    "GW1NSR-4(C) C6/I5": {
+    "GW1NSR-4 C6/I5": {
         "comment": "Untested",
         "pll_name": "PLLVR",
         "pfd_min": 3,
@@ -126,7 +135,37 @@ device_limits = {
         "clkout_min": 3.125,
         "clkout_max": 600,
     },
-    "GW1NSR-4(C) C5/I4": {
+    "GW1NSR-4 C5/I4": {
+        "comment": "Untested",
+        "pll_name": "PLLVR",
+        "pfd_min": 3,
+        "pfd_max": 320,
+        "vco_min": 320,
+        "vco_max": 960,
+        "clkout_min": 2.5,
+        "clkout_max": 480,
+    },
+    "GW1NSR-4C C7/I6": {
+        "comment": "Untested",
+        "pll_name": "PLLVR",
+        "pfd_min": 3,
+        "pfd_max": 400,
+        "vco_min": 400,
+        "vco_max": 1200,
+        "clkout_min": 3.125,
+        "clkout_max": 600,
+    },
+    "GW1NSR-4C C6/I5": {
+        "comment": "Untested",
+        "pll_name": "PLLVR",
+        "pfd_min": 3,
+        "pfd_max": 400,
+        "vco_min": 400,
+        "vco_max": 1200,
+        "clkout_min": 3.125,
+        "clkout_max": 600,
+    },
+    "GW1NSR-4C C5/I4": {
         "comment": "Untested",
         "pll_name": "PLLVR",
         "pfd_min": 3,
@@ -173,11 +212,11 @@ if args.list_devices:
         print(f"{device} - {device_limits[device]['comment']}")
     sys.exit(0)
 
-if args.device not in device_limits:
-    print(f"ERROR: device '{args.device}' not found")
+if device_name not in device_limits:
+    print(f"ERROR: device '{device_name}' not found")
     sys.exit(1)
 
-limits = device_limits[args.device]
+limits = device_limits[device_name]
 setup = {}
 
 FCLKIN = args.input_freq_mhz
@@ -221,7 +260,7 @@ if setup:
  * using the gowin-pll tool.
  * Use at your own risk.
  *
- * Target-Device:                {args.device}
+ * Target-Device:                {device_name}
  * Given input frequency:        {args.input_freq_mhz:0.3f} MHz
  * Requested output frequency:   {args.output_freq_mhz:0.3f} MHz
  * Achieved output frequency:    {setup['CLKOUT']:0.3f} MHz
