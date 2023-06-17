@@ -6,7 +6,8 @@ NEXTPNR ?= nextpnr-gowin
 include deser/Makefile
 
 all: attosoc-tec0117.fs nanolcd-tangnano.fs blinky-tec0117.fs blinky-runber.fs \
-	blinky-tangnano.fs blinky-honeycomb.fs shift-tec0117.fs shift-runber.fs \
+	blinky-tangnano.fs blinky-honeycomb.fs blinky-primer20k.fs \
+	shift-tec0117.fs shift-runber.fs \
 	shift-tangnano.fs shift-honeycomb.fs \
 	tonegen-tec0117.fs blinky-tangnano9k.fs blinky-tangnano1k.fs blinky-tangnano4k.fs \
 	blinky-tbuf-tangnano.fs blinky-tbuf-tangnano1k.fs blinky-tbuf-tangnano4k.fs \
@@ -64,6 +65,12 @@ clean: clean_deser
 	rm -f *.json *.fs *-unpacked.v
 	
 .PHONY: all unpacked clean
+
+%-primer20k.fs: %-primer20k.json
+	gowin_pack -d GW2A-18 -o $@ $<
+
+%-primer20k.json: %-primer20k-synth.json primer20k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW2A-LV18PG256C8/I7 --cst primer20k.cst
 
 %-tec0117.fs: %-tec0117.json
 	gowin_pack -d GW1N-9 -o $@ $<
@@ -160,6 +167,9 @@ pll2-tec0117-synth.json: pll/GW1N-9-dyn.vh pll2.v pll/rpll.v
 
 pll2-runber-synth.json: pll/GW1N-4-dyn.vh pll2.v pll/rpll.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -noalu -json $@"
+
+%-primer20k-synth.json: %.v
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
 
 %-tec0117-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
