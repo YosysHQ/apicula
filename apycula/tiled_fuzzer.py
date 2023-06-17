@@ -68,6 +68,11 @@ params = {
         "device": "GW1NZ-1-QFN48-6",
         "partnumber": "GW1NZ-LV1QN48C6/I5",
     },
+    "GW2A-18": {
+        "package": "PBGA256",
+        "device": "GW2A-18-PBGA256-8",
+        "partnumber": "GW2A-LV18PG256C8/I7",
+    },
 }[device]
 
 # utils
@@ -275,7 +280,10 @@ if __name__ == "__main__":
         name = pin.upper()
         cfg_attrs = set()
         chipdb.add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[f'{name}_AS_GPIO'], attrids.cfg_attrvals['YES'])
-        bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][0][0], cfg_attrs, 'CFG')
+        if device == 'GW2A-18':
+            bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][0][-1], cfg_attrs, 'CFG')
+        else:
+            bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][0][0], cfg_attrs, 'CFG')
         tile = db.template
         for row_, col_ in bits:
             tile[row_][col_] = 0
