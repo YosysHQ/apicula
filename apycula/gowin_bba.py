@@ -1,6 +1,7 @@
 import sys
 import importlib.resources
 import pickle
+import gzip
 import argparse
 import re
 from contextlib import contextmanager
@@ -254,7 +255,7 @@ def main():
 
     args = parser.parse_args()
     read_constids(args.constids)
-    with importlib.resources.open_binary("apycula", f"{args.device}.pickle") as f:
+    with gzip.open(importlib.resources.files("apycula").joinpath(f"{args.device}.pickle"), 'rb') as f:
         db = pickle.load(f)
     write_chipdb(db, args.output, args.device)
 
