@@ -5,6 +5,7 @@ import random
 import numpy as np
 from itertools import chain, count
 import pickle
+import gzip
 import argparse
 import importlib.resources
 from apycula import codegen
@@ -1047,7 +1048,7 @@ def main():
         luts = m.group(3)
         _device = f"GW1N{mods}-{luts}"
 
-    with importlib.resources.open_binary("apycula", f"{_device}.pickle") as f:
+    with gzip.open(importlib.resources.files("apycula").joinpath(f"{_device}.pickle"), 'rb') as f:
         db = pickle.load(f)
 
     global _pinout

@@ -18,7 +18,7 @@ all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle \
 	python3 -m apycula.clock_fuzzer $*
 
 apycula/%.pickle: %_stage2.pickle
-	cp $< $@
+	gzip -c $< > $@
 
 clean:
 	rm *.json

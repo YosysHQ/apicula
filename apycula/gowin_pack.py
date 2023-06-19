@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import pickle
+import gzip
 import itertools
 import math
 import numpy as np
@@ -980,8 +981,7 @@ def main():
         mods = m.group(1) or ""
         luts = m.group(3)
         device = f"GW1N{mods}-{luts}"
-
-    with importlib.resources.open_binary("apycula", f"{device}.pickle") as f:
+    with gzip.open(importlib.resources.files("apycula").joinpath(f"{device}.pickle"), 'rb') as f:
         db = pickle.load(f)
     with open(args.netlist) as f:
         pnr = json.load(f)
