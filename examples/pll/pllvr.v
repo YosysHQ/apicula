@@ -1,4 +1,4 @@
-module Gowin_PLLVR (clkout, clkin, lock_o, reset, reset_p, clkfb, clkoutd_o, fdiv, idiv);
+module Gowin_PLLVR (clkout, clkin, lock_o, reset, reset_p, clkfb, clkoutd_o, fdiv, idiv, odiv);
 
 output wire clkout;
 output wire lock_o;
@@ -9,6 +9,7 @@ input wire clkfb;
 output wire clkoutd_o;
 input wire [5:0] fdiv;
 input wire [5:0] idiv;
+input wire [5:0] odiv;
 
 wire clkoutp_o;
 wire clkoutd3_o;
@@ -30,7 +31,7 @@ PLLVR pllvr_inst (
     .CLKFB(gw_gnd),
     .FBDSEL(fdiv),
     .IDSEL(idiv),
-    .ODSEL({gw_gnd,gw_gnd,gw_gnd,gw_gnd,gw_gnd,gw_gnd}),
+    .ODSEL(odiv),
     .PSDA({gw_gnd,gw_gnd,gw_gnd,gw_gnd}),
     .DUTYDA({gw_gnd,gw_gnd,gw_gnd,gw_gnd}),
     .FDLY({gw_gnd,gw_gnd,gw_gnd,gw_gnd}),
@@ -42,11 +43,11 @@ defparam pllvr_inst.DYN_IDIV_SEL = "true";
 defparam pllvr_inst.IDIV_SEL = 5;
 defparam pllvr_inst.DYN_FBDIV_SEL = "true";
 defparam pllvr_inst.FBDIV_SEL = 12;
-defparam pllvr_inst.DYN_ODIV_SEL = "false";
+defparam pllvr_inst.DYN_ODIV_SEL = "true";
 defparam pllvr_inst.ODIV_SEL = 8;
 defparam pllvr_inst.PSDA_SEL = "0000";
 defparam pllvr_inst.DYN_DA_EN = "false";
-defparam pllvr_inst.DUTYDA_SEL = "0100";
+defparam pllvr_inst.DUTYDA_SEL = "1000";
 defparam pllvr_inst.CLKOUT_FT_DIR = 1'b1;
 defparam pllvr_inst.CLKOUTP_FT_DIR = 1'b1;
 defparam pllvr_inst.CLKOUT_DLY_STEP = 0;
