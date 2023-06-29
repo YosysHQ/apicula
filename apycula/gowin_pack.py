@@ -18,6 +18,7 @@ from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
 
 device = ""
+is_himbaechel = False
 
 # Sometimes it is convenient to know where a port is connected to enable
 # special fuses for VCC/VSS cases.
@@ -78,7 +79,11 @@ def extra_pll_bels(cell, row, col, num, cellname):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+    if is_himbaechel:
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+    else:
+        belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'}:
             continue
@@ -88,6 +93,11 @@ def get_bels(data):
         if not bels:
             raise Exception(f"Unknown bel:{bel}")
         row, col, num = bels.groups()
+        if is_himbaechel:
+            col_ = col
+            col = str(int(row) + 1)
+            row = str(int(col_) + 1)
+
         # The differential buffer is pushed to the end of the queue for processing
         # because it does not have an independent iostd, but adjusts to the normal pins
         # in the bank, if any are found
@@ -107,7 +117,10 @@ def get_bels(data):
                 cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
 def get_pips(data):
-    pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
+    if is_himbaechel:
+        pipre = re.compile(r"X(\d+)Y(\d+)/([^_]+)/([^_]+)")
+    else:
+        pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
     for net in data['modules']['top']['netnames'].values():
         routing = net['attributes']['ROUTING']
         pips = routing.split(';')[1::3]
@@ -115,7 +128,10 @@ def get_pips(data):
             res = pipre.fullmatch(pip) # ignore alias
             if res:
                 row, col, src, dest = res.groups()
-                yield int(row), int(col), src, dest
+                if is_himbaechel:
+                    yield int(col) + 1, int(row) + 1, dest, src
+                else:
+                    yield int(row), int(col), src, dest
             elif pip and "DUMMY" not in pip:
                 print("Invalid pip:", pip)
 
@@ -536,11 +552,83 @@ _refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE'}
 def refine_io_attrs(attr):
     return _refine_attrs.get(attr, attr)
 
+def place_lut(db, tiledata, tile, parms, num):
+    lutmap = tiledata.bels[f'LUT{num}'].flags
+    init = str(parms['INIT'])
+    init = init*(16//len(init))
+    for bitnum, lutbit in enumerate(init[::-1]):
+        if lutbit == '0':
+            fuses = lutmap[bitnum]
+            for brow, bcol in fuses:
+                tile[brow][bcol] = 1
+
+def place_dff(db, tiledata, tile, parms, num, mode):
+        dff_attrs = set()
+        add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['REGMODE'], attrids.cls_attrvals['FF'])
+        # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
+        if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC', 'DFF', 'DFFN'}:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['RESET'])
+        else:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['SET'])
+        # are set/reset/clear/preset port needed?
+        if mode not in {'DFF', 'DFFN'}:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['LSRONMUX'], attrids.cls_attrvals['LSRMUX'])
+        # invert clock?
+        if mode in {'DFFN', 'DFFNR', 'DFFNC', 'DFFNP', 'DFFNS'}:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['INV'])
+        else:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['SIG'])
+
+        # async option?
+        if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['SRMODE'], attrids.cls_attrvals['ASYNC'])
+
+        dffbits = get_shortval_fuses(db, tiledata.ttyp, dff_attrs, f'CLS{int(num) // 2}')
+        #print(f'({row - 1}, {col - 1}) mode:{mode}, num{num}, attrs:{dff_attrs}, bits:{dffbits}')
+        for brow, bcol in dffbits:
+            tile[brow][bcol] = 1
+
+def place_slice(db, tiledata, tile, parms, num):
+    lutmap = tiledata.bels[f'LUT{num}'].flags
+
+    if 'ALU_MODE' in parms.keys():
+        alu_bel = tiledata.bels[f"ALU{num}"]
+        mode = str(parms['ALU_MODE'])
+        for r_c in lutmap.values():
+            for r, c in r_c:
+                tile[r][c] = 0
+        if mode in alu_bel.modes.keys():
+            bits = alu_bel.modes[mode]
+        else:
+            bits = alu_bel.modes[str(int(mode, 2))]
+            #if int(mode, 2) == 2:
+            #print('ALU mode:', int(mode, 2), ' bits:', bits)
+        for r, c in bits:
+            tile[r][c] = 1
+    else:
+        place_lut(db, tiledata, tile, parms, num)
+
+    if int(num) < 6 and int(parms['FF_USED'], 2):
+        mode = str(parms['FF_TYPE']).strip('E')
+        place_dff(db, tiledata, tile, parms, num, mode)
+
 _sides = "AB"
 def place(db, tilemap, bels, cst, args):
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
+
+        # XXX
+        if typ in {'IBUF', 'OBUF'}:
+            parms['ENABLE_USED'] = "0"
+            if typ == 'IBUF':
+                parms['OUTPUT_USED'] = "0"
+                parms['INPUT_USED'] = "1"
+            else:
+                parms['OUTPUT_USED'] = "1"
+                parms['INPUT_USED'] = "0"
+            typ = 'IOB'
+
         if typ == "GSR":
             pass
         elif typ.startswith('MUX2_'):
@@ -571,61 +659,13 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits:
                 tile[r][c] = 1
         elif typ == "SLICE":
-            lutmap = tiledata.bels[f'LUT{num}'].flags
+            place_slice(db, tiledata, tile, parms, num)
+        elif typ == "DFF":
+            mode = typ
+            place_dff(db, tiledata, tile, parms, num, mode)
+        elif typ in {'LUT1', 'LUT2', 'LUT3', 'LUT4'}:
+            place_lut(db, tiledata, tile, parms, num)
 
-            if 'ALU_MODE' in parms.keys():
-                alu_bel = tiledata.bels[f"ALU{num}"]
-                mode = str(parms['ALU_MODE'])
-                for r_c in lutmap.values():
-                    for r, c in r_c:
-                        tile[r][c] = 0
-                if mode in alu_bel.modes.keys():
-                    bits = alu_bel.modes[mode]
-                else:
-                    bits = alu_bel.modes[str(int(mode, 2))]
-                    #if int(mode, 2) == 2:
-                    #print('ALU mode:', int(mode, 2), ' bits:', bits)
-                for r, c in bits:
-                    tile[r][c] = 1
-            else:
-                init = str(parms['INIT'])
-                init = init*(16//len(init))
-                for bitnum, lutbit in enumerate(init[::-1]):
-                    if lutbit == '0':
-                        fuses = lutmap[bitnum]
-                        for brow, bcol in fuses:
-                            tile[brow][bcol] = 1
-
-            if int(num) < 6 and int(parms['FF_USED'], 2):
-                mode = str(parms['FF_TYPE']).strip('E')
-                dff_attrs = set()
-                add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['REGMODE'], attrids.cls_attrvals['FF'])
-                # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
-                if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC', 'DFF', 'DFFN'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['RESET'])
-                else:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['SET'])
-                # are set/reset/clear/preset port needed?
-                if mode not in {'DFF', 'DFFN'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['LSRONMUX'], attrids.cls_attrvals['LSRMUX'])
-                # invert clock?
-                if mode in {'DFFN', 'DFFNR', 'DFFNC', 'DFFNP', 'DFFNS'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['INV'])
-                else:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['SIG'])
-
-                # async option?
-                if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['SRMODE'], attrids.cls_attrvals['ASYNC'])
-
-                dffbits = get_shortval_fuses(db, tiledata.ttyp, dff_attrs, f'CLS{int(num) // 2}')
-                #print(f'({row - 1}, {col - 1}) mode:{mode}, num{num}, attrs:{dff_attrs}, bits:{dffbits}')
-                for brow, bcol in dffbits:
-                    tile[brow][bcol] = 1
-
-            # XXX skip power
-            if not cellname.startswith('\$PACKER'):
-                cst.cells[cellname] = (row, col, int(num) // 2, _sides[int(num) % 2])
         elif typ[:3] == "IOB":
             edge = 'T'
             idx = col
@@ -895,6 +935,11 @@ def route(db, tilemap, pips):
         # short-circuit prevention
         secure_long_wires(db, tilemap, row, col, src, dest)
 
+        # XD - input of the DFF
+        if dest.startswith('XD'):
+            if src.startswith('F'):
+                continue
+
         try:
             if dest in tiledata.clock_pips:
                 bits = tiledata.clock_pips[dest][src]
@@ -975,6 +1020,15 @@ def main():
 
     args = parser.parse_args()
     device = args.device
+
+    with open(args.netlist) as f:
+        pnr = json.load(f)
+
+    # check for new P&R
+    if pnr['modules']['top']['settings'].get('packer.arch', '') == 'himbaechel/gowin':
+        global is_himbaechel
+        is_himbaechel = True
+
     # For tool integration it is allowed to pass a full part number
     m = re.match("GW1N(S|Z)?[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
     if m:
@@ -983,11 +1037,10 @@ def main():
         device = f"GW1N{mods}-{luts}"
     with gzip.open(importlib.resources.files("apycula").joinpath(f"{device}.pickle"), 'rb') as f:
         db = pickle.load(f)
-    with open(args.netlist) as f:
-        pnr = json.load(f)
 
-    _vcc_net = pnr['modules']['top']['netnames']['$PACKER_VCC_NET']['bits']
-    _gnd_net = pnr['modules']['top']['netnames']['$PACKER_GND_NET']['bits']
+
+    _vcc_net = pnr['modules']['top']['netnames'].get('$PACKER_VCC_NET', {'bits': []})['bits']
+    _gnd_net = pnr['modules']['top']['netnames'].get('$PACKER_GND_NET', {'bits': []})['bits']
 
     tilemap = chipdb.tile_bitmap(db, db.template, empty=True)
     cst = codegen.Constraints()
