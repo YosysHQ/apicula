@@ -89,6 +89,9 @@ def get_bels(data):
             continue
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
+        if is_himbaechel and bel[-4:] in {'/GND', '/VCC'}:
+            continue
+
         bels = belre.match(bel)
         if not bels:
             raise Exception(f"Unknown bel:{bel}")
@@ -116,6 +119,7 @@ def get_bels(data):
         yield (cell['type'], int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
+_pip_bels = []
 def get_pips(data):
     if is_himbaechel:
         pipre = re.compile(r"X(\d+)Y(\d+)/([^_]+)/([^_]+)")
@@ -129,6 +133,16 @@ def get_pips(data):
             if res:
                 row, col, src, dest = res.groups()
                 if is_himbaechel:
+                    # XD - input of the DFF
+                    if src.startswith('XD'):
+                        if dest.startswith('F'):
+                            continue
+                        # pass-though LUT
+                        num = dest[1]
+                        init = {'A': '1010101010101010', 'B': '1100110011001100',
+                                'C': '1111000011110000', 'D': '1111111100000000'}[dest[0]]
+                        _pip_bels.append(("LUT4", int(col) + 1, int(row) + 1, num, {"INIT": init}, {}, f'$PACKER_PASS_LUT_{len(_pip_bels)}', None))
+                        continue
                     yield int(col) + 1, int(row) + 1, dest, src
                 else:
                     yield int(row), int(col), src, dest
@@ -935,11 +949,6 @@ def route(db, tilemap, pips):
         # short-circuit prevention
         secure_long_wires(db, tilemap, row, col, src, dest)
 
-        # XD - input of the DFF
-        if dest.startswith('XD'):
-            if src.startswith('F'):
-                continue
-
         try:
             if dest in tiledata.clock_pips:
                 bits = tiledata.clock_pips[dest][src]
@@ -1038,16 +1047,20 @@ def main():
     with gzip.open(importlib.resources.files("apycula").joinpath(f"{device}.pickle"), 'rb') as f:
         db = pickle.load(f)
 
+    const_nets = {'GND': '$PACKER_GND_NET', 'VCC': '$PACKER_GND_NET'}
+    if is_himbaechel:
+        const_nets = {'GND': '$PACKER_GND', 'VCC': '$PACKER_GND'}
 
-    _vcc_net = pnr['modules']['top']['netnames'].get('$PACKER_VCC_NET', {'bits': []})['bits']
-    _gnd_net = pnr['modules']['top']['netnames'].get('$PACKER_GND_NET', {'bits': []})['bits']
+    _gnd_net = pnr['modules']['top']['netnames'].get(const_nets['GND'], {'bits': []})['bits']
+    _vcc_net = pnr['modules']['top']['netnames'].get(const_nets['VCC'], {'bits': []})['bits']
 
     tilemap = chipdb.tile_bitmap(db, db.template, empty=True)
     cst = codegen.Constraints()
-    bels = get_bels(pnr)
-    place(db, tilemap, bels, cst, args)
     pips = get_pips(pnr)
     route(db, tilemap, pips)
+    bels = get_bels(pnr)
+    # routing can add pass-through LUTs
+    place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args)
     dualmode_pins(db, tilemap, args)
     res = chipdb.fuse_bitmap(db, tilemap)
     header_footer(db, res, args.compress)
