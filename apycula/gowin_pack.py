@@ -674,7 +674,7 @@ def place(db, tilemap, bels, cst, args):
                 tile[r][c] = 1
         elif typ == "SLICE":
             place_slice(db, tiledata, tile, parms, num)
-        elif typ == "DFF":
+        elif typ.startswith("DFF"):
             mode = typ
             place_dff(db, tiledata, tile, parms, num, mode)
         elif typ in {'LUT1', 'LUT2', 'LUT3', 'LUT4'}:
