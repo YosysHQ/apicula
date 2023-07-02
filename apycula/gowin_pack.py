@@ -80,7 +80,7 @@ def extra_pll_bels(cell, row, col, num, cellname):
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -675,7 +675,7 @@ def place(db, tilemap, bels, cst, args):
         elif typ == "SLICE":
             place_slice(db, tiledata, tile, parms, num)
         elif typ.startswith("DFF"):
-            mode = typ
+            mode = typ.strip('E')
             place_dff(db, tiledata, tile, parms, num, mode)
         elif typ in {'LUT1', 'LUT2', 'LUT3', 'LUT4'}:
             place_lut(db, tiledata, tile, parms, num)
