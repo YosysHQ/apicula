@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 apicula contributors <https://github.com/YosysHQ/apicula/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 # These constants are used to interact with the 'logicinfo', 'shortval' and maybe 'longval' tables
 # * - it seems that these attributes must always be present (XXX)
 # Warning:

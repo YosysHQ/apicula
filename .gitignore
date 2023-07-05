@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 apicula contributors <https://github.com/YosysHQ/apicula/graphs/contributors>
+#
+# SPDX-License-Identifier: CC0-1.0
+
 *.txt
 *.c
 /*.png

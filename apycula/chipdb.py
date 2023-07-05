@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 apicula contributors <https://github.com/YosysHQ/apicula/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple, Union, ByteString
 from itertools import chain

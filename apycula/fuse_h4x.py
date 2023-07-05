@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 apicula contributors <https://github.com/YosysHQ/apicula/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 import sys
 import numpy as np
 import random

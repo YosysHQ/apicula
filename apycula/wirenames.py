@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 apicula contributors <https://github.com/YosysHQ/apicula/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 wirenames = { 0: "A0", 1: "B0", 2: "C0", 3: "D0", 4: "A1", 5: "B1", 6: "C1", 7: "D1", 8: "A2", 9: "B2", 10: "C2", 11: "D2", 12: "A3", 13: "B3", 14: "C3",
 15: "D3", 16: "A4", 17: "B4", 18: "C4", 19: "D4", 20: "A5", 21: "B5", 22: "C5", 23: "D5", 24: "A6", 25: "B6", 26: "C6", 27: "D6", 28: "A7", 29: "B7",
 30: "C7", 31: "D7", 32: "F0", 33: "F1", 34: "F2", 35: "F3", 36: "F4", 37: "F5", 38: "F6", 39: "F7", 40: "Q0", 41: "Q1", 42: "Q2", 43: "Q3", 44: "Q4",
