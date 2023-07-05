@@ -80,7 +80,7 @@ def extra_pll_bels(cell, row, col, num, cellname):
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -576,6 +576,20 @@ def place_lut(db, tiledata, tile, parms, num):
             for brow, bcol in fuses:
                 tile[brow][bcol] = 1
 
+def place_alu(db, tiledata, tile, parms, num):
+    lutmap = tiledata.bels[f'LUT{num}'].flags
+    alu_bel = tiledata.bels[f"ALU{num}"]
+    mode = str(parms['ALU_MODE'])
+    for r_c in lutmap.values():
+        for r, c in r_c:
+            tile[r][c] = 0
+    if mode in alu_bel.modes.keys():
+        bits = alu_bel.modes[mode]
+    else:
+        bits = alu_bel.modes[str(int(mode, 2))]
+    for r, c in bits:
+        tile[r][c] = 1
+
 def place_dff(db, tiledata, tile, parms, num, mode):
         dff_attrs = set()
         add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['REGMODE'], attrids.cls_attrvals['FF'])
@@ -606,19 +620,7 @@ def place_slice(db, tiledata, tile, parms, num):
     lutmap = tiledata.bels[f'LUT{num}'].flags
 
     if 'ALU_MODE' in parms.keys():
-        alu_bel = tiledata.bels[f"ALU{num}"]
-        mode = str(parms['ALU_MODE'])
-        for r_c in lutmap.values():
-            for r, c in r_c:
-                tile[r][c] = 0
-        if mode in alu_bel.modes.keys():
-            bits = alu_bel.modes[mode]
-        else:
-            bits = alu_bel.modes[str(int(mode, 2))]
-            #if int(mode, 2) == 2:
-            #print('ALU mode:', int(mode, 2), ' bits:', bits)
-        for r, c in bits:
-            tile[r][c] = 1
+        place_alu(db, tiledata, tile, parms, num)
     else:
         place_lut(db, tiledata, tile, parms, num)
 
@@ -677,8 +679,10 @@ def place(db, tilemap, bels, cst, args):
         elif typ.startswith("DFF"):
             mode = typ.strip('E')
             place_dff(db, tiledata, tile, parms, num, mode)
-        elif typ in {'LUT1', 'LUT2', 'LUT3', 'LUT4'}:
+        elif typ.startswith('LUT'):
             place_lut(db, tiledata, tile, parms, num)
+        elif typ.startswith('ALU'):
+            place_alu(db, tiledata, tile, parms, num)
 
         elif typ[:3] == "IOB":
             edge = 'T'
