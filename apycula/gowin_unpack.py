@@ -903,12 +903,12 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             ram16.params["INIT_1"] = f"16'b{val1:016b}"
             ram16.params["INIT_2"] = f"16'b{val2:016b}"
             ram16.params["INIT_3"] = f"16'b{val3:016b}"
-            ram16.portmap['DI'] = [f"R{row}C{col}_{x}5" for x in "ABCD"]
+            ram16.portmap['DI'] = [f"R{row}C{col}_{x}5" for x in "DCBA"]
             ram16.portmap['CLK'] = f"R{row}C{col}_CLK2"
             ram16.portmap['WRE'] = f"R{row}C{col}_LSR2"
-            ram16.portmap['WAD'] = [f"R{row}C{col}_{x}4" for x in "ABCD"]
-            ram16.portmap['RAD'] = [f"R{row}C{col}_{x}0" for x in "ABCD"]
-            ram16.portmap['DO'] = [f"R{row}C{col}_F{x}" for x in range(4)]
+            ram16.portmap['WAD'] = [f"R{row}C{col}_{x}4" for x in "DCBA"]
+            ram16.portmap['RAD'] = [f"R{row}C{col}_{x}0" for x in "DCBA"]
+            ram16.portmap['DO'] = [f"R{row}C{col}_F{x}" for x in range(4, -1, -1)]
             mod.wires.update(chain.from_iterable([x if isinstance(x, list) else [x] for x in ram16.portmap.values()]))
             mod.primitives[name] = ram16
         elif typ in {"OSC", "OSCZ", "OSCF", "OSCH", "OSCW", "OSCO"}:
