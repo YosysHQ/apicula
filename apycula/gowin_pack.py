@@ -80,7 +80,7 @@ def extra_pll_bels(cell, row, col, num, cellname):
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUFS|RAM16SDP4|RAM16SDP2|RAM16SDP1|rPLL|PLLVR|IOLOGIC)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -756,12 +756,19 @@ def place(db, tilemap, bels, cst, args):
             io_desc.attrs['IO_TYPE'] = iostd
             if pinless_io:
                 return
-        elif typ == "RAMW":
-            bel = tiledata.bels['RAM16']
-            bits = bel.modes['0']
-            #print(typ, bits)
-            for r, c in bits:
-                tile[r][c] = 1
+        elif typ.startswith("RAM16SDP") or typ == "RAMW":
+            ram_attrs = set()
+            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['MODE'], attrids.cls_attrvals['SSRAM'])
+            rambits = get_shortval_fuses(db, tiledata.ttyp, ram_attrs, 'CLS3')
+            # In fact, the WRE signal is considered active when it is low, so
+            # we include an inverter on the LSR2 line here to comply with the
+            # documentation
+            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['LSR_MUX_1'], attrids.cls_attrvals['0'])
+            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['LSR_MUX_LSR'], attrids.cls_attrvals['INV'])
+            rambits.update(get_shortval_fuses(db, tiledata.ttyp, ram_attrs, 'CLS2'))
+            print(f'({row - 1}, {col - 1}) attrs:{ram_attrs}, bits:{rambits}')
+            for brow, bcol in rambits:
+                tile[brow][bcol] = 1
         elif typ ==  'IOLOGIC':
             iologic_attrs = set_iologic_attrs(db, parms, attrs)
             bits = set()
