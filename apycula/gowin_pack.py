@@ -766,7 +766,7 @@ def place(db, tilemap, bels, cst, args):
             add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['LSR_MUX_1'], attrids.cls_attrvals['0'])
             add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['LSR_MUX_LSR'], attrids.cls_attrvals['INV'])
             rambits.update(get_shortval_fuses(db, tiledata.ttyp, ram_attrs, 'CLS2'))
-            print(f'({row - 1}, {col - 1}) attrs:{ram_attrs}, bits:{rambits}')
+            #print(f'({row - 1}, {col - 1}) attrs:{ram_attrs}, bits:{rambits}')
             for brow, bcol in rambits:
                 tile[brow][bcol] = 1
         elif typ ==  'IOLOGIC':
