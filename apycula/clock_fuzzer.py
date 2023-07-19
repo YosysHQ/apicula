@@ -395,7 +395,6 @@ if __name__ == "__main__":
     # long wires
     make_lw_aliases(fse, dat, db, quads, clks)
 
-
     with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)
 

@@ -649,6 +649,18 @@ cfg_attrvals = {
         'FALSE':            9
     }
 
+# global set/reset
+gsr_attrids = {
+        'GSRMODE':          0,
+        'SYNCMODE':         1,
+    }
+
+gsr_attrvals = {
+        'UNKNOWN':          0,
+        'ACTIVE_LOW':       1,
+        'SYNC':             2,
+    }
+
 # iologic
 iologic_attrids = {
         'INMODE':                   0,

@@ -281,16 +281,23 @@ if __name__ == "__main__":
         cfg_attrs = set()
         chipdb.add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[f'{name}_AS_GPIO'], attrids.cfg_attrvals['YES'])
         if device == 'GW2A-18':
-            bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][0][-1], cfg_attrs, 'CFG')
+            bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][27][50], cfg_attrs, 'CFG')
+            tile = fuse_h4x.tile_bitmap(fse, db.template, empty = True)[27, 50, 1]
+            for row_, col_ in bits:
+                tile[row_][col_] = 0
+            db.grid[27][50].bels.setdefault('CFG', chipdb.Bel()).flags[name] = bits
         else:
             bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][0][0], cfg_attrs, 'CFG')
-        tile = db.template
-        for row_, col_ in bits:
-            tile[row_][col_] = 0
-        db.grid[0][0].bels.setdefault('CFG', chipdb.Bel()).flags[name] = bits
+            tile = db.template
+            for row_, col_ in bits:
+                tile[row_][col_] = 0
+            db.grid[0][0].bels.setdefault('CFG', chipdb.Bel()).flags[name] = bits
 
     # GSR
-    db.grid[0][0].bels.setdefault('GSR0', chipdb.Bel()).portmap['GSRI'] = 'C4';
+    if device == 'GW2A-18':
+        db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+    else:
+        db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
 
     for row, col, ttyp in corners:
         if "BANK" not in db.grid[row][col].bels.keys():

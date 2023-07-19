@@ -6,7 +6,7 @@ from functools import reduce
 from collections import namedtuple
 import numpy as np
 import apycula.fuse_h4x as fuse
-from apycula.wirenames import wirenames, clknames
+from apycula.wirenames import wirenames, clknames, clknumbers
 from apycula import pindef
 
 # the character that marks the I/O attributes that come from the nextpnr
@@ -81,6 +81,12 @@ class Device:
     longval: Dict[int, Dict[str, Dict[Tuple[int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int], Set[Coord]]]] = field(default_factory=dict)
     # always-connected dest, src aliases
     aliases: Dict[Tuple[int, int, str], Tuple[int, int, str]] = field(default_factory=dict)
+
+    # for Himbaechel arch
+    # nodes - always connected wires {node_name: {(row, col, wire_name)}}
+    nodes: Dict[str, Set[Tuple[int, int, str]]] = field(default_factory = dict)
+    # external clock pins [(row, col, bel_num)]
+    clk_pins: List[Tuple[int, int, int, str]] = field(default_factory = list)
 
     @property
     def rows(self):
@@ -714,6 +720,87 @@ def fse_iologic(device, fse, ttyp):
             bels['IDES16'] = Bel()
     return bels
 
+# create clock aliases
+_clock_data = {
+        'GW1N-1':  { 'tap_start': [[1, 0, 3, 2], [3, 2, 1, 0]], 'quads': {( 6, 0, 11, 2, 3)}},
+        'GW1NZ-1': { 'tap_start': [[1, 0, 3, 2], [3, 2, 1, 0]], 'quads': {( 6, 0, 11, 2, 3)}},
+        'GW1NS-2': { 'tap_start': [[1, 0, 3, 2], [3, 2, 1, 0]], 'quads': {( 6, 0, 15, 2, 3)}},
+        'GW1N-4':  { 'tap_start': [[2, 1, 0, 3], [3, 2, 1, 0]], 'quads': {(10, 0, 20, 2, 3)}},
+        'GW1NS-4': { 'tap_start': [[2, 1, 0, 3], [3, 2, 1, 0]], 'quads': {(10, 0, 20, 2, 3)}},
+        'GW1N-9':  { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {( 1, 0, 11, 1, 0), (19, 11, 29, 2, 3)}},
+        'GW1N-9C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {( 1, 0, 11, 1, 0), (19, 11, 29, 2, 3)}},
+        'GW2A-18': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
+        }
+def fse_create_clocks(dev, device, dat, fse):
+    center_col = dat['center'][1] - 1
+    clkpin_wires = {}
+    taps = {}
+    # find center muxes
+    for clk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(clknumbers['PCLKT0'], clknumbers['PCLKR1'] + 1)}:
+        if row != -2:
+            dev.nodes.setdefault(clknames[clk_idx], set()).add((row, col, wirenames[wire_idx]))
+
+    spines = {f'SPINE{i}' for i in range(32)}
+    for row, rd in enumerate(dev.grid):
+        for col, rc in enumerate(rd):
+            for dest, srcs in rc.clock_pips.items():
+                for src in srcs.keys():
+                    if src in spines and not dest.startswith('GT'):
+                        dev.nodes.setdefault(src, set()).add((row, col, src))
+                if dest in spines:
+                    dev.nodes.setdefault(dest, set()).add((row, col, dest))
+                    for src in { wire for wire in srcs.keys() if wire not in {'VCC', 'VSS'}}:
+                        dev.nodes.setdefault(src, set()).add((row, col, src))
+    # GBx0 <- GBOx
+    for spine_pair in range(4): # GB00/GB40, GB10/GB50, GB20/GB60, GB30/GB70
+        tap_start = _clock_data[device]['tap_start'][0]
+        tap_col = tap_start[spine_pair]
+        last_col = center_col
+        for col in range(dev.cols):
+            if col == center_col + 1:
+                tap_start = _clock_data[device]['tap_start'][1]
+                tap_col = tap_start[spine_pair] + col
+                last_col = dev.cols -1
+            if (col > tap_col + 2) and (tap_col + 4 < last_col):
+                tap_col += 4
+            taps.setdefault(spine_pair, {}).setdefault(tap_col, set()).add(col)
+    for row in range(dev.rows):
+        for spine_pair, tap_desc in taps.items():
+            for tap_col, cols in tap_desc.items():
+                node0_name = f'X{tap_col}Y{row}/GBO0'
+                dev.nodes.setdefault(node0_name, set()).add((row, tap_col, 'GBO0'))
+                node1_name = f'X{tap_col}Y{row}/GBO1'
+                dev.nodes.setdefault(node1_name, set()).add((row, tap_col, 'GBO1'))
+                for col in cols:
+                    dev.nodes.setdefault(node0_name, set()).add((row, col, f'GB{spine_pair}0'))
+                    dev.nodes.setdefault(node1_name, set()).add((row, col, f'GB{spine_pair + 4}0'))
+
+    # GTx0 <- center row GTx0
+    for spine_row, start_row, end_row, qno_l, qno_r in _clock_data[device]['quads']:
+        for spine_pair, tap_desc in taps.items():
+            for tap_col, cols in tap_desc.items():
+                if tap_col < center_col:
+                    quad = qno_l
+                else:
+                    quad = qno_r
+                for col in cols - {center_col}:
+                    node0_name = f'X{col}Y{spine_row}/GT00'
+                    dev.nodes.setdefault(node0_name, set()).add((spine_row, col, 'GT00'))
+                    node1_name = f'X{col}Y{spine_row}/GT10'
+                    dev.nodes.setdefault(node1_name, set()).add((spine_row, col, 'GT10'))
+                    for row in range(start_row, end_row):
+                        if row == spine_row:
+                            if col == tap_col:
+                                spine = quad * 8 + spine_pair
+                                dev.nodes.setdefault(f'SPINE{spine}', set()).add((row, col, f'SPINE{spine}'))
+                                # XXX skip clock 6 and 7 for now
+                                if spine_pair not in {2, 3}:
+                                    dev.nodes.setdefault(f'SPINE{spine + 4}', set()).add((row, col, f'SPINE{spine + 4}'))
+                        else:
+                            dev.nodes.setdefault(node0_name, set()).add((row, col, 'GT00'))
+                            dev.nodes.setdefault(node1_name, set()).add((row, col, 'GT10'))
+
+
 def from_fse(device, fse, dat):
     dev = Device()
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
@@ -737,6 +824,7 @@ def from_fse(device, fse, dat):
 
     fse_fill_logic_tables(dev, fse)
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
+    fse_create_clocks(dev, device, dat, fse)
     fse_create_pll_clock_aliases(dev, device)
     fse_create_hclk_aliases(dev, device, dat)
     return dev
