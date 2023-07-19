@@ -81,6 +81,8 @@ class Device:
     longval: Dict[int, Dict[str, Dict[Tuple[int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int], Set[Coord]]]] = field(default_factory=dict)
     # always-connected dest, src aliases
     aliases: Dict[Tuple[int, int, str], Tuple[int, int, str]] = field(default_factory=dict)
+    # nodes - always connected wires (for Himbaechel arch)
+    nodes: Dict[str, List[Tuple[int, int, str]]] = field(default_factory = dict)
 
     # for Himbaechel arch
     # nodes - always connected wires {node_name: {(row, col, wire_name)}}
@@ -799,7 +801,6 @@ def fse_create_clocks(dev, device, dat, fse):
                         else:
                             dev.nodes.setdefault(node0_name, set()).add((row, col, 'GT00'))
                             dev.nodes.setdefault(node1_name, set()).add((row, col, 'GT10'))
-
 
 def from_fse(device, fse, dat):
     dev = Device()
