@@ -81,14 +81,10 @@ class Device:
     longval: Dict[int, Dict[str, Dict[Tuple[int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int], Set[Coord]]]] = field(default_factory=dict)
     # always-connected dest, src aliases
     aliases: Dict[Tuple[int, int, str], Tuple[int, int, str]] = field(default_factory=dict)
-    # nodes - always connected wires (for Himbaechel arch)
-    nodes: Dict[str, List[Tuple[int, int, str]]] = field(default_factory = dict)
 
     # for Himbaechel arch
-    # nodes - always connected wires {node_name: {(row, col, wire_name)}}
-    nodes: Dict[str, Set[Tuple[int, int, str]]] = field(default_factory = dict)
-    # external clock pins [(row, col, bel_num)]
-    clk_pins: List[Tuple[int, int, int, str]] = field(default_factory = list)
+    # nodes - always connected wires {node_name: (wire_type, {(row, col, wire_name)})}
+    nodes: Dict[str, Tuple[str, Set[Tuple[int, int, str]]]] = field(default_factory = dict)
 
     @property
     def rows(self):
@@ -205,6 +201,11 @@ def fse_pll(device, fse, ttyp):
             bel = bels.setdefault('RPLLB', Bel())
     elif device in {'GW1N-9C', 'GW1N-9'}:
         if ttyp in {86, 87}:
+            bel = bels.setdefault('RPLLA', Bel())
+        elif ttyp in {74, 75, 76, 77, 78, 79}:
+            bel = bels.setdefault('RPLLB', Bel())
+    elif device in {'GW2A-18'}:
+        if ttyp in {42, 45}:
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp in {74, 75, 76, 77, 78, 79}:
             bel = bels.setdefault('RPLLB', Bel())
@@ -686,6 +687,15 @@ _pll_loc = {
     'TLPLL0CLK2': (9, 2, 'F5'), 'TLPLL0CLK3': (9, 2, 'F6'),
     'TRPLL0CLK0': (9, 44, 'F4'), 'TRPLL0CLK1': (9, 44, 'F7'),
     'TRPLL0CLK2': (9, 44, 'F5'), 'TRPLL0CLK3': (9, 44, 'F6'), },
+ 'GW2A-18':
+   {'TLPLL0CLK0': (9, 2, 'F4'), 'TLPLL0CLK1': (9, 2, 'F7'),
+    'TLPLL0CLK2': (9, 2, 'F5'), 'TLPLL0CLK3': (9, 2, 'F6'),
+    'TRPLL0CLK0': (9, 53, 'F4'), 'TRPLL0CLK1': (9, 53, 'F7'),
+    'TRPLL0CLK2': (9, 53, 'F5'), 'TRPLL0CLK3': (9, 53, 'F6'),
+    'BLPLL0CLK0': (45, 2, 'F4'), 'BLPLL0CLK1': (45, 2, 'F7'),
+    'BLPLL0CLK2': (45, 2, 'F5'), 'BLPLL0CLK3': (45, 2, 'F6'),
+    'BRPLL0CLK0': (45, 53, 'F4'), 'BRPLL0CLK1': (45, 53, 'F7'),
+    'BRPLL0CLK2': (45, 53, 'F5'), 'BRPLL0CLK3': (45, 53, 'F6'), },
 }
 
 def fse_create_pll_clock_aliases(db, device):
@@ -695,9 +705,11 @@ def fse_create_pll_clock_aliases(db, device):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
                     # XXX
-                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9'}:
+                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
+                            # Himbaechel node
+                            db.nodes.setdefault(w_src, ("PLL_O", set()))[1].add((row, col, w_src))
 
 def fse_iologic(device, fse, ttyp):
     bels = {}
@@ -740,7 +752,7 @@ def fse_create_clocks(dev, device, dat, fse):
     # find center muxes
     for clk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(clknumbers['PCLKT0'], clknumbers['PCLKR1'] + 1)}:
         if row != -2:
-            dev.nodes.setdefault(clknames[clk_idx], set()).add((row, col, wirenames[wire_idx]))
+            dev.nodes.setdefault(clknames[clk_idx], ("GLOBAL_CLK", set()))[1].add((row, col, wirenames[wire_idx]))
 
     spines = {f'SPINE{i}' for i in range(32)}
     for row, rd in enumerate(dev.grid):
@@ -748,11 +760,11 @@ def fse_create_clocks(dev, device, dat, fse):
             for dest, srcs in rc.clock_pips.items():
                 for src in srcs.keys():
                     if src in spines and not dest.startswith('GT'):
-                        dev.nodes.setdefault(src, set()).add((row, col, src))
+                        dev.nodes.setdefault(src, ("GLOBAL_CLK", set()))[1].add((row, col, src))
                 if dest in spines:
-                    dev.nodes.setdefault(dest, set()).add((row, col, dest))
+                    dev.nodes.setdefault(dest, ("GLOBAL_CLK", set()))[1].add((row, col, dest))
                     for src in { wire for wire in srcs.keys() if wire not in {'VCC', 'VSS'}}:
-                        dev.nodes.setdefault(src, set()).add((row, col, src))
+                        dev.nodes.setdefault(src, ("GLOBAL_CLK", set()))[1].add((row, col, src))
     # GBx0 <- GBOx
     for spine_pair in range(4): # GB00/GB40, GB10/GB50, GB20/GB60, GB30/GB70
         tap_start = _clock_data[device]['tap_start'][0]
@@ -770,12 +782,12 @@ def fse_create_clocks(dev, device, dat, fse):
         for spine_pair, tap_desc in taps.items():
             for tap_col, cols in tap_desc.items():
                 node0_name = f'X{tap_col}Y{row}/GBO0'
-                dev.nodes.setdefault(node0_name, set()).add((row, tap_col, 'GBO0'))
+                dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, tap_col, 'GBO0'))
                 node1_name = f'X{tap_col}Y{row}/GBO1'
-                dev.nodes.setdefault(node1_name, set()).add((row, tap_col, 'GBO1'))
+                dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, tap_col, 'GBO1'))
                 for col in cols:
-                    dev.nodes.setdefault(node0_name, set()).add((row, col, f'GB{spine_pair}0'))
-                    dev.nodes.setdefault(node1_name, set()).add((row, col, f'GB{spine_pair + 4}0'))
+                    dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, col, f'GB{spine_pair}0'))
+                    dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, col, f'GB{spine_pair + 4}0'))
 
     # GTx0 <- center row GTx0
     for spine_row, start_row, end_row, qno_l, qno_r in _clock_data[device]['quads']:
@@ -787,20 +799,20 @@ def fse_create_clocks(dev, device, dat, fse):
                     quad = qno_r
                 for col in cols - {center_col}:
                     node0_name = f'X{col}Y{spine_row}/GT00'
-                    dev.nodes.setdefault(node0_name, set()).add((spine_row, col, 'GT00'))
+                    dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((spine_row, col, 'GT00'))
                     node1_name = f'X{col}Y{spine_row}/GT10'
-                    dev.nodes.setdefault(node1_name, set()).add((spine_row, col, 'GT10'))
+                    dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((spine_row, col, 'GT10'))
                     for row in range(start_row, end_row):
                         if row == spine_row:
                             if col == tap_col:
                                 spine = quad * 8 + spine_pair
-                                dev.nodes.setdefault(f'SPINE{spine}', set()).add((row, col, f'SPINE{spine}'))
+                                dev.nodes.setdefault(f'SPINE{spine}', ("GLOBAL_CLK", set()))[1].add((row, col, f'SPINE{spine}'))
                                 # XXX skip clock 6 and 7 for now
                                 if spine_pair not in {2, 3}:
-                                    dev.nodes.setdefault(f'SPINE{spine + 4}', set()).add((row, col, f'SPINE{spine + 4}'))
+                                    dev.nodes.setdefault(f'SPINE{spine + 4}', ("GLOBAL_CLK", set()))[1].add((row, col, f'SPINE{spine + 4}'))
                         else:
-                            dev.nodes.setdefault(node0_name, set()).add((row, col, 'GT00'))
-                            dev.nodes.setdefault(node1_name, set()).add((row, col, 'GT10'))
+                            dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT00'))
+                            dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT10'))
 
 def from_fse(device, fse, dat):
     dev = Device()
@@ -818,7 +830,7 @@ def from_fse(device, fse, dat):
             tile.bels = fse_luts(fse, ttyp)
         if 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
-        if ttyp in [74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
+        if ttyp in [42, 45, 74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
         tile.bels.update(fse_iologic(device, fse, ttyp))
         tiles[ttyp] = tile
@@ -1019,11 +1031,21 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
               ('OSCO', 'GW1N-2'):  ({'OSCOUT': 'Q7'}, {'OSCEN': (9, 1, 'B4')}),
               ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
               }
+
+def get_pllout_global_name(row, col, wire, device):
+    for name, loc in _pll_loc[device].items():
+        if loc == (row, col, wire):
+            return name
+    raise Exception(f"bad PLL output {device} ({row}, {col}){wire}")
+
 def dat_portmap(dat, dev, device):
     for row, row_dat in enumerate(dev.grid):
         for col, tile in enumerate(row_dat):
             for name, bel in tile.bels.items():
-                if bel.portmap: continue
+                if bel.portmap:
+                    # GW2A has same PLL in different rows
+                    if not (name.startswith("RPLLA") and device in {'GW2A-18'}):
+                        continue
                 if name.startswith("IOB"):
                     if name[3] > 'B':
                         idx = ord(name[-1]) - ord('A')
@@ -1080,7 +1102,7 @@ def dat_portmap(dat, dev, device):
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.
                     offx = 1
-                    if device in {'GW1N-9C', 'GW1N-9'}:
+                    if device in {'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
                         # two mirrored PLLs
                         if col > dat['center'][1] - 1:
                             offx = -1
@@ -1100,6 +1122,9 @@ def dat_portmap(dat, dev, device):
                             # not our cell, make an alias
                             bel.portmap[nam] = f'rPLL{nam}{wire}'
                             dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
+                            # Himbaechel node
+                            dev.nodes.setdefault(f'X{col}Y{row}/rPLL{nam}{wire}', ("PLL_I", {(row, col, f'rPLL{nam}{wire}')}))[1].add((row, col + off, wire))
+
                     for idx, nam in _pll_outputs:
                         wire = wirenames[dat['PllOut'][idx]]
                         off = dat['PllOutDlt'][idx] * offx
@@ -1109,6 +1134,12 @@ def dat_portmap(dat, dev, device):
                             # not our cell, make an alias
                             bel.portmap[nam] = f'rPLL{nam}{wire}'
                             dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
+                        # Himbaechel node
+                        if nam != 'LOCK':
+                            global_name = get_pllout_global_name(row, col + off, wire, device)
+                        else:
+                            global_name = f'X{col}Y{row}/rPLL{nam}{wire}'
+                        dev.nodes.setdefault(global_name, ("PLL_O", set()))[1].update({(row, col, f'rPLL{nam}{wire}'), (row, col + off, wire)})
                     # clock input
                     nam = 'CLKIN'
                     wire = wirenames[dat['PllClkin'][1][0]]
@@ -1119,6 +1150,8 @@ def dat_portmap(dat, dev, device):
                         # not our cell, make an alias
                         bel.portmap[nam] = f'rPLL{nam}{wire}'
                         dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
+                        # Himbaechel node
+                        dev.nodes.setdefault(f'X{col}Y{row}/rPLL{nam}{wire}', ("PLL_I", {(row, col, f'rPLL{nam}{wire}')}))[1].add((row, col + off, wire))
                 elif name == 'PLLVR':
                     pll_idx = 0
                     if col != 27:
