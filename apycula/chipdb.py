@@ -85,6 +85,10 @@ class Device:
     # for Himbaechel arch
     # nodes - always connected wires {node_name: (wire_type, {(row, col, wire_name)})}
     nodes: Dict[str, Tuple[str, Set[Tuple[int, int, str]]]] = field(default_factory = dict)
+    # strange bottom row IO. In order for OBUF and Co. to work, one of the four
+    # combinations must be applied to two special wires.
+    # (wire_a, wire_b, [(wire_a_net, wire_b_net)])
+    bottom_io: Tuple[str, str, List[Tuple[str, str]]] = field(default_factory = tuple)
 
     @property
     def rows(self):
@@ -814,6 +818,14 @@ def fse_create_clocks(dev, device, dat, fse):
                             dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT00'))
                             dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT10'))
 
+def fse_create_bottom_io(dev, device):
+    if device in {'GW1NS-4', 'GW1N-9C'}:
+        dev.bottom_io = ('D6', 'C6', [('VSS', 'VSS')])
+    elif device in {'GW1N-9'}:
+        dev.bottom_io = ('A6', 'CE2', [('VSS', 'VSS')])
+    else:
+        dev.bottom_io = ('', '', [('', '')])
+
 def from_fse(device, fse, dat):
     dev = Device()
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
@@ -840,6 +852,7 @@ def from_fse(device, fse, dat):
     fse_create_clocks(dev, device, dat, fse)
     fse_create_pll_clock_aliases(dev, device)
     fse_create_hclk_aliases(dev, device, dat)
+    fse_create_bottom_io(dev, device)
     return dev
 
 # get fuses for attr/val set using short/longval table
@@ -1063,6 +1076,10 @@ def dat_portmap(dat, dev, device):
                         bel.portmap['I'] = out
                         oe = wirenames[dat[f'Iobuf{pin}OE']]
                         bel.portmap['OE'] = oe
+                        if row == dev.rows - 1:
+                            # bottom io
+                            bel.portmap['BOTTOM_IO_PORT_A'] = dev.bottom_io[0]
+                            bel.portmap['BOTTOM_IO_PORT_B'] = dev.bottom_io[1]
                 elif name.startswith("IOLOGIC"):
                     buf = name[-1]
                     for idx, nam in _iologic_inputs:
