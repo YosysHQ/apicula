@@ -422,6 +422,19 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             attrvals = parse_attrvals(tile, db.logicinfo['IOB'], _bank_fuse_tables[tiledata.ttyp][name], attrids.iob_attrids)
             for a, v in attrvals.items():
                 bels.setdefault(name, set()).add(f'{a}={attrids.iob_num2val[v]}')
+        if name.startswith("ALU"):
+            idx = int(name[3])
+            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids)
+            # skip ALU and unsupported modes
+            if attrvals.get('MODE') != attrids.cls_attrvals['ALU']:
+                continue
+            bels[name] = {"C2L"}
+            mode_bits = {(row, col)
+                         for row, col in bel.mode_bits
+                         if tile[row][col] == 1}
+            for mode, bits in bel.modes.items():
+                if bits == mode_bits and (default or bits):
+                    bels[name] = {mode}
         else:
             mode_bits = {(row, col)
                          for row, col in bel.mode_bits
@@ -870,11 +883,13 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             name = f"R{row}C{col}_ALU_{idx}"
             if kind == 'hadder':
                 kind = '0'
-            if kind in "012346789": # main ALU
+            if kind in "012346789" or kind == "C2L" : # main ALU
                 alu = codegen.Primitive("ALU", name)
                 alu.params["ALU_MODE"] = kind
-                alu.portmap['SUM'] = f"R{row}C{col}_F{idx}"
+                if kind != "C2L":
+                    alu.portmap['SUM'] = f"R{row}C{col}_F{idx}"
                 alu.portmap['CIN'] = f"R{row}C{col}_CIN{idx}"
+                alu.portmap['I2'] = f"R{row}C{col}_C{idx}"
                 if idx != 5:
                     alu.portmap['COUT'] = f"R{row}C{col}_CIN{idx+1}"
                 else:
@@ -887,6 +902,11 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                 elif kind == "0":
                     alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
+                elif kind == "C2L":
+                    alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
+                    alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
+                    alu.portmap['COUT'] = f"R{row}C{col}_F{idx}"
+                    alu.params["ALU_MODE"] = "9" # XXX
                 else:
                     alu.portmap['I0'] = f"R{row}C{col}_A{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"

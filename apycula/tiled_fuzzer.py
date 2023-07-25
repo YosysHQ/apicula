@@ -188,7 +188,7 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
     is_true_lvds = False
     is_positive = False
     for ttyp, tiles in pin_locations.items():
-        # tiles are unique, so one in enough but we need A&B pins
+        # tiles are unique, so one is enough but we need A&B pins
         for tile, bels in tiles.items():
             if len(bels) >= 2:
                 break
@@ -294,10 +294,13 @@ if __name__ == "__main__":
             db.grid[0][0].bels.setdefault('CFG', chipdb.Bel()).flags[name] = bits
 
     # GSR
-    if device == 'GW2A-18':
+    if device in {'GW2A-18'}:
         db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
-    else:
+    elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
         db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+    else:
+        raise Exception(f"No GSR for {device}")
+
 
     for row, col, ttyp in corners:
         if "BANK" not in db.grid[row][col].bels.keys():

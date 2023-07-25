@@ -66,7 +66,7 @@ def sanitize_name(name):
 def extra_pll_bels(cell, row, col, num, cellname):
     # rPLL can occupy several cells, add them depending on the chip
     offx = 1
-    if device in {'GW1N-9C', 'GW1N-9'}:
+    if device in {'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
         if int(col) > 28:
             offx = -1
         for off in [1, 2, 3]:
@@ -80,7 +80,7 @@ def extra_pll_bels(cell, row, col, num, cellname):
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUFS|RAM16SDP4|RAM16SDP2|RAM16SDP1|rPLL|PLLVR|IOLOGIC)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUFS|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -162,6 +162,7 @@ _permitted_freqs = {
         "GW1N-9":  (400, 500, 3.125,  1000, 400),
         "GW1N-9C": (400, 600, 3.125,  1200, 400),
         "GW1NS-2": (400, 500, 3.125,  1200, 400),
+        "GW2A-18": (400, 600, 3.125,  1200, 400), # XXX check it
         }
 # input params are calculated as described in GOWIN doc (UG286-1.7E_Gowin Clock User Guide)
 # fref = fclkin / idiv

@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple, Union, ByteString
 from itertools import chain
 import re
+import copy
 from functools import reduce
 from collections import namedtuple
 import numpy as np
@@ -50,6 +51,10 @@ class Tile:
     # a mapping from dest, source wire to bit coordinates
     pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
+    # XXX Since Himbaechel uses a system of nodes instead of aliases for clock
+    # wires, at first we would like to avoid mixing in a bunch of PIPs of
+    # different nature.
+    pure_clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     # fuses to disable the long wire columns. This is the table 'alonenode[6]' in the vendor file
     # {dst: ({src}, {bits})}
     alonenode_6: Dict[str, Tuple[Set[str], Set[Coord]]] = field(default_factory=dict)
@@ -89,6 +94,13 @@ class Device:
     # combinations must be applied to two special wires.
     # (wire_a, wire_b, [(wire_a_net, wire_b_net)])
     bottom_io: Tuple[str, str, List[Tuple[str, str]]] = field(default_factory = tuple)
+    # simplified IO rows
+    simplio_rows: Set[int] = field(default_factory = set)
+    # tile types by func. The same ttyp number can correspond to different
+    # functional blocks on different chips. For example 86 is the PLL head ttyp
+    # for GW2A-18 and the same number is used in GW1N-1 where it has nothing to
+    # do with PLL.  { type_name: {type_num} }
+    tile_types: Dict[str, Set[int]] = field(default_factory = dict)
 
     @property
     def rows(self):
@@ -824,10 +836,36 @@ def fse_create_bottom_io(dev, device):
     elif device in {'GW1N-9'}:
         dev.bottom_io = ('A6', 'CE2', [('VSS', 'VSS')])
     else:
-        dev.bottom_io = ('', '', [('', '')])
+        dev.bottom_io = ('', '', [])
+
+def fse_create_simplio_rows(dev, dat):
+    for row, rd in enumerate(dat['grid']):
+        if [r for r in rd if r in "Bb"]:
+            if row > 0:
+                row -= 1
+            if row == dev.rows:
+                row -= 1
+            dev.simplio_rows.add(row)
+
+def fse_create_tile_types(dev, dat):
+    for row, rd in enumerate(dat['grid']):
+        for col, fn in enumerate(rd):
+            if fn in 'PCMI':
+                i = row
+                if i > 0:
+                    i -= 1
+                if i == dev.rows:
+                    i -= 1
+                j = col
+                if j > 0:
+                    j -= 1
+                if j == dev.cols:
+                    j -= 1
+                dev.tile_types.setdefault(fn, set()).add(dev.grid[i][j].ttyp)
 
 def from_fse(device, fse, dat):
     dev = Device()
+    fse_create_simplio_rows(dev, dat)
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
     tiles = {}
     for ttyp in ttypes:
@@ -836,6 +874,8 @@ def from_fse(device, fse, dat):
         tile = Tile(w, h, ttyp)
         tile.pips = fse_pips(fse, ttyp, 2, wirenames)
         tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
+        # copy for Himbaechel without hclk
+        tile.pure_clock_pips = copy.deepcopy(tile.clock_pips)
         tile.clock_pips.update(fse_hclk_pips(fse, ttyp, tile.aliases))
         tile.alonenode_6 = fse_alonenode(fse, ttyp, 6)
         if 5 in fse[ttyp]['shortval']:
@@ -853,6 +893,7 @@ def from_fse(device, fse, dat):
     fse_create_pll_clock_aliases(dev, device)
     fse_create_hclk_aliases(dev, device, dat)
     fse_create_bottom_io(dev, device)
+    fse_create_tile_types(dev, dat)
     return dev
 
 # get fuses for attr/val set using short/longval table
@@ -1060,7 +1101,7 @@ def dat_portmap(dat, dev, device):
                     if not (name.startswith("RPLLA") and device in {'GW2A-18'}):
                         continue
                 if name.startswith("IOB"):
-                    if name[3] > 'B':
+                    if row in dev.simplio_rows:
                         idx = ord(name[-1]) - ord('A')
                         inp = wirenames[dat['IobufIns'][idx]]
                         bel.portmap['I'] = inp
