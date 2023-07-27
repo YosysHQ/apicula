@@ -357,43 +357,44 @@ def make_lw_aliases(fse, dat, db, quads, clks):
                     db.aliases.update({(row, col, f'LB{lw + 4}1') : (row, tap_col, f'LBO1')})
 
 if __name__ == "__main__":
-    quads = quadrants()
+    if False:
+        quads = quadrants()
 
-    srcs = {}
-    dests = {}
-    clks = {}
-    for ct, (rows, cols, _) in quads.items():
-        # I reverse the pins here because
-        # the 8th mux is not fuzzed presently
-        true_pins.reverse()
-        qsrcs, qdests = center_muxes(ct, rows, cols)
-        srcs.update(qsrcs)
-        dests.update(qdests)
+        srcs = {}
+        dests = {}
+        clks = {}
+        for ct, (rows, cols, _) in quads.items():
+            # I reverse the pins here because
+            # the 8th mux is not fuzzed presently
+            true_pins.reverse()
+            qsrcs, qdests = center_muxes(ct, rows, cols)
+            srcs.update(qsrcs)
+            dests.update(qdests)
 
-        clks[ct] = taps(rows, cols)
+            clks[ct] = taps(rows, cols)
 
-    print("    quads =", quads)
-    print("    srcs =", srcs)
-    print("    dests =", dests)
-    print("    clks =", clks)
+        print("    quads =", quads)
+        print("    srcs =", srcs)
+        print("    dests =", dests)
+        print("    clks =", clks)
 
-    pa = pin_aliases(quads, srcs)
-    sa = spine_aliases(quads, dests, clks)
-    ta = tap_aliases(quads)
-    ba = branch_aliases(quads, clks)
+        pa = pin_aliases(quads, srcs)
+        sa = spine_aliases(quads, dests, clks)
+        ta = tap_aliases(quads)
+        ba = branch_aliases(quads, clks)
 
-    # print(pa)
-    # print(sa)
-    # print(ta)
-    # print(ba)
+        # print(pa)
+        # print(sa)
+        # print(ta)
+        # print(ba)
 
-    db.aliases.update(pa)
-    db.aliases.update(sa)
-    db.aliases.update(ta)
-    db.aliases.update(ba)
+        db.aliases.update(pa)
+        db.aliases.update(sa)
+        db.aliases.update(ta)
+        db.aliases.update(ba)
 
-    # long wires
-    make_lw_aliases(fse, dat, db, quads, clks)
+        # long wires
+        make_lw_aliases(fse, dat, db, quads, clks)
 
     with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)
