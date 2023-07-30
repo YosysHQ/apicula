@@ -101,6 +101,8 @@ class Device:
     # for GW2A-18 and the same number is used in GW1N-1 where it has nothing to
     # do with PLL.  { type_name: {type_num} }
     tile_types: Dict[str, Set[int]] = field(default_factory = dict)
+    # supported differential IO primitives
+    diff_io_types: List[str] = field(default_factory = list)
 
     @property
     def rows(self):
@@ -863,6 +865,23 @@ def fse_create_tile_types(dev, dat):
                     j -= 1
                 dev.tile_types.setdefault(fn, set()).add(dev.grid[i][j].ttyp)
 
+def fse_create_diff_types(dev, device):
+    dev.diff_io_types = ['ELVDS_IBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF', 'ELVDS_TBUF',
+                         'TLVDS_IBUF', 'TLVDS_OBUF', 'TLVDS_IOBUF', 'TLVDS_TBUF']
+    if device == 'GW1NZ-1':
+        dev.diff_io_types.remove('TLVDS_IBUF')
+        dev.diff_io_types.remove('TLVDS_OBUF')
+        dev.diff_io_types.remove('TLVDS_TBUF')
+        dev.diff_io_types.remove('TLVDS_IOBUF')
+        dev.diff_io_types.remove('ELVDS_IOBUF')
+    elif device == 'GW1N-1':
+        dev.diff_io_types.remove('TLVDS_OBUF')
+        dev.diff_io_types.remove('TLVDS_TBUF')
+        dev.diff_io_types.remove('TLVDS_IOBUF')
+        dev.diff_io_types.remove('ELVDS_IOBUF')
+    elif device not in {'GW2A-18', 'GW1N-4'}:
+        dev.diff_io_types.remove('TLVDS_IOBUF')
+
 def from_fse(device, fse, dat):
     dev = Device()
     fse_create_simplio_rows(dev, dat)
@@ -894,6 +913,7 @@ def from_fse(device, fse, dat):
     fse_create_hclk_aliases(dev, device, dat)
     fse_create_bottom_io(dev, device)
     fse_create_tile_types(dev, dat)
+    fse_create_diff_types(dev, device)
     return dev
 
 # get fuses for attr/val set using short/longval table

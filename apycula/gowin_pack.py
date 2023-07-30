@@ -176,18 +176,26 @@ _permitted_freqs = {
 # There are not many resistors so the whole frequency range is divided into
 # 30MHz intervals and the number of this interval is one of the fuse sets. But
 # the resistor itself is not directly dependent on the input frequency.
-_freq_R = [(2.6, 65100.0), (3.87, 43800.0), (7.53, 22250.0), (14.35, 11800.0), (28.51, 5940.0), (57.01, 2970.0), (114.41, 1480), (206.34, 820.0)]
+_freq_R = [[(2.6, 65100.0), (3.87, 43800.0), (7.53, 22250.0), (14.35, 11800.0), (28.51, 5940.0), (57.01, 2970.0), (114.41, 1480), (206.34, 820.0)], [(2.4, 69410.0), (3.53, 47150.0), (6.82, 24430.0), (12.93, 12880.0), (25.7, 6480.0), (51.4, 3240.0), (102.81, 1620), (187.13, 890.0)]]
 def calc_pll_pump(fref, fvco):
     fclkin_idx = int((fref - 1) // 30)
     if (fclkin_idx == 13 and fref <= 395) or (fclkin_idx == 14 and fref <= 430) or (fclkin_idx == 15 and fref <= 465) or fclkin_idx == 16:
         fclkin_idx = fclkin_idx - 1
 
-    r_vals = [(fr[1], len(_freq_R) - 1 - idx) for idx, fr in enumerate(_freq_R) if fr[0] < fref]
+    if device not in {'GW2A-18'}:
+        freq_Ri = _freq_R[0]
+    else:
+        freq_Ri = _freq_R[1]
+    r_vals = [(fr[1], len(freq_Ri) - 1 - idx) for idx, fr in enumerate(freq_Ri) if fr[0] < fref]
     r_vals.reverse()
 
     # Find the resistor that provides the minimum current through the capacitor
-    K0 = (497.5 - math.sqrt(247506.25 - (2675.4 - fvco) * 78.46)) / 39.23
-    K1 = 4.8714 * K0 * K0 + 6.5257 * K0 + 142.67
+    if device not in {'GW2A-18'}:
+        K0 = (497.5 - math.sqrt(247506.25 - (2675.4 - fvco) * 78.46)) / 39.23
+        K1 = 4.8714 * K0 * K0 + 6.5257 * K0 + 142.67
+    else:
+        K0 = (-28.938 + math.sqrt(837.407844 - (385.07 - fvco) * 0.9892)) / 0.4846
+        K1 = 0.1942 * K0 * K0 - 13.173 * K0 + 518.86
     Kvco = 1000000.0 * K1
     Ndiv = fvco / fref
     C1 = 6.69244e-11
@@ -227,14 +235,6 @@ _default_pll_inattrs = {
 
         }
 
-def add_pll_default_attrs(attrs):
-    pll_inattrs = attrs.copy()
-    for k, v in _default_pll_inattrs.items():
-        if k in pll_inattrs.keys():
-            continue
-        pll_inattrs[k] = v
-    return pll_inattrs
-
 _default_pll_internal_attrs = {
             'INSEL': 'CLKIN1',
             'FBSEL': 'CLKFB3',
@@ -256,6 +256,16 @@ _default_pll_internal_attrs = {
             'LPR': 'R4',
             'ICPSEL': 50,
 }
+
+
+def add_pll_default_attrs(attrs):
+    pll_inattrs = attrs.copy()
+    for k, v in _default_pll_inattrs.items():
+        if k in pll_inattrs.keys():
+            continue
+        pll_inattrs[k] = v
+    return pll_inattrs
+
 
 # typ - PLL type (RPLL, etc)
 def set_pll_attrs(db, typ, idx, attrs):
@@ -381,7 +391,6 @@ def set_pll_attrs(db, typ, idx, attrs):
         if isinstance(val, str):
             val = attrids.pll_attrvals[val]
         add_attr_val(db, 'PLL', fin_attrs, attrids.pll_attrids[attr], val)
-    #print(fin_attrs)
     return fin_attrs
 
 def set_osc_attrs(db, typ, params):
@@ -635,15 +644,23 @@ def place(db, tilemap, bels, cst, args):
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
 
-        # XXX
-        if typ in {'IBUF', 'OBUF'}:
-            parms['ENABLE_USED'] = "0"
+        if typ in {'IBUF', 'OBUF', 'TBUF', 'IOBUF'}:
             if typ == 'IBUF':
                 parms['OUTPUT_USED'] = "0"
-                parms['INPUT_USED'] = "1"
+                parms['INPUT_USED'] =  "1"
+                parms['ENABLE_USED'] = "0"
+            elif typ == 'TBUF':
+                parms['OUTPUT_USED'] = "1"
+                parms['INPUT_USED'] =  "0"
+                parms['ENABLE_USED'] = "1"
+            elif typ == 'IOBUF':
+                parms['OUTPUT_USED'] = "1"
+                parms['INPUT_USED'] =  "1"
+                parms['ENABLE_USED'] = "1"
             else:
                 parms['OUTPUT_USED'] = "1"
-                parms['INPUT_USED'] = "0"
+                parms['INPUT_USED'] =  "0"
+                parms['ENABLE_USED'] = "0"
             typ = 'IOB'
 
         if typ == "GSR":
@@ -754,6 +771,8 @@ def place(db, tilemap, bels, cst, args):
                     continue
                 if flag_name_val[0] == chipdb.mode_attr_sep + "IO_TYPE":
                     iostd = _iostd_alias.get(flag_name_val[1], flag_name_val[1])
+                else:
+                    io_desc.attrs[flag_name_val[0][1:]] = flag_name_val[1]
             io_desc.attrs['IO_TYPE'] = iostd
             if pinless_io:
                 return
@@ -806,27 +825,30 @@ def place(db, tilemap, bels, cst, args):
     # second IO pass
     for bank, ios in _io_bels.items():
         # check IO standard
-        # IBUFs do not affect bank io
-        iostds = {iob.attrs['IO_TYPE'] for iob in ios.values() if iob.flags['mode'] != 'IBUF'}
-        iostds = set()
+        vccio = None
+        iostd = None
         for iob in ios.values():
+            # diff io can't be placed at simplified io
+            if iob.pos[0] in db.simplio_rows:
+                if iob.flags['mode'].startswith('ELVDS') or iob.flags['mode'].startswith('TLVDS'):
+                    raise Exception(f"Differential IO cant be placed at special row {iob.pos[0]}")
+
             if iob.flags['mode'] in {'IBUF', 'IOBUF', 'TLVDS_IBUF', 'TLVDS_IOBUF', 'ELVDS_IBUF', 'ELVDS_IOBUF'}:
                 iob.attrs['IO_TYPE'] = get_iostd_alias(iob.attrs['IO_TYPE'])
                 if iob.attrs.get('SINGLERESISTOR', 'OFF') != 'OFF':
                     iob.attrs['DDR_DYNTERM'] = 'ON'
-                if iob.flags['mode'] in {'IOBUF', 'TLVDS_IOBUF', 'ELVDS_IOBUF'}:
-                    iostds.add(iob.attrs['IO_TYPE'])
-            else: # TBUF and OBUF
-                iostds.add(iob.attrs['IO_TYPE'])
+            if iob.flags['mode'] in {'OBUF', 'IOBUF', 'TLVDS_IOBUF', 'ELVDS_IOBUF'}:
+                if not vccio:
+                    iostd = iob.attrs['IO_TYPE']
+                    vccio = _vcc_ios[iostd]
+                elif vccio != _vcc_ios[iob.attrs['IO_TYPE']] and not iostd.startswith('LVDS') and not iob.attrs['IO_TYPE'].startswith('LVDS'):
+                    snd_type = iob.attrs['IO_TYPE']
+                    fst = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == iostd][0]
+                    snd = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == snd_type][0]
+                    raise Exception(f"Different IO standard for bank {bank}: {fst} sets {iostd}, {snd} sets {iob.attrs['IO_TYPE']}.")
 
-        if len(iostds) >= 2:
-            conflict_std = list(iostds)
-            fst = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == conflict_std[0]][0]
-            snd = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == conflict_std[1]][0]
-            raise Exception(f"Different IO standard for bank {bank}: {fst} sets {conflict_std[0]}, {snd} sets {conflict_std[1]}.")
-        if len(iostds) == 0:
-            iostds.add('LVCMOS12')
-        iostd = list(iostds)[0]
+        if not vccio:
+            iostd = 'LVCMOS12'
 
         in_bank_attrs = {}
         in_bank_attrs['VCCIO'] = _vcc_ios[iostd]
@@ -863,6 +885,7 @@ def place(db, tilemap, bels, cst, args):
                 k = refine_io_attrs(k)
                 in_iob_attrs[k] = val
             in_iob_attrs['VCCIO'] = in_bank_attrs['VCCIO']
+            #print(in_iob_attrs)
 
             # lvds
             if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
@@ -900,6 +923,7 @@ def place(db, tilemap, bels, cst, args):
                 in_iob_b_attrs = in_iob_attrs.copy()
 
             for iob_idx, atr in [(idx, in_iob_attrs), ('B', in_iob_b_attrs)]:
+                #print(name, atr)
                 iob_attrs = set()
                 for k, val in atr.items():
                     if k not in attrids.iob_attrids.keys():
