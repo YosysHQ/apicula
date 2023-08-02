@@ -982,7 +982,6 @@ def main():
         mods = m.group(1) or ""
         luts = m.group(3)
         device = f"GW1N{mods}-{luts}"
-    read_constids(args.constids)
     
     with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
