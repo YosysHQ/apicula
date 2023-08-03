@@ -10,6 +10,7 @@ import json
 import argparse
 import importlib.resources
 from collections import namedtuple
+from contextlib import closing
 from apycula import codegen
 from apycula import chipdb
 from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses
@@ -981,8 +982,11 @@ def main():
         mods = m.group(1) or ""
         luts = m.group(3)
         device = f"GW1N{mods}-{luts}"
-    with gzip.open(importlib.resources.files("apycula").joinpath(f"{device}.pickle"), 'rb') as f:
-        db = pickle.load(f)
+    
+    with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
+        with closing(gzip.open(path, 'rb')) as f:
+            db = pickle.load(f)
+            
     with open(args.netlist) as f:
         pnr = json.load(f)
 

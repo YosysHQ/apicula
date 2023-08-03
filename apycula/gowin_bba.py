@@ -4,7 +4,7 @@ import pickle
 import gzip
 import argparse
 import re
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 from collections import Counter
 from apycula import chipdb
 
@@ -255,8 +255,11 @@ def main():
 
     args = parser.parse_args()
     read_constids(args.constids)
-    with gzip.open(importlib.resources.files("apycula").joinpath(f"{args.device}.pickle"), 'rb') as f:
+
+    with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
+     with closing(gzip.open(path, 'rb')) as f:
         db = pickle.load(f)
+        
     write_chipdb(db, args.output, args.device)
 
 if __name__ == "__main__":
