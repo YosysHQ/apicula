@@ -30,6 +30,7 @@ setuptools.setup(
             'gowin_pack=apycula.gowin_pack:main',
             'gowin_unpack=apycula.gowin_unpack:main',
             'gowin_bba=apycula.gowin_bba:main',
+            'gowin_pll=apycula.gowin_pll:main',
         ],
     },
     use_scm_version=True,
