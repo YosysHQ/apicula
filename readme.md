@@ -8,7 +8,7 @@ This project is supported by our generous sponsors. Have a look at our [contribu
 
 ## Getting Started
 
-Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr-gowin](https://github.com/YosysHQ/nextpnr#nextpnr-gowin), [openFPGALoader](https://github.com/trabucayre/openFPGALoader), and Python 3.6 or higher. [Yowasp](http://yowasp.org/) versions of Yosys and Nextpnr are also supported.
+Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr-gowin](https://github.com/YosysHQ/nextpnr#nextpnr-gowin), [openFPGALoader](https://github.com/trabucayre/openFPGALoader), and Python 3.8 or higher. [Yowasp](http://yowasp.org/) versions of Yosys and Nextpnr are also supported.
 
 Currently supported boards are
  * Trenz TEC0117: GW1NR-UV9QN881C6/I5
