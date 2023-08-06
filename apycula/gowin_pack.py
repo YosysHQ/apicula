@@ -123,7 +123,7 @@ def get_bels(data):
 _pip_bels = []
 def get_pips(data):
     if is_himbaechel:
-        pipre = re.compile(r"X(\d+)Y(\d+)/([^_]+)/([^_]+)")
+        pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
     else:
         pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
     for net in data['modules']['top']['netnames'].values():
@@ -664,6 +664,13 @@ def place(db, tilemap, bels, cst, args):
                 parms['ENABLE_USED'] = "0"
             typ = 'IOB'
 
+        if typ in {'ODDR', 'ODDRC', 'OSER4', 'OSER8'}:
+            attrs['IOLOGIC_TYPE'] = typ
+            attrs['IOLOGIC_FCLK'] = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
+                                     'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
+                                     'HCLK_OUT3': 'SPINE13'}[attrs['IOLOGIC_FCLK']]
+            typ = 'IOLOGIC'
+
         if typ == "GSR":
             pass
         elif typ.startswith('MUX2_'):
@@ -886,7 +893,7 @@ def place(db, tilemap, bels, cst, args):
                 k = refine_io_attrs(k)
                 in_iob_attrs[k] = val
             in_iob_attrs['VCCIO'] = in_bank_attrs['VCCIO']
-            #print(in_iob_attrs)
+            print(in_iob_attrs)
 
             # lvds
             if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
@@ -956,9 +963,9 @@ def place(db, tilemap, bels, cst, args):
         for row, col in bits:
             btile[row][col] = 1
 
-    #for k, v in _io_bels.items():
-    #    for io, bl in v.items():
-    #        print(k, io, vars(bl))
+    for k, v in _io_bels.items():
+        for io, bl in v.items():
+            print(k, io, vars(bl))
 
 # The vertical columns of long wires can receive a signal from either the upper
 # or the lower end of the column.
@@ -983,12 +990,12 @@ def route(db, tilemap, pips):
     for row, col, src, dest in pips:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
-        # short-circuit prevention
-        secure_long_wires(db, tilemap, row, col, src, dest)
 
         try:
             if dest in tiledata.clock_pips:
                 bits = tiledata.clock_pips[dest][src]
+            elif is_himbaechel and (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1]:
+                bits = db.hclk_pips[row - 1, col - 1][dest][src]
             else:
                 bits = tiledata.pips[dest][src]
         except KeyError:
@@ -1081,7 +1088,6 @@ def main():
         mods = m.group(1) or ""
         luts = m.group(3)
         device = f"GW1N{mods}-{luts}"
-
     with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)

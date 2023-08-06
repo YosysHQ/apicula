@@ -7,7 +7,7 @@ from functools import reduce
 from collections import namedtuple
 import numpy as np
 import apycula.fuse_h4x as fuse
-from apycula.wirenames import wirenames, clknames, clknumbers
+from apycula.wirenames import wirenames, clknames, clknumbers, hclknames, hclknumbers
 from apycula import pindef
 
 # the character that marks the I/O attributes that come from the nextpnr
@@ -103,6 +103,10 @@ class Device:
     tile_types: Dict[str, Set[int]] = field(default_factory = dict)
     # supported differential IO primitives
     diff_io_types: List[str] = field(default_factory = list)
+    # HCLK pips depend on the location of the cell, not on the type, so they
+    # are difficult to match with the deduplicated description of the tile
+    # { (y, x) : pips}
+    hclk_pips: Dict[Tuple[int, int], Dict[str, Dict[str, Set[Coord]]]] = field(default_factory=dict)
 
     @property
     def rows(self):
@@ -675,6 +679,157 @@ def fse_create_hclk_aliases(db, device, dat):
             db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
             db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
 
+# HCLK for Himbaechel
+_hclk_to_fclk = {
+    'GW1N-1': {
+        'B': {
+             'hclk': {(10, 0), (10, 19)},
+             'edges': {
+                 ( 1, 10) : {'CLK2', 'HCLK_OUT2'},
+                 (10, 19) : {'CLK2', 'HCLK_OUT3'},
+                 },
+             },
+        'T': {
+             'edges': {
+                 ( 1, 19) : {'CLK2'},
+                 },
+             },
+        'L': {
+             'edges': {
+                 ( 1, 10) : {'CLK2'},
+                 },
+             },
+        'R': {
+             'edges': {
+                 ( 1, 10) : {'CLK2'},
+                 },
+             },
+        },
+    'GW1N-9C': {
+        'B': {
+             'hclk': {(28, 0), (28, 46)},
+             'edges': {
+                 ( 1, 46) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'T': {
+             'hclk': {(0, 0), (0, 46)},
+             'edges': {
+                 ( 1, 46) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'L': {
+             'hclk': {(18, 0)},
+             'edges': {
+                 ( 1, 28) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'R': {
+             'hclk': {(18, 46)},
+             'edges': {
+                 ( 1, 28) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        },
+    'GW2A-18': {
+        'B': {
+             'hclk': {(54, 27), (54, 28)},
+             'edges': {
+                 ( 1, 27) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (29, 55) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'T': {
+             'hclk': {(0, 27), (0, 28)},
+             'edges': {
+                 ( 1, 27) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (29, 55) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'L': {
+             'hclk': {(27, 0)},
+             'edges': {
+                 ( 1, 27) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (28, 55) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'R': {
+             'hclk': {(27, 55)},
+             'edges': {
+                 ( 1, 27) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (28, 55) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        },
+}
+
+_global_wire_prefixes = {'PCLK', 'TBDHCLK', 'BBDHCLK', 'RBDHCLK', 'LBDHCLK',
+                         'TLPLL', 'TRPLL', 'BLPLL', 'BRPLL'}
+def fse_create_hclk_nodes(dev, device, fse, dat):
+    # XXX
+    if device not in _hclk_to_fclk:
+        return
+    hclk_info = _hclk_to_fclk[device]
+    for side in 'BRTL':
+        if side not in hclk_info:
+            continue
+
+        # create HCLK nodes
+        hclks = {}
+        # entries to the HCLK from logic
+        for hclk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(hclknumbers['TBDHCLK0'], hclknumbers['RBDHCLK3'] + 1)}:
+            if row != -2:
+                dev.nodes.setdefault(hclknames[hclk_idx], ("HCLK", set()))[1].add((row, col, wirenames[wire_idx]))
+
+        if 'hclk' in hclk_info[side]:
+            # create HCLK cells pips
+            for hclk_loc in hclk_info[side]['hclk']:
+                row, col = hclk_loc
+                ttyp = fse['header']['grid'][61][row][col]
+                dev.hclk_pips[(row, col)] = fse_pips(fse, ttyp, table = 48, wn = hclknames)
+                # connect local wires like PCLKT0 etc to the global nodes
+                for srcs in dev.hclk_pips[(row, col)].values():
+                    for src in srcs.keys():
+                        for pfx in _global_wire_prefixes:
+                            if src.startswith(pfx):
+                                dev.nodes.setdefault(src, ('HCLK', set()))[1].add((row, col, src))
+                # strange GW1N-9C input-input aliases
+                for i in {0, 2}:
+                    dev.nodes.setdefault(f'X{col}Y{row}/HCLK9-{i}', ('HCLK', {(row, col, f'HCLK_IN{i}')}))[1].add((row, col, f'HCLK_9IN{i}'))
+
+            for i in range(4):
+                hnam = f'HCLK_OUT{i}'
+                wires = dev.nodes.setdefault(f'{side}{hnam}', ("HCLK", set()))[1]
+                hclks[hnam] = wires
+                for hclk_loc in hclk_info[side]['hclk']:
+                    row, col = hclk_loc
+                    wires.add((row, col, hnam))
+
+        # create pips from HCLK spines to FCLK inputs of IO logic
+        for edge, srcs in hclk_info[side]['edges'].items():
+            if side in 'TB':
+                row = {'T': 0, 'B': dev.rows - 1}[side]
+                for col in range(edge[0], edge[1]):
+                    if 'IOLOGICA' not in dev.grid[row][col].bels:
+                        continue
+                    pips = dev.hclk_pips.setdefault((row, col), {})
+                    for dst in 'AB':
+                        for src in srcs:
+                            pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
+                            if src.startswith('HCLK'):
+                                hclks[src].add((row, col, src))
+            else:
+                col = {'L': 0, 'R': dev.cols - 1}[side]
+                for row in range(edge[0], edge[1]):
+                    if 'IOLOGICA' not in dev.grid[row][col].bels:
+                        continue
+                    pips = dev.hclk_pips.setdefault((row, col), {})
+                    for dst in 'AB':
+                        for src in srcs:
+                            pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
+                            if src.startswith('HCLK'):
+                                hclks[src].add((row, col, src))
+
 _pll_loc = {
  'GW1N-1':
    {'TRPLL0CLK0': (0, 17, 'F4'), 'TRPLL0CLK1': (0, 17, 'F5'),
@@ -722,12 +877,18 @@ def fse_create_pll_clock_aliases(db, device):
         for col in range(db.cols):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
-                    # XXX
                     if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
                             # Himbaechel node
                             db.nodes.setdefault(w_src, ("PLL_O", set()))[1].add((row, col, w_src))
+            # Himbaechel HCLK
+            if (row, col) in db.hclk_pips:
+                for w_dst, w_srcs in db.hclk_pips[row, col].items():
+                    for w_src in w_srcs.keys():
+                        if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
+                            if w_src in _pll_loc[device]:
+                                db.nodes.setdefault(w_src, ("PLL_O", set()))[1].add((row, col, w_src))
 
 def fse_iologic(device, fse, ttyp):
     bels = {}
@@ -775,7 +936,7 @@ def fse_create_clocks(dev, device, dat, fse):
     spines = {f'SPINE{i}' for i in range(32)}
     for row, rd in enumerate(dev.grid):
         for col, rc in enumerate(rd):
-            for dest, srcs in rc.clock_pips.items():
+            for dest, srcs in rc.pure_clock_pips.items():
                 for src in srcs.keys():
                     if src in spines and not dest.startswith('GT'):
                         dev.nodes.setdefault(src, ("GLOBAL_CLK", set()))[1].add((row, col, src))
@@ -832,11 +993,13 @@ def fse_create_clocks(dev, device, dat, fse):
                             dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT00'))
                             dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT10'))
 
+# function 0 - usual io
+# function 1 - DDR
 def fse_create_bottom_io(dev, device):
     if device in {'GW1NS-4', 'GW1N-9C'}:
-        dev.bottom_io = ('D6', 'C6', [('VSS', 'VSS')])
+        dev.bottom_io = ('D6', 'C6', [('VSS', 'VSS'), ('VCC', 'VSS')])
     elif device in {'GW1N-9'}:
-        dev.bottom_io = ('A6', 'CE2', [('VSS', 'VSS')])
+        dev.bottom_io = ('A6', 'CE2', [('VSS', 'VSS'), ('VCC:', 'VSS')])
     else:
         dev.bottom_io = ('', '', [])
 
@@ -850,9 +1013,12 @@ def fse_create_simplio_rows(dev, dat):
             dev.simplio_rows.add(row)
 
 def fse_create_tile_types(dev, dat):
+    type_chars = 'PCMI'
+    for fn in type_chars:
+        dev.tile_types[fn] = set()
     for row, rd in enumerate(dat['grid']):
         for col, fn in enumerate(rd):
-            if fn in 'PCMI':
+            if fn in type_chars:
                 i = row
                 if i > 0:
                     i -= 1
@@ -863,7 +1029,7 @@ def fse_create_tile_types(dev, dat):
                     j -= 1
                 if j == dev.cols:
                     j -= 1
-                dev.tile_types.setdefault(fn, set()).add(dev.grid[i][j].ttyp)
+                dev.tile_types[fn].add(dev.grid[i][j].ttyp)
 
 def fse_create_diff_types(dev, device):
     dev.diff_io_types = ['ELVDS_IBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF', 'ELVDS_TBUF',
@@ -914,6 +1080,7 @@ def from_fse(device, fse, dat):
     fse_create_bottom_io(dev, device)
     fse_create_tile_types(dev, dat)
     fse_create_diff_types(dev, device)
+    fse_create_hclk_nodes(dev, device, fse, dat)
     return dev
 
 # get fuses for attr/val set using short/longval table

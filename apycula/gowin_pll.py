@@ -204,6 +204,26 @@ def main():
             "clkout_min": 2.5,
             "clkout_max": 480,
         },
+        "GW1NZ-1 C6/I5": {
+            "comment": "untested",
+            "pll_name": "rPLL",
+            "pfd_min": 3,
+            "pfd_max": 400,
+            "vco_min": 400,
+            "vco_max": 800,
+            "clkout_min": 3.125,
+            "clkout_max": 400,
+        },
+        "GW2A-18 C8/I7": {
+            "comment": "untested",
+            "pll_name": "rPLL",
+            "pfd_min": 3,
+            "pfd_max": 400,
+            "vco_min": 400,
+            "vco_max": 1000,
+            "clkout_min": 3.125,
+            "clkout_max": 500,
+        },
     }
 
     if args.list_devices:
