@@ -49,7 +49,7 @@ def iob_is_vcc_net(flags, wire):
     return flags.get(f'NET_{wire}', False) == 'VCC'
 
 def iob_is_connected(flags, wire):
-    return f'NET_{wire}' in flags.keys()
+    return f'NET_{wire}' in flags
 
 _verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
 def sanitize_name(name):
@@ -86,7 +86,7 @@ def get_bels(data):
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
     for cellname, cell in data['modules']['top']['cells'].items():
-        if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'}:
+        if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
             continue
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
@@ -105,7 +105,7 @@ def get_bels(data):
         # The differential buffer is pushed to the end of the queue for processing
         # because it does not have an independent iostd, but adjusts to the normal pins
         # in the bank, if any are found
-        if 'DIFF' in cell['attributes'].keys():
+        if 'DIFF' in cell['attributes']:
             later.append((cellname, cell, row, col, num))
             continue
         cell_type = cell['type']
@@ -262,7 +262,7 @@ _default_pll_internal_attrs = {
 def add_pll_default_attrs(attrs):
     pll_inattrs = attrs.copy()
     for k, v in _default_pll_inattrs.items():
-        if k in pll_inattrs.keys():
+        if k in pll_inattrs:
             continue
         pll_inattrs[k] = v
     return pll_inattrs
@@ -280,7 +280,7 @@ def set_pll_attrs(db, typ, idx, attrs):
 
     # parse attrs
     for attr, val in pll_inattrs.items():
-        if attr in pll_attrs.keys():
+        if attr in pll_attrs:
             pll_attrs[attr] = val
         if attr == 'CLKOUTD_SRC':
             if val == 'CLKOUTP':
@@ -422,6 +422,7 @@ def set_osc_attrs(db, typ, params):
 
 _iologic_default_attrs = {
         'DUMMY': {},
+        'IOLOGIC_DUMMY': {},
         'ODDR': { 'TXCLK_POL': '0'},
         'ODDRC': { 'TXCLK_POL': '0'},
         'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
@@ -438,17 +439,17 @@ _iologic_default_attrs = {
         'IDES16': { 'GSREN': 'false', 'LSREN': 'true', 'CLKIMUX': 'ENABLE'},
         }
 def iologic_mod_attrs(attrs):
-    if 'TXCLK_POL' in attrs.keys():
+    if 'TXCLK_POL' in attrs:
         if int(attrs['TXCLK_POL']) == 0:
             attrs['TSHX'] = 'SIG'
         else:
             attrs['TSHX'] = 'INV'
         del attrs['TXCLK_POL']
-    if 'HWL' in attrs.keys():
+    if 'HWL' in attrs:
         if attrs['HWL'] == 'true':
             attrs['UPDATE'] = 'SAME'
         del attrs['HWL']
-    if 'GSREN' in attrs.keys():
+    if 'GSREN' in attrs:
         if attrs['GSREN'] == 'true':
             attrs['GSR'] = 'ENGSR'
         del attrs['GSREN']
@@ -462,7 +463,7 @@ def set_iologic_attrs(db, attrs, param):
     in_attrs.update(attrs)
     iologic_mod_attrs(in_attrs)
     fin_attrs = set()
-    if 'OUTMODE' in attrs.keys():
+    if 'OUTMODE' in attrs:
         if attrs['OUTMODE'] != 'ODDRX1':
             in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
         if attrs['OUTMODE'] != 'ODDRX1' or param['IOLOGIC_TYPE'] == 'ODDRC':
@@ -484,7 +485,7 @@ def set_iologic_attrs(db, attrs, param):
         in_attrs['LSRIMUX_0'] = '0'
         in_attrs['CLKOMUX'] = 'ENABLE'
         #in_attrs['LSRMUX_LSR'] = 'INV'
-    if 'INMODE' in attrs.keys():
+    if 'INMODE' in attrs:
         if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
             in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
             in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
@@ -504,7 +505,7 @@ def set_iologic_attrs(db, attrs, param):
             in_attrs['CLKIMUX'] = 'ENABLE'
 
     for k, val in in_attrs.items():
-        if k not in attrids.iologic_attrids.keys():
+        if k not in attrids.iologic_attrids:
             print(f'XXX IOLOGIC: add {k} key handle')
         else:
             add_attr_val(db, 'IOLOGIC', fin_attrs, attrids.iologic_attrids[k], attrids.iologic_attrvals[val])
@@ -594,7 +595,7 @@ def place_alu(db, tiledata, tile, parms, num):
     for r_c in lutmap.values():
         for r, c in r_c:
             tile[r][c] = 0
-    if mode in alu_bel.modes.keys():
+    if mode in alu_bel.modes:
         bits = alu_bel.modes[mode]
     else:
         bits = alu_bel.modes[str(int(mode, 2))]
@@ -630,7 +631,7 @@ def place_dff(db, tiledata, tile, parms, num, mode):
 def place_slice(db, tiledata, tile, parms, num):
     lutmap = tiledata.bels[f'LUT{num}'].flags
 
-    if 'ALU_MODE' in parms.keys():
+    if 'ALU_MODE' in parms:
         place_alu(db, tiledata, tile, parms, num)
     else:
         place_lut(db, tiledata, tile, parms, num)
@@ -664,7 +665,7 @@ def place(db, tilemap, bels, cst, args):
                 parms['ENABLE_USED'] = "0"
             typ = 'IOB'
 
-        if typ in {'ODDR', 'ODDRC', 'OSER4', 'OSER8'}:
+        if typ in {'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8'}:
             attrs['IOLOGIC_TYPE'] = typ
             attrs['IOLOGIC_FCLK'] = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
                                      'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
@@ -724,7 +725,7 @@ def place(db, tilemap, bels, cst, args):
             bel_name = f"IO{edge}{idx}{num}"
             cst.ports[cellname] = bel_name
             iob = tiledata.bels[f'IOB{num}']
-            if 'DIFF' in parms.keys():
+            if 'DIFF' in parms:
                 # skip negative pin for lvds
                 if parms['DIFF'] == 'N':
                     continue
@@ -807,7 +808,7 @@ def place(db, tilemap, bels, cst, args):
         elif typ.startswith('RPLL'):
             pll_attrs = set_pll_attrs(db, 'RPLL', 0,  parms)
             bits = set()
-            if 'PLL' in db.shortval[tiledata.ttyp].keys():
+            if 'PLL' in db.shortval[tiledata.ttyp]:
                 bits = get_shortval_fuses(db, tiledata.ttyp, pll_attrs, 'PLL')
             #print(typ, tiledata.ttyp, bits)
             for r, c in bits:
@@ -934,7 +935,7 @@ def place(db, tilemap, bels, cst, args):
                 #print(name, atr)
                 iob_attrs = set()
                 for k, val in atr.items():
-                    if k not in attrids.iob_attrids.keys():
+                    if k not in attrids.iob_attrids:
                         print(f'XXX IO: add {k} key handle')
                     else:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
@@ -954,7 +955,7 @@ def place(db, tilemap, bels, cst, args):
 
         bank_attrs = set()
         for k, val in in_bank_attrs.items():
-            if k not in attrids.iob_attrids.keys():
+            if k not in attrids.iob_attrids:
                 print(f'XXX BANK: add {k} key handle')
             else:
                 add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
@@ -979,7 +980,7 @@ def secure_long_wires(db, tilemap, row, col, src, dest):
         fuse_row = 0
         if row == check_row and dest in {'LT02', 'LT13'}:
             tiledata = db.grid[fuse_row][col - 1]
-            if dest in tiledata.alonenode_6.keys():
+            if dest in tiledata.alonenode_6:
                 tile = tilemap[(fuse_row, col - 1)]
                 _, bits = tiledata.alonenode_6[dest]
                 for row, col in bits:
