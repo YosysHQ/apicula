@@ -19,6 +19,7 @@ from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
 
 device = ""
+pnr = None
 is_himbaechel = False
 
 # Sometimes it is convenient to know where a port is connected to enable
@@ -665,7 +666,9 @@ def place(db, tilemap, bels, cst, args):
                 parms['ENABLE_USED'] = "0"
             typ = 'IOB'
 
-        if typ in {'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8'}:
+        if typ in {'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8', 'OSER10', 'OVIDEO'}:
+            if typ == 'IOLOGIC_DUMMY':
+                attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
             attrs['IOLOGIC_TYPE'] = typ
             attrs['IOLOGIC_FCLK'] = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
                                      'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
@@ -1051,6 +1054,8 @@ def dualmode_pins(db, tilemap, args):
 
 def main():
     global device
+    global pnr
+
     pil_available = True
     try:
         from PIL import Image
@@ -1092,9 +1097,6 @@ def main():
     with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)
-
-    with open(args.netlist) as f:
-        pnr = json.load(f)
 
     const_nets = {'GND': '$PACKER_GND_NET', 'VCC': '$PACKER_GND_NET'}
     if is_himbaechel:
