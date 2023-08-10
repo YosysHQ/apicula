@@ -488,12 +488,13 @@ def set_iologic_attrs(db, attrs, param):
         #in_attrs['LSRMUX_LSR'] = 'INV'
     if 'INMODE' in attrs:
         if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
-            in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+            #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+            in_attrs['CLKOMUX_1'] = '1'
             in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
             if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
                 in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK1'
             elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
-                in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0'
+                in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK0'
             in_attrs['LSRIMUX_0'] = '1'
             if attrs['INMODE'] == 'IDDRX8' or attrs['INMODE'] == 'DDRENABLE16':
                 in_attrs['LSROMUX_0'] = '0'
@@ -666,13 +667,16 @@ def place(db, tilemap, bels, cst, args):
                 parms['ENABLE_USED'] = "0"
             typ = 'IOB'
 
-        if typ in {'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8', 'OSER10', 'OVIDEO'}:
+        if typ in {'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8', 'OSER10', 'OVIDEO',
+                   'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}:
             if typ == 'IOLOGIC_DUMMY':
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
             attrs['IOLOGIC_TYPE'] = typ
-            attrs['IOLOGIC_FCLK'] = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
-                                     'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
-                                     'HCLK_OUT3': 'SPINE13'}[attrs['IOLOGIC_FCLK']]
+            attrs['IOLOGIC_FCLK'] = 'UNKNOWN'
+            if typ in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC'}:
+                attrs['IOLOGIC_FCLK'] = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
+                                         'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
+                                         'HCLK_OUT3': 'SPINE13'}[attrs['IOLOGIC_FCLK']]
             typ = 'IOLOGIC'
 
         if typ == "GSR":
@@ -969,9 +973,9 @@ def place(db, tilemap, bels, cst, args):
         for row, col in bits:
             btile[row][col] = 1
 
-    for k, v in _io_bels.items():
-        for io, bl in v.items():
-            print(k, io, vars(bl))
+    #for k, v in _io_bels.items():
+    #    for io, bl in v.items():
+    #        print(k, io, vars(bl))
 
 # The vertical columns of long wires can receive a signal from either the upper
 # or the lower end of the column.
@@ -1096,13 +1100,9 @@ def main():
         mods = m.group(1) or ""
         luts = m.group(3)
         device = f"GW1N{mods}-{luts}"
-
     with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)
-
-    with open(args.netlist) as f:
-        pnr = json.load(f)
 
     const_nets = {'GND': '$PACKER_GND_NET', 'VCC': '$PACKER_GND_NET'}
     if is_himbaechel:

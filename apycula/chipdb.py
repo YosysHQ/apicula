@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Union, ByteString
+from typing import Dict, List, Set, Tuple, Union, ByteString, Any
 from itertools import chain
 import re
 import copy
@@ -107,6 +107,8 @@ class Device:
     # are difficult to match with the deduplicated description of the tile
     # { (y, x) : pips}
     hclk_pips: Dict[Tuple[int, int], Dict[str, Dict[str, Set[Coord]]]] = field(default_factory=dict)
+    # extra cell functions besides main type
+    extra_cell_func: Dict[Tuple[int, int], Dict[str, Any]] = field(default_factory=dict)
 
     @property
     def rows(self):
@@ -1048,6 +1050,55 @@ def fse_create_diff_types(dev, device):
     elif device not in {'GW2A-18', 'GW1N-4'}:
         dev.diff_io_types.remove('TLVDS_IOBUF')
 
+def fse_create_io16(dev, device):
+    if device in {'GW1N-9', 'GW1N-9C'}:
+        for i in chain(range(1, 8, 2), range(10, 17, 2), range(20, 35, 2), range(38, 45, 2)):
+            dev.extra_cell_func.setdefault((0, i), {}).update(
+                    {'io16': {'role': 'MAIN', 'pair': (0, i +1)}})
+            dev.extra_cell_func.setdefault((0, i + 1), {}).update(
+                    {'io16': {'role': 'AUX', 'pair': (0, i)}})
+            dev.extra_cell_func.setdefault((dev.rows - 1, i), {}).update(
+                    {'io16': {'role': 'MAIN', 'pair': (dev.rows - 1, i +1)}})
+            dev.extra_cell_func.setdefault((dev.rows - 1, i + 1), {}).update(
+                    {'io16': {'role': 'AUX', 'pair': (dev.rows - 1, i)}})
+    elif device in {'GW1NS-4'}:
+        for i in chain(range(1, 8, 2), range(10, 17, 2), range(20, 26, 2), range(28, 35, 2)):
+            dev.extra_cell_func.setdefault((0, i), {}).update(
+                    {'io16': {'role': 'MAIN', 'pair': (0, i +1)}})
+            dev.extra_cell_func.setdefault((0, i + 1), {}).update(
+                    {'io16': {'role': 'AUX', 'pair': (0, i)}})
+            if i < 17:
+                dev.extra_cell_func.setdefault((i, dev.cols - 1), {}).update(
+                        {'io16': {'role': 'MAIN', 'pair': (i + 1, dev.cols - 1)}})
+                dev.extra_cell_func.setdefault((i + 1, dev.cols - 1), {}).update(
+                        {'io16': {'role': 'AUX', 'pair': (i, dev.cols - 1)}})
+
+# (osc-type, devices) : ({local-ports}, {aliases})
+_osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 2, 'A6')}),
+              ('OSCZ', 'GW1NS-4'): ({'OSCOUT': 'Q4', 'OSCEN': 'D6'}, {}),
+              ('OSCF', 'GW1NS-2'): ({}, {'OSCOUT': (10, 19, 'Q4'), 'OSCEN': (13, 19, 'B3')}),
+              ('OSCH', 'GW1N-1'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSC',  'GW1N-4'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSC',  'GW1N-9'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSC',  'GW1N-9C'):  ({'OSCOUT': 'Q4'}, {}),
+              # XXX check this!
+              ('OSC',  'GW2A-18'):  ({'OSCOUT': 'Q4'}, {}),
+              # XXX unsupported boards, pure theorizing
+              ('OSCO', 'GW1N-2'):  ({'OSCOUT': 'Q7'}, {'OSCEN': (9, 1, 'B4')}),
+              ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
+              }
+
+def fse_create_osc(dev, device, fse):
+    for row, rd in enumerate(dev.grid):
+        for col, rc in enumerate(rd):
+            if 51 in fse[rc.ttyp]['shortval']:
+                osc_type = list(fse_osc(device, fse, rc.ttyp).keys())[0]
+                dev.extra_cell_func.setdefault((row, col), {}).update(
+                        {'osc': {'type': osc_type}})
+                _, aliases = _osc_ports[osc_type, device]
+                for port, alias in aliases.items():
+                    dev.nodes.setdefault(f'X{col}Y{row}/{port}', (port, {(row, col, port)}))[1].add(alias)
+
 def from_fse(device, fse, dat):
     dev = Device()
     fse_create_simplio_rows(dev, dat)
@@ -1081,6 +1132,8 @@ def from_fse(device, fse, dat):
     fse_create_tile_types(dev, dat)
     fse_create_diff_types(dev, device)
     fse_create_hclk_nodes(dev, device, fse, dat)
+    fse_create_io16(dev, device)
+    fse_create_osc(dev, device, fse)
     return dev
 
 # get fuses for attr/val set using short/longval table
@@ -1258,21 +1311,6 @@ _ides16_inputs = [(19, 'PCLK'), (20, 'FCLK'), (38, 'CALIB'), (25, 'RESET'), (0, 
 _ides16_fixed_outputs = { 'Q0': 'F2', 'Q1': 'F3', 'Q2': 'F4', 'Q3': 'F5', 'Q4': 'Q0',
                           'Q5': 'Q1', 'Q6': 'Q2', 'Q7': 'Q3', 'Q8': 'Q4', 'Q9': 'Q5', 'Q10': 'F0',
                          'Q11': 'F1', 'Q12': 'F2', 'Q13': 'F3', 'Q14': 'F4', 'Q15': 'F5'}
-# (osc-type, devices) : ({local-ports}, {aliases})
-_osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 2, 'A6')}),
-              ('OSCZ', 'GW1NS-4'): ({'OSCOUT': 'Q4', 'OSCEN': 'D6'}, {}),
-              ('OSCF', 'GW1NS-2'): ({}, {'OSCOUT': (10, 19, 'Q4'), 'OSCEN': (13, 19, 'B3')}),
-              ('OSCH', 'GW1N-1'):  ({'OSCOUT': 'Q4'}, {}),
-              ('OSC',  'GW1N-4'):  ({'OSCOUT': 'Q4'}, {}),
-              ('OSC',  'GW1N-9'):  ({'OSCOUT': 'Q4'}, {}),
-              ('OSC',  'GW1N-9C'):  ({'OSCOUT': 'Q4'}, {}),
-              # XXX check this!
-              ('OSC',  'GW2A-18'):  ({'OSCOUT': 'Q4'}, {}),
-              # XXX unsupported boards, pure theorizing
-              ('OSCO', 'GW1N-2'):  ({'OSCOUT': 'Q7'}, {'OSCEN': (9, 1, 'B4')}),
-              ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
-              }
-
 def get_pllout_global_name(row, col, wire, device):
     for name, loc in _pll_loc[device].items():
         if loc == (row, col, wire):
