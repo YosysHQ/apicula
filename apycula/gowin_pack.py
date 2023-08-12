@@ -672,11 +672,12 @@ def place(db, tilemap, bels, cst, args):
             if typ == 'IOLOGIC_DUMMY':
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
             attrs['IOLOGIC_TYPE'] = typ
-            attrs['IOLOGIC_FCLK'] = 'UNKNOWN'
-            if typ in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC'}:
+            if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC'}:
                 attrs['IOLOGIC_FCLK'] = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
                                          'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
                                          'HCLK_OUT3': 'SPINE13'}[attrs['IOLOGIC_FCLK']]
+            else:
+                attrs['IOLOGIC_FCLK'] = 'UNKNOWN'
             typ = 'IOLOGIC'
 
         if typ == "GSR":
@@ -901,7 +902,7 @@ def place(db, tilemap, bels, cst, args):
                 k = refine_io_attrs(k)
                 in_iob_attrs[k] = val
             in_iob_attrs['VCCIO'] = in_bank_attrs['VCCIO']
-            print(in_iob_attrs)
+            #print(in_iob_attrs)
 
             # lvds
             if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
