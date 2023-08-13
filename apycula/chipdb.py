@@ -914,7 +914,7 @@ def fse_iologic(device, fse, ttyp):
     if device in {'GW1NS-4'} and ttyp in {142, 144, 59}:
             bels['OSER16'] = Bel()
             bels['IDES16'] = Bel()
-    if device in {'GW1N-9', 'GW1N-9C'} and ttyp in {52, 66}:
+    if device in {'GW1N-9', 'GW1N-9C'} and ttyp in {52, 66, 63, 91, 92}:
             bels['OSER16'] = Bel()
             bels['IDES16'] = Bel()
     return bels

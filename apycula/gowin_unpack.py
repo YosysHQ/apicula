@@ -341,7 +341,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("IOLOGIC"):
             idx = name[-1]
             attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids)
-            #print(row, col, attrvals)
+            print(row, col, attrvals)
             if not attrvals:
                 continue
             if 'OUTMODE' in attrvals.keys():

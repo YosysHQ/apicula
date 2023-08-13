@@ -423,6 +423,7 @@ def set_osc_attrs(db, typ, params):
 
 _iologic_default_attrs = {
         'DUMMY': {},
+        'IOLOGIC': {},
         'IOLOGIC_DUMMY': {},
         'ODDR': { 'TXCLK_POL': '0'},
         'ODDRC': { 'TXCLK_POL': '0'},
@@ -667,15 +668,17 @@ def place(db, tilemap, bels, cst, args):
                 parms['ENABLE_USED'] = "0"
             typ = 'IOB'
 
-        if typ in {'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8', 'OSER10', 'OVIDEO',
+        if is_himbaechel and typ in {'IOLOGIC', 'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8', 'OSER10', 'OVIDEO',
                    'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}:
             if typ == 'IOLOGIC_DUMMY':
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
             attrs['IOLOGIC_TYPE'] = typ
             if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC'}:
-                attrs['IOLOGIC_FCLK'] = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
-                                         'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
-                                         'HCLK_OUT3': 'SPINE13'}[attrs['IOLOGIC_FCLK']]
+                recode_spines = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
+                                 'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
+                                 'HCLK_OUT3': 'SPINE13'}
+                if attrs['IOLOGIC_FCLK'] in recode_spines:
+                    attrs['IOLOGIC_FCLK'] = recode_spines[attrs['IOLOGIC_FCLK']]
             else:
                 attrs['IOLOGIC_FCLK'] = 'UNKNOWN'
             typ = 'IOLOGIC'
@@ -807,6 +810,7 @@ def place(db, tilemap, bels, cst, args):
             for brow, bcol in rambits:
                 tile[brow][bcol] = 1
         elif typ ==  'IOLOGIC':
+            #print(row, col, cellname)
             iologic_attrs = set_iologic_attrs(db, parms, attrs)
             bits = set()
             table_type = f'IOLOGIC{num}'
@@ -940,7 +944,7 @@ def place(db, tilemap, bels, cst, args):
                 in_iob_b_attrs = in_iob_attrs.copy()
 
             for iob_idx, atr in [(idx, in_iob_attrs), ('B', in_iob_b_attrs)]:
-                #print(name, atr)
+                #print(name, iob.pos, atr)
                 iob_attrs = set()
                 for k, val in atr.items():
                     if k not in attrids.iob_attrids:
