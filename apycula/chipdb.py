@@ -686,6 +686,8 @@ def fse_create_hclk_aliases(db, device, dat):
             db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
 
 # HCLK for Himbaechel
+# hclk - locs of hclk control this side
+# edges - how cells along this side can connect to hclk
 _hclk_to_fclk = {
     'GW1N-1': {
         'B': {
@@ -708,6 +710,133 @@ _hclk_to_fclk = {
         'R': {
              'edges': {
                  ( 1, 10) : {'CLK2'},
+                 },
+             },
+        },
+    'GW1NZ-1': {
+        'T': {
+             'hclk': {(0, 5)},
+             'edges': {
+                 ( 1, 10) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (10, 19) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'R': {
+             'hclk': {(5, 19)},
+             'edges': {
+                 ( 1,  5) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 ( 6, 10) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        },
+    'GW1NS-2': {
+        'B': {
+             'hclk': {(14, 0), (14, 19)},
+             'edges': {
+                 ( 1, 10) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (10, 19) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'T': {
+             'hclk': {(0, 0), (0, 19)},
+             'edges': {
+                 ( 1, 10) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (10, 19) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'L': {
+             'hclk': {(5, 0)},
+             'edges': {
+                 ( 1, 5) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 ( 6, 14) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'R': {
+             'hclk': {(5, 19)},
+             'edges': {
+                 ( 1, 5) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (6, 14) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        },
+    'GW1N-4': {
+        'B': {
+             'hclk': {(19, 0), (19, 37)},
+             'edges': {
+                 ( 1, 19) : {'CLK2', 'HCLK_OUT2'},
+                 (19, 37) : {'CLK2', 'HCLK_OUT3'},
+                 },
+             },
+        'T': {
+             'edges': {
+                 ( 1, 37) : {'CLK2'},
+                 },
+             },
+        'L': {
+             'hclk': {(9, 0)},
+             'edges': {
+                 ( 1, 9) : {'CLK2', 'HCLK_OUT2'},
+                 (10, 19) : {'CLK2', 'HCLK_OUT3'},
+                 },
+             },
+        'R': {
+             'hclk': {(9, 37)},
+             'edges': {
+                 ( 1, 9) : {'CLK2', 'HCLK_OUT2'},
+                 (10, 19) : {'CLK2', 'HCLK_OUT3'},
+                 },
+             },
+        },
+    'GW1NS-4': {
+        'B': {
+             'hclk': {(19, 16), (19, 17), (19, 20)},
+             'edges': {
+                 ( 1, 16) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (21, 37) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'T': {
+             'hclk': {(0, 18)},
+             'edges': {
+                 ( 1, 10) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (10, 37) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'R': {
+             'hclk': {(9, 37)},
+             'edges': {
+                 ( 1, 9) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (9, 19) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        },
+    'GW1N-9': {
+        'B': {
+             'hclk': {(28, 0), (28, 46)},
+             'edges': {
+                 ( 1, 28) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (28, 46) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'T': {
+             'hclk': {(0, 0), (0, 46)},
+             'edges': {
+                 ( 1, 28) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (28, 46) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'L': {
+             'hclk': {(18, 0)},
+             'edges': {
+                 ( 1, 19) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (19, 28) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'R': {
+             'hclk': {(18, 46)},
+             'edges': {
+                 ( 1, 19) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (19, 28) : {'HCLK_OUT1', 'HCLK_OUT3'},
                  },
              },
         },
@@ -911,7 +1040,7 @@ def fse_iologic(device, fse, ttyp):
         if 22 in fse[ttyp]['shortval'].keys():
             bels['IOLOGICB'] = Bel()
     # 16bit
-    if device in {'GW1NS-4'} and ttyp in {142, 144, 59}:
+    if device in {'GW1NS-4'} and ttyp in {142, 143, 144, 58, 59}:
             bels['OSER16'] = Bel()
             bels['IDES16'] = Bel()
     if device in {'GW1N-9', 'GW1N-9C'} and ttyp in {52, 66, 63, 91, 92}:
@@ -1005,7 +1134,7 @@ def fse_create_bottom_io(dev, device):
     if device in {'GW1NS-4', 'GW1N-9C'}:
         dev.bottom_io = ('D6', 'C6', [('VSS', 'VSS'), ('VCC', 'VSS')])
     elif device in {'GW1N-9'}:
-        dev.bottom_io = ('A6', 'CE2', [('VSS', 'VSS'), ('VCC:', 'VSS')])
+        dev.bottom_io = ('A6', 'CE2', [('VSS', 'VSS'), ('VCC', 'VSS')])
     else:
         dev.bottom_io = ('', '', [])
 
