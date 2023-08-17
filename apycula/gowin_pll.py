@@ -44,9 +44,9 @@ def main():
         device_name = f"{match.group(1)}-{match.group(2)} {match.group(3)}"
 
     device_limits = {
-        "GW1NR-1 C6/I5": {
+        "GW1N-1 C6/I5": {
             "comment": "Untested",
-            "pll_name": "PLLVR",
+            "pll_name": "rPLL",
             "pfd_min": 3,
             "pfd_max": 400,
             "vco_min": 400,
@@ -54,9 +54,9 @@ def main():
             "clkout_min": 3.125,
             "clkout_max": 450,
         },
-        "GW1NR-1 C5/I4": {
+        "GW1N-1 C5/I4": {
             "comment": "Untested",
-            "pll_name": "PLLVR",
+            "pll_name": "rPLL",
             "pfd_min": 3,
             "pfd_max": 320,
             "vco_min": 320,

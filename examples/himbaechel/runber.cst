@@ -1,0 +1,25 @@
+IO_LOC "clk" 4;
+IO_LOC "rst" 58;
+IO_LOC "key" 59;
+IO_LOC "led[0]" 25;
+IO_LOC "led[1]" 26;
+IO_LOC "led[2]" 23;
+IO_LOC "led[3]" 24;
+IO_LOC "led[4]" 27;
+IO_LOC "led[5]" 28;
+IO_LOC "led[6]" 29;
+IO_LOC "led[7]" 30;
+
+IO_LOC "tlvds_p" 27;
+IO_LOC "tlvds_n" 28;
+
+IO_LOC "elvds_p" 40;
+IO_LOC "elvds_n" 41;
+
+IO_LOC "PLL_0_CLKOUT"  38;
+IO_LOC "PLL_0_CLKOUTD" 39;
+IO_LOC "PLL_0_LOCK"    40;
+IO_LOC "PLL_1_CLKOUT"  41;
+IO_LOC "PLL_1_CLKOUTD" 42;
+IO_LOC "PLL_1_LOCK"    43;
+

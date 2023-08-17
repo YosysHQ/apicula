@@ -9,5 +9,10 @@ IO_LOC "key" 15;
 IO_LOC "rst" 14;
 IO_LOC "clk" 45;
 
+
 // true LVDS pins
-IO_LOC "tlvds_p" 28,27;
+IO_LOC "tlvds_p" 28;
+IO_LOC "tlvds_n" 27;
+
+IO_LOC "elvds_p" 39;
+IO_LOC "elvds_n" 40;

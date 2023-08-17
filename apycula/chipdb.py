@@ -1593,9 +1593,17 @@ def dat_portmap(dat, dev, device):
                             # to be taken care of separately.
                             bel.portmap[nam] = f'PLLVR{nam}{wire}'
                             dev.aliases[row, col, f'PLLVR{nam}{wire}'] = (9, 37, wire)
+                            # Himbaechel node
+                            dev.nodes.setdefault(f'X{col}Y{row}/PLLVR{nam}{wire}', ("PLL_I", {(row, col, f'PLLVR{nam}{wire}')}))[1].add((9, 37, wire))
                     for idx, nam in _pll_outputs:
                         wire = wirenames[dat[f'SpecPll{pll_idx}Outs'][idx * 3 + 2]]
                         bel.portmap[nam] = wire
+                        # Himbaechel node
+                        if nam != 'LOCK':
+                            global_name = get_pllout_global_name(row, col, wire, device)
+                        else:
+                            global_name = f'X{col}Y{row}/PLLVR{nam}{wire}'
+                        dev.nodes.setdefault(global_name, ("PLL_O", set()))[1].update({(row, col, f'PLLVR{nam}{wire}'), (row, col, wire)})
                     bel.portmap['CLKIN'] = wirenames[124];
                     reset = wirenames[dat[f'SpecPll{pll_idx}Ins'][0 + 2]]
                     # VREN pin is placed in another cell
@@ -1605,6 +1613,8 @@ def dat_portmap(dat, dev, device):
                         vren = 'B0'
                     bel.portmap['VREN'] = f'PLLVRV{vren}'
                     dev.aliases[row, col, f'PLLVRV{vren}'] = (0, 37, vren)
+                    # Himbaechel node
+                    dev.nodes.setdefault(f'X{col}Y{row}/PLLVRV{vren}', ("PLL_I", {(row, col, f'PLLVRV{vren}')}))[1].add((0, 37, vren))
                 if name.startswith('OSC'):
                     # local ports
                     local_ports, aliases = _osc_ports[name, device]

@@ -1,0 +1,26 @@
+//File Title: Physical Constraints file
+//Part Number: GW1NR-LV9LQ144PC6/I5
+
+IO_LOC "clk" 98;
+
+IO_LOC "rst" 27;	// key0
+IO_LOC "key" 28;
+
+IO_LOC "led[0]" 29;
+IO_LOC "led[1]" 30;
+IO_LOC "led[2]" 32;
+IO_LOC "led[3]" 34;
+
+// fake
+IO_LOC "led[4]" 71;
+IO_LOC "led[5]" 72;
+IO_LOC "led[6]" 124;
+IO_LOC "led[7]" 125;
+
+// emulated lvds pins
+IO_LOC "elvds_p" 44;
+IO_LOC "elvds_n" 45;
+
+// true LVDS pins
+IO_LOC "tlvds_p" 42;
+IO_LOC "tlvds_n" 43;

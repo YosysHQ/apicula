@@ -949,7 +949,7 @@ def place(db, tilemap, bels, cst, args):
                 for k, val in atr.items():
                     if k not in attrids.iob_attrids:
                         print(f'XXX IO: add {k} key handle')
-                    elif k == 'OPENDRAIN' and val == 'OFF':
+                    elif k == 'OPENDRAIN' and val == 'OFF' and 'LVDS' not in iob.flags['mode']:
                         continue
                     else:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
@@ -1124,6 +1124,12 @@ def main():
     # routing can add pass-through LUTs
     place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args)
     dualmode_pins(db, tilemap, args)
+    # XXX Z-1 some kind of power saving for pll, disable
+    if device in {'GW1NZ-1'}:
+        tile = tilemap[(db.rows - 1, db.cols - 1)]
+        for row, col in {(23, 63)}:
+            tile[row][col] = 0
+
     res = chipdb.fuse_bitmap(db, tilemap)
     header_footer(db, res, args.compress)
     if pil_available and args.png:
