@@ -17,6 +17,12 @@ IO_LOC "led[5]" 72;
 IO_LOC "led[6]" 124;
 IO_LOC "led[7]" 125;
 
+// oser
+IO_LOC "oser_out" 29;
+IO_LOC "io16"     29;
+IO_LOC "pclk_o"   51;
+IO_LOC "fclk_o"   50;
+
 // emulated lvds pins
 IO_LOC "elvds_p" 44;
 IO_LOC "elvds_n" 45;

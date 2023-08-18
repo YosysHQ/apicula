@@ -20,6 +20,12 @@ IO_LOC "tlvds_n" T6;
 IO_LOC "elvds_p" C12;
 IO_LOC "elvds_n" B12;
 
+// oser
+IO_LOC "oser_out" C13;
+IO_LOC "fclk_o"   N16;
+IO_LOC "pclk_o"   N14;
+
+// RGB LCD
 IO_LOC "LCD_CLK" R9;
 IO_LOC "LCD_HYNC" A15;
 IO_LOC "LCD_SYNC" D14;

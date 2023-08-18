@@ -9,6 +9,11 @@ IO_LOC "key" 15;
 IO_LOC "rst" 14;
 IO_LOC "clk" 45;
 
+// oser
+IO_LOC "oser_out" 35;
+IO_LOC "io16" 35;
+IO_LOC "pclk_o"   29;
+IO_LOC "fclk_o"   30;
 
 // true LVDS pins
 IO_LOC "tlvds_p" 28;

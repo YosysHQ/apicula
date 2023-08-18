@@ -14,6 +14,13 @@ IO_LOC "rst" 4;
 IO_LOC "led[6]" 35;
 IO_LOC "led[7]" 33;
 
+// oser
+IO_LOC "oser_out" 10;
+IO_LOC "io16"     29;
+IO_LOC "pclk_o"   15;
+IO_LOC "fclk_o"   16;
+
+// RGB LCD
 IO_LOC "LCD_B[0]" 54;
 IO_LOC "LCD_B[1]" 53;
 IO_LOC "LCD_B[2]" 51;

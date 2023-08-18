@@ -33,6 +33,16 @@ IO_PORT "LCD_XR" IO_TYPE=LVCMOS33;
 IO_LOC "LCD_XL"   34;
 IO_PORT "LCD_XL" IO_TYPE=LVCMOS33;
 
+// oser
+IO_LOC "oser_out" 86;
+IO_PORT "oser_out" IO_TYPE=LVCMOS33;
+IO_LOC "io16" 86;
+IO_PORT "io16" IO_TYPE=LVCMOS33;
+IO_LOC "pclk_o"   81;
+IO_PORT "pclk_o" IO_TYPE=LVCMOS33;
+IO_LOC "fclk_o"   80;
+IO_PORT "fclk_o" IO_TYPE=LVCMOS33;
+
 // true LVDS pins
 IO_LOC "tlvds_p" 29;
 IO_LOC "tlvds_n" 30;

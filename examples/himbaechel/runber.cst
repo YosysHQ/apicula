@@ -16,6 +16,12 @@ IO_LOC "tlvds_n" 28;
 IO_LOC "elvds_p" 40;
 IO_LOC "elvds_n" 41;
 
+// oser
+IO_LOC "oser_out" 25;
+IO_LOC "io16"     25;
+IO_LOC "pclk_o"   28;
+IO_LOC "fclk_o"   29;
+
 IO_LOC "PLL_0_CLKOUT"  38;
 IO_LOC "PLL_0_CLKOUTD" 39;
 IO_LOC "PLL_0_LOCK"    40;
