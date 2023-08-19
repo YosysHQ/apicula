@@ -23,7 +23,19 @@ IO_LOC "elvds_n" B12;
 // oser
 IO_LOC "oser_out" C13;
 IO_LOC "fclk_o"   N16;
-IO_LOC "pclk_o"   N14;
+IO_LOC "pclk_o"   A14;
+
+// ides
+IO_LOC "fclk_i" B13;
+IO_LOC "data_i" C12;
+IO_LOC "q_o[0]" P9;
+IO_LOC "q_o[1]" E15;
+IO_LOC "q_o[2]" T7;
+IO_LOC "q_o[3]" R8;
+IO_LOC "q_o[4]" T6;
+IO_LOC "q_o[5]" P6;
+IO_LOC "q_o[6]" T8;
+IO_LOC "q_o[7]" P8;
 
 // RGB LCD
 IO_LOC "LCD_CLK" R9;

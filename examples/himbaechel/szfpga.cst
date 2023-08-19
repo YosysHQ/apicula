@@ -23,6 +23,18 @@ IO_LOC "io16"     29;
 IO_LOC "pclk_o"   51;
 IO_LOC "fclk_o"   50;
 
+// ides
+IO_LOC "fclk_i" 43;
+IO_LOC "data_i" 46;
+IO_LOC "q_o[0]" 121;
+IO_LOC "q_o[1]" 42;
+IO_LOC "q_o[2]" 125;
+IO_LOC "q_o[3]" 48;
+IO_LOC "q_o[4]" 49;
+IO_LOC "q_o[5]" 117;
+IO_LOC "q_o[6]" 115;
+IO_LOC "q_o[7]" 113;
+
 // emulated lvds pins
 IO_LOC "elvds_p" 44;
 IO_LOC "elvds_n" 45;

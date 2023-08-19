@@ -12,6 +12,18 @@ IO_LOC "oser_out" 16;
 IO_LOC "pclk_o" 17;
 IO_LOC "fclk_o" 18;
 
+// ides
+IO_LOC "fclk_i" 45;
+IO_LOC "data_i" 41;
+IO_LOC "q_o[0]" 32;
+IO_LOC "q_o[1]" 33;
+IO_LOC "q_o[2]" 34;
+IO_LOC "q_o[3]" 46;
+IO_LOC "q_o[4]" 27;
+IO_LOC "q_o[5]" 38;
+IO_LOC "q_o[6]" 39;
+IO_LOC "q_o[7]" 29;
+
 // RGB LCD
 IO_LOC "LCD_B[0]" 41;
 IO_LOC "LCD_B[1]" 42;

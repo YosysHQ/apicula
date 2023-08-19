@@ -22,6 +22,18 @@ IO_LOC "io16"     25;
 IO_LOC "pclk_o"   28;
 IO_LOC "fclk_o"   29;
 
+// ides
+IO_LOC "fclk_i" 54;
+IO_LOC "data_i" 25;
+IO_LOC "q_o[0]" 38;
+IO_LOC "q_o[1]" 39;
+IO_LOC "q_o[2]" 40;
+IO_LOC "q_o[3]" 27;
+IO_LOC "q_o[4]" 23;
+IO_LOC "q_o[5]" 43;
+IO_LOC "q_o[6]" 42;
+IO_LOC "q_o[7]" 41;
+
 IO_LOC "PLL_0_CLKOUT"  38;
 IO_LOC "PLL_0_CLKOUTD" 39;
 IO_LOC "PLL_0_LOCK"    40;
