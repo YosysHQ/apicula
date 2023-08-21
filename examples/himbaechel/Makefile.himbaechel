@@ -6,7 +6,13 @@ HIMBAECHEL_OUT ?= ./himbaechel-out
 
 .DEFAULT_GOAL := all
 
-all: blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
+all: \
+	blinky-tangnano20k.fs shift-tangnano20k.fs blinky-tbuf-tangnano20k.fs blinky-oddr-tangnano20k.fs \
+	blinky-osc-tangnano20k.fs \
+	pll-nanolcd-tangnano20k.fs attosoc-tangnano20k.fs \
+	test-pll-tangnano20k.fs \
+	\
+	blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
 	blinky-osc-primer20k.fs tlvds-primer20k.fs elvds-primer20k.fs oddr-tlvds-primer20k.fs \
 	oddr-elvds-primer20k.fs pll-nanolcd-primer20k.fs attosoc-primer20k.fs \
 	oser4-primer20k.fs ovideo-primer20k.fs oser8-primer20k.fs oser10-primer20k.fs \
@@ -81,6 +87,23 @@ clean:
 	rm -f *.json *.fs *-unpacked.v
 	
 .PHONY: unpacked clean
+
+# ============================================================
+# Tangnano20k
+%-tangnano20k.fs: %-tangnano20k.json
+	gowin_pack -d GW2A-18C -o $@ $<
+
+%-tangnano20k.json: %-tangnano20k-synth.json tangnano20k.cst
+	$(NEXTPNR) -v --debug --json $< --write $@ --chipdb ${CHIPDB_PATH}/GW2A-18C.bin --vopt partno=GW2AR-LV18QN88PC8/I7 --vopt cst=tangnano20k.cst
+
+%-tangnano20k-synth.json: %.v
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
+
+pll-nanolcd-tangnano20k-synth.json: pll/GW2A-18-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
+	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
+
+attosoc-%-synth.json: attosoc/attosoc.v attosoc/picorv32.v
+	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
 # ============================================================
 # TangPrimer20k

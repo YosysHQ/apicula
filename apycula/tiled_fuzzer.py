@@ -73,6 +73,11 @@ params = {
         "device": "GW2A-18-PBGA256-8",
         "partnumber": "GW2A-LV18PG256C8/I7",
     },
+    "GW2A-18C": {
+        "package": "PBGA256S",
+        "device": "GW2AR-18C",
+        "partnumber": "GW2AR-LV18PG256SC8/I7",
+    },
 }[device]
 
 # utils
@@ -269,43 +274,14 @@ if __name__ == "__main__":
         bel.portmap['GW9_ALWAYS_LOW0'] = wirenames[dat[f'IologicAIn'][40]]
         bel.portmap['GW9_ALWAYS_LOW1'] = wirenames[dat[f'IologicAIn'][42]]
     chipdb.dat_aliases(dat, db)
-    #db.grid[0][0].bels['CFG'].flags['UNK0'] = {(3, 1)}
-    #db.grid[0][0].bels['CFG'].flags['UNK1'] = {(3, 2)}
-    db.template[(3, 1)] = 1
-    db.template[(3, 2)] = 1
-
-    # set template dual-mode pins to HW mode
-    dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'i2c'}
-    for pin in dualmode_pins:
-        name = pin.upper()
-        cfg_attrs = set()
-        chipdb.add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[f'{name}_AS_GPIO'], attrids.cfg_attrvals['YES'])
-        if device == 'GW2A-18':
-            bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][27][50], cfg_attrs, 'CFG')
-            tile = fuse_h4x.tile_bitmap(fse, db.template, empty = True)[27, 50, 1]
-            for row_, col_ in bits:
-                tile[row_][col_] = 0
-            db.grid[27][50].bels.setdefault('CFG', chipdb.Bel()).flags[name] = bits
-        else:
-            bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][0][0], cfg_attrs, 'CFG')
-            tile = db.template
-            for row_, col_ in bits:
-                tile[row_][col_] = 0
-            db.grid[0][0].bels.setdefault('CFG', chipdb.Bel()).flags[name] = bits
 
     # GSR
-    if device in {'GW2A-18'}:
+    if device in {'GW2A-18', 'GW2A-18C'}:
         db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
         db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     else:
         raise Exception(f"No GSR for {device}")
-
-
-    for row, col, ttyp in corners:
-        if "BANK" not in db.grid[row][col].bels.keys():
-            continue
-        bel = db.grid[row][col].bels["BANK"]
 
 
     #TODO proper serialization format

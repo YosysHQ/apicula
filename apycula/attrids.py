@@ -624,8 +624,8 @@ osc_attrvals = {
 
 # config
 cfg_attrids = {
+        'DONE_AS_GPIO':     0,
         'GSR':              2,
-        'DONE_AS_GPIO':     4,
         'JTAG_AS_GPIO':     6,
         'READY_AS_GPIO':    7,
         'MSPI_AS_GPIO':     8,

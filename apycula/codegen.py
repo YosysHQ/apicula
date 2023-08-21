@@ -135,7 +135,7 @@ run pnr
             """
 
         device_desc = self.partnumber
-        if self.device in ['GW1N-9', 'GW1N-4', 'GW1N-9C', 'GW2A-18']:
+        if self.device in ['GW1N-9', 'GW1N-4', 'GW1N-9C', 'GW2A-18', 'GW2AR-18']:
             device_desc = f'-name {self.device} {device_desc}'
 
         f.write(template.format(

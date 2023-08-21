@@ -68,7 +68,7 @@ def sanitize_name(name):
 def extra_pll_bels(cell, row, col, num, cellname):
     # rPLL can occupy several cells, add them depending on the chip
     offx = 1
-    if device in {'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
+    if device in {'GW1N-9C', 'GW1N-9', 'GW2A-18', 'GW2A-18C'}:
         if int(col) > 28:
             offx = -1
         for off in [1, 2, 3]:
@@ -165,6 +165,7 @@ _permitted_freqs = {
         "GW1N-9C": (400, 600, 3.125,  1200, 400),
         "GW1NS-2": (400, 500, 3.125,  1200, 400),
         "GW2A-18": (400, 600, 3.125,  1200, 400), # XXX check it
+        "GW2A-18C": (400, 600, 3.125,  1200, 400), # XXX check it
         }
 # input params are calculated as described in GOWIN doc (UG286-1.7E_Gowin Clock User Guide)
 # fref = fclkin / idiv
@@ -969,6 +970,7 @@ def place(db, tilemap, bels, cst, args):
 
         bank_attrs = set()
         for k, val in in_bank_attrs.items():
+            #print(k, val)
             if k not in attrids.iob_attrids:
                 print(f'XXX BANK: add {k} key handle')
             else:
@@ -1044,24 +1046,79 @@ def header_footer(db, bs, compress):
     # set the checksum
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
+def gsr(db, tilemap, args):
+    gsr_attrs = set()
+    for k, val in {'GSRMODE': 'ACTIVE_LOW'}.items():
+        if k not in attrids.gsr_attrids:
+            print(f'XXX GSR: add {k} key handle')
+        else:
+            add_attr_val(db, 'GSR', gsr_attrs, attrids.gsr_attrids[k], attrids.gsr_attrvals[val])
+
+    cfg_attrs = set()
+    for k, val in {'GSR': 'USED'}.items():
+        if k not in attrids.cfg_attrids:
+            print(f'XXX CFG GSR: add {k} key handle')
+        else:
+            add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals[val])
+
+    gsr_type = {50, 83}
+    cfg_type = {50, 51}
+    if device in {'GW2A-18', 'GW2A-18C'}:
+        gsr_type = {1, 83}
+        cfg_type = {1, 51}
+    for row, rd in enumerate(db.grid):
+        for col, rc in enumerate(rd):
+            bits = set()
+            if rc.ttyp in gsr_type:
+                bits = get_shortval_fuses(db, rc.ttyp, gsr_attrs, 'GSR')
+            if rc.ttyp in cfg_type:
+                bits.update(get_shortval_fuses(db, rc.ttyp, cfg_attrs, 'CFG'))
+            if bits:
+                btile = tilemap[(row, col)]
+                for brow, bcol in bits:
+                    btile[brow][bcol] = 1
+
 def dualmode_pins(db, tilemap, args):
-    bits = set()
+    pin_flags = {'JTAG_AS_GPIO': 'UNKNOWN', 'SSPI_AS_GPIO': 'UNKNOWN', 'MSPI_AS_GPIO': 'UNKNOWN',
+            'DONE_AS_GPIO': 'UNKNOWN', 'RECONFIG_AS_GPIO': 'UNKNOWN', 'READY_AS_GPIO': 'UNKNOWN'}
     if args.jtag_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['JTAG'])
+        pin_flags['JTAG_AS_GPIO'] = 'YES'
     if args.sspi_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['SSPI'])
+        pin_flags['SSPI_AS_GPIO'] = 'YES'
     if args.mspi_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['MSPI'])
+        pin_flags['MSPI_AS_GPIO'] = 'YES'
     if args.ready_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['READY'])
+        pin_flags['READY_AS_GPIO'] = 'YES'
     if args.done_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['DONE'])
+        pin_flags['DONE_AS_GPIO'] = 'YES'
     if args.reconfign_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['RECONFIG'])
-    if bits:
-        tile = tilemap[(0, 0)]
-        for row, col in bits:
-            tile[row][col] = 1
+        pin_flags['RECONFIG_AS_GPIO'] = 'YES'
+
+    set_attrs = set()
+    clr_attrs = set()
+    for k, val in pin_flags.items():
+        if k not in attrids.cfg_attrids:
+            print(f'XXX CFG: add {k} key handle')
+        else:
+            add_attr_val(db, 'CFG', set_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals[val])
+            add_attr_val(db, 'CFG', clr_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals['YES'])
+
+    cfg_type = {50, 51}
+    if device in {'GW2A-18', 'GW2A-18C'}:
+        cfg_type = {1, 51}
+    for row, rd in enumerate(db.grid):
+        for col, rc in enumerate(rd):
+            bits = set()
+            clr_bits = set()
+            if rc.ttyp in cfg_type:
+                bits.update(get_shortval_fuses(db, rc.ttyp, set_attrs, 'CFG'))
+                clr_bits.update(get_shortval_fuses(db, rc.ttyp, clr_attrs, 'CFG'))
+            if clr_bits:
+                btile = tilemap[(row, col)]
+                for brow, bcol in clr_bits:
+                    btile[brow][bcol] = 0
+                for brow, bcol in bits:
+                    btile[brow][bcol] = 1
 
 def main():
     global device
@@ -1123,6 +1180,7 @@ def main():
     bels = get_bels(pnr)
     # routing can add pass-through LUTs
     place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args)
+    gsr(db, tilemap, args)
     dualmode_pins(db, tilemap, args)
     # XXX Z-1 some kind of power saving for pll, disable
     if device in {'GW1NZ-1'}:

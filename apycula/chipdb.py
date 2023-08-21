@@ -232,7 +232,7 @@ def fse_pll(device, fse, ttyp):
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp in {74, 75, 76, 77, 78, 79}:
             bel = bels.setdefault('RPLLB', Bel())
-    elif device in {'GW2A-18'}:
+    elif device in {'GW2A-18', 'GW2A-18C'}:
         if ttyp in {42, 45}:
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp in {74, 75, 76, 77, 78, 79}:
@@ -374,7 +374,7 @@ def fse_luts(fse, ttyp):
 def fse_osc(device, fse, ttyp):
     osc = {}
 
-    if device in {'GW1N-4', 'GW1N-9', 'GW1N-9C', 'GW2A-18'}:
+    if device in {'GW1N-4', 'GW1N-9', 'GW1N-9C', 'GW2A-18', 'GW2A-18C'}:
         bel = osc.setdefault(f"OSC", Bel())
     elif device in {'GW1NZ-1', 'GW1NS-4'}:
         bel = osc.setdefault(f"OSCZ", Bel())
@@ -1004,6 +1004,15 @@ _pll_loc = {
     'BLPLL0CLK2': (45, 2, 'F5'), 'BLPLL0CLK3': (45, 2, 'F6'),
     'BRPLL0CLK0': (45, 53, 'F4'), 'BRPLL0CLK1': (45, 53, 'F7'),
     'BRPLL0CLK2': (45, 53, 'F5'), 'BRPLL0CLK3': (45, 53, 'F6'), },
+ 'GW2A-18C':
+   {'TLPLL0CLK0': (9, 2, 'F4'), 'TLPLL0CLK1': (9, 2, 'F7'),
+    'TLPLL0CLK2': (9, 2, 'F5'), 'TLPLL0CLK3': (9, 2, 'F6'),
+    'TRPLL0CLK0': (9, 53, 'F4'), 'TRPLL0CLK1': (9, 53, 'F7'),
+    'TRPLL0CLK2': (9, 53, 'F5'), 'TRPLL0CLK3': (9, 53, 'F6'),
+    'BLPLL0CLK0': (45, 2, 'F4'), 'BLPLL0CLK1': (45, 2, 'F7'),
+    'BLPLL0CLK2': (45, 2, 'F5'), 'BLPLL0CLK3': (45, 2, 'F6'),
+    'BRPLL0CLK0': (45, 53, 'F4'), 'BRPLL0CLK1': (45, 53, 'F7'),
+    'BRPLL0CLK2': (45, 53, 'F5'), 'BRPLL0CLK3': (45, 53, 'F6'), },
 }
 
 def fse_create_pll_clock_aliases(db, device):
@@ -1012,7 +1021,7 @@ def fse_create_pll_clock_aliases(db, device):
         for col in range(db.cols):
             for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
                 for w_src in w_srcs.keys():
-                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
+                    if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18', 'GW2A-18C'}:
                         if w_src in _pll_loc[device].keys():
                             db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
                             # Himbaechel node
@@ -1021,7 +1030,7 @@ def fse_create_pll_clock_aliases(db, device):
             if (row, col) in db.hclk_pips:
                 for w_dst, w_srcs in db.hclk_pips[row, col].items():
                     for w_src in w_srcs.keys():
-                        if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
+                        if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18', 'GW2A-18C'}:
                             if w_src in _pll_loc[device]:
                                 db.nodes.setdefault(w_src, ("PLL_O", set()))[1].add((row, col, w_src))
 
@@ -1058,6 +1067,7 @@ _clock_data = {
         'GW1N-9':  { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {( 1, 0, 10, 1, 0), (19, 10, 29, 2, 3)}},
         'GW1N-9C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {( 1, 0, 10, 1, 0), (19, 10, 29, 2, 3)}},
         'GW2A-18': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
+        'GW2A-18C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
         }
 def fse_create_clocks(dev, device, dat, fse):
     center_col = dat['center'][1] - 1
@@ -1207,8 +1217,8 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
               ('OSC',  'GW1N-4'):  ({'OSCOUT': 'Q4'}, {}),
               ('OSC',  'GW1N-9'):  ({'OSCOUT': 'Q4'}, {}),
               ('OSC',  'GW1N-9C'):  ({'OSCOUT': 'Q4'}, {}),
-              # XXX check this!
               ('OSC',  'GW2A-18'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSC',  'GW2A-18C'):  ({'OSCOUT': 'Q4'}, {}),
               # XXX unsupported boards, pure theorizing
               ('OSCO', 'GW1N-2'):  ({'OSCOUT': 'Q7'}, {'OSCEN': (9, 1, 'B4')}),
               ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
@@ -1227,10 +1237,15 @@ def fse_create_osc(dev, device, fse):
 
 def fse_create_gsr(dev, device):
     row, col = (0, 0)
-    if device in {'GW2A-18'}:
+    if device in {'GW2A-18', 'GW2A-18C'}:
         row, col = (27, 50)
     dev.extra_func.setdefault((row, col), {}).update(
         {'gsr': {'wire': 'C4'}})
+
+def disable_plls(dev, device):
+    if device in {'GW2A-18C'}:
+        dev.extra_func.setdefault((9, 0), {}).setdefault('disabled', {}).update({'PLL': True})
+        dev.extra_func.setdefault((9, 55), {}).setdefault('disabled', {}).update({'PLL': True})
 
 def sync_extra_func(dev):
     for loc, pips in dev.hclk_pips.items():
@@ -1273,6 +1288,7 @@ def from_fse(device, fse, dat):
     fse_create_io16(dev, device)
     fse_create_osc(dev, device, fse)
     fse_create_gsr(dev, device)
+    disable_plls(dev, device)
     sync_extra_func(dev)
     return dev
 
@@ -1327,7 +1343,7 @@ def add_attr_val(dev, logic_table, attrs, attr, val):
             break
 
 def get_pins(device):
-    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C", "GW2A-18"}:
+    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C"}:
         raise Exception(f"unsupported device {device}")
     pkgs = pindef.all_packages(device)
     res = {}
@@ -1409,11 +1425,24 @@ def json_pinout(device):
             "GW1NS-2": pins,
             "GW1NS-2C": pins_c
         }, res_bank_pins)
-    if device == "GW2A-18":
+    elif device == "GW2A-18":
         pkgs, pins, bank_pins = get_pins("GW2A-18")
         return (pkgs, {
             "GW2A-18": pins
         }, bank_pins)
+    elif device == "GW2A-18C":
+        pkgs, pins, bank_pins = get_pins("GW2A-18C")
+        pkgs_r, pins_r, bank_pins_r = get_pins("GW2AR-18C")
+        res = {}
+        res.update(pkgs)
+        res.update(pkgs_r)
+        res_bank_pins = {}
+        res_bank_pins.update(bank_pins)
+        res_bank_pins.update(bank_pins_r)
+        return (res, {
+            "GW2A-18C": pins,
+            "GW2AR-18C": pins_r
+        }, res_bank_pins)
     else:
         raise Exception("unsupported device")
 
@@ -1463,7 +1492,7 @@ def dat_portmap(dat, dev, device):
             for name, bel in tile.bels.items():
                 if bel.portmap:
                     # GW2A has same PLL in different rows
-                    if not (name.startswith("RPLLA") and device in {'GW2A-18'}):
+                    if not (name.startswith("RPLLA") and device in {'GW2A-18', 'GW2A-18C'}):
                         continue
                 if name.startswith("IOB"):
                     if row in dev.simplio_rows:
@@ -1525,7 +1554,7 @@ def dat_portmap(dat, dev, device):
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.
                     offx = 1
-                    if device in {'GW1N-9C', 'GW1N-9', 'GW2A-18'}:
+                    if device in {'GW1N-9C', 'GW1N-9', 'GW2A-18', 'GW2A-18C'}:
                         # two mirrored PLLs
                         if col > dat['center'][1] - 1:
                             offx = -1
