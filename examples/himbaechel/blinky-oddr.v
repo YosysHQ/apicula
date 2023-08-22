@@ -4,6 +4,7 @@
 module top (
 	input clk,
 	input key,
+	input rst,
 	output [`LEDS_NR-1:0] led
 );
 
@@ -12,7 +13,7 @@ wire [24:0] ctr_d;
 
 // Sequential code (flip-flop)
 always @(posedge clk) begin
-	if (key) begin
+	if (rst) begin
 		ctr_q <= ctr_d;
 	end
 end

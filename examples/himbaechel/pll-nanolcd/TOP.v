@@ -12,15 +12,14 @@ module TOP
 	output	[5:0]	LCD_G,
 	output	[4:0]	LCD_B,
 
-	output [2:0] led
+	output LED_R,
+	output LED_G,
+	output LED_B
 
 );
 
 	wire CLK_SYS;	
 	wire CLK_PIX;
-	wire LED_R;
-	wire LED_G;
-	wire LED_B;
 
 /* //使用内部时钟
     Gowin_OSC chip_osc(
@@ -63,10 +62,6 @@ rPLL pll(
 	defparam pll.DYN_SDIV_SEL=1;      // 9MHz --- pixel clock
 	defparam pll.PSDA_SEL="0000";
 
-assign led[0] = LED_R;
-assign led[1] = LED_G;
-assign led[2] = LED_B;
-
 	VGAMod	D1
 	(
 		.CLK		(	CLK_SYS     ),
@@ -83,17 +78,18 @@ assign led[2] = LED_B;
 	);
 
 	assign		LCD_CLK		=	CLK_PIX;
-	assign		LCD_SYS		=	CLK_PIX;
+	assign		CLK_SYS		=	CLK_PIX;
+	
 
     //RGB LED TEST
     reg 	[24:0] Count;
     reg     [1:0] rgb_data;
 	always @(  posedge CLK_SYS or negedge rst  )
 	begin
-		if(  !rst  )
+		if( !rst  )
 		begin
-		Count		<= 25'd0;
-        rgb_data    <= 2'b00;
+			Count		<= 25'd0;
+			rgb_data    <= 2'b00;
 		end
 		else if ( Count == 1200000 )
 		begin

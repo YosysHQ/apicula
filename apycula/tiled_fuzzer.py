@@ -35,42 +35,42 @@ device = sys.argv[1]
 params = {
     "GW1NS-2": {
         "package": "LQFP144",
-        "device": "GW1NS-2C-LQFP144-5",
+        "device": "GW1NS-2C",
         "partnumber": "GW1NS-UX2CLQ144C5/I4",
     },
     "GW1NS-4": {
         "package": "QFN48",
-        "device": "GW1NSR-4C-QFN48-7",
+        "device": "GW1NSR-4C",
         "partnumber": "GW1NSR-LV4CQN48PC7/I6",
     },
     "GW1N-9": {
         "package": "PBGA256",
-        "device": "GW1N-9-PBGA256-6",
+        "device": "GW1N-9",
         "partnumber": "GW1N-LV9PG256C6/I5",
     },
     "GW1N-9C": {
         "package": "UBGA332",
-        "device": "GW1N-9C-UBGA332-6",
+        "device": "GW1N-9C",
         "partnumber": "GW1N-LV9UG332C6/I5",
     },
     "GW1N-4": {
         "package": "PBGA256",
-        "device": "GW1N-4-PBGA256-6",
+        "device": "GW1N-4",
         "partnumber": "GW1N-LV4PG256C6/I5",
     },
     "GW1N-1": {
         "package": "LQFP144",
-        "device": "GW1N-1-LQFP144-6",
+        "device": "GW1N-1",
         "partnumber": "GW1N-LV1LQ144C6/I5",
     },
     "GW1NZ-1": {
         "package": "QFN48",
-        "device": "GW1NZ-1-QFN48-6",
+        "device": "GW1NZ-1",
         "partnumber": "GW1NZ-LV1QN48C6/I5",
     },
     "GW2A-18": {
         "package": "PBGA256",
-        "device": "GW2A-18-PBGA256-8",
+        "device": "GW2A-18",
         "partnumber": "GW2A-LV18PG256C8/I7",
     },
     "GW2A-18C": {
@@ -159,7 +159,7 @@ def run_pnr(mod, constr, config):
     #"show_all_warn" : "1",
 
     pnr = codegen.Pnr()
-    pnr.device = device
+    pnr.device = params['device']
     pnr.partnumber = params['partnumber']
     pnr.opt = opt
     pnr.cfg = cfg

@@ -112,6 +112,7 @@ class Device:
     # - GSR
     # - OSER16/IDES16
     # - ref to hclk_pips
+    # - disabled blocks
     extra_func: Dict[Tuple[int, int], Dict[str, Any]] = field(default_factory=dict)
 
     @property
@@ -867,6 +868,36 @@ _hclk_to_fclk = {
              },
         },
     'GW2A-18': {
+        'B': {
+             'hclk': {(54, 27), (54, 28)},
+             'edges': {
+                 ( 1, 27) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (29, 55) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'T': {
+             'hclk': {(0, 27), (0, 28)},
+             'edges': {
+                 ( 1, 27) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (29, 55) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'L': {
+             'hclk': {(27, 0)},
+             'edges': {
+                 ( 1, 27) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (28, 55) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        'R': {
+             'hclk': {(27, 55)},
+             'edges': {
+                 ( 1, 27) : {'HCLK_OUT0', 'HCLK_OUT2'},
+                 (28, 55) : {'HCLK_OUT1', 'HCLK_OUT3'},
+                 },
+             },
+        },
+    'GW2A-18C': {
         'B': {
              'hclk': {(54, 27), (54, 28)},
              'edges': {
