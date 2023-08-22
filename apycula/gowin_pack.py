@@ -185,7 +185,7 @@ def calc_pll_pump(fref, fvco):
     if (fclkin_idx == 13 and fref <= 395) or (fclkin_idx == 14 and fref <= 430) or (fclkin_idx == 15 and fref <= 465) or fclkin_idx == 16:
         fclkin_idx = fclkin_idx - 1
 
-    if device not in {'GW2A-18'}:
+    if device not in {'GW2A-18', 'GW2A-18C'}:
         freq_Ri = _freq_R[0]
     else:
         freq_Ri = _freq_R[1]
@@ -193,7 +193,7 @@ def calc_pll_pump(fref, fvco):
     r_vals.reverse()
 
     # Find the resistor that provides the minimum current through the capacitor
-    if device not in {'GW2A-18'}:
+    if device not in {'GW2A-18', 'GW2A-18C'}:
         K0 = (497.5 - math.sqrt(247506.25 - (2675.4 - fvco) * 78.46)) / 39.23
         K1 = 4.8714 * K0 * K0 + 6.5257 * K0 + 142.67
     else:

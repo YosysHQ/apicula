@@ -1190,7 +1190,7 @@ def fse_create_diff_types(dev, device):
         dev.diff_io_types.remove('TLVDS_TBUF')
         dev.diff_io_types.remove('TLVDS_IOBUF')
         dev.diff_io_types.remove('ELVDS_IOBUF')
-    elif device not in {'GW2A-18', 'GW1N-4'}:
+    elif device not in {'GW2A-18', 'GW2A-18C', 'GW1N-4'}:
         dev.diff_io_types.remove('TLVDS_IOBUF')
 
 def fse_create_io16(dev, device):

@@ -10,7 +10,6 @@ all: \
 	blinky-tangnano20k.fs shift-tangnano20k.fs blinky-tbuf-tangnano20k.fs blinky-oddr-tangnano20k.fs \
 	blinky-osc-tangnano20k.fs \
 	pll-nanolcd-tangnano20k.fs attosoc-tangnano20k.fs \
-	test-pll-tangnano20k.fs \
 	\
 	blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
 	blinky-osc-primer20k.fs tlvds-primer20k.fs elvds-primer20k.fs oddr-tlvds-primer20k.fs \
@@ -94,7 +93,7 @@ clean:
 	gowin_pack -d GW2A-18C -o $@ $<
 
 %-tangnano20k.json: %-tangnano20k-synth.json tangnano20k.cst
-	$(NEXTPNR) -v --debug --json $< --write $@ --chipdb ${CHIPDB_PATH}/GW2A-18C.bin --vopt partno=GW2AR-LV18QN88PC8/I7 --vopt cst=tangnano20k.cst
+	$(NEXTPNR) --json $< --write $@ --chipdb ${CHIPDB_PATH}/GW2A-18C.bin --vopt partno=GW2AR-LV18QN88C8/I7 --vopt cst=tangnano20k.cst
 
 %-tangnano20k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
