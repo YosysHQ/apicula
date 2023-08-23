@@ -29,7 +29,7 @@ ODDR oddr_0(
 	.CLK(i_tick),
 	.Q0(w_ddr),
 	.Q1(oen),
-	.TX(~key)
+	.TX(key)
 );
 
 ELVDS_TBUF diff_buf(

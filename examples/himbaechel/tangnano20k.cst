@@ -29,22 +29,21 @@ IO_LOC "led[6]" 35;
 IO_LOC "led[7]" 33;
 
 // oser
-IO_LOC "oser_out" 10;
-IO_LOC "io16"     29;
-IO_LOC "pclk_o"   15;
-IO_LOC "fclk_o"   16;
+IO_LOC "oser_out" 15;
+IO_LOC "pclk_o"   17;
+IO_LOC "fclk_o"   18;
 
 // ides
-IO_LOC "fclk_i" 54;
-IO_LOC "data_i" 29;
-IO_LOC "q_o[0]" 68;
-IO_LOC "q_o[1]" 69;
-IO_LOC "q_o[2]" 70;
-IO_LOC "q_o[3]" 75;
-IO_LOC "q_o[4]" 74;
-IO_LOC "q_o[5]" 73;
-IO_LOC "q_o[6]" 72;
-IO_LOC "q_o[7]" 71;
+IO_LOC "fclk_i" 25;
+IO_LOC "data_i" 27;
+IO_LOC "q_o[0]" 29;
+IO_LOC "q_o[1]" 30;
+IO_LOC "q_o[2]" 31;
+IO_LOC "q_o[3]" 48;
+IO_LOC "q_o[4]" 20;
+IO_LOC "q_o[5]" 19;
+IO_LOC "q_o[6]" 18;
+IO_LOC "q_o[7]" 16;
 
 // RGB LCD
 IO_LOC "LCD_CLK"  77;
