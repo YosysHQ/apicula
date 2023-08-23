@@ -16,6 +16,10 @@ IO_LOC "tlvds_n" 28;
 IO_LOC "elvds_p" 40;
 IO_LOC "elvds_n" 41;
 
+IO_LOC "LED_R" 25;
+IO_LOC "LED_G" 26;
+IO_LOC "LED_B" 23;
+
 // oser
 IO_LOC "oser_out" 25;
 IO_LOC "io16"     25;
