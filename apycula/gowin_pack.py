@@ -564,11 +564,11 @@ _vcc_ios = {'LVCMOS12': '1.2', 'LVCMOS15': '1.5', 'LVCMOS18': '1.8', 'LVCMOS25':
         'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3'}
 _init_io_attrs = {
         'IBUF': {'PADDI': 'PADDI', 'HYSTERESIS': 'NONE', 'PULLMODE': 'UP', 'SLEWRATE': 'SLOW',
-                 'DRIVE': '0', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
+                 'DRIVE': '0', 'CLAMP': 'OFF', 'OPENDRAIN': 'OFF', 'DIFFRESISTOR': 'OFF',
                  'VREF': 'OFF', 'LVDS_OUT': 'OFF'},
         'OBUF': {'ODMUX_1': '1', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
-                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA', 'TO': 'INV'},
+                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA', 'TO': 'INV', 'OPENDRAIN': 'OFF'},
         'TBUF': {'ODMUX_1': 'UNKNOWN', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
                  'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
@@ -576,7 +576,7 @@ _init_io_attrs = {
         'IOBUF': {'ODMUX_1': 'UNKNOWN', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
                  'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
-                 'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'PADDI': 'PADDI'},
+                 'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'PADDI': 'PADDI', 'OPENDRAIN': 'OFF'},
         }
 _refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE', 'OPEN_DRAIN': 'OPENDRAIN'}
 def refine_io_attrs(attr):
@@ -675,6 +675,11 @@ def place(db, tilemap, bels, cst, args):
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
             attrs['IOLOGIC_TYPE'] = typ
             if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC'}:
+                # We clearly distinguish between the HCLK wires and clock
+                # spines at the nextpnr level by name, but in the fuse tables
+                # they have the same number, this is possible because the clock
+                # spines never go along the edges of the chip where the HCLK
+                # wires are.
                 recode_spines = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
                                  'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
                                  'HCLK_OUT3': 'SPINE13'}
@@ -950,7 +955,7 @@ def place(db, tilemap, bels, cst, args):
                 for k, val in atr.items():
                     if k not in attrids.iob_attrids:
                         print(f'XXX IO: add {k} key handle')
-                    elif k == 'OPENDRAIN' and val == 'OFF' and 'LVDS' not in iob.flags['mode']:
+                    elif k == 'OPENDRAIN' and val == 'OFF' and 'LVDS' not in iob.flags['mode'] and 'IBUF' not in iob.flags['mode']:
                         continue
                     else:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
@@ -1061,6 +1066,8 @@ def gsr(db, tilemap, args):
         else:
             add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals[val])
 
+    # The configuration fuses are described in the ['shortval'][60] table, global set/reset is
+    # described in the ['shortval'][20] table. Look for cells with type with these tables
     gsr_type = {50, 83}
     cfg_type = {50, 51}
     if device in {'GW2A-18', 'GW2A-18C'}:
@@ -1103,6 +1110,8 @@ def dualmode_pins(db, tilemap, args):
             add_attr_val(db, 'CFG', set_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals[val])
             add_attr_val(db, 'CFG', clr_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals['YES'])
 
+    # The configuration fuses are described in the ['shortval'][60] table, here
+    # we are looking for cells with types that have such a table.
     cfg_type = {50, 51}
     if device in {'GW2A-18', 'GW2A-18C'}:
         cfg_type = {1, 51}
@@ -1183,6 +1192,12 @@ def main():
     gsr(db, tilemap, args)
     dualmode_pins(db, tilemap, args)
     # XXX Z-1 some kind of power saving for pll, disable
+    # When comparing images with a working (IDE) and non-working PLL (apicula),
+    # no differences were found in the fuses of the PLL cell itself, but a
+    # change in one bit in the root cell was replaced.
+    # If the PLL configurations match, then the assumption has been made that this
+    # bit simply disables it somehow.
+
     if device in {'GW1NZ-1'}:
         tile = tilemap[(db.rows - 1, db.cols - 1)]
         for row, col in {(23, 63)}:

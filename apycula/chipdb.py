@@ -687,8 +687,25 @@ def fse_create_hclk_aliases(db, device, dat):
             db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
 
 # HCLK for Himbaechel
-# hclk - locs of hclk control this side
-# edges - how cells along this side can connect to hclk
+#
+# hclk - locs of hclk control this side. The location of the HCLK is determined
+# by the presence of table 48 in the 'wire' table of the cell. If there is
+# such a table, then there are fuses for managing HCLK muxes. HCLK affiliation
+# is determined empirically by comparing an empty image and an image with one
+# OSER4 located on the side of the chip of interest.
+#
+# edges - how cells along this side can connect to hclk.
+# Usually a specific HCLK is responsible for the nearest half side of the chip,
+# but sometimes the IDE refuses to put IOLOGIC in one or two cells in the
+# middle of the side, do not specify such cells as controlled by HCLK.
+#
+# CLK2/HCLK_OUT# - These are determined by putting two OSER4s in the same IO
+# with different FCLK networks - this will force the IDE to use two ways to
+# provide fast clocks to the primitives in the same cell. What exactly was used
+# is determined by the fuses used and table 2 of this cell (if CLK2 was used)
+# or table 48 of the HCLK responsible for this half (we already know which of
+# the previous chags)
+
 _hclk_to_fclk = {
     'GW1N-1': {
         'B': {
@@ -1065,6 +1082,17 @@ def fse_create_pll_clock_aliases(db, device):
                             if w_src in _pll_loc[device]:
                                 db.nodes.setdefault(w_src, ("PLL_O", set()))[1].add((row, col, w_src))
 
+# from Gowin Programmable IO (GPIO) User Guide:
+#
+# IOL6 and IOR6 pins of devices of GW1N-1, GW1NR-1, GW1NZ-1, GW1NS-2,
+# GW1NS-2C, GW1NSR-2C, GW1NSR-2 and GW1NSE-2C do not support IO logic.
+# IOT2 and IOT3A pins of GW1N-2, GW1NR-2, GW1N-1P5, GW1N-2B, GW1N-1P5B,
+# GW1NR-2B devices do not support IO logic.
+# IOL10 and IOR10 pins of the devices of GW1N-4, GW1N-4B, GW1NR-4, GW1NR-4B,
+# ==========================================================================
+# These are cells along the edges of the chip and their types are taken from
+# fse['header']['grid'][61][row][col] and it was checked whether or not the IDE
+# would allow placing IOLOGIC there.
 def fse_iologic(device, fse, ttyp):
     bels = {}
     # some iocells nave no iologic
@@ -1089,6 +1117,120 @@ def fse_iologic(device, fse, ttyp):
     return bels
 
 # create clock aliases
+# to understand how the clock works in gowin, it is useful to read the experiments of Pepijndevos
+# https://github.com/YosysHQ/apicula/blob/master/clock_experiments.ipynb
+# especially since I was deriving everything based on that information.
+
+# It is impossible to get rid of fuzzing, the difference is that I do it
+# manually to check the observed patterns and assumptions, and then
+# programmatically fix the found formulas.
+
+# We have 8 clocks, which are divided into two parts: 0-3 and 4-7. They are
+# located in pairs: 0 and 4, 1 and 5, 2 and 6, 3 and 7. From here it is enough
+# to consider only the location of wires 0-4.
+
+# So tap_start describes along which column the wire of a particular clock is located.
+# This is derived from the Out[26] table (see
+# https://github.com/YosysHQ/apicula/blob/master/clock_experiments.ipynb)
+# The index in [1, 0, 3, 2] is the relative position of tap (hence tap_start)
+# in the four column space.
+# tap column 0 -> clock #1
+# tap column 1 -> clock #0
+# tap column 2 -> clock #3
+# tap column 3 -> clock #2
+# Out[26] also implies the repeatability of the columns, here it is fixed as a formula:
+# (tap column) % 4 -> clock #
+# for example 6 % 4 -> clock #3
+
+# If you look closely at Out[26], then we can say that the formula breaks
+# starting from a certain column number. But it's not. Recall that we have at
+# least two quadrants located horizontally and at some point there is a
+# transition to another quadrant and these four element parts must be counted
+# from a new beginning.
+
+# To determine where the left quadrant ends, look at dat['center'] - the
+# coordinates of the "central" cell of the chip are stored there. The number of
+# the column indicated there is the last column of the left quadrant.
+
+# It is enough to empirically determine the correspondence of clocks and
+# speakers in the new quadrant (even three clocks is enough, since the fourth
+# becomes obvious).
+# [3, 2, 1, 0] turned out to be the unwritten standard for all the chips studied.
+
+# We're not done with that yet - what matters is how the columns of each
+# quadrant end.
+# For GW1N-1 dat['center'] = [6, 10]
+# From Out[26]: 5: {4, 5, 6, 7, 8, 9}, why is the 5th column responsible not
+# for four, but for so many columns, including the end of the quadrant, column
+# 9 (we have a 0 based system, remember)?
+# We cannot answer this question, but based on observations we can formulate a
+# rule: after the tap-column there must be a place for one more column,
+# otherwise all columns are assigned to the previous one. Let's see Out[26]:
+# 5: {4, 5, 6, 7, 8, 9} can't use column 9 because there is no space for one more
+# 8: {7, 8, 9}       ok, although not a complete four, we are at a sufficient distance from column 9
+# 7: {6, 7, 8, 9}    ok, full four
+# 6: {5, 6, 7, 8, 9},   can't use column 10 - wrong quadrant
+
+# 'quads': {( 6, 0, 11, 2, 3)}
+# 6 - row of spine->tap
+# 0, 11 - segment is located between these rows
+# 2, 3 - this is the simplest - left and right quadrant numbers.
+# The quadrants are numbered like this:
+#  1 | 0
+# ------   moreover, two-quadrant chips have only quadrants 2 and 3
+#  2 | 3
+# Determining the boundary between vertical quadrants and even which line
+# contains spine->tap is not as easy as determining the vertical boundary
+# between segments. This is done empirically by placing a test DFF along the
+# column until the moment of changing the row of muxes is caught.
+#
+# A bit about the nature of Central (Clock?) mux: wherever there is
+# ['wire'][38] some clocks are switched somewhere. That is, this is such a huge
+# mux spread over the chip, and this is how we describe it for nextpnr - the
+# wires of the same name involved in some kind of switching anywhere in the
+# chip are combined into one Himbaechel node. Further, when routing, there is
+# already a choice of which pip to use and which cell.
+# It also follows that for the Himbaechel watch wires should not be mixed
+# together with any other  wires. At least I came to this conclusion and that
+# is why the HCLK wires, which have the same numbers as the watch spines, are
+# stored separately.
+
+# dat['CmuxIns'] and 80 - here, the places of entry points into the clock
+# system are stored in the form [row, col, wire], that is, in order to send a
+# signal for propagation through the global clock network, you need to send it
+# to this particular wire in this cell. In most cases it will not be possible
+# to connect to this wire as they are basically outputs (IO output, PLL output
+# etc).
+
+# Let's look at the dat['CmuxIns'] fragment for GW1N-1. We know that this board
+# has an external clock generator connected to the IOR5A pin and this is one of
+# the PCLKR clock wires (R is for right here). We see that this is index 47,
+# and index 48 belongs to another pin on the same side of the chip. If we
+# consider the used fuses from the ['wire'][38] table on the simplest example,
+# we will see that 47 corresponds to the PCLKR0 wire, whose index in the
+# clknames table (irenames.py) is 127.
+# For lack of a better way, we assume that the indexes in the dat['CmuxIns']
+# table are the wire numbers in clknames minus 80.
+
+# We check on a couple of other chips and leave it that way. This is neither the
+# best nor the worst method in the absence of documentation about the internal
+# structure of the chip.
+
+# 38 [-1, -1, -1]
+# 39 [-1, -1, -1]
+# 40 [-1, -1, -1]
+# 41 [-1, -1, -1]
+# 42 [-1, -1, -1]
+# 43 [11, 10, 38]
+# 44 [11, 11, 38]
+# 45 [5, 1, 38]
+# 46 [7, 1, 38]
+# 47 [5, 20, 38]    <==  IOR5A (because of 38 = F6)
+# 48 [7, 20, 38]
+# 49 [1, 11, 124]
+# 50 [1, 11, 125]
+# 51 [6, 20, 124]
+
 _clock_data = {
         'GW1N-1':  { 'tap_start': [[1, 0, 3, 2], [3, 2, 1, 0]], 'quads': {( 6, 0, 11, 2, 3)}},
         'GW1NZ-1': { 'tap_start': [[1, 0, 3, 2], [3, 2, 1, 0]], 'quads': {( 6, 0, 11, 2, 3)}},
@@ -1169,6 +1311,15 @@ def fse_create_clocks(dev, device, dat, fse):
                             dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT00'))
                             dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT10'))
 
+# These features of IO on the underside of the chip were revealed during
+# operation. The first (normal) mode was found in a report by @LoneTech on
+# 4/1/2022, when it turned out that the pins on the bottom edge of the GW1NR-9
+# require voltages to be applied to strange wires to function.
+
+# The second mode was discovered when the IOLOGIC implementation appeared and
+# it turned out that even ODDR does not work without applying other voltages.
+# Other applications of these wires are not yet known.
+
 # function 0 - usual io
 # function 1 - DDR
 def fse_create_bottom_io(dev, device):
@@ -1179,6 +1330,13 @@ def fse_create_bottom_io(dev, device):
     else:
         dev.bottom_io = ('', '', [])
 
+# It was noticed that the "simplified" IO line matched the BRAM line, whose
+# position can be found from dat['grid']. Later this turned out to be not very
+# true - for chips other than GW1N-1 IO in these lines may be with reduced
+# functionality, or may be normal.  It may be worth renaming these lines to
+# BRAM-rows, but for now this is an acceptable mechanism for finding
+# non-standard IOs, taking into account the chip series, eliminating the
+# "magic" coordinates.
 def fse_create_simplio_rows(dev, dat):
     for row, rd in enumerate(dat['grid']):
         if [r for r in rd if r in "Bb"]:
@@ -1225,6 +1383,21 @@ def fse_create_diff_types(dev, device):
         dev.diff_io_types.remove('TLVDS_IOBUF')
 
 def fse_create_io16(dev, device):
+    # 16-bit serialization/deserialization primitives occupy two consecutive
+    # cells. For the top and bottom sides of the chip, this means that the
+    # "main" cell is located in the column with a lower number, and for the
+    # sides of the chip - in the row with a lower number.
+
+    # But the IDE does not allow placing OSER16/IDES16 in all cells of a
+    # row/column. Valid ranges are determined by placing the OSER16 primitive
+    # sequentially (at intervals of 2 since all "master" cells are either odd
+    # or even) along the side of the chip one at a time and compiling with the
+    # IDE.
+
+    # It is unlikely that someone will need to repeat this work since OSER16 /
+    # IDES16 were only in three chips and these primitives simply do not exist
+    # in the latest series.
+
     df = dev.extra_func
     if device in {'GW1N-9', 'GW1N-9C'}:
         for i in chain(range(1, 8, 2), range(10, 17, 2), range(20, 35, 2), range(38, 45, 2)):
@@ -1267,6 +1440,11 @@ def fse_create_osc(dev, device, fse):
                     dev.nodes.setdefault(f'X{col}Y{row}/{port}', (port, {(row, col, port)}))[1].add(alias)
 
 def fse_create_gsr(dev, device):
+    # Since, in the general case, there are several cells that have a
+    # ['shortval'][20] table, in this case we do a test example with the GSR
+    # primitive (Gowin Primitives User Guide.pdf - GSR), connect the GSRI input
+    # to the button and see how the routing has changed in which of the
+    # previously found cells.
     row, col = (0, 0)
     if device in {'GW2A-18', 'GW2A-18C'}:
         row, col = (27, 50)
@@ -1275,6 +1453,8 @@ def fse_create_gsr(dev, device):
 
 def disable_plls(dev, device):
     if device in {'GW2A-18C'}:
+        # (9, 0) and (9, 55) are the coordinates of cells when trying to place
+        # a PLL in which the IDE gives an error.
         dev.extra_func.setdefault((9, 0), {}).setdefault('disabled', {}).update({'PLL': True})
         dev.extra_func.setdefault((9, 55), {}).setdefault('disabled', {}).update({'PLL': True})
 
@@ -1302,6 +1482,10 @@ def from_fse(device, fse, dat):
             tile.bels = fse_luts(fse, ttyp)
         if 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
+        # These are the cell types in which PLLs can be located. To determine,
+        # we first take the coordinates of the cells with the letters P and p
+        # from the dat['grid'] table, and then, using these coordinates,
+        # determine the type from fse['header']['grid'][61][row][col]
         if ttyp in [42, 45, 74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
         tile.bels.update(fse_iologic(device, fse, ttyp))
