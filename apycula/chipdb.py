@@ -1127,7 +1127,7 @@ def fse_iologic(device, fse, ttyp):
 
 # We have 8 clocks, which are divided into two parts: 0-3 and 4-7. They are
 # located in pairs: 0 and 4, 1 and 5, 2 and 6, 3 and 7. From here it is enough
-# to consider only the location of wires 0-4.
+# to consider only the location of wires 0-3.
 
 # So tap_start describes along which column the wire of a particular clock is located.
 # This is derived from the Out[26] table (see
