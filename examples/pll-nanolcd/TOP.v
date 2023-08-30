@@ -32,6 +32,8 @@ rPLL pll(
 		.CLKIN(clk),
 		.CLKOUTD(CLK_PIX), // 9MHz
 		.CLKFB(GND),
+		.RESET_P(GND),
+		.RESET(GND),
 		.FBDSEL({GND,GND,GND,GND,GND,GND}),
 		.IDSEL({GND,GND,GND,GND,GND,GND}),
 		.ODSEL({GND,GND,GND,GND,GND,GND}),
@@ -81,7 +83,7 @@ assign led[2] = LED_B;
 		.LCD_R		(	LCD_R		)
 	);
 
-	assign		LCD_CLK		=	CLK_SYS;
+	assign		LCD_CLK		=	CLK_PIX;
 
     //RGB LED TEST
     reg 	[31:0] Count;
