@@ -1,0 +1,66 @@
+IO_LOC "clk" IOT27A;
+IO_LOC "key" T3;
+IO_LOC "rst" T10;
+
+
+IO_LOC "led[0]" C13;
+IO_LOC "led[1]" A13;
+IO_LOC "led[2]" N16;
+IO_LOC "led[3]" N14;
+IO_LOC "led[4]" L14;
+IO_LOC "led[5]" L16;
+
+// fake
+IO_LOC "led[6]" A15;
+IO_LOC "led[7]" D14;
+
+IO_LOC "tlvds_p" P6;
+IO_LOC "tlvds_n" T6;
+
+IO_LOC "elvds_p" C12;
+IO_LOC "elvds_n" B12;
+
+IO_LOC "LED_R" C13;
+IO_LOC "LED_G" A13;
+IO_LOC "LED_B" N16;
+
+// oser
+IO_LOC "oser_out" C13;
+IO_LOC "fclk_o"   N16;
+IO_LOC "pclk_o"   N14;
+
+// ides
+IO_LOC "fclk_i" B13;
+IO_LOC "data_i" C12;
+IO_LOC "q_o[0]" P9;
+IO_LOC "q_o[1]" E15;
+IO_LOC "q_o[2]" T7;
+IO_LOC "q_o[3]" R8;
+IO_LOC "q_o[4]" T6;
+IO_LOC "q_o[5]" P6;
+IO_LOC "q_o[6]" T8;
+IO_LOC "q_o[7]" P8;
+
+// RGB LCD
+IO_LOC "LCD_CLK" R9;
+IO_LOC "LCD_HYNC" A15;
+IO_LOC "LCD_SYNC" D14;
+IO_LOC "LCD_DEN" E15;
+IO_LOC "LCD_R[0]" L9;
+IO_LOC "LCD_R[1]" N8;
+IO_LOC "LCD_R[2]" N9;
+IO_LOC "LCD_R[3]" N7;
+IO_LOC "LCD_R[4]" N6;
+
+IO_LOC "LCD_G[0]" D11;
+IO_LOC "LCD_G[1]" A11;
+IO_LOC "LCD_G[2]" B11;
+IO_LOC "LCD_G[3]" P7;
+IO_LOC "LCD_G[4]" R7;
+IO_LOC "LCD_G[5]" D10;
+
+IO_LOC "LCD_B[0]" B12;
+IO_LOC "LCD_B[1]" C12;
+IO_LOC "LCD_B[2]" B13;
+IO_LOC "LCD_B[3]" A14;
+IO_LOC "LCD_B[4]" B14;

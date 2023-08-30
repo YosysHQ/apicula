@@ -35,43 +35,48 @@ device = sys.argv[1]
 params = {
     "GW1NS-2": {
         "package": "LQFP144",
-        "device": "GW1NS-2C-LQFP144-5",
+        "device": "GW1NS-2C",
         "partnumber": "GW1NS-UX2CLQ144C5/I4",
     },
     "GW1NS-4": {
         "package": "QFN48",
-        "device": "GW1NSR-4C-QFN48-7",
+        "device": "GW1NSR-4C",
         "partnumber": "GW1NSR-LV4CQN48PC7/I6",
     },
     "GW1N-9": {
         "package": "PBGA256",
-        "device": "GW1N-9-PBGA256-6",
+        "device": "GW1N-9",
         "partnumber": "GW1N-LV9PG256C6/I5",
     },
     "GW1N-9C": {
         "package": "UBGA332",
-        "device": "GW1N-9C-UBGA332-6",
+        "device": "GW1N-9C",
         "partnumber": "GW1N-LV9UG332C6/I5",
     },
     "GW1N-4": {
         "package": "PBGA256",
-        "device": "GW1N-4-PBGA256-6",
+        "device": "GW1N-4",
         "partnumber": "GW1N-LV4PG256C6/I5",
     },
     "GW1N-1": {
         "package": "LQFP144",
-        "device": "GW1N-1-LQFP144-6",
+        "device": "GW1N-1",
         "partnumber": "GW1N-LV1LQ144C6/I5",
     },
     "GW1NZ-1": {
         "package": "QFN48",
-        "device": "GW1NZ-1-QFN48-6",
+        "device": "GW1NZ-1",
         "partnumber": "GW1NZ-LV1QN48C6/I5",
     },
     "GW2A-18": {
         "package": "PBGA256",
-        "device": "GW2A-18-PBGA256-8",
+        "device": "GW2A-18",
         "partnumber": "GW2A-LV18PG256C8/I7",
+    },
+    "GW2A-18C": {
+        "package": "PBGA256S",
+        "device": "GW2AR-18C",
+        "partnumber": "GW2AR-LV18PG256SC8/I7",
     },
 }[device]
 
@@ -154,7 +159,7 @@ def run_pnr(mod, constr, config):
     #"show_all_warn" : "1",
 
     pnr = codegen.Pnr()
-    pnr.device = device
+    pnr.device = params['device']
     pnr.partnumber = params['partnumber']
     pnr.opt = opt
     pnr.cfg = cfg
@@ -188,7 +193,7 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
     is_true_lvds = False
     is_positive = False
     for ttyp, tiles in pin_locations.items():
-        # tiles are unique, so one in enough but we need A&B pins
+        # tiles are unique, so one is enough but we need A&B pins
         for tile, bels in tiles.items():
             if len(bels) >= 2:
                 break
@@ -269,33 +274,14 @@ if __name__ == "__main__":
         bel.portmap['GW9_ALWAYS_LOW0'] = wirenames[dat[f'IologicAIn'][40]]
         bel.portmap['GW9_ALWAYS_LOW1'] = wirenames[dat[f'IologicAIn'][42]]
     chipdb.dat_aliases(dat, db)
-    #db.grid[0][0].bels['CFG'].flags['UNK0'] = {(3, 1)}
-    #db.grid[0][0].bels['CFG'].flags['UNK1'] = {(3, 2)}
-    db.template[(3, 1)] = 1
-    db.template[(3, 2)] = 1
-
-    # set template dual-mode pins to HW mode
-    dualmode_pins = {'jtag', 'sspi', 'mspi', 'ready', 'done', 'reconfig', 'i2c'}
-    for pin in dualmode_pins:
-        name = pin.upper()
-        cfg_attrs = set()
-        chipdb.add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[f'{name}_AS_GPIO'], attrids.cfg_attrvals['YES'])
-        if device == 'GW2A-18':
-            bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][0][-1], cfg_attrs, 'CFG')
-        else:
-            bits = chipdb.get_shortval_fuses(db, fse['header']['grid'][61][0][0], cfg_attrs, 'CFG')
-        tile = db.template
-        for row_, col_ in bits:
-            tile[row_][col_] = 0
-        db.grid[0][0].bels.setdefault('CFG', chipdb.Bel()).flags[name] = bits
 
     # GSR
-    db.grid[0][0].bels.setdefault('GSR0', chipdb.Bel()).portmap['GSRI'] = 'C4';
-
-    for row, col, ttyp in corners:
-        if "BANK" not in db.grid[row][col].bels.keys():
-            continue
-        bel = db.grid[row][col].bels["BANK"]
+    if device in {'GW2A-18', 'GW2A-18C'}:
+        db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+    elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
+        db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+    else:
+        raise Exception(f"No GSR for {device}")
 
 
     #TODO proper serialization format

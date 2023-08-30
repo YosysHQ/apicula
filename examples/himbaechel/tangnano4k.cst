@@ -1,0 +1,39 @@
+// these are the HDMI pins!
+IO_LOC "led[0]" 34;
+IO_LOC "led[1]" 35;
+IO_LOC "led[2]" 29;
+IO_LOC "led[3]" 30;
+IO_LOC "led[4]" 31;
+IO_LOC "led[5]" 32;
+IO_LOC "key" 15;
+IO_LOC "rst" 14;
+IO_LOC "clk" 45;
+
+// oser
+IO_LOC "oser_out" 35;
+IO_LOC "io16" 35;
+IO_LOC "pclk_o"   29;
+IO_LOC "fclk_o"   30;
+
+IO_LOC "LED_R" 34;
+IO_LOC "LED_G" 35;
+IO_LOC "LED_B" 29;
+
+// ides
+IO_LOC "data_i" 43;
+IO_LOC "fclk_i" 46;
+IO_LOC "q_o[0]" 21;
+IO_LOC "q_o[1]" 27;
+IO_LOC "q_o[2]" 41;
+IO_LOC "q_o[3]" 31;
+IO_LOC "q_o[4]" 40;
+IO_LOC "q_o[5]" 39;
+IO_LOC "q_o[6]" 28;
+IO_LOC "q_o[7]" 30;
+
+// true LVDS pins
+IO_LOC "tlvds_p" 28;
+IO_LOC "tlvds_n" 27;
+
+IO_LOC "elvds_p" 39;
+IO_LOC "elvds_n" 40;

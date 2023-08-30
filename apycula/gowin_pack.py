@@ -19,6 +19,8 @@ from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
 
 device = ""
+pnr = None
+is_himbaechel = False
 
 # Sometimes it is convenient to know where a port is connected to enable
 # special fuses for VCC/VSS cases.
@@ -48,7 +50,7 @@ def iob_is_vcc_net(flags, wire):
     return flags.get(f'NET_{wire}', False) == 'VCC'
 
 def iob_is_connected(flags, wire):
-    return f'NET_{wire}' in flags.keys()
+    return f'NET_{wire}' in flags
 
 _verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
 def sanitize_name(name):
@@ -66,7 +68,7 @@ def sanitize_name(name):
 def extra_pll_bels(cell, row, col, num, cellname):
     # rPLL can occupy several cells, add them depending on the chip
     offx = 1
-    if device in {'GW1N-9C', 'GW1N-9'}:
+    if device in {'GW1N-9C', 'GW1N-9', 'GW2A-18', 'GW2A-18C'}:
         if int(col) > 28:
             offx = -1
         for off in [1, 2, 3]:
@@ -79,20 +81,32 @@ def extra_pll_bels(cell, row, col, num, cellname):
 
 def get_bels(data):
     later = []
-    belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+    if is_himbaechel:
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUFS|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC)(\w*)")
+    else:
+        belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+
     for cellname, cell in data['modules']['top']['cells'].items():
-        if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'}:
+        if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
             continue
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
+        if is_himbaechel and bel[-4:] in {'/GND', '/VCC'}:
+            continue
+
         bels = belre.match(bel)
         if not bels:
             raise Exception(f"Unknown bel:{bel}")
         row, col, num = bels.groups()
+        if is_himbaechel:
+            col_ = col
+            col = str(int(row) + 1)
+            row = str(int(col_) + 1)
+
         # The differential buffer is pushed to the end of the queue for processing
         # because it does not have an independent iostd, but adjusts to the normal pins
         # in the bank, if any are found
-        if 'DIFF' in cell['attributes'].keys():
+        if 'DIFF' in cell['attributes']:
             later.append((cellname, cell, row, col, num))
             continue
         cell_type = cell['type']
@@ -107,8 +121,12 @@ def get_bels(data):
         yield (cell['type'], int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
+_pip_bels = []
 def get_pips(data):
-    pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
+    if is_himbaechel:
+        pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
+    else:
+        pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
     for net in data['modules']['top']['netnames'].values():
         routing = net['attributes']['ROUTING']
         pips = routing.split(';')[1::3]
@@ -116,7 +134,20 @@ def get_pips(data):
             res = pipre.fullmatch(pip) # ignore alias
             if res:
                 row, col, src, dest = res.groups()
-                yield int(row), int(col), src, dest
+                if is_himbaechel:
+                    # XD - input of the DFF
+                    if src.startswith('XD'):
+                        if dest.startswith('F'):
+                            continue
+                        # pass-though LUT
+                        num = dest[1]
+                        init = {'A': '1010101010101010', 'B': '1100110011001100',
+                                'C': '1111000011110000', 'D': '1111111100000000'}[dest[0]]
+                        _pip_bels.append(("LUT4", int(col) + 1, int(row) + 1, num, {"INIT": init}, {}, f'$PACKER_PASS_LUT_{len(_pip_bels)}', None))
+                        continue
+                    yield int(col) + 1, int(row) + 1, dest, src
+                else:
+                    yield int(row), int(col), src, dest
             elif pip and "DUMMY" not in pip:
                 print("Invalid pip:", pip)
 
@@ -133,6 +164,8 @@ _permitted_freqs = {
         "GW1N-9":  (400, 500, 3.125,  1000, 400),
         "GW1N-9C": (400, 600, 3.125,  1200, 400),
         "GW1NS-2": (400, 500, 3.125,  1200, 400),
+        "GW2A-18": (400, 600, 3.125,  1200, 400), # XXX check it
+        "GW2A-18C": (400, 600, 3.125,  1200, 400), # XXX check it
         }
 # input params are calculated as described in GOWIN doc (UG286-1.7E_Gowin Clock User Guide)
 # fref = fclkin / idiv
@@ -146,18 +179,26 @@ _permitted_freqs = {
 # There are not many resistors so the whole frequency range is divided into
 # 30MHz intervals and the number of this interval is one of the fuse sets. But
 # the resistor itself is not directly dependent on the input frequency.
-_freq_R = [(2.6, 65100.0), (3.87, 43800.0), (7.53, 22250.0), (14.35, 11800.0), (28.51, 5940.0), (57.01, 2970.0), (114.41, 1480), (206.34, 820.0)]
+_freq_R = [[(2.6, 65100.0), (3.87, 43800.0), (7.53, 22250.0), (14.35, 11800.0), (28.51, 5940.0), (57.01, 2970.0), (114.41, 1480), (206.34, 820.0)], [(2.4, 69410.0), (3.53, 47150.0), (6.82, 24430.0), (12.93, 12880.0), (25.7, 6480.0), (51.4, 3240.0), (102.81, 1620), (187.13, 890.0)]]
 def calc_pll_pump(fref, fvco):
     fclkin_idx = int((fref - 1) // 30)
     if (fclkin_idx == 13 and fref <= 395) or (fclkin_idx == 14 and fref <= 430) or (fclkin_idx == 15 and fref <= 465) or fclkin_idx == 16:
         fclkin_idx = fclkin_idx - 1
 
-    r_vals = [(fr[1], len(_freq_R) - 1 - idx) for idx, fr in enumerate(_freq_R) if fr[0] < fref]
+    if device not in {'GW2A-18', 'GW2A-18C'}:
+        freq_Ri = _freq_R[0]
+    else:
+        freq_Ri = _freq_R[1]
+    r_vals = [(fr[1], len(freq_Ri) - 1 - idx) for idx, fr in enumerate(freq_Ri) if fr[0] < fref]
     r_vals.reverse()
 
     # Find the resistor that provides the minimum current through the capacitor
-    K0 = (497.5 - math.sqrt(247506.25 - (2675.4 - fvco) * 78.46)) / 39.23
-    K1 = 4.8714 * K0 * K0 + 6.5257 * K0 + 142.67
+    if device not in {'GW2A-18', 'GW2A-18C'}:
+        K0 = (497.5 - math.sqrt(247506.25 - (2675.4 - fvco) * 78.46)) / 39.23
+        K1 = 4.8714 * K0 * K0 + 6.5257 * K0 + 142.67
+    else:
+        K0 = (-28.938 + math.sqrt(837.407844 - (385.07 - fvco) * 0.9892)) / 0.4846
+        K1 = 0.1942 * K0 * K0 - 13.173 * K0 + 518.86
     Kvco = 1000000.0 * K1
     Ndiv = fvco / fref
     C1 = 6.69244e-11
@@ -197,14 +238,6 @@ _default_pll_inattrs = {
 
         }
 
-def add_pll_default_attrs(attrs):
-    pll_inattrs = attrs.copy()
-    for k, v in _default_pll_inattrs.items():
-        if k in pll_inattrs.keys():
-            continue
-        pll_inattrs[k] = v
-    return pll_inattrs
-
 _default_pll_internal_attrs = {
             'INSEL': 'CLKIN1',
             'FBSEL': 'CLKFB3',
@@ -227,6 +260,16 @@ _default_pll_internal_attrs = {
             'ICPSEL': 50,
 }
 
+
+def add_pll_default_attrs(attrs):
+    pll_inattrs = attrs.copy()
+    for k, v in _default_pll_inattrs.items():
+        if k in pll_inattrs:
+            continue
+        pll_inattrs[k] = v
+    return pll_inattrs
+
+
 # typ - PLL type (RPLL, etc)
 def set_pll_attrs(db, typ, idx, attrs):
     pll_inattrs = add_pll_default_attrs(attrs)
@@ -239,7 +282,7 @@ def set_pll_attrs(db, typ, idx, attrs):
 
     # parse attrs
     for attr, val in pll_inattrs.items():
-        if attr in pll_attrs.keys():
+        if attr in pll_attrs:
             pll_attrs[attr] = val
         if attr == 'CLKOUTD_SRC':
             if val == 'CLKOUTP':
@@ -351,7 +394,6 @@ def set_pll_attrs(db, typ, idx, attrs):
         if isinstance(val, str):
             val = attrids.pll_attrvals[val]
         add_attr_val(db, 'PLL', fin_attrs, attrids.pll_attrids[attr], val)
-    #print(fin_attrs)
     return fin_attrs
 
 def set_osc_attrs(db, typ, params):
@@ -382,6 +424,8 @@ def set_osc_attrs(db, typ, params):
 
 _iologic_default_attrs = {
         'DUMMY': {},
+        'IOLOGIC': {},
+        'IOLOGIC_DUMMY': {},
         'ODDR': { 'TXCLK_POL': '0'},
         'ODDRC': { 'TXCLK_POL': '0'},
         'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
@@ -398,17 +442,17 @@ _iologic_default_attrs = {
         'IDES16': { 'GSREN': 'false', 'LSREN': 'true', 'CLKIMUX': 'ENABLE'},
         }
 def iologic_mod_attrs(attrs):
-    if 'TXCLK_POL' in attrs.keys():
+    if 'TXCLK_POL' in attrs:
         if int(attrs['TXCLK_POL']) == 0:
             attrs['TSHX'] = 'SIG'
         else:
             attrs['TSHX'] = 'INV'
         del attrs['TXCLK_POL']
-    if 'HWL' in attrs.keys():
+    if 'HWL' in attrs:
         if attrs['HWL'] == 'true':
             attrs['UPDATE'] = 'SAME'
         del attrs['HWL']
-    if 'GSREN' in attrs.keys():
+    if 'GSREN' in attrs:
         if attrs['GSREN'] == 'true':
             attrs['GSR'] = 'ENGSR'
         del attrs['GSREN']
@@ -422,7 +466,7 @@ def set_iologic_attrs(db, attrs, param):
     in_attrs.update(attrs)
     iologic_mod_attrs(in_attrs)
     fin_attrs = set()
-    if 'OUTMODE' in attrs.keys():
+    if 'OUTMODE' in attrs:
         if attrs['OUTMODE'] != 'ODDRX1':
             in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
         if attrs['OUTMODE'] != 'ODDRX1' or param['IOLOGIC_TYPE'] == 'ODDRC':
@@ -444,14 +488,15 @@ def set_iologic_attrs(db, attrs, param):
         in_attrs['LSRIMUX_0'] = '0'
         in_attrs['CLKOMUX'] = 'ENABLE'
         #in_attrs['LSRMUX_LSR'] = 'INV'
-    if 'INMODE' in attrs.keys():
+    if 'INMODE' in attrs:
         if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
-            in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+            #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+            in_attrs['CLKOMUX_1'] = '1'
             in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
             if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
                 in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK1'
             elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
-                in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0'
+                in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK0'
             in_attrs['LSRIMUX_0'] = '1'
             if attrs['INMODE'] == 'IDDRX8' or attrs['INMODE'] == 'DDRENABLE16':
                 in_attrs['LSROMUX_0'] = '0'
@@ -464,7 +509,7 @@ def set_iologic_attrs(db, attrs, param):
             in_attrs['CLKIMUX'] = 'ENABLE'
 
     for k, val in in_attrs.items():
-        if k not in attrids.iologic_attrids.keys():
+        if k not in attrids.iologic_attrids:
             print(f'XXX IOLOGIC: add {k} key handle')
         else:
             add_attr_val(db, 'IOLOGIC', fin_attrs, attrids.iologic_attrids[k], attrids.iologic_attrvals[val])
@@ -519,11 +564,11 @@ _vcc_ios = {'LVCMOS12': '1.2', 'LVCMOS15': '1.5', 'LVCMOS18': '1.8', 'LVCMOS25':
         'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3'}
 _init_io_attrs = {
         'IBUF': {'PADDI': 'PADDI', 'HYSTERESIS': 'NONE', 'PULLMODE': 'UP', 'SLEWRATE': 'SLOW',
-                 'DRIVE': '0', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
+                 'DRIVE': '0', 'CLAMP': 'OFF', 'OPENDRAIN': 'OFF', 'DIFFRESISTOR': 'OFF',
                  'VREF': 'OFF', 'LVDS_OUT': 'OFF'},
         'OBUF': {'ODMUX_1': '1', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
-                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA', 'TO': 'INV'},
+                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA', 'TO': 'INV', 'OPENDRAIN': 'OFF'},
         'TBUF': {'ODMUX_1': 'UNKNOWN', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
                  'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
@@ -531,17 +576,119 @@ _init_io_attrs = {
         'IOBUF': {'ODMUX_1': 'UNKNOWN', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
                  'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
-                 'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'PADDI': 'PADDI'},
+                 'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'PADDI': 'PADDI', 'OPENDRAIN': 'OFF'},
         }
 _refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE', 'OPEN_DRAIN': 'OPENDRAIN'}
 def refine_io_attrs(attr):
     return _refine_attrs.get(attr, attr)
+
+def place_lut(db, tiledata, tile, parms, num):
+    lutmap = tiledata.bels[f'LUT{num}'].flags
+    init = str(parms['INIT'])
+    init = init*(16//len(init))
+    for bitnum, lutbit in enumerate(init[::-1]):
+        if lutbit == '0':
+            fuses = lutmap[bitnum]
+            for brow, bcol in fuses:
+                tile[brow][bcol] = 1
+
+def place_alu(db, tiledata, tile, parms, num):
+    lutmap = tiledata.bels[f'LUT{num}'].flags
+    alu_bel = tiledata.bels[f"ALU{num}"]
+    mode = str(parms['ALU_MODE'])
+    for r_c in lutmap.values():
+        for r, c in r_c:
+            tile[r][c] = 0
+    if mode in alu_bel.modes:
+        bits = alu_bel.modes[mode]
+    else:
+        bits = alu_bel.modes[str(int(mode, 2))]
+    for r, c in bits:
+        tile[r][c] = 1
+
+def place_dff(db, tiledata, tile, parms, num, mode):
+        dff_attrs = set()
+        add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['REGMODE'], attrids.cls_attrvals['FF'])
+        # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
+        if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC', 'DFF', 'DFFN'}:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['RESET'])
+        else:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['SET'])
+        # are set/reset/clear/preset port needed?
+        if mode not in {'DFF', 'DFFN'}:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['LSRONMUX'], attrids.cls_attrvals['LSRMUX'])
+        # invert clock?
+        if mode in {'DFFN', 'DFFNR', 'DFFNC', 'DFFNP', 'DFFNS'}:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['INV'])
+        else:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['SIG'])
+
+        # async option?
+        if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
+            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['SRMODE'], attrids.cls_attrvals['ASYNC'])
+
+        dffbits = get_shortval_fuses(db, tiledata.ttyp, dff_attrs, f'CLS{int(num) // 2}')
+        #print(f'({row - 1}, {col - 1}) mode:{mode}, num{num}, attrs:{dff_attrs}, bits:{dffbits}')
+        for brow, bcol in dffbits:
+            tile[brow][bcol] = 1
+
+def place_slice(db, tiledata, tile, parms, num):
+    lutmap = tiledata.bels[f'LUT{num}'].flags
+
+    if 'ALU_MODE' in parms:
+        place_alu(db, tiledata, tile, parms, num)
+    else:
+        place_lut(db, tiledata, tile, parms, num)
+
+    if int(num) < 6 and int(parms['FF_USED'], 2):
+        mode = str(parms['FF_TYPE']).strip('E')
+        place_dff(db, tiledata, tile, parms, num, mode)
 
 _sides = "AB"
 def place(db, tilemap, bels, cst, args):
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
+
+        if typ in {'IBUF', 'OBUF', 'TBUF', 'IOBUF'}:
+            if typ == 'IBUF':
+                parms['OUTPUT_USED'] = "0"
+                parms['INPUT_USED'] =  "1"
+                parms['ENABLE_USED'] = "0"
+            elif typ == 'TBUF':
+                parms['OUTPUT_USED'] = "1"
+                parms['INPUT_USED'] =  "0"
+                parms['ENABLE_USED'] = "1"
+            elif typ == 'IOBUF':
+                parms['OUTPUT_USED'] = "1"
+                parms['INPUT_USED'] =  "1"
+                parms['ENABLE_USED'] = "1"
+            else:
+                parms['OUTPUT_USED'] = "1"
+                parms['INPUT_USED'] =  "0"
+                parms['ENABLE_USED'] = "0"
+            typ = 'IOB'
+
+        if is_himbaechel and typ in {'IOLOGIC', 'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8', 'OSER10', 'OVIDEO',
+                   'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}:
+            if typ == 'IOLOGIC_DUMMY':
+                attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
+            attrs['IOLOGIC_TYPE'] = typ
+            if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC'}:
+                # We clearly distinguish between the HCLK wires and clock
+                # spines at the nextpnr level by name, but in the fuse tables
+                # they have the same number, this is possible because the clock
+                # spines never go along the edges of the chip where the HCLK
+                # wires are.
+                recode_spines = {'UNKNOWN': 'UNKNOWN', 'HCLK_OUT0': 'SPINE10',
+                                 'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
+                                 'HCLK_OUT3': 'SPINE13'}
+                if attrs['IOLOGIC_FCLK'] in recode_spines:
+                    attrs['IOLOGIC_FCLK'] = recode_spines[attrs['IOLOGIC_FCLK']]
+            else:
+                attrs['IOLOGIC_FCLK'] = 'UNKNOWN'
+            typ = 'IOLOGIC'
+
         if typ == "GSR":
             pass
         elif typ.startswith('MUX2_'):
@@ -572,61 +719,15 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits:
                 tile[r][c] = 1
         elif typ == "SLICE":
-            lutmap = tiledata.bels[f'LUT{num}'].flags
+            place_slice(db, tiledata, tile, parms, num)
+        elif typ.startswith("DFF"):
+            mode = typ.strip('E')
+            place_dff(db, tiledata, tile, parms, num, mode)
+        elif typ.startswith('LUT'):
+            place_lut(db, tiledata, tile, parms, num)
+        elif typ.startswith('ALU'):
+            place_alu(db, tiledata, tile, parms, num)
 
-            if 'ALU_MODE' in parms.keys():
-                alu_bel = tiledata.bels[f"ALU{num}"]
-                mode = str(parms['ALU_MODE'])
-                for r_c in lutmap.values():
-                    for r, c in r_c:
-                        tile[r][c] = 0
-                if mode in alu_bel.modes.keys():
-                    bits = alu_bel.modes[mode]
-                else:
-                    bits = alu_bel.modes[str(int(mode, 2))]
-                    #if int(mode, 2) == 2:
-                    #print('ALU mode:', int(mode, 2), ' bits:', bits)
-                for r, c in bits:
-                    tile[r][c] = 1
-            else:
-                init = str(parms['INIT'])
-                init = init*(16//len(init))
-                for bitnum, lutbit in enumerate(init[::-1]):
-                    if lutbit == '0':
-                        fuses = lutmap[bitnum]
-                        for brow, bcol in fuses:
-                            tile[brow][bcol] = 1
-
-            if int(num) < 6 and int(parms['FF_USED'], 2):
-                mode = str(parms['FF_TYPE']).strip('E')
-                dff_attrs = set()
-                add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['REGMODE'], attrids.cls_attrvals['FF'])
-                # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
-                if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC', 'DFF', 'DFFN'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['RESET'])
-                else:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['SET'])
-                # are set/reset/clear/preset port needed?
-                if mode not in {'DFF', 'DFFN'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['LSRONMUX'], attrids.cls_attrvals['LSRMUX'])
-                # invert clock?
-                if mode in {'DFFN', 'DFFNR', 'DFFNC', 'DFFNP', 'DFFNS'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['INV'])
-                else:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['SIG'])
-
-                # async option?
-                if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
-                    add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['SRMODE'], attrids.cls_attrvals['ASYNC'])
-
-                dffbits = get_shortval_fuses(db, tiledata.ttyp, dff_attrs, f'CLS{int(num) // 2}')
-                #print(f'({row - 1}, {col - 1}) mode:{mode}, num{num}, attrs:{dff_attrs}, bits:{dffbits}')
-                for brow, bcol in dffbits:
-                    tile[brow][bcol] = 1
-
-            # XXX skip power
-            if not cellname.startswith('\$PACKER'):
-                cst.cells[cellname] = (row, col, int(num) // 2, _sides[int(num) % 2])
         elif typ[:3] == "IOB":
             edge = 'T'
             idx = col
@@ -641,7 +742,7 @@ def place(db, tilemap, bels, cst, args):
             bel_name = f"IO{edge}{idx}{num}"
             cst.ports[cellname] = bel_name
             iob = tiledata.bels[f'IOB{num}']
-            if 'DIFF' in parms.keys():
+            if 'DIFF' in parms:
                 # skip negative pin for lvds
                 if parms['DIFF'] == 'N':
                     continue
@@ -701,13 +802,21 @@ def place(db, tilemap, bels, cst, args):
             io_desc.attrs['IO_TYPE'] = iostd
             if pinless_io:
                 return
-        elif typ == "RAMW":
-            bel = tiledata.bels['RAM16']
-            bits = bel.modes['0']
-            #print(typ, bits)
-            for r, c in bits:
-                tile[r][c] = 1
+        elif typ.startswith("RAM16SDP") or typ == "RAMW":
+            ram_attrs = set()
+            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['MODE'], attrids.cls_attrvals['SSRAM'])
+            rambits = get_shortval_fuses(db, tiledata.ttyp, ram_attrs, 'CLS3')
+            # In fact, the WRE signal is considered active when it is low, so
+            # we include an inverter on the LSR2 line here to comply with the
+            # documentation
+            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['LSR_MUX_1'], attrids.cls_attrvals['0'])
+            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['LSR_MUX_LSR'], attrids.cls_attrvals['INV'])
+            rambits.update(get_shortval_fuses(db, tiledata.ttyp, ram_attrs, 'CLS2'))
+            #print(f'({row - 1}, {col - 1}) attrs:{ram_attrs}, bits:{rambits}')
+            for brow, bcol in rambits:
+                tile[brow][bcol] = 1
         elif typ ==  'IOLOGIC':
+            #print(row, col, cellname)
             iologic_attrs = set_iologic_attrs(db, parms, attrs)
             bits = set()
             table_type = f'IOLOGIC{num}'
@@ -717,7 +826,7 @@ def place(db, tilemap, bels, cst, args):
         elif typ.startswith('RPLL'):
             pll_attrs = set_pll_attrs(db, 'RPLL', 0,  parms)
             bits = set()
-            if 'PLL' in db.shortval[tiledata.ttyp].keys():
+            if 'PLL' in db.shortval[tiledata.ttyp]:
                 bits = get_shortval_fuses(db, tiledata.ttyp, pll_attrs, 'PLL')
             #print(typ, tiledata.ttyp, bits)
             for r, c in bits:
@@ -743,27 +852,30 @@ def place(db, tilemap, bels, cst, args):
     # second IO pass
     for bank, ios in _io_bels.items():
         # check IO standard
-        # IBUFs do not affect bank io
-        iostds = {iob.attrs['IO_TYPE'] for iob in ios.values() if iob.flags['mode'] != 'IBUF'}
-        iostds = set()
+        vccio = None
+        iostd = None
         for iob in ios.values():
+            # diff io can't be placed at simplified io
+            if iob.pos[0] in db.simplio_rows:
+                if iob.flags['mode'].startswith('ELVDS') or iob.flags['mode'].startswith('TLVDS'):
+                    raise Exception(f"Differential IO cant be placed at special row {iob.pos[0]}")
+
             if iob.flags['mode'] in {'IBUF', 'IOBUF', 'TLVDS_IBUF', 'TLVDS_IOBUF', 'ELVDS_IBUF', 'ELVDS_IOBUF'}:
                 iob.attrs['IO_TYPE'] = get_iostd_alias(iob.attrs['IO_TYPE'])
                 if iob.attrs.get('SINGLERESISTOR', 'OFF') != 'OFF':
                     iob.attrs['DDR_DYNTERM'] = 'ON'
-                if iob.flags['mode'] in {'IOBUF', 'TLVDS_IOBUF', 'ELVDS_IOBUF'}:
-                    iostds.add(iob.attrs['IO_TYPE'])
-            else: # TBUF and OBUF
-                iostds.add(iob.attrs['IO_TYPE'])
+            if iob.flags['mode'] in {'OBUF', 'IOBUF', 'TLVDS_IOBUF', 'ELVDS_IOBUF'}:
+                if not vccio:
+                    iostd = iob.attrs['IO_TYPE']
+                    vccio = _vcc_ios[iostd]
+                elif vccio != _vcc_ios[iob.attrs['IO_TYPE']] and not iostd.startswith('LVDS') and not iob.attrs['IO_TYPE'].startswith('LVDS'):
+                    snd_type = iob.attrs['IO_TYPE']
+                    fst = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == iostd][0]
+                    snd = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == snd_type][0]
+                    raise Exception(f"Different IO standard for bank {bank}: {fst} sets {iostd}, {snd} sets {iob.attrs['IO_TYPE']}.")
 
-        if len(iostds) >= 2:
-            conflict_std = list(iostds)
-            fst = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == conflict_std[0]][0]
-            snd = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == conflict_std[1]][0]
-            raise Exception(f"Different IO standard for bank {bank}: {fst} sets {conflict_std[0]}, {snd} sets {conflict_std[1]}.")
-        if len(iostds) == 0:
-            iostds.add('LVCMOS12')
-        iostd = list(iostds)[0]
+        if not vccio:
+            iostd = 'LVCMOS12'
 
         in_bank_attrs = {}
         in_bank_attrs['VCCIO'] = _vcc_ios[iostd]
@@ -800,6 +912,7 @@ def place(db, tilemap, bels, cst, args):
                 k = refine_io_attrs(k)
                 in_iob_attrs[k] = val
             in_iob_attrs['VCCIO'] = in_bank_attrs['VCCIO']
+            #print(in_iob_attrs)
 
             # lvds
             if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
@@ -837,11 +950,12 @@ def place(db, tilemap, bels, cst, args):
                 in_iob_b_attrs = in_iob_attrs.copy()
 
             for iob_idx, atr in [(idx, in_iob_attrs), ('B', in_iob_b_attrs)]:
+                #print(name, iob.pos, atr)
                 iob_attrs = set()
                 for k, val in atr.items():
-                    if k not in attrids.iob_attrids.keys():
+                    if k not in attrids.iob_attrids:
                         print(f'XXX IO: add {k} key handle')
-                    elif k == 'OPENDRAIN' and val == 'OFF':
+                    elif k == 'OPENDRAIN' and val == 'OFF' and 'LVDS' not in iob.flags['mode'] and 'IBUF' not in iob.flags['mode']:
                         continue
                     else:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
@@ -861,7 +975,8 @@ def place(db, tilemap, bels, cst, args):
 
         bank_attrs = set()
         for k, val in in_bank_attrs.items():
-            if k not in attrids.iob_attrids.keys():
+            #print(k, val)
+            if k not in attrids.iob_attrids:
                 print(f'XXX BANK: add {k} key handle')
             else:
                 add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
@@ -886,7 +1001,7 @@ def secure_long_wires(db, tilemap, row, col, src, dest):
         fuse_row = 0
         if row == check_row and dest in {'LT02', 'LT13'}:
             tiledata = db.grid[fuse_row][col - 1]
-            if dest in tiledata.alonenode_6.keys():
+            if dest in tiledata.alonenode_6:
                 tile = tilemap[(fuse_row, col - 1)]
                 _, bits = tiledata.alonenode_6[dest]
                 for row, col in bits:
@@ -897,12 +1012,12 @@ def route(db, tilemap, pips):
     for row, col, src, dest in pips:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
-        # short-circuit prevention
-        secure_long_wires(db, tilemap, row, col, src, dest)
 
         try:
             if dest in tiledata.clock_pips:
                 bits = tiledata.clock_pips[dest][src]
+            elif is_himbaechel and (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1]:
+                bits = db.hclk_pips[row - 1, col - 1][dest][src]
             else:
                 bits = tiledata.pips[dest][src]
         except KeyError:
@@ -936,27 +1051,88 @@ def header_footer(db, bs, compress):
     # set the checksum
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
+def gsr(db, tilemap, args):
+    gsr_attrs = set()
+    for k, val in {'GSRMODE': 'ACTIVE_LOW'}.items():
+        if k not in attrids.gsr_attrids:
+            print(f'XXX GSR: add {k} key handle')
+        else:
+            add_attr_val(db, 'GSR', gsr_attrs, attrids.gsr_attrids[k], attrids.gsr_attrvals[val])
+
+    cfg_attrs = set()
+    for k, val in {'GSR': 'USED'}.items():
+        if k not in attrids.cfg_attrids:
+            print(f'XXX CFG GSR: add {k} key handle')
+        else:
+            add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals[val])
+
+    # The configuration fuses are described in the ['shortval'][60] table, global set/reset is
+    # described in the ['shortval'][20] table. Look for cells with type with these tables
+    gsr_type = {50, 83}
+    cfg_type = {50, 51}
+    if device in {'GW2A-18', 'GW2A-18C'}:
+        gsr_type = {1, 83}
+        cfg_type = {1, 51}
+    for row, rd in enumerate(db.grid):
+        for col, rc in enumerate(rd):
+            bits = set()
+            if rc.ttyp in gsr_type:
+                bits = get_shortval_fuses(db, rc.ttyp, gsr_attrs, 'GSR')
+            if rc.ttyp in cfg_type:
+                bits.update(get_shortval_fuses(db, rc.ttyp, cfg_attrs, 'CFG'))
+            if bits:
+                btile = tilemap[(row, col)]
+                for brow, bcol in bits:
+                    btile[brow][bcol] = 1
+
 def dualmode_pins(db, tilemap, args):
-    bits = set()
+    pin_flags = {'JTAG_AS_GPIO': 'UNKNOWN', 'SSPI_AS_GPIO': 'UNKNOWN', 'MSPI_AS_GPIO': 'UNKNOWN',
+            'DONE_AS_GPIO': 'UNKNOWN', 'RECONFIG_AS_GPIO': 'UNKNOWN', 'READY_AS_GPIO': 'UNKNOWN'}
     if args.jtag_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['JTAG'])
+        pin_flags['JTAG_AS_GPIO'] = 'YES'
     if args.sspi_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['SSPI'])
+        pin_flags['SSPI_AS_GPIO'] = 'YES'
     if args.mspi_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['MSPI'])
+        pin_flags['MSPI_AS_GPIO'] = 'YES'
     if args.ready_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['READY'])
+        pin_flags['READY_AS_GPIO'] = 'YES'
     if args.done_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['DONE'])
+        pin_flags['DONE_AS_GPIO'] = 'YES'
     if args.reconfign_as_gpio:
-        bits.update(db.grid[0][0].bels['CFG'].flags['RECONFIG'])
-    if bits:
-        tile = tilemap[(0, 0)]
-        for row, col in bits:
-            tile[row][col] = 1
+        pin_flags['RECONFIG_AS_GPIO'] = 'YES'
+
+    set_attrs = set()
+    clr_attrs = set()
+    for k, val in pin_flags.items():
+        if k not in attrids.cfg_attrids:
+            print(f'XXX CFG: add {k} key handle')
+        else:
+            add_attr_val(db, 'CFG', set_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals[val])
+            add_attr_val(db, 'CFG', clr_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals['YES'])
+
+    # The configuration fuses are described in the ['shortval'][60] table, here
+    # we are looking for cells with types that have such a table.
+    cfg_type = {50, 51}
+    if device in {'GW2A-18', 'GW2A-18C'}:
+        cfg_type = {1, 51}
+    for row, rd in enumerate(db.grid):
+        for col, rc in enumerate(rd):
+            bits = set()
+            clr_bits = set()
+            if rc.ttyp in cfg_type:
+                bits.update(get_shortval_fuses(db, rc.ttyp, set_attrs, 'CFG'))
+                clr_bits.update(get_shortval_fuses(db, rc.ttyp, clr_attrs, 'CFG'))
+            if clr_bits:
+                btile = tilemap[(row, col)]
+                for brow, bcol in clr_bits:
+                    btile[brow][bcol] = 0
+                for brow, bcol in bits:
+                    btile[brow][bcol] = 1
 
 def main():
     global device
+    global pnr
+
     pil_available = True
     try:
         from PIL import Image
@@ -980,30 +1156,53 @@ def main():
 
     args = parser.parse_args()
     device = args.device
+
+    with open(args.netlist) as f:
+        pnr = json.load(f)
+
+    # check for new P&R
+    if pnr['modules']['top']['settings'].get('packer.arch', '') == 'himbaechel/gowin':
+        global is_himbaechel
+        is_himbaechel = True
+
     # For tool integration it is allowed to pass a full part number
     m = re.match("GW1N(S|Z)?[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
     if m:
         mods = m.group(1) or ""
         luts = m.group(3)
         device = f"GW1N{mods}-{luts}"
-
     with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)
 
-    with open(args.netlist) as f:
-        pnr = json.load(f)
+    const_nets = {'GND': '$PACKER_GND_NET', 'VCC': '$PACKER_GND_NET'}
+    if is_himbaechel:
+        const_nets = {'GND': '$PACKER_GND', 'VCC': '$PACKER_GND'}
 
-    _vcc_net = pnr['modules']['top']['netnames']['$PACKER_VCC_NET']['bits']
-    _gnd_net = pnr['modules']['top']['netnames']['$PACKER_GND_NET']['bits']
+    _gnd_net = pnr['modules']['top']['netnames'].get(const_nets['GND'], {'bits': []})['bits']
+    _vcc_net = pnr['modules']['top']['netnames'].get(const_nets['VCC'], {'bits': []})['bits']
 
     tilemap = chipdb.tile_bitmap(db, db.template, empty=True)
     cst = codegen.Constraints()
-    bels = get_bels(pnr)
-    place(db, tilemap, bels, cst, args)
     pips = get_pips(pnr)
     route(db, tilemap, pips)
+    bels = get_bels(pnr)
+    # routing can add pass-through LUTs
+    place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args)
+    gsr(db, tilemap, args)
     dualmode_pins(db, tilemap, args)
+    # XXX Z-1 some kind of power saving for pll, disable
+    # When comparing images with a working (IDE) and non-working PLL (apicula),
+    # no differences were found in the fuses of the PLL cell itself, but a
+    # change in one bit in the root cell was replaced.
+    # If the PLL configurations match, then the assumption has been made that this
+    # bit simply disables it somehow.
+
+    if device in {'GW1NZ-1'}:
+        tile = tilemap[(db.rows - 1, db.cols - 1)]
+        for row, col in {(23, 63)}:
+            tile[row][col] = 0
+
     res = chipdb.fuse_bitmap(db, tilemap)
     header_footer(db, res, args.compress)
     if pil_available and args.png:

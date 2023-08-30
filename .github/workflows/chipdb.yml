@@ -155,9 +155,27 @@ jobs:
       with:
           name: gw2a-18-stage
           path: GW2A-18*
+  gw2a18c:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build gw2a-18c chipdb
+      run: |
+        docker pull pepijndevos/apicula:1.9.8
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW2A-18C.pickle
+    - name: Archive artifact
+      uses: actions/upload-artifact@v3
+      with:
+          name: gw2a-18c-chipdb
+          path: apycula/GW2A-18C.pickle
+    - name: Archive stage artifact
+      uses: actions/upload-artifact@v3
+      with:
+          name: gw2a-18C-stage
+          path: GW2A-18C*
   pypi:
     runs-on: ubuntu-latest
-    needs: [gw1n1, gw1nz1, gw1n9, gw1n9c, gw1n4, gw1ns2, gw1ns4, gw2a18]
+    needs: [gw1n1, gw1nz1, gw1n9, gw1n9c, gw1n4, gw1ns2, gw1ns4, gw2a18, gw2a18c]
     steps:
     - uses: actions/checkout@v3
     - name: Download gw1n-1 chipdb
@@ -199,6 +217,11 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: gw2a-18-chipdb
+        path: apycula
+    - name: Download gw2a-18c chipdb
+      uses: actions/download-artifact@v3
+      with:
+        name: gw2a-18c-chipdb
         path: apycula
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -278,7 +301,7 @@ jobs:
         sudo make install
         cd ../nextpnr
         git checkout ${{ matrix.nextpnr }}
-        cmake . -DARCH=gowin
+        cmake . -DARCH="gowin;himbaechel"
         make -j$(nproc)
         sudo make install
         cd ../examples

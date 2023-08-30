@@ -1,0 +1,7 @@
+//Part Number: GW1NS-UX2CQN48C5/I4
+
+IO_LOC "clk" 10;
+IO_LOC "led[0]" 32;
+IO_LOC "led[1]" 33;
+IO_LOC "led[2]" 34;
+

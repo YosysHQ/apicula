@@ -624,8 +624,8 @@ osc_attrvals = {
 
 # config
 cfg_attrids = {
+        'DONE_AS_GPIO':     0,
         'GSR':              2,
-        'DONE_AS_GPIO':     4,
         'JTAG_AS_GPIO':     6,
         'READY_AS_GPIO':    7,
         'MSPI_AS_GPIO':     8,
@@ -647,6 +647,18 @@ cfg_attrvals = {
         'USED':             7,
         'UNUSED':           8,
         'FALSE':            9
+    }
+
+# global set/reset
+gsr_attrids = {
+        'GSRMODE':          0,
+        'SYNCMODE':         1,
+    }
+
+gsr_attrvals = {
+        'UNKNOWN':          0,
+        'ACTIVE_LOW':       1,
+        'SYNC':             2,
     }
 
 # iologic

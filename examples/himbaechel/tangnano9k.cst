@@ -1,0 +1,67 @@
+//Part Number: GW1NR-LV9QN88PC6/I5
+
+IO_LOC "clk" 52;
+IO_LOC "led[0]" 10;
+IO_LOC "led[1]" 11;
+IO_LOC "led[2]" 13;
+IO_LOC "led[3]" 14;
+IO_LOC "led[4]" 15;
+IO_LOC "led[5]" 16;
+IO_LOC "key" 3;
+IO_LOC "rst" 4;
+
+IO_LOC "LED_R" 10;
+IO_LOC "LED_G" 11;
+IO_LOC "LED_B" 13;
+
+// fake
+IO_LOC "led[6]" 35;
+IO_LOC "led[7]" 33;
+
+// oser
+IO_LOC "oser_out" 10;
+IO_LOC "io16"     29;
+IO_LOC "pclk_o"   15;
+IO_LOC "fclk_o"   16;
+
+// ides
+IO_LOC "fclk_i" 54;
+IO_LOC "data_i" 29;
+IO_LOC "q_o[0]" 68;
+IO_LOC "q_o[1]" 69;
+IO_LOC "q_o[2]" 70;
+IO_LOC "q_o[3]" 75;
+IO_LOC "q_o[4]" 74;
+IO_LOC "q_o[5]" 73;
+IO_LOC "q_o[6]" 72;
+IO_LOC "q_o[7]" 71;
+
+// RGB LCD
+IO_LOC "LCD_B[0]" 54;
+IO_LOC "LCD_B[1]" 53;
+IO_LOC "LCD_B[2]" 51;
+IO_LOC "LCD_B[3]" 42;
+IO_LOC "LCD_B[4]" 41;
+IO_LOC "LCD_CLK" 35;
+IO_LOC "LCD_DEN" 33;
+IO_LOC "LCD_G[0]" 70;
+IO_LOC "LCD_G[1]" 69;
+IO_LOC "LCD_G[2]" 68;
+IO_LOC "LCD_G[3]" 57;
+IO_LOC "LCD_G[4]" 56;
+IO_LOC "LCD_G[5]" 55;
+IO_LOC "LCD_HYNC" 40;
+IO_LOC "LCD_R[0]" 75;
+IO_LOC "LCD_R[1]" 74;
+IO_LOC "LCD_R[2]" 73;
+IO_LOC "LCD_R[3]" 72;
+IO_LOC "LCD_R[4]" 71;
+IO_LOC "LCD_SYNC" 34;
+IO_LOC "LCD_XR"   32;
+IO_LOC "LCD_XL"   39;
+
+IO_LOC "tlvds_p" 25;
+IO_LOC "tlvds_n" 26;
+
+IO_LOC "elvds_p" 75;
+IO_LOC "elvds_n" 74;

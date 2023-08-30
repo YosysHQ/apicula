@@ -1,0 +1,77 @@
+//Copyright (C)2014-2019 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//GOWIN Version: V1.9.1.01Beta
+//Part Number: GW1N-LV1QN48C6/I5
+//Created Time: Sun Dec 15 11:40:09 2019
+
+IO_LOC "clk" 35;
+IO_PORT "clk" IO_TYPE=LVCMOS33;
+IO_LOC "rst" 77;
+IO_LOC "key" 68;
+IO_LOC "sd_out" 47; // PMOD header pin 1
+IO_PORT "sd_out" IO_TYPE=LVCMOS33;
+IO_LOC "led[0]" 86;
+IO_LOC "led[1]" 85;
+IO_LOC "led[2]" 84;
+IO_LOC "led[3]" 83;
+IO_LOC "led[4]" 82;
+IO_LOC "led[5]" 81;
+IO_LOC "led[6]" 80;
+IO_LOC "led[7]" 79;
+
+IO_LOC "LCD_CLK"  29;
+IO_PORT "LCD_CLK" IO_TYPE=LVCMOS33;
+IO_LOC "LCD_DEN"  30;
+IO_PORT "LCD_DEN" IO_TYPE=LVCMOS33;
+IO_LOC "LCD_HYNC" 31;
+IO_PORT "LCD_HYNC" IO_TYPE=LVCMOS33;
+IO_LOC "LCD_SYNC" 32;
+IO_PORT "LCD_SYNC" IO_TYPE=LVCMOS33;
+IO_LOC "LCD_XR"   33;
+IO_PORT "LCD_XR" IO_TYPE=LVCMOS33;
+IO_LOC "LCD_XL"   34;
+IO_PORT "LCD_XL" IO_TYPE=LVCMOS33;
+
+// oser
+IO_LOC "oser_out" 86;
+IO_PORT "oser_out" IO_TYPE=LVCMOS33;
+IO_LOC "io16" 86;
+IO_PORT "io16" IO_TYPE=LVCMOS33;
+IO_LOC "pclk_o"   81;
+IO_PORT "pclk_o" IO_TYPE=LVCMOS33;
+IO_LOC "fclk_o"   80;
+IO_PORT "fclk_o" IO_TYPE=LVCMOS33;
+
+// ides
+IO_LOC "fclk_i" 18;
+IO_PORT "fclk_i" IO_TYPE=LVCMOS33;
+IO_LOC "data_i" 86;
+IO_PORT "data_i" IO_TYPE=LVCMOS33;
+IO_LOC "q_o[0]" 20;
+IO_PORT "q_o[0]" IO_TYPE=LVCMOS33;
+IO_LOC "q_o[1]" 25;
+IO_PORT "q_o[1]" IO_TYPE=LVCMOS33;
+IO_LOC "q_o[2]" 26;
+IO_PORT "q_o[2]" IO_TYPE=LVCMOS33;
+IO_LOC "q_o[3]" 27;
+IO_PORT "q_o[3]" IO_TYPE=LVCMOS33;
+IO_LOC "q_o[4]" 28;
+IO_PORT "q_o[4]" IO_TYPE=LVCMOS33;
+IO_LOC "q_o[5]" 29;
+IO_PORT "q_o[5]" IO_TYPE=LVCMOS33;
+IO_LOC "q_o[6]" 30;
+IO_PORT "q_o[6]" IO_TYPE=LVCMOS33;
+IO_LOC "q_o[7]" 31;
+IO_PORT "q_o[7]" IO_TYPE=LVCMOS33;
+
+// true LVDS pins
+IO_LOC "tlvds_p" 29;
+IO_LOC "tlvds_n" 30;
+IO_PORT "tlvds_p" IO_TYPE=LVCMOS33;
+IO_PORT "tlvds_n" IO_TYPE=LVCMOS33;
+
+IO_LOC "elvds_p" 71;
+IO_LOC "elvds_n" 70;
+IO_PORT "elvds_p" IO_TYPE=LVCMOS33;
+IO_PORT "elvds_n" IO_TYPE=LVCMOS33;

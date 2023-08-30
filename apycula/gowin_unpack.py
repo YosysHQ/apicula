@@ -19,7 +19,8 @@ _device = ""
 _pinout = ""
 _packages = {
         'GW1N-1' : 'LQFP144', 'GW1NZ-1' : 'QFN48', 'GW1N-4' : 'PBGA256', 'GW1N-9C' : 'UBGA332',
-        'GW1N-9' : 'PBGA256', 'GW1NS-4' : 'QFN48', 'GW1NS-2' : 'LQFP144',
+        'GW1N-9' : 'PBGA256', 'GW1NS-4' : 'QFN48', 'GW1NS-2' : 'LQFP144', 'GW2A-18': 'PBGA256',
+        'GW2A-18C' : 'PBGA256S'
 }
 
 # bank iostandards
@@ -390,6 +391,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("IOB"):
             idx = name[-1]
             attrvals = parse_attrvals(tile, db.logicinfo['IOB'], db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids)
+            #print(row, col, attrvals)
             try: # we can ask for invalid pin here because the IOBs share some stuff
                 bank = chipdb.loc2bank(db, row, col)
             except KeyError:
@@ -423,6 +425,19 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             attrvals = parse_attrvals(tile, db.logicinfo['IOB'], _bank_fuse_tables[tiledata.ttyp][name], attrids.iob_attrids)
             for a, v in attrvals.items():
                 bels.setdefault(name, set()).add(f'{a}={attrids.iob_num2val[v]}')
+        if name.startswith("ALU"):
+            idx = int(name[3])
+            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids)
+            # skip ALU and unsupported modes
+            if attrvals.get('MODE') != attrids.cls_attrvals['ALU']:
+                continue
+            bels[name] = {"C2L"}
+            mode_bits = {(row, col)
+                         for row, col in bel.mode_bits
+                         if tile[row][col] == 1}
+            for mode, bits in bel.modes.items():
+                if bits == mode_bits and (default or bits):
+                    bels[name] = {mode}
         else:
             mode_bits = {(row, col)
                          for row, col in bel.mode_bits
@@ -605,39 +620,48 @@ def move_iologic(bels):
     return res
 
 def disable_unused_pll_ports(pll):
-    if 'DYN_DA_EN' not in pll.params.keys():
+    if 'DYN_DA_EN' not in pll.params:
         for n in range(0, 4):
-            del pll.portmap[f'PSDA{n}']
-            del pll.portmap[f'DUTYDA{n}']
-            del pll.portmap[f'FDLY{n}']
-    if 'DYN_IDIV_SEL' not in pll.params.keys():
+            if f'PSDA{n}' in pll.portmap:
+                del pll.portmap[f'PSDA{n}']
+                del pll.portmap[f'DUTYDA{n}']
+                del pll.portmap[f'FDLY{n}']
+    if 'DYN_IDIV_SEL' not in pll.params:
         for n in range(0, 6):
-            del pll.portmap[f'IDSEL{n}']
-    if 'DYN_FBDIV_SEL' not in pll.params.keys():
+            if f'IDSEL{n}' in pll.portmap:
+                del pll.portmap[f'IDSEL{n}']
+    if 'DYN_FBDIV_SEL' not in pll.params:
         for n in range(0, 6):
-            del pll.portmap[f'FBDSEL{n}']
-    if 'DYN_ODIV_SEL' not in pll.params.keys():
+            if f'FBDSEL{n}' in pll.portmap:
+                del pll.portmap[f'FBDSEL{n}']
+    if 'DYN_ODIV_SEL' not in pll.params:
         for n in range(0, 6):
-            del pll.portmap[f'ODSEL{n}']
-    if 'PWDEN' in pll.params.keys():
+            if f'ODSEL{n}' in pll.portmap:
+                del pll.portmap[f'ODSEL{n}']
+    if 'PWDEN' in pll.params:
         if pll.params['PWDEN'] == 'DISABLE':
-            del pll.portmap['RESET_P']
+            if 'RESET_P' in pll.portmap:
+                del pll.portmap['RESET_P']
         del pll.params['PWDEN']
-    if 'RSTEN' in pll.params.keys():
+    if 'RSTEN' in pll.params:
         if pll.params['RSTEN'] == 'DISABLE':
-            del pll.portmap['RESET']
+            if 'RESET' in pll.portmap:
+                del pll.portmap['RESET']
         del pll.params['RSTEN']
-    if 'CLKOUTDIV3' in pll.params.keys():
+    if 'CLKOUTDIV3' in pll.params:
         if pll.params['CLKOUTDIV3'] == 'DISABLE':
-            del pll.portmap['CLKOUTD3']
+            if 'CLKOUTD3' in pll.portmap:
+                del pll.portmap['CLKOUTD3']
         del pll.params['CLKOUTDIV3']
-    if 'CLKOUTDIV' in pll.params.keys():
+    if 'CLKOUTDIV' in pll.params:
         if pll.params['CLKOUTDIV'] == 'DISABLE':
-            del pll.portmap['CLKOUTD']
+            if 'CLKOUTD' in pll.portmap:
+                del pll.portmap['CLKOUTD']
         del pll.params['CLKOUTDIV']
-    if 'CLKOUTPS' in pll.params.keys():
+    if 'CLKOUTPS' in pll.params:
         if pll.params['CLKOUTPS'] == 'DISABLE':
-            del pll.portmap['CLKOUTP']
+            if 'CLKOUTP' in pll.portmap:
+                del pll.portmap['CLKOUTP']
         del pll.params['CLKOUTPS']
 
 _tbrlre = re.compile(r"IO([TBRL])(\d+)(\w)")
@@ -673,14 +697,16 @@ def modify_pll_inputs(db, pll):
             if insel == 'CLKIN0':
                 find_pll_in_pin(db, pll)
             else:
-                del pll.portmap['CLKIN']
+                if 'CLKIN' in pll.portmap:
+                    del pll.portmap['CLKIN']
         del pll.params['INSEL']
     if 'FBSEL' in pll.params.keys():
         fbsel = pll.params['FBSEL']
         if fbsel == 'CLKFB3':
             # internal
             pll.params['CLKFB_SEL'] = '"internal"'
-            del pll.portmap['CLKFB']
+            if 'CLKFB' in pll.portmap:
+                del pll.portmap['CLKFB']
         elif fbsel == 'CLKFB0':
             # external CLK2
             pll.params['CLKFB_SEL'] = '"external"'
@@ -871,11 +897,13 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             name = f"R{row}C{col}_ALU_{idx}"
             if kind == 'hadder':
                 kind = '0'
-            if kind in "012346789": # main ALU
+            if kind in "012346789" or kind == "C2L" : # main ALU
                 alu = codegen.Primitive("ALU", name)
                 alu.params["ALU_MODE"] = kind
-                alu.portmap['SUM'] = f"R{row}C{col}_F{idx}"
+                if kind != "C2L":
+                    alu.portmap['SUM'] = f"R{row}C{col}_F{idx}"
                 alu.portmap['CIN'] = f"R{row}C{col}_CIN{idx}"
+                alu.portmap['I2'] = f"R{row}C{col}_C{idx}"
                 if idx != 5:
                     alu.portmap['COUT'] = f"R{row}C{col}_CIN{idx+1}"
                 else:
@@ -888,6 +916,11 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                 elif kind == "0":
                     alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
+                elif kind == "C2L":
+                    alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
+                    alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
+                    alu.portmap['COUT'] = f"R{row}C{col}_F{idx}"
+                    alu.params["ALU_MODE"] = "9" # XXX
                 else:
                     alu.portmap['I0'] = f"R{row}C{col}_A{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
@@ -904,12 +937,12 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             ram16.params["INIT_1"] = f"16'b{val1:016b}"
             ram16.params["INIT_2"] = f"16'b{val2:016b}"
             ram16.params["INIT_3"] = f"16'b{val3:016b}"
-            ram16.portmap['DI'] = [f"R{row}C{col}_{x}5" for x in "ABCD"]
+            ram16.portmap['DI'] = [f"R{row}C{col}_{x}5" for x in "DCBA"]
             ram16.portmap['CLK'] = f"R{row}C{col}_CLK2"
             ram16.portmap['WRE'] = f"R{row}C{col}_LSR2"
-            ram16.portmap['WAD'] = [f"R{row}C{col}_{x}4" for x in "ABCD"]
-            ram16.portmap['RAD'] = [f"R{row}C{col}_{x}0" for x in "ABCD"]
-            ram16.portmap['DO'] = [f"R{row}C{col}_F{x}" for x in range(4)]
+            ram16.portmap['WAD'] = [f"R{row}C{col}_{x}4" for x in "DCBA"]
+            ram16.portmap['RAD'] = [f"R{row}C{col}_{x}0" for x in "DCBA"]
+            ram16.portmap['DO'] = [f"R{row}C{col}_F{x}" for x in range(4, -1, -1)]
             mod.wires.update(chain.from_iterable([x if isinstance(x, list) else [x] for x in ram16.portmap.values()]))
             mod.primitives[name] = ram16
         elif typ in {"OSC", "OSCZ", "OSCF", "OSCH", "OSCW", "OSCO"}:
@@ -1066,6 +1099,12 @@ def main():
         bm_pll = chipdb.tile_bitmap(db, bitmap, empty = True)
         bm[(9, 0)] = bm_pll[(9, 0)]
         bm[(9, 46)] = bm_pll[(9, 46)]
+    if _device in {'GW2A-18', 'GW2A-18C'}:
+        bm_pll = chipdb.tile_bitmap(db, bitmap, empty = True)
+        bm[(9, 0)] = bm_pll[(9, 0)]
+        bm[(9, 55)] = bm_pll[(9, 55)]
+        bm[(45, 0)] = bm_pll[(45, 0)]
+        bm[(45, 55)] = bm_pll[(45, 55)]
 
     for (drow, dcol, dname), (srow, scol, sname) in db.aliases.items():
         src = f"R{srow+1}C{scol+1}_{sname}"

@@ -74,7 +74,14 @@ clknames.update({
     121: 'PCLKT0', 122: 'PCLKT1', 123: 'PCLKB0', 124: 'PCLKB1',
     125: 'PCLKL0', 126: 'PCLKL1', 127: 'PCLKR0', 128: 'PCLKR1',
 })
-clknames.update({n: f"UNK{n}" for n in range(129, 153)})
+clknames.update({
+    129: 'TRBDCLK0', 130: 'TRBDCLK1', 131: 'TRBDCLK2', 132: 'TRBDCLK3',
+    133: 'TLBDCLK1', 134: 'TLBDCLK2', 135: 'TLBDCLK3', 136: 'TLBDCLK0',
+    137: 'BRBDCLK2', 138: 'BRBDCLK3', 139: 'BRBDCLK0', 140: 'BRBDCLK1',
+    141: 'BLBDCLK3', 142: 'BLBDCLK0', 143: 'BLBDCLK1', 144: 'BLBDCLK2',
+    145: 'TRMDCLK0', 146: 'TLMDCLK0', 147: 'BRMDCLK0', 148: 'BLMDCLK0',
+    149: 'BLMDCLK1', 150: 'BRMDCLK1', 151: 'TLMDCLK1', 152: 'TRMDCLK1',
+})
 clknames[153] = 'VCC'
 clknames.update({n: f"UNK{n}" for n in range(154, 170)})
 
@@ -99,5 +106,24 @@ clknames.update({
 })
 
 clknames.update({n: f"UNK{n}" for n in range(210, 261)})
-
 clknumbers = {v: k for k, v in clknames.items()}
+
+# hclk
+hclknames = clknames.copy()
+hclknames.update({n: f"HCLK_UNK{n}" for n in range(26)})
+# inputs
+hclknames.update({
+    2: 'HCLK_IN0', 3: 'HCLK_IN1', 4: 'HCLK_IN2', 5: 'HCLK_IN3'
+})
+
+# outputs
+hclknames.update({
+    10: 'HCLK_OUT0', 11: 'HCLK_OUT1', 12: 'HCLK_OUT2', 13: 'HCLK_OUT3'
+})
+# these work as inputs in GW1N-9c
+hclknames.update({
+    16: 'HCLK_9IN0', 17: 'HCLK_9IN1', 18: 'HCLK_9IN2', 19: 'HCLK_9IN3'
+})
+
+
+hclknumbers = {v: k for k, v in hclknames.items()}
