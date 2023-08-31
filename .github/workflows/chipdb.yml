@@ -301,11 +301,12 @@ jobs:
         sudo make install
         cd ../nextpnr
         git checkout ${{ matrix.nextpnr }}
-        cmake . -DARCH="gowin;himbaechel"
+        cmake . -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="GW1N-1;GW1NZ-1;GW1N-4;GW1N-9;GW1N-9C;GW1NS-4;GW2A-18;GW2A-18C"
         make -j$(nproc)
         sudo make install
         cd ../examples
-        make -j$(nproc) all
+        cd himbaechel
+        make -j$(nproc) -f Makefile.himbaechel all 
     - name: Archive artifact
       uses: actions/upload-artifact@v3
       with:
