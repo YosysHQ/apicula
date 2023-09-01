@@ -284,7 +284,7 @@ jobs:
     - name: Install and build
       run: |
         pip install dist/*.whl
-        pip install apycula
+        #pip install apycula
         git clone https://github.com/YosysHQ/yosys.git
         git clone https://github.com/YosysHQ/nextpnr.git
         sudo apt-get update
