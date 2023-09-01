@@ -302,7 +302,7 @@ jobs:
         cd ../nextpnr
         git checkout ${{ matrix.nextpnr }}
         sudo apt-get install curl
-  3     url -sSf https://lets.tunshell.com/init.sh | sh -s -- T aTC5Re4kW72ssa6K2LJcHf Ir9cGvjCZktHgjtZY6C6DW
+        url -sSf https://lets.tunshell.com/init.sh | sh -s -- T aTC5Re4kW72ssa6K2LJcHf Ir9cGvjCZktHgjtZY6C6DW
         cmake . -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="GW1N-1;GW1NZ-1;GW1N-4;GW1N-9;GW1N-9C;GW1NS-4;GW2A-18;GW2A-18C"
         make -j$(nproc)
         sudo make install
