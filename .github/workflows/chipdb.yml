@@ -305,8 +305,7 @@ jobs:
         cmake . -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="GW1N-1;GW1NZ-1;GW1N-4;GW1N-9;GW1N-9C;GW1NS-4;GW2A-18;GW2A-18C" -DPython3_EXECUTABLE=/opt/hostedtoolcache/Python/3.9.17/x64/bin/python
         make -j$(nproc)
         sudo make install
-        cd ../examples
-        cd himbaechel
+        cd ../examples/himbaechel
         make -j$(nproc) -f Makefile.himbaechel all 
     - name: Archive artifact
       uses: actions/upload-artifact@v3
@@ -315,7 +314,7 @@ jobs:
           path: examples
     - name: Do sanity check
       run: |
-        cd examples
+        cd examples/himbaechel
         make unpacked
         for f in *-unpacked.v; do
           yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:LUT*; select -assert-any t:*BUF;";
