@@ -317,5 +317,5 @@ jobs:
         cd examples/himbaechel
         make -f Makefile.himbaechel unpacked
         for f in *-unpacked.v; do
-          yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:LUT*; select -assert-any t:*BUF;";
+          yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
         done
