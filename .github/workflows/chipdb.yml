@@ -284,7 +284,7 @@ jobs:
     - name: Install and build
       run: |
         pip install dist/*.whl
-        #pip install apycula
+        # pip install apycula
         git clone https://github.com/YosysHQ/yosys.git
         git clone https://github.com/YosysHQ/nextpnr.git
         sudo apt-get update
@@ -304,7 +304,9 @@ jobs:
         cmake . -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="GW1N-1;GW1NZ-1;GW1N-4;GW1N-9;GW1N-9C;GW1NS-4;GW2A-18;GW2A-18C" -DPython3_EXECUTABLE=/opt/hostedtoolcache/Python/3.9.17/x64/bin/python
         make -j$(nproc)
         sudo make install
-        cd ../examples/himbaechel
+        cd ../examples
+        #make -j$(nproc) all
+        cd himbaechel
         make -j$(nproc) -f Makefile.himbaechel all 
     - name: Archive artifact
       uses: actions/upload-artifact@v3
@@ -313,7 +315,12 @@ jobs:
           path: examples
     - name: Do sanity check
       run: |
-        cd examples/himbaechel
+        cd examples
+        #make -j$(nproc) unpacked
+        #for f in *-unpacked.v; do
+        #  yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
+        #done
+        cd himbaechel
         make -j$(nproc) -f Makefile.himbaechel unpacked
         for f in *-unpacked.v; do
           yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
