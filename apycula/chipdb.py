@@ -113,6 +113,7 @@ class Device:
     # - OSER16/IDES16
     # - ref to hclk_pips
     # - disabled blocks
+    # - BUF(G)
     extra_func: Dict[Tuple[int, int], Dict[str, Any]] = field(default_factory=dict)
 
     @property
@@ -153,6 +154,40 @@ class Device:
                 if bel[0:4] == 'BANK':
                     res.update({ bel[4:] : pos })
         return res
+
+# XXX GW1N-4 and GW1NS-4 have next data in dat['CmuxIns']:
+# 62 [11, 1, 126]
+# 63 [11, 1, 126]
+# this means that the same wire (11, 1, 126) is connected implicitly to two
+# other logical wires. Let's remember such connections.
+# If suddenly a command is given to assign an already used wire to another
+# node, then all the contents of this node are combined with the existing one,
+# and the node itself is destroyed.  only for HCLK and clock nets for now
+wire2node = {}
+def add_node(dev, node_name, wire_type, row, col, wire):
+    if (row, col, wire) not in wire2node:
+        wire2node[row, col, wire] = node_name
+        dev.nodes.setdefault(node_name, (wire_type, set()))[1].add((row, col, wire))
+    else:
+        if node_name != wire2node[row, col, wire] and node_name in dev.nodes:
+            #print(f'{node_name} -> {wire2node[row, col, wire]} share ({row}, {col}, {wire})')
+            dev.nodes[wire2node[row, col, wire]][1].update(dev.nodes[node_name][1])
+            del dev.nodes[node_name]
+
+# create bels for entry potints to the global clock nets
+def add_buf_bel(dev, row, col, wire, buf_type = 'BUFG'):
+    # clock pins
+    if not wire.startswith('CLK'):
+        return
+    extra_func = dev.extra_func.setdefault((row, col), {})
+    if 'buf' not in extra_func or buf_type not in extra_func['buf']:
+        extra_func.update({'buf': {buf_type: [wire]}})
+    else:
+        # dups not allowed for now
+        if wire in extra_func['buf'][buf_type]:
+            #print(f'extra buf dup ({row}, {col}) {buf_type}/{wire}')
+            return
+        extra_func['buf'][buf_type].append(wire)
 
 def unpad(fuses, pad=-1):
     try:
@@ -962,7 +997,10 @@ def fse_create_hclk_nodes(dev, device, fse, dat):
         # entries to the HCLK from logic
         for hclk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(hclknumbers['TBDHCLK0'], hclknumbers['RBDHCLK3'] + 1)}:
             if row != -2:
-                dev.nodes.setdefault(hclknames[hclk_idx], ("HCLK", set()))[1].add((row, col, wirenames[wire_idx]))
+                add_node(dev, hclknames[hclk_idx], "HCLK", row, col, wirenames[wire_idx])
+                # XXX clock router is doing fine with HCLK w/o any buffering
+                # may be placement suffers a bit
+                #add_buf_bel(dev, row, col, wirenames[wire_idx], buf_type = 'BUFH')
 
         if 'hclk' in hclk_info[side]:
             # create HCLK cells pips
@@ -975,7 +1013,7 @@ def fse_create_hclk_nodes(dev, device, fse, dat):
                     for src in srcs.keys():
                         for pfx in _global_wire_prefixes:
                             if src.startswith(pfx):
-                                dev.nodes.setdefault(src, ('HCLK', set()))[1].add((row, col, src))
+                                add_node(dev, src, "HCLK", row, col, src)
                 # strange GW1N-9C input-input aliases
                 for i in {0, 2}:
                     dev.nodes.setdefault(f'X{col}Y{row}/HCLK9-{i}', ('HCLK', {(row, col, f'HCLK_IN{i}')}))[1].add((row, col, f'HCLK_9IN{i}'))
@@ -1249,7 +1287,8 @@ def fse_create_clocks(dev, device, dat, fse):
     # find center muxes
     for clk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(clknumbers['PCLKT0'], clknumbers['PCLKR1'] + 1)}:
         if row != -2:
-            dev.nodes.setdefault(clknames[clk_idx], ("GLOBAL_CLK", set()))[1].add((row, col, wirenames[wire_idx]))
+            add_node(dev, clknames[clk_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
+            add_buf_bel(dev, row, col, wirenames[wire_idx])
 
     spines = {f'SPINE{i}' for i in range(32)}
     for row, rd in enumerate(dev.grid):
@@ -1257,11 +1296,11 @@ def fse_create_clocks(dev, device, dat, fse):
             for dest, srcs in rc.pure_clock_pips.items():
                 for src in srcs.keys():
                     if src in spines and not dest.startswith('GT'):
-                        dev.nodes.setdefault(src, ("GLOBAL_CLK", set()))[1].add((row, col, src))
+                        add_node(dev, src, "GLOBAL_CLK", row, col, src)
                 if dest in spines:
-                    dev.nodes.setdefault(dest, ("GLOBAL_CLK", set()))[1].add((row, col, dest))
+                    add_node(dev, dest, "GLOBAL_CLK", row, col, dest)
                     for src in { wire for wire in srcs.keys() if wire not in {'VCC', 'VSS'}}:
-                        dev.nodes.setdefault(src, ("GLOBAL_CLK", set()))[1].add((row, col, src))
+                        add_node(dev, src, "GLOBAL_CLK", row, col, src)
     # GBx0 <- GBOx
     for spine_pair in range(4): # GB00/GB40, GB10/GB50, GB20/GB60, GB30/GB70
         tap_start = _clock_data[device]['tap_start'][0]
@@ -1428,6 +1467,46 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
               ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
               }
 
+# from logic to global clocks. An interesting piece of dat['CmuxIns'], it was
+# found out experimentally that this range is responsible for the wires
+# 129: 'TRBDCLK0' - 152: 'TRMDCLK1'. Again we have a shift of 80 from the wire number
+# (see create clock aliases).
+# 124-126 equal CLK0-CLK2 so these are clearly inputs to the clock system
+# (GW1N-1 data)
+# 49 [1, 11, 124]
+# 50 [1, 11, 125]
+# 51 [6, 20, 124]
+# 52 [6, 20, 125]
+# 53 [1, 10, 125]
+# 54 [6, 1, 124]
+# 55 [6, 1, 125]
+# 56 [1, 10, 124]
+# 57 [11, 11, 124]
+# 58 [11, 11, 125]
+# 59 [7, 20, 126]
+# 60 [8, 20, 126]
+# 61 [11, 10, 125]
+# 62 [7, 1, 126]
+# 63 [8, 1, 126]
+# 64 [11, 10, 124]
+# 65 [-1, -1, -1]
+# 66 [-1, -1, -1]
+# 67 [-1, -1, -1]
+# 68 [-1, -1, -1]
+# 69 [-1, -1, -1]
+# 70 [-1, -1, -1]
+# 71 [6, 10, 126]
+# 72 [6, 11, 126]
+# We don't need to worry about routing TRBDCLK0 and the family - this was
+# already done when we created pure clock pips. But what we need to do is
+# indicate that these CLKs at these coordinates are TRBDCLK0, etc. Therefore,
+# we create Himbaechel nodes.
+def fse_create_logic2clk(dev, device, dat):
+    for clkwire_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(clknumbers['TRBDCLK0'], clknumbers['TRMDCLK1'] + 1)}:
+        if row != -2:
+            add_node(dev, clknames[clkwire_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
+            add_buf_bel(dev, row, col, wirenames[wire_idx])
+
 def fse_create_osc(dev, device, fse):
     for row, rd in enumerate(dev.grid):
         for col, rc in enumerate(rd):
@@ -1503,6 +1582,7 @@ def from_fse(device, fse, dat):
     fse_create_io16(dev, device)
     fse_create_osc(dev, device, fse)
     fse_create_gsr(dev, device)
+    fse_create_logic2clk(dev, device, dat)
     disable_plls(dev, device)
     sync_extra_func(dev)
     return dev

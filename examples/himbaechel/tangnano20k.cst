@@ -1,5 +1,6 @@
 IO_LOC "clk" 4;
-IO_LOC "clk_i" 4;
+
+CLOCK_LOC "clk" BUFG;
 
 IO_LOC "led[0]" 15;
 IO_LOC "led[1]" 16;
