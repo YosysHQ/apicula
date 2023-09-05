@@ -5,8 +5,8 @@ IO_LOC "led[2]" 29;
 IO_LOC "led[3]" 30;
 IO_LOC "led[4]" 31;
 IO_LOC "led[5]" 32;
-IO_LOC "key" 15;
-IO_LOC "rst" 14;
+IO_LOC "key_i" 15;
+IO_LOC "rst_i" 14;
 IO_LOC "clk" 45;
 
 // oser

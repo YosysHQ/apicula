@@ -1,6 +1,6 @@
 (* top *)
 module top (
-	input key,
+	input key_i,
 	input clk,
 	output [`LEDS_NR-1:0] led
 );
@@ -43,6 +43,7 @@ rPLL pll(
 	defparam pll.DYN_SDIV_SEL=1;      // 9MHz --- pixel clock
 	defparam pll.PSDA_SEL="0000";
 
+wire key = key_i ^ `INV_BTN;
 
 reg [25:0] ctr_q;
 wire [25:0] ctr_d;

@@ -5,11 +5,12 @@
 * are connected to the board pins.
 */
 module top(input wire clk, 
-	input wire rst,
+	input wire rst_i,
 	output wire oser_out,
 	output wire pclk_o,
     output wire fclk_o);
 
+	wire rst = rst_i ^ `INV_BTN;
 	OSER10 os(
 		.D0(1'b0),
 		.D1(1'b1),

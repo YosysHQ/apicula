@@ -1,11 +1,12 @@
 `default_nettype none
 module top(input wire clk, 
-	input wire rst, 
+	input wire rst_i, 
 	input wire fclk_i,
 	input wire data_i,
 	output wire pclk_o,
 	output wire [7:0]q_o);
 
+	wire rst = rst_i ^ `INV_BTN;
     IVIDEO ides(
         .D(data_i),
 		.FCLK(fclk_i),

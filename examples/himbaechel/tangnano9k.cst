@@ -7,8 +7,8 @@ IO_LOC "led[2]" 13;
 IO_LOC "led[3]" 14;
 IO_LOC "led[4]" 15;
 IO_LOC "led[5]" 16;
-IO_LOC "key" 3;
-IO_LOC "rst" 4;
+IO_LOC "key_i" 3;
+IO_LOC "rst_i" 4;
 
 IO_LOC "LED_R" 10;
 IO_LOC "LED_G" 11;

@@ -1,6 +1,6 @@
 IO_LOC "clk" IOT27A;
-IO_LOC "key" T3;
-IO_LOC "rst" T10;
+IO_LOC "key_i" T3;
+IO_LOC "rst_i" T10;
 
 
 IO_LOC "led[0]" C13;

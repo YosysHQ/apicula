@@ -5,8 +5,10 @@ module top (
     input clk,
     output elvds_p,
     output elvds_n,
-	input key
+	input key_i
 );
+
+wire key = key_i ^ `INV_BTN;
 
 reg [24:0] ctr_q;
 wire [24:0] ctr_d;

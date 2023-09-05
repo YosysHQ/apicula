@@ -1,7 +1,7 @@
 (* top *)
 module TOP
 (
-	input			rst,
+	input			rst_i,
     input           clk,
 
 	output			LCD_CLK,
@@ -18,6 +18,7 @@ module TOP
 
 );
 
+	wire rst = rst_i ^ `INV_BTN;
 	wire CLK_SYS;	
 	wire CLK_PIX;
 

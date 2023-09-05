@@ -1,5 +1,5 @@
 module top (
-	input key,
+	input key_i,
 	output [`LEDS_NR-1:0] led
 );
 
@@ -26,6 +26,8 @@ OSCH osc(
 );
 `endif
 defparam osc.FREQ_DIV=16;
+
+wire key = key_i ^ `INV_BTN;
 
 reg [25:0] ctr_q;
 wire [25:0] ctr_d;
