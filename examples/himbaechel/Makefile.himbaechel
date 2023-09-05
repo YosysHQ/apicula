@@ -146,13 +146,13 @@ clean:
 %-tangnano20k.json: %-tangnano20k-synth.json tangnano20k.cst
 	$(NEXTPNR) --json $< --write $@ --chipdb ${CHIPDB_PATH}/chipdb-GW2A-18C.bin --vopt partno=GW2AR-LV18QN88C8/I7 --vopt cst=tangnano20k.cst
 
-%-tangnano20k-synth.json: %.v
+%-tangnano20k-synth.json: tangnano20k/%.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -p "read_verilog $^; synth_gowin -json $@"
 
-pll-nanolcd-tangnano20k-synth.json: pll/GW2A-18-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
+pll-nanolcd-tangnano20k-synth.json: pll/GW2A-18-dyn.vh tangnano20k/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
-attosoc-tangnano20k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
+attosoc-tangnano20k-synth.json: tangnano20k/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@"
 
 # ============================================================
