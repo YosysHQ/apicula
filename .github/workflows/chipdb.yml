@@ -301,7 +301,7 @@ jobs:
         sudo make install
         cd ../nextpnr
         git checkout ${{ matrix.nextpnr }}
-        cmake . -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="GW1N-1;GW1NZ-1;GW1N-4;GW1N-9;GW1N-9C;GW1NS-4;GW2A-18;GW2A-18C" -DPython3_EXECUTABLE=/opt/hostedtoolcache/Python/3.9.17/x64/bin/python
+        cmake . -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="GW1N-1;GW1NZ-1;GW1N-4;GW1N-9;GW1N-9C;GW1NS-4;GW2A-18;GW2A-18C" -DPython3_EXECUTABLE=/opt/hostedtoolcache/Python/3.9.18/x64/bin/python
         make -j$(nproc)
         sudo make install
         cd ../examples
