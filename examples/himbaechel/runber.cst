@@ -1,6 +1,6 @@
 IO_LOC "clk" 4;
-IO_LOC "rst" 58;
-IO_LOC "key" 59;
+IO_LOC "rst_i" 58;
+IO_LOC "key_i" 59;
 IO_LOC "led[0]" 25;
 IO_LOC "led[1]" 26;
 IO_LOC "led[2]" 23;

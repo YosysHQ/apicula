@@ -279,6 +279,7 @@ jobs:
         path: dist
     - name: Set up Python
       uses: actions/setup-python@v4
+      id: pysetup
       with:
         python-version: '3.9'
     - name: Install and build
@@ -301,7 +302,7 @@ jobs:
         sudo make install
         cd ../nextpnr
         git checkout ${{ matrix.nextpnr }}
-        cmake . -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="GW1N-1;GW1NZ-1;GW1N-4;GW1N-9;GW1N-9C;GW1NS-4;GW2A-18;GW2A-18C" -DPython3_EXECUTABLE=/opt/hostedtoolcache/Python/3.9.17/x64/bin/python
+        cmake . -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="GW1N-1;GW1NZ-1;GW1N-4;GW1N-9;GW1N-9C;GW1NS-4;GW2A-18;GW2A-18C" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
         make -j$(nproc)
         sudo make install
         cd ../examples

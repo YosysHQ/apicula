@@ -3,10 +3,13 @@
 */
 module top (
 	input clk,
-	input key,
-	input rst,
+	input key_i,
+	input rst_i,
 	output [`LEDS_NR-1:0] led
 );
+
+wire key = key_i ^ `INV_BTN;
+wire rst = rst_i ^ `INV_BTN;
 
 reg [24:0] ctr_q;
 wire [24:0] ctr_d;

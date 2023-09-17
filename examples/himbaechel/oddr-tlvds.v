@@ -4,11 +4,12 @@
 */
 module top (
     input clk,
-	input key,
+	input key_i,
     output tlvds_p,
     output tlvds_n
 );
 
+wire key = key_i ^ `INV_BTN;
 reg [24:0] ctr_q;
 wire [24:0] ctr_d;
 wire i_tick;
