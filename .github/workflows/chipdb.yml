@@ -306,7 +306,7 @@ jobs:
         make -j$(nproc)
         sudo make install
         cd ../examples
-        make -j$(nproc) all
+        make -j$(nproc) all NEXTPNR_VERSION=${{ matrix.nextpnr }}
         cd himbaechel
         make -j$(nproc) -f Makefile.himbaechel all 
     - name: Archive artifact
