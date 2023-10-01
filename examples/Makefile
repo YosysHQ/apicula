@@ -7,84 +7,84 @@ include deser/Makefile
 
 NEXTPNR_VERSION ?= master
 
-BUILD_LIST :=
-	attosoc-tec0117.fs \
-	nanolcd-tangnano.fs \
-	tonegen-tec0117.fs \
-	blinky-tec0117.fs \
-	blinky-runber.fs \
-	blinky-honeycomb.fs \
-	blinky-tangnano.fs \
-	blinky-tangnano1k.fs \
-	blinky-tangnano4k.fs \
-	blinky-tangnano9k.fs \
-	blinky-tbuf-tangnano.fs \
-	blinky-tbuf-tangnano1k.fs \
-	blinky-tbuf-tangnano4k.fs \
-	blinky-tbuf-tangnano9k.fs \
-	blinky-tbuf-tec0117.fs \
-	blinky-tbuf-runber.fs \
-	blinky-tbuf-honeycomb.fs \
-	shift-tec0117.fs \
-	shift-runber.fs \
-	shift-honeycomb.fs \
-	shift-tangnano.fs \
-	shift-tangnano1k.fs \
-	shift-tangnano9k.fs \
-	shift-tangnano4k.fs \
-	tlvds-tec0117.fs \
-	tlvds-szfpga.fs \
-	tlvds-tangnano4k.fs \
-	tlvds-tangnano9k.fs \
-	elvds-tec0117.fs \
-	elvds-szfpga.fs \
-	elvds-tangnano.fs \
-	elvds-tangnano1k.fs \
-	elvds-tangnano4k.fs \
-	elvds-tangnano9k.fs \
-	oddr-tlvds-tec0117.fs \
-	oddr-tlvds-tangnano4k.fs \
-	oddr-tlvds-tangnano9k.fs \
-	oddr-elvds-tangnano4k.fs \
-	oddr-elvds-tangnano9k.fs \
-	oddr-elvds-tec0117.fs \
-	oddr-elvds-szfpga.fs \
-	oddr-elvds-tangnano.fs \
-	oddr-elvds-tangnano1k.fs \
-	blinky-oddr-tec0117.fs \
-	blinky-oddr-runber.fs \
-	blinky-oddr-honeycomb.fs \
-	blinky-oddr-tangnano.fs \
-	blinky-oddr-tangnano1k.fs \
-	blinky-oddr-tangnano4k.fs \
-	blinky-oddr-tangnano9k.fs \
-	blinky-osc-tec0117.fs \
-	blinky-osc-runber.fs \
-	blinky-osc-honeycomb.fs \
-	blinky-osc-tangnano.fs  \
-	blinky-osc-tangnano9k.fs \
-	blinky-osc-tangnano1k.fs \
-	blinky-osc-tangnano4k.fs \
-	pll-52-tangnano.fs \
-	pll-80-tangnano.fs \
-	pll-54-tangnano1k.fs \
-	pll-81-tangnano1k.fs \
-	pll-dyn-tangnano.fs \
-	pll-dyn-tangnano1k.fs \
-	pll-tangnano4k.fs \
-	pll-dyn-honeycomb.fs \
-	pll-nanolcd-tangnano.fs \
-	pll-nanolcd-tangnano9k.fs \
-	pll2-tec0117.fs \
-	pll2-runber.fs \
-	pll2-tangnano9k.fs \
-	all_deser
+BUILD_LIST := \
+  attosoc-tec0117.fs \
+  nanolcd-tangnano.fs \
+  tonegen-tec0117.fs \
+  blinky-tec0117.fs \
+  blinky-runber.fs \
+  blinky-honeycomb.fs \
+  blinky-tangnano.fs \
+  blinky-tangnano1k.fs \
+  blinky-tangnano4k.fs \
+  blinky-tangnano9k.fs \
+  blinky-tbuf-tangnano.fs \
+  blinky-tbuf-tangnano1k.fs \
+  blinky-tbuf-tangnano4k.fs \
+  blinky-tbuf-tangnano9k.fs \
+  blinky-tbuf-tec0117.fs \
+  blinky-tbuf-runber.fs \
+  blinky-tbuf-honeycomb.fs \
+  shift-tec0117.fs \
+  shift-runber.fs \
+  shift-honeycomb.fs \
+  shift-tangnano.fs \
+  shift-tangnano1k.fs \
+  shift-tangnano9k.fs \
+  shift-tangnano4k.fs \
+  tlvds-tec0117.fs \
+  tlvds-szfpga.fs \
+  tlvds-tangnano4k.fs \
+  tlvds-tangnano9k.fs \
+  elvds-tec0117.fs \
+  elvds-szfpga.fs \
+  elvds-tangnano.fs \
+  elvds-tangnano1k.fs \
+  elvds-tangnano4k.fs \
+  elvds-tangnano9k.fs \
+  oddr-tlvds-tec0117.fs \
+  oddr-tlvds-tangnano4k.fs \
+  oddr-tlvds-tangnano9k.fs \
+  oddr-elvds-tangnano4k.fs \
+  oddr-elvds-tangnano9k.fs \
+  oddr-elvds-tec0117.fs \
+  oddr-elvds-szfpga.fs \
+  oddr-elvds-tangnano.fs \
+  oddr-elvds-tangnano1k.fs \
+  blinky-oddr-tec0117.fs \
+  blinky-oddr-runber.fs \
+  blinky-oddr-honeycomb.fs \
+  blinky-oddr-tangnano.fs \
+  blinky-oddr-tangnano1k.fs \
+  blinky-oddr-tangnano4k.fs \
+  blinky-oddr-tangnano9k.fs \
+  blinky-osc-tec0117.fs \
+  blinky-osc-runber.fs \
+  blinky-osc-honeycomb.fs \
+  blinky-osc-tangnano.fs  \
+  blinky-osc-tangnano1k.fs \
+  blinky-osc-tangnano9k.fs \
+  blinky-osc-tangnano4k.fs \
+  pll-52-tangnano.fs \
+  pll-80-tangnano.fs \
+  pll-54-tangnano1k.fs \
+  pll-81-tangnano1k.fs \
+  pll-dyn-tangnano.fs \
+  pll-dyn-tangnano1k.fs \
+  pll-tangnano4k.fs \
+  pll-dyn-honeycomb.fs \
+  pll-nanolcd-tangnano.fs \
+  pll-nanolcd-tangnano9k.fs \
+  pll2-tec0117.fs \
+  pll2-runber.fs \
+  pll2-tangnano9k.fs \
+  all_deser
 
 # add any examples that nextpnr-0.6 does not support to this list.
 POST_NEXTPNR_0_6 = blinky-primer20k.fs
 
 ifneq ($(NEXTPNR_VERSION),nextpnr-0.6)
-	BUILD_LIST := $(BUILD_LIST) $(POST_NEXTPNR_0_6)
+  BUILD_LIST := $(BUILD_LIST) $(POST_NEXTPNR_0_6)
 endif
 
 all: $(BUILD_LIST)
