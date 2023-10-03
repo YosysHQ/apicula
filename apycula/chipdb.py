@@ -7,7 +7,7 @@ from functools import reduce
 from collections import namedtuple
 import numpy as np
 import apycula.fuse_h4x as fuse
-from apycula.wirenames import wirenames, clknames, clknumbers, hclknames, hclknumbers
+from apycula.wirenames import wirenames, wirenumbers, clknames, clknumbers, hclknames, hclknumbers
 from apycula import pindef
 
 # the character that marks the I/O attributes that come from the nextpnr
@@ -447,6 +447,7 @@ _known_logic_tables = {
             13: 'BSRAM',
             14: 'DSP',
             15: 'PLL',
+            39: 'BSRAM_INIT',
             59: 'CFG',
             62: 'OSC',
             63: 'USB',
@@ -464,6 +465,10 @@ _known_tables = {
             26: 'CLS1',
             27: 'CLS2',
             28: 'CLS3',
+            29: 'BSRAM_DP',
+            30: 'BSRAM_SDP',
+            31: 'BSRAM_SP',
+            32: 'BSRAM_ROM',
             35: 'PLL',
             37: 'BANK',
             40: 'IOBC',
@@ -1386,7 +1391,7 @@ def fse_create_simplio_rows(dev, dat):
             dev.simplio_rows.add(row)
 
 def fse_create_tile_types(dev, dat):
-    type_chars = 'PCMI'
+    type_chars = 'PCMIB'
     for fn in type_chars:
         dev.tile_types[fn] = set()
     for row, rd in enumerate(dat['grid']):
@@ -1403,6 +1408,25 @@ def fse_create_tile_types(dev, dat):
                 if j == dev.cols:
                     j -= 1
                 dev.tile_types[fn].add(dev.grid[i][j].ttyp)
+
+def get_tile_types_by_func(dev, dat, fse, fn):
+    ttypes = set()
+    fse_grid = fse['header']['grid'][61]
+    for row, rd in enumerate(dat['grid']):
+        for col, type_char in enumerate(rd):
+            if type_char == fn:
+                i = row
+                if i > 0:
+                    i -= 1
+                if i == len(fse_grid):
+                    i -= 1
+                j = col
+                if j > 0:
+                    j -= 1
+                if j == len(fse_grid[0]):
+                    j -= 1
+                ttypes.add(fse_grid[i][j])
+    return ttypes
 
 def fse_create_diff_types(dev, device):
     dev.diff_io_types = ['ELVDS_IBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF', 'ELVDS_TBUF',
@@ -1530,6 +1554,14 @@ def fse_create_gsr(dev, device):
     dev.extra_func.setdefault((row, col), {}).update(
         {'gsr': {'wire': 'C4'}})
 
+def fse_bram(fse, aux = False):
+    bels = {}
+    name = 'BSRAM'
+    if aux:
+        name = 'BSRAM_AUX'
+    bels[name] = Bel()
+    return bels
+
 def disable_plls(dev, device):
     if device in {'GW2A-18C'}:
         # (9, 0) and (9, 55) are the coordinates of cells when trying to place
@@ -1547,6 +1579,8 @@ def from_fse(device, fse, dat):
     fse_create_simplio_rows(dev, dat)
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
     tiles = {}
+    bram_ttypes = get_tile_types_by_func(dev, dat, fse, 'B')
+    bram_aux_ttypes = get_tile_types_by_func(dev, dat, fse, 'b')
     for ttyp in ttypes:
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
@@ -1559,13 +1593,17 @@ def from_fse(device, fse, dat):
         tile.alonenode_6 = fse_alonenode(fse, ttyp, 6)
         if 5 in fse[ttyp]['shortval']:
             tile.bels = fse_luts(fse, ttyp)
-        if 51 in fse[ttyp]['shortval']:
+        elif 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
+        elif ttyp in bram_ttypes:
+            tile.bels = fse_bram(fse)
+        elif ttyp in bram_aux_ttypes:
+            tile.bels = fse_bram(fse, True)
         # These are the cell types in which PLLs can be located. To determine,
         # we first take the coordinates of the cells with the letters P and p
         # from the dat['grid'] table, and then, using these coordinates,
         # determine the type from fse['header']['grid'][61][row][col]
-        if ttyp in [42, 45, 74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
+        elif ttyp in [42, 45, 74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
         tile.bels.update(fse_iologic(device, fse, ttyp))
         tiles[ttyp] = tile
@@ -1775,6 +1813,7 @@ _ides16_inputs = [(19, 'PCLK'), (20, 'FCLK'), (38, 'CALIB'), (25, 'RESET'), (0, 
 _ides16_fixed_outputs = { 'Q0': 'F2', 'Q1': 'F3', 'Q2': 'F4', 'Q3': 'F5', 'Q4': 'Q0',
                           'Q5': 'Q1', 'Q6': 'Q2', 'Q7': 'Q3', 'Q8': 'Q4', 'Q9': 'Q5', 'Q10': 'F0',
                          'Q11': 'F1', 'Q12': 'F2', 'Q13': 'F3', 'Q14': 'F4', 'Q15': 'F5'}
+_bsram_control_ins = ['CLK', 'OCE', 'CE', 'RESET', 'WRE']
 def get_pllout_global_name(row, col, wire, device):
     for name, loc in _pll_loc[device].items():
         if loc == (row, col, wire):
@@ -1787,7 +1826,7 @@ def dat_portmap(dat, dev, device):
             for name, bel in tile.bels.items():
                 if bel.portmap:
                     # GW2A has same PLL in different rows
-                    if not (name.startswith("RPLLA") and device in {'GW2A-18', 'GW2A-18C'}):
+                    if (not (name.startswith("RPLLA") and device in {'GW2A-18', 'GW2A-18C'})) and name != "BSRAM":
                         continue
                 if name.startswith("IOB"):
                     if row in dev.simplio_rows:
@@ -1845,6 +1884,84 @@ def dat_portmap(dat, dev, device):
                             # dummy Input, we'll make a special pips for it
                             bel.portmap[nam] = "FCLK"
                     bel.portmap.update(_ides16_fixed_outputs)
+                elif name == 'BSRAM':
+                    # dat['BsramOutDlt'] and dat['BsramOutDlt'] indicate port offset in cells
+                    wire2node = {} # some wires used for >1 port, remember node
+                    for i in range(len(dat['BsramOut'])):
+                        off = dat['BsramOutDlt'][i]
+                        wire_idx = dat['BsramOut'][i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # outs sequence: DO0-35, DOA0-17, DOB0-17
+                        if i < 36:
+                            nam = f'DO{i}'
+                        elif i < 54:
+                            nam = f'DOA{i - 36}'
+                        else:
+                            nam = f'DOB{i - 36 - 18}'
+                        # for aux cells create Himbaechel nodes
+                        if off:
+                            bel.portmap[nam] = f'BSRAM{nam}{wire}'
+                            node = wire2node.get((row, col + off, wire), None)
+                            if node:
+                                dev.nodes[node][1].add((row, col, f'BSRAM{nam}{wire}'))
+                            else:
+                                dev.nodes.setdefault(f'X{col}Y{row}/BSRAM{nam}{wire}', ("BSRAM_O", {(row, col, f'BSRAM{nam}{wire}')}))[1].add((row, col + off, wire))
+                                wire2node[(row, col + off, wire)] = f'X{col}Y{row}/BSRAM{nam}{wire}'
+                        else:
+                            bel.portmap[nam] = wire
+                    for i in range(len(dat['BsramIn']) + 6):
+                        if i < 132:
+                            off = dat['BsramInDlt'][i]
+                            wire_idx = dat['BsramIn'][i]
+                            if wire_idx < 0:
+                                continue
+                        elif i in range(132, 135):
+                            nam = f'BLKSELA{i - 132}'
+                            wire_idx = dat['BsramIn'][i - 132 + 15]
+                            off = 0
+                        else:
+                            nam = f'BLKSELB{i - 135}'
+                            wire_idx = wirenumbers[['CE2', 'LSR2', 'CE1'][i - 135]]
+                            off = [1, 1, 2][i - 135]
+                        wire = wirenames[wire_idx]
+                        # helping the clock router
+                        wire_type = 'BSRAM_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        # ins sequence: control(0-17), ADA0-13, AD0-13, DIA0-17,
+                        # DI0-35, ADB0-13, DIB0-17, control(133-138)
+                        # controls - A, B, '' like all controls for A (CLKA,), then for B (CLKB),
+                        # then without modifier '' (CLK)
+                        if i < 18:
+                            if i < 15:
+                                nam = _bsram_control_ins[i % 5] + ['A', 'B', ''][i // 5]
+                            else:
+                                nam = f'BLKSEL{i - 15}'
+                        elif i < 32:
+                            nam = f'ADA{i - 18}'
+                        elif i < 46:
+                            nam = f'AD{i - 32}'
+                        elif i < 64:
+                            nam = f'DIA{i - 46}'
+                        elif i < 100:
+                            nam = f'DI{i - 64}'
+                        elif i < 114:
+                            nam = f'ADB{i - 100}'
+                        elif i < 132:
+                            nam = f'DIB{i - 114}'
+                        # for aux cells create Himbaechel nodes
+                        if off:
+                            bel.portmap[nam] = f'BSRAM{nam}{wire}'
+                            node = wire2node.get((row, col + off, wire), None)
+                            if node:
+                                dev.nodes[node][1].add((row, col, f'BSRAM{nam}{wire}'))
+                            else:
+                                dev.nodes.setdefault(f'X{col}Y{row}/BSRAM{nam}{wire}', (wire_type, {(row, col, f'BSRAM{nam}{wire}')}))[1].add((row, col + off, wire))
+                                wire2node[(row, col + off, wire)] = f'X{col}Y{row}/BSRAM{nam}{wire}'
+                        else:
+                            bel.portmap[nam] = wire
                 elif name == 'RPLLA':
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.
