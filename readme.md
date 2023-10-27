@@ -120,9 +120,9 @@ Things that could be fuzzed:
 
 ### Parsing
 
-For each FPGA, the vendor provides `.dat`, `.fse`, `.ini`, `.pwr`, and `.tm` files. Of these, only parsers for `.dat`, `.fse` and `.tm` have been written.
+For each FPGA, the vendor provides `.dat`, `.fse`, `.ini`, `.pwr`, and `.tm` files. Of these, parsers for `.dat`, `.fse`, `.ini` and `.tm` have been written.
 
-The format of these other files is unknown, you're on your own here. I could only offer you some vague pointers based on experience from the other two files.
+The format of the `.pwr` file is unknown, you're on your own here. I could only offer you some vague pointers based on experience from the other two files.
 
 For a description of the known file formats, [see the documentation](doc/filestructure.md).
 
@@ -132,6 +132,10 @@ The main thing lacking here is a better understanding of the meaning of all thes
 The parser for the `.dat` file is more fragile and incomplete. This is mainly because it just appears to be a fixed format struct with array fields. New vendor software versions sometimes add new fields, breaking the parser. Here there are actually a few gaps in the data that have not been decoded and named. It is suspected that at least some of these gaps are related to pinouts and packaging.
 
 The format of the '.tm' appears to be just a big collection of floats. Not all of them have a meaning that is well understood, but the parser itself is fairly complete.
+
+The `.ini` file is a table of IO configuration options. The format of these files appears to be fairly stable across IDE versions and the current parser is able to handle the vast majority of available files.
+
+
 
 ### Refactoring
 
