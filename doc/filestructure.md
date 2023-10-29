@@ -1,6 +1,6 @@
 # File structure
 
-Three important types of vendor files are parsed, `.dat`, `.fse`, and `.tm`. Other files also exist, but these are not currently parsed.
+Three important types of vendor files are parsed, `.dat`, `.fse`, and `.tm`. A parser exists for the `.ini` files as well, other files are not currently parsed.
 
 # Wire names
 
@@ -8,7 +8,7 @@ The vendor files use wire IDs that map to the following names. A full mapping is
 
 * 0-31 LUT inputs
 * 32-39 LUT outputs
-* 40-87 DFF outputs
+* 40-47 DFF outputs
 * 48-55 unknown, maybe MUX outputs
 * 56-63 X0 tile-local wires
 * 64-75 X1 one-hop wires, origin segments
@@ -104,3 +104,19 @@ So this means that the numbers represent
 2. input falling, output rising
 3. input rising, output falling
 4. input rising, output rising
+
+# IO Initialization File (.ini)
+
+The .ini file contains IO configuration information. It reads like a table and contains information similar to what is found in the vendor provided IO CSV files (`input.csv`, `bidir.csv` and `output.csv`).
+
+## Header
+The header of the `.ini` files roughly corresponds to configurable **Features** (PullMode, Mode, etc) available for a device under consideration. The order of these features is predetermined. 
+
+## Sections
+The `.ini` file has 4 ordered sections -- `input`, `output`, `bidirectional` and `i3cBank`(optional). The i3cBank section seems to describe what IO banks on the device are capable of i3c; the `input` , `output` and `bidirectional` sections contain the information that their names imply. The number of rows corresponding to each section is predetermined but seems to always be the same as the number of rows in corresponding csv files like `{GOWINHOME}/IDE/data/iotable/input.csv`.
+
+
+## Rows
+
+The cells in a row map to cofiguration options for specific IO Features (defined by the header). The first cell is a 4-byte value that represents the IO Type and the last cell is a 4-byte value that represents IO Mode. The cells between the first and last cells contain configuration options for each IO **Feature**. These cells are prefixed by a 2-byte `count` that determines the number of options available, followed by `count` 4-byte words that correspond to individual configuration options.
+
