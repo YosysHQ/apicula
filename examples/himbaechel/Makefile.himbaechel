@@ -34,6 +34,7 @@ all: \
 	oser4-tangnano4k.fs ovideo-tangnano4k.fs oser8-tangnano4k.fs oser10-tangnano4k.fs \
 	ides16-tangnano4k.fs \
 	ides4-tangnano4k.fs ivideo-tangnano4k.fs ides8-tangnano4k.fs ides10-tangnano4k.fs \
+	oser10-tlvds-tangnano4k.fs \
 	\
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
 	blinky-osc-tangnano9k.fs tlvds-tangnano9k.fs elvds-tangnano9k.fs oddr-tlvds-tangnano9k.fs \
@@ -100,7 +101,7 @@ unpacked:\
 	blinky-pll-tangnano4k-unpacked.v oser16-tangnano4k-unpacked.v oser4-tangnano4k-unpacked.v \
 	ovideo-tangnano4k-unpacked.v oser8-tangnano4k-unpacked.v oser10-tangnano4k-unpacked.v \
 	ides16-tangnano4k-unpacked.v ides4-tangnano4k-unpacked.v ivideo-tangnano4k-unpacked.v \
-	ides8-tangnano4k-unpacked.v ides10-tangnano4k-unpacked.v \
+	ides8-tangnano4k-unpacked.v ides10-tangnano4k-unpacked.v oser10-tlvds-tangnano4k-unpacked.v \
 	\
 	blinky-tangnano9k-unpacked.v shift-tangnano9k-unpacked.v blinky-tbuf-tangnano9k-unpacked.v \
 	blinky-oddr-tangnano9k-unpacked.v blinky-osc-tangnano9k-unpacked.v tlvds-tangnano9k-unpacked.v \
