@@ -17,6 +17,7 @@ from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, 
 from apycula import attrids
 from apycula import bslib
 from apycula.wirenames import wirenames, wirenumbers
+from apycula.family_aliases import replace_family_alias
 
 device = ""
 pnr = None
@@ -1029,12 +1030,25 @@ def route(db, tilemap, pips):
         for row, col in bits:
             tile[row][col] = 1
 
-def header_footer(db, bs, compress):
+def header_footer(db, bs, compress, family):
     """
     Generate fs header and footer
     Currently limited to checksum with
     CRC_check and security_bit_enable set
     """
+    # override part IDCODE in header
+    assert db.cmd_hdr[3][0] == 0x06  # IDCODE data
+    
+    with importlib.resources.path('apycula', f'family_info.json') as path:
+        with open(path, 'r') as f:
+            family_info = json.load(f)
+
+    if family in family_info and "idcode" in family_info[family]:
+        db.cmd_hdr[3][-4:] = bytes.fromhex(family_info[family]["idcode"])
+    else:
+        print("Not overriding IDCODE as it is not present in family_info.json")
+
+    # calculate checksum
     bs = np.fliplr(bs)
     bs=np.packbits(bs)
     # configuration data checksum is computed on all
@@ -1157,7 +1171,7 @@ def main():
         parser.add_argument('--png')
 
     args = parser.parse_args()
-    device = args.device
+    device = replace_family_alias(args.device)
 
     with open(args.netlist) as f:
         pnr = json.load(f)
@@ -1173,7 +1187,9 @@ def main():
         mods = m.group(1) or ""
         luts = m.group(3)
         device = f"GW1N{mods}-{luts}"
-    with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
+        device = replace_family_alias(device)
+
+    with importlib.resources.path('apycula', f'{device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)
 
@@ -1206,7 +1222,7 @@ def main():
             tile[row][col] = 0
 
     res = chipdb.fuse_bitmap(db, tilemap)
-    header_footer(db, res, args.compress)
+    header_footer(db, res, args.compress, device)
     if pil_available and args.png:
         bslib.display(args.png, res)
     bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress)

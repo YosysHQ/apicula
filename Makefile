@@ -6,7 +6,8 @@ endif
 .PHONY: all clean
 all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle \
 	 apycula/GW1NS-2.pickle apycula/GW1NS-4.pickle apycula/GW1N-9C.pickle \
-	 apycula/GW1NZ-1.pickle apycula/GW2A-18.pickle apycula/GW2A-18C.pickle
+	 apycula/GW1NZ-1.pickle apycula/GW2A-18.pickle apycula/GW2A-18C.pickle \
+	 family_info.json
 
 %.json: apycula/dat19_h4x.py
 	python3 -m apycula.dat19_h4x $*
@@ -20,7 +21,12 @@ all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle \
 apycula/%.pickle: %_stage2.pickle
 	gzip -c $< > $@
 
+apycula/family_info.json: apycula/build_family_info.py
+	python3 -m apycula.build_family_info
+	cp family_info.json apycula/
+
 clean:
 	rm *.json
 	rm *.pickle
 	rm apycula/*.pickle
+	rm apycula/family_info.json

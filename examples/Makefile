@@ -121,16 +121,16 @@ pll-tangnano4k.json: pll-tangnano4k-synth.json tangnano4k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --cst tangnano4k.cst
 
 %-tangnano9k.fs: %-tangnano9k.json
-	gowin_pack -d GW1N-9C -o $@ $^
+	gowin_pack -d GW1NR-9C -o $@ $^
 
 pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
-	gowin_pack -d GW1N-9C --sspi_as_gpio --mspi_as_gpio -o $@ $^
+	gowin_pack -d GW1NR-9C --sspi_as_gpio --mspi_as_gpio -o $@ $^
 
 %-tangnano9k.json: %-tangnano9k-synth.json tangnano9k.cst
-	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --family GW1N-9C --cst tangnano9k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --family GW1NR-9C --cst tangnano9k.cst
 
 %lvds-tangnano9k.json: %lvds-tangnano9k-synth.json lvds-tangnano9k.cst
-	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --family GW1N-9C --cst lvds-tangnano9k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --family GW1NR-9C --cst lvds-tangnano9k.cst
 
 %-honeycomb.fs: %-honeycomb.json
 	gowin_pack -d GW1NS-2 -o $@ $<
@@ -264,7 +264,7 @@ pll-%-honeycomb-synth.json: pll/GW1NS-2C-%.vh pll.v pll/rpll.v
 	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --cst longwires/tangnano4k.cst
 
 %-lw-tangnano9k.json: %-tangnano9k-synth.json longwires/tangnano9k.cst
-	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --family GW1N-9C --cst longwires/tangnano9k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --family GW1NR-9C --cst longwires/tangnano9k.cst
 
 %-lw-runber.json: %-runber-synth.json longwires/runber.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1N-UV4LQ144C6/I5 --cst longwires/runber.cst

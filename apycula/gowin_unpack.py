@@ -14,6 +14,7 @@ from apycula import chipdb
 from apycula import attrids
 from apycula.bslib import read_bitstream
 from apycula.wirenames import wirenames
+from apycula.family_aliases import replace_family_alias
 
 _device = ""
 _pinout = ""
@@ -1074,7 +1075,7 @@ def main():
     args = parser.parse_args()
 
     global _device
-    _device = args.device
+    _device = replace_family_alias(args.device)
     # For tool integration it is allowed to pass a full part number
     m = re.match("GW1N(S?)[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", _device)
     if m:

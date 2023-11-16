@@ -11,6 +11,19 @@ on:
   pull_request:
 
 jobs:
+  family_info:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build family_info.json
+      run: |
+        docker pull pepijndevos/apicula:1.9.8
+        docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/family_info.json
+    - name: Archive artifact
+      uses: actions/upload-artifact@v3
+      with:
+          name: family_info.json
+          path: apycula/family_info.json
   gw1n1:
     runs-on: ubuntu-latest
     steps:

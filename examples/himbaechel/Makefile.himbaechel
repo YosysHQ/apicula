@@ -141,10 +141,10 @@ clean:
 # ============================================================
 # Tangnano20k
 %-tangnano20k.fs: %-tangnano20k.json
-	gowin_pack -d GW2A-18C -o $@ $<
+	gowin_pack -d GW2AR-18C -o $@ $<
 
 %-tangnano20k.json: %-tangnano20k-synth.json tangnano20k.cst
-	$(NEXTPNR) --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=tangnano20k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2AR-18C --vopt cst=tangnano20k.cst
 
 %-tangnano20k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@"
@@ -223,7 +223,7 @@ blinky-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh blinky-pll-vr.v
 	gowin_pack -d GW1N-9C -o $@ $^
 
 %-tangnano9k.json: %-tangnano9k-synth.json tangnano9k.cst
-	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=tangnano9k.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1NR-9C --vopt cst=tangnano9k.cst
 
 %-tangnano9k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
@@ -232,7 +232,7 @@ pll-nanolcd-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh pll-nanolcd/TOP.v pll-nano
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
 
 pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
-	gowin_pack -d GW1N-9C --sspi_as_gpio --mspi_as_gpio -o $@ $^
+	gowin_pack -d GW1NR-9C --sspi_as_gpio --mspi_as_gpio -o $@ $^
 
 # ============================================================
 # szfpga (GW1N-9)
@@ -288,10 +288,10 @@ blinky-pll-runber-synth.json: pll/GW1N-4-dyn.vh blinky-pll.v
 	gowin_unpack -d GW1NS-4 -o $@ $^
 
 %-tangnano9k-unpacked.v: %-tangnano9k.fs
-	gowin_unpack -d GW1N-9C -o $@ $^
+	gowin_unpack -d GW1NR-9C -o $@ $^
 
 %-tangnano20k-unpacked.v: %-tangnano20k.fs
-	gowin_unpack -d GW2A-18C -o $@ $^
+	gowin_unpack -d GW2AR-18C -o $@ $^
 
 %-runber-unpacked.v: %-runber.fs
 	gowin_unpack -d GW1N-4 -o $@ $^
