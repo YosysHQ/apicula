@@ -9,6 +9,9 @@ IO_LOC "key_i" 15;
 IO_LOC "rst_i" 14;
 IO_LOC "clk" 45;
 
+IO_PORT "key_i" PULLMODE=UP;
+IO_PORT "rst_i" PULLMODE=UP;
+
 // oser
 IO_LOC "oser_out" 35;
 IO_LOC "io16" 35;
