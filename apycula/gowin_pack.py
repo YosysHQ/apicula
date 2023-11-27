@@ -103,8 +103,9 @@ def extra_bsram_bels(cell, row, col, num, cellname):
 def store_bsram_init_val(db, row, col, typ, parms, attrs):
     global bsram_init_map
     global has_bsram_init
-    if typ == 'BSRAM_AUX':
+    if typ == 'BSRAM_AUX' or 'INIT_RAM_00' not in parms:
         return
+
     subtype = attrs['BSRAM_SUBTYPE']
     if not has_bsram_init:
         has_bsram_init = True
@@ -113,7 +114,7 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
     # 3 BSRAM cells have width 3 * 60
     loc_map = np.zeros((256, 3 * 60), dtype = np.int8)
     #print("mapping")
-    if subtype in {''}:
+    if not subtype.strip():
         width = 256
     elif subtype in {'X9'}:
         width = 288
@@ -484,27 +485,16 @@ def set_pll_attrs(db, typ, idx, attrs):
         add_attr_val(db, 'PLL', fin_attrs, attrids.pll_attrids[attr], val)
     return fin_attrs
 
-_bsram_defaults = {
-        'READ_MODE': "0", 'WRITE_MODE': "00", 'RESET_MODE': "SYNC", 'BLK_SEL': "000",
-        'BIT_WIDTH': "00000000000000000000000000100000"}
-def bsram_add_defaults(params):
-    ret_params = _bsram_defaults.copy()
-    for parm, val in params.items():
-        if parm in ret_params:
-            ret_params[parm] = val
-    return ret_params
-
-_bsram_bit_widths = { 1: '1', 2: '2', 4: '4', 8: '9', 9: '9', 16: '16', 18: '16'}
+_bsram_bit_widths = { 1: '1', 2: '2', 4: '4', 8: '9', 9: '9', 16: '16', 18: '16', 32: 'X36', 36: 'X36'}
 def set_bsram_attrs(db, typ, params):
     bsram_attrs = {}
     bsram_attrs['MODE'] = 'ENABLE'
     bsram_attrs['GSR'] = 'DISABLE'
 
-    for parm, val in bsram_add_defaults(params).items():
+    for parm, val in params.items():
         if parm == 'BIT_WIDTH':
             val = int(val, 2)
             if val in _bsram_bit_widths:
-                bsram_attrs[f'{typ}A_DATA_WIDTH'] = _bsram_bit_widths[val]
                 if typ not in {'ROM'}:
                     if val in {16, 18}: # XXX no dynamic byte enable
                         bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
@@ -512,9 +502,38 @@ def set_bsram_attrs(db, typ, params):
                     elif val in {32, 36}: # XXX no dynamic byte enable
                         bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
                         bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
-                        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
-                        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
-                bsram_attrs[f'{typ}B_DATA_WIDTH'] = _bsram_bit_widths[val]
+                        bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+                        bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+                if val not in {32, 36}:
+                    bsram_attrs[f'{typ}A_DATA_WIDTH'] = _bsram_bit_widths[val]
+                    bsram_attrs[f'{typ}B_DATA_WIDTH'] = _bsram_bit_widths[val]
+                elif typ != 'SP':
+                    bsram_attrs['DBLWA'] = _bsram_bit_widths[val]
+                    bsram_attrs['DBLWB'] = _bsram_bit_widths[val]
+            else:
+                raise Exception(f"BSRAM width of {val} isn't supported for now")
+        elif parm == 'BIT_WIDTH_0':
+            val = int(val, 2)
+            if val in _bsram_bit_widths:
+                if val not in {32, 36}:
+                    bsram_attrs[f'{typ}A_DATA_WIDTH'] = _bsram_bit_widths[val]
+                else:
+                    bsram_attrs['DBLWA'] = _bsram_bit_widths[val]
+                if val in {16, 18, 32, 36}: # XXX no dynamic byte enable
+                    bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+                    bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+            else:
+                raise Exception(f"BSRAM width of {val} isn't supported for now")
+        elif parm == 'BIT_WIDTH_1':
+            val = int(val, 2)
+            if val in _bsram_bit_widths:
+                if val not in {32, 36}:
+                    bsram_attrs[f'{typ}B_DATA_WIDTH'] = _bsram_bit_widths[val]
+                else:
+                    bsram_attrs['DBLWB'] = _bsram_bit_widths[val]
+                if val in {16, 18, 32, 36}: # XXX no dynamic byte enable
+                    bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+                    bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
             else:
                 raise Exception(f"BSRAM width of {val} isn't supported for now")
         elif parm == 'BLK_SEL':
@@ -522,18 +541,48 @@ def set_bsram_attrs(db, typ, params):
                 if val[-1 - i] == '0':
                     bsram_attrs[f'CSA_{i}'] = 'SET'
                     bsram_attrs[f'CSB_{i}'] = 'SET'
+        elif parm == 'BLK_SEL_0':
+            for i in range(3):
+                if val[-1 - i] == '0':
+                    bsram_attrs[f'CSA_{i}'] = 'SET'
+        elif parm == 'BLK_SEL_1':
+            for i in range(3):
+                if val[-1 - i] == '0':
+                    bsram_attrs[f'CSB_{i}'] = 'SET'
+        elif parm == 'READ_MODE0':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}A_REGMODE'] = 'OUTREG'
+        elif parm == 'READ_MODE1':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}B_REGMODE'] = 'OUTREG'
         elif parm == 'READ_MODE':
-            if val == '1':
+            val = int(val, 2)
+            if val == 1:
                 bsram_attrs[f'{typ}A_REGMODE'] = 'OUTREG'
                 bsram_attrs[f'{typ}B_REGMODE'] = 'OUTREG'
         elif parm == 'RESET_MODE':
             if val == 'ASYNC':
                 bsram_attrs[f'OUTREG_ASYNC'] = 'RESET'
+        elif parm == 'WRITE_MODE0':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}A_MODE'] = 'WT'
+            elif val == 2:
+                bsram_attrs[f'{typ}A_MODE'] = 'RBW'
+        elif parm == 'WRITE_MODE1':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}B_MODE'] = 'WT'
+            elif val == 2:
+                bsram_attrs[f'{typ}B_MODE'] = 'RBW'
         elif parm == 'WRITE_MODE':
-            if val == '01':
+            val = int(val, 2)
+            if val == 1:
                 bsram_attrs[f'{typ}A_MODE'] = 'WT'
                 bsram_attrs[f'{typ}B_MODE'] = 'WT'
-            elif val == '10':
+            elif val == 2:
                 bsram_attrs[f'{typ}A_MODE'] = 'RBW'
                 bsram_attrs[f'{typ}B_MODE'] = 'RBW'
     fin_attrs = set()
@@ -732,7 +781,10 @@ def refine_io_attrs(attr):
 def place_lut(db, tiledata, tile, parms, num):
     lutmap = tiledata.bels[f'LUT{num}'].flags
     init = str(parms['INIT'])
-    init = init*(16//len(init))
+    if len(init) > 16:
+        init = init[-16:]
+    else:
+        init = init*(16//len(init))
     for bitnum, lutbit in enumerate(init[::-1]):
         if lutbit == '0':
             fuses = lutmap[bitnum]

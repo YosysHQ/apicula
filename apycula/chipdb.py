@@ -1196,7 +1196,7 @@ def fse_iologic(device, fse, ttyp):
 # the column indicated there is the last column of the left quadrant.
 
 # It is enough to empirically determine the correspondence of clocks and
-# speakers in the new quadrant (even three clocks is enough, since the fourth
+# columns in the new quadrant (even three clocks is enough, since the fourth
 # becomes obvious).
 # [3, 2, 1, 0] turned out to be the unwritten standard for all the chips studied.
 
@@ -1233,9 +1233,9 @@ def fse_iologic(device, fse, ttyp):
 # wires of the same name involved in some kind of switching anywhere in the
 # chip are combined into one Himbaechel node. Further, when routing, there is
 # already a choice of which pip to use and which cell.
-# It also follows that for the Himbaechel watch wires should not be mixed
+# It also follows that for the Himbaechel clock wires should not be mixed
 # together with any other  wires. At least I came to this conclusion and that
-# is why the HCLK wires, which have the same numbers as the watch spines, are
+# is why the HCLK wires, which have the same numbers as the clock spines, are
 # stored separately.
 
 # dat['CmuxIns'] and 80 - here, the places of entry points into the clock
@@ -1561,6 +1561,7 @@ def fse_bram(fse, aux = False):
         name = 'BSRAM_AUX'
     bels[name] = Bel()
     return bels
+
 
 def disable_plls(dev, device):
     if device in {'GW2A-18C'}:
@@ -1920,7 +1921,7 @@ def dat_portmap(dat, dev, device):
                         elif i in range(132, 135):
                             nam = f'BLKSELA{i - 132}'
                             wire_idx = dat['BsramIn'][i - 132 + 15]
-                            off = 0
+                            off = [0, 0, 2][i - 132]
                         else:
                             nam = f'BLKSELB{i - 135}'
                             wire_idx = wirenumbers[['CE2', 'LSR2', 'CE1'][i - 135]]

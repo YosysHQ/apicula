@@ -355,11 +355,12 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             if 'BSRAM_SP' not in db.shortval[tiledata.ttyp]:
                 continue
             idx = _bsram_cells.setdefault(get_bsram_main_cell(db, row, col, name), len(_bsram_cells))
-            print(row, col, name, tiledata.ttyp)
+            #print(row, col, name, idx, tiledata.ttyp)
             attrvals = parse_attrvals(tile, db.logicinfo['BSRAM'], db.shortval[tiledata.ttyp]['BSRAM_SP'], attrids.bsram_attrids)
             if not attrvals:
                 continue
-            print(row, col, idx, attrvals)
+            #print(row, col, name, idx, tiledata.ttyp, attrvals)
+            bels[f'{name}'] = {}
             continue
         if name.startswith("IOLOGIC"):
             idx = name[-1]
@@ -802,7 +803,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC|BSRAM)(\w*)")
     bels_items = move_iologic(bels)
 
     iologic_detected = set()
@@ -911,6 +912,15 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             portmap = db.grid[dbrow][dbcol].bels[bel[:-1]].portmap
             for port, wname in portmap.items():
                 pll.portmap[port] = f"R{row}C{col}_{wname}"
+        elif typ.startswith("BSRAM"):
+            name = f"BSRAM_{idx}"
+            pll = mod.primitives.setdefault(name, codegen.Primitive("BSRAM", name))
+            for paramval in flags:
+                param, _, val = paramval.partition('=')
+                pll.params[param] = val
+            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+            for port, wname in portmap.items():
+                pll.portmap[port] = f"R{row}C{col}_{wname}"
         elif typ == "ALU":
             #print(flags)
             kind, = flags # ALU only have one flag
@@ -937,6 +947,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                 elif kind == "0":
                     alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
+                    alu.portmap['I3'] = f"R{row}C{col}_A{idx}"
                 elif kind == "C2L":
                     alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
