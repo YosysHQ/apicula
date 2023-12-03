@@ -21,6 +21,8 @@ from apycula.wirenames import wirenames, wirenumbers
 device = ""
 pnr = None
 is_himbaechel = False
+has_bsram_init = False
+bsram_init_map = None
 
 # Sometimes it is convenient to know where a port is connected to enable
 # special fuses for VCC/VSS cases.
@@ -79,10 +81,95 @@ def extra_pll_bels(cell, row, col, num, cellname):
             yield ('RPLLB', int(row), int(col) + offx * off, num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}', cell)
 
+def extra_bsram_bels(cell, row, col, num, cellname):
+    for off in [1, 2]:
+        yield ('BSRAM_AUX', int(row), int(col) + off, num,
+            cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'AUX{off}', cell)
+
+# Explanation of what comes from and magic numbers. The process is this: you
+# create a file with one primitive from the BSRAM family. In my case pROM. You
+# give it a completely zero initialization. You generate an image. You specify
+# one single unit bit at address 0 in the initialization. You generate an
+# image. You compare. You sweep away garbage like CRC.
+# Repeat 16 times.
+# The 16th bit did not show much, but it allowed us to discover the meaning of
+# the logicinfo table [39] - this is the location of a bit in the chip
+# depending on its location in a 16-bit word.
+# Next, we set the bits at address 2 (the next 16 bits) and compare. The result
+# is unexpected: the bits no longer end up where we expect, but a certain pattern
+# is present - bits 4 and 5 radically change the position of the bits in the
+# chip, we take this into account.
+# We repeat for bits up to the 13th --- since this is the maximum address in one SRAM block.
+def store_bsram_init_val(db, row, col, typ, parms, attrs):
+    global bsram_init_map
+    global has_bsram_init
+    if typ == 'BSRAM_AUX' or 'INIT_RAM_00' not in parms:
+        return
+
+    subtype = attrs['BSRAM_SUBTYPE']
+    if not has_bsram_init:
+        has_bsram_init = True
+        # 256 * bsram rows * chip bit width
+        bsram_init_map = np.zeros((256 * len(db.simplio_rows), db.template.shape[1]), dtype=np.uint8)
+    # 3 BSRAM cells have width 3 * 60
+    loc_map = np.zeros((256, 3 * 60), dtype = np.int8)
+    #print("mapping")
+    if not subtype.strip():
+        width = 256
+    elif subtype in {'X9'}:
+        width = 288
+    else:
+        raise Exception(f"Init for {subtype} is not supported")
+
+    def get_bits(init_data):
+        bit_no = 0
+        ptr = -1
+        while ptr >= -width:
+            if bit_no == 8 or bit_no == 17:
+                if width == 288:
+                    yield (init_data[ptr], bit_no, lambda x: x)
+                    ptr -= 1
+                else:
+                    yield ('0', bit_no, lambda x: x)
+                bit_no = (bit_no + 1) % 18
+            else:
+                yield (init_data[ptr], bit_no, lambda x: x + 1)
+                ptr -= 1
+                bit_no = (bit_no + 1) % 18
+
+    addr = -1
+    for init_row in range(0x40):
+        init_data = parms[f'INIT_RAM_{init_row:02X}']
+        #print(init_data)
+        for ptr_bit_inc in get_bits(init_data):
+            addr = ptr_bit_inc[2](addr)
+            if ptr_bit_inc[0] == '0':
+                continue
+            logic_line = ptr_bit_inc[1] * 4 + (addr >> 12)
+            bit = db.logicinfo['BSRAM_INIT'][logic_line][0] - 1
+            quad = {0x30: 0xc0, 0x20: 0x40, 0x10: 0x80, 0x00: 0x0}[addr & 0x30]
+            map_row = quad + ((addr >> 6) & 0x3f)
+            #print(f'map_row:{map_row}, addr: {addr}, bit {ptr_bit_inc[1]}, bit:{bit}')
+            loc_map[map_row][bit] = 1
+
+    # now put one cell init data into global place
+    height = 256
+    y = 0
+    for brow in db.simplio_rows:
+        if row == brow:
+            break
+        y += height
+    x = 0
+    for jdx in range(col):
+        x += db.grid[0][jdx].width
+    loc_map = np.flipud(loc_map)
+    bsram_init_map[y:y + height, x:x + 3 * 60] = loc_map
+
+_bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|BSRAM)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -113,6 +200,8 @@ def get_bels(data):
         if cell_type == 'rPLL':
             cell_type = 'RPLLA'
             yield from extra_pll_bels(cell, row, col, num, cellname)
+        if cell_type in _bsram_cell_types:
+            yield from extra_bsram_bels(cell, row, col, num, cellname)
         yield (cell_type, int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
@@ -396,6 +485,113 @@ def set_pll_attrs(db, typ, idx, attrs):
         add_attr_val(db, 'PLL', fin_attrs, attrids.pll_attrids[attr], val)
     return fin_attrs
 
+_bsram_bit_widths = { 1: '1', 2: '2', 4: '4', 8: '9', 9: '9', 16: '16', 18: '16', 32: 'X36', 36: 'X36'}
+def set_bsram_attrs(db, typ, params):
+    bsram_attrs = {}
+    bsram_attrs['MODE'] = 'ENABLE'
+    bsram_attrs['GSR'] = 'DISABLE'
+
+    for parm, val in params.items():
+        if parm == 'BIT_WIDTH':
+            val = int(val, 2)
+            if val in _bsram_bit_widths:
+                if typ not in {'ROM'}:
+                    if val in {16, 18}: # XXX no dynamic byte enable
+                        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+                        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+                    elif val in {32, 36}: # XXX no dynamic byte enable
+                        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+                        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+                        bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+                        bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+                if val not in {32, 36}:
+                    bsram_attrs[f'{typ}A_DATA_WIDTH'] = _bsram_bit_widths[val]
+                    bsram_attrs[f'{typ}B_DATA_WIDTH'] = _bsram_bit_widths[val]
+                elif typ != 'SP':
+                    bsram_attrs['DBLWA'] = _bsram_bit_widths[val]
+                    bsram_attrs['DBLWB'] = _bsram_bit_widths[val]
+            else:
+                raise Exception(f"BSRAM width of {val} isn't supported for now")
+        elif parm == 'BIT_WIDTH_0':
+            val = int(val, 2)
+            if val in _bsram_bit_widths:
+                if val not in {32, 36}:
+                    bsram_attrs[f'{typ}A_DATA_WIDTH'] = _bsram_bit_widths[val]
+                else:
+                    bsram_attrs['DBLWA'] = _bsram_bit_widths[val]
+                if val in {16, 18, 32, 36}: # XXX no dynamic byte enable
+                    bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+                    bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+            else:
+                raise Exception(f"BSRAM width of {val} isn't supported for now")
+        elif parm == 'BIT_WIDTH_1':
+            val = int(val, 2)
+            if val in _bsram_bit_widths:
+                if val not in {32, 36}:
+                    bsram_attrs[f'{typ}B_DATA_WIDTH'] = _bsram_bit_widths[val]
+                else:
+                    bsram_attrs['DBLWB'] = _bsram_bit_widths[val]
+                if val in {16, 18, 32, 36}: # XXX no dynamic byte enable
+                    bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+                    bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+            else:
+                raise Exception(f"BSRAM width of {val} isn't supported for now")
+        elif parm == 'BLK_SEL':
+            for i in range(3):
+                if val[-1 - i] == '0':
+                    bsram_attrs[f'CSA_{i}'] = 'SET'
+                    bsram_attrs[f'CSB_{i}'] = 'SET'
+        elif parm == 'BLK_SEL_0':
+            for i in range(3):
+                if val[-1 - i] == '0':
+                    bsram_attrs[f'CSA_{i}'] = 'SET'
+        elif parm == 'BLK_SEL_1':
+            for i in range(3):
+                if val[-1 - i] == '0':
+                    bsram_attrs[f'CSB_{i}'] = 'SET'
+        elif parm == 'READ_MODE0':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}A_REGMODE'] = 'OUTREG'
+        elif parm == 'READ_MODE1':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}B_REGMODE'] = 'OUTREG'
+        elif parm == 'READ_MODE':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}A_REGMODE'] = 'OUTREG'
+                bsram_attrs[f'{typ}B_REGMODE'] = 'OUTREG'
+        elif parm == 'RESET_MODE':
+            if val == 'ASYNC':
+                bsram_attrs[f'OUTREG_ASYNC'] = 'RESET'
+        elif parm == 'WRITE_MODE0':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}A_MODE'] = 'WT'
+            elif val == 2:
+                bsram_attrs[f'{typ}A_MODE'] = 'RBW'
+        elif parm == 'WRITE_MODE1':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}B_MODE'] = 'WT'
+            elif val == 2:
+                bsram_attrs[f'{typ}B_MODE'] = 'RBW'
+        elif parm == 'WRITE_MODE':
+            val = int(val, 2)
+            if val == 1:
+                bsram_attrs[f'{typ}A_MODE'] = 'WT'
+                bsram_attrs[f'{typ}B_MODE'] = 'WT'
+            elif val == 2:
+                bsram_attrs[f'{typ}A_MODE'] = 'RBW'
+                bsram_attrs[f'{typ}B_MODE'] = 'RBW'
+    fin_attrs = set()
+    for attr, val in bsram_attrs.items():
+        if isinstance(val, str):
+            val = attrids.bsram_attrvals[val]
+        add_attr_val(db, 'BSRAM', fin_attrs, attrids.bsram_attrids[attr], val)
+    return fin_attrs
+
 def set_osc_attrs(db, typ, params):
     osc_attrs = dict()
     for param, val in params.items():
@@ -585,7 +781,10 @@ def refine_io_attrs(attr):
 def place_lut(db, tiledata, tile, parms, num):
     lutmap = tiledata.bels[f'LUT{num}'].flags
     init = str(parms['INIT'])
-    init = init*(16//len(init))
+    if len(init) > 16:
+        init = init[-16:]
+    else:
+        init = init*(16//len(init))
     for bitnum, lutbit in enumerate(init[::-1]):
         if lutbit == '0':
             fuses = lutmap[bitnum]
@@ -825,6 +1024,15 @@ def place(db, tilemap, bels, cst, args):
             bits = get_shortval_fuses(db, tiledata.ttyp, iologic_attrs, table_type)
             for r, c in bits:
                 tile[r][c] = 1
+        elif typ in _bsram_cell_types or typ == 'BSRAM_AUX':
+            store_bsram_init_val(db, row - 1, col -1, typ, parms, attrs)
+            if typ == 'BSRAM_AUX':
+                typ = cell['type']
+            bsram_attrs = set_bsram_attrs(db, typ, parms)
+            bsrambits = get_shortval_fuses(db, tiledata.ttyp, bsram_attrs, f'BSRAM_{typ}')
+            print(f'({row - 1}, {col - 1}) attrs:{bsram_attrs}, bits:{bsrambits}')
+            for brow, bcol in bsrambits:
+                tile[brow][bcol] = 1
         elif typ.startswith('RPLL'):
             pll_attrs = set_pll_attrs(db, 'RPLL', 0,  parms)
             bits = set()
@@ -1209,7 +1417,11 @@ def main():
     header_footer(db, res, args.compress)
     if pil_available and args.png:
         bslib.display(args.png, res)
-    bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress)
+
+    if has_bsram_init:
+        bslib.write_bitstream_with_bsram_init(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress, bsram_init_map)
+    else:
+        bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress)
     if args.cst:
         with open(args.cst, "w") as f:
                 cst.write(f)

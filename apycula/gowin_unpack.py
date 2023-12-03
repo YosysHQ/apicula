@@ -293,6 +293,17 @@ _iologic_mode = {
         'MIDDRX5': 'IDES10', 'IDDRX5': 'IDES10',
         'IDDRX8': 'IDES16',
         }
+
+# BSRAM have 3 cells: BSRAM, BSRAM0 and BSRAM1
+# { (row, col) : idx }
+_bsram_cells = {}
+def get_bsram_main_cell(db, row, col, typ):
+    if typ[-4:] == '_AUX':
+        col -= 1
+        if 'BSRAM_AUX' in db.grid[row][col].bels:
+            col -= 2
+    return row, col
+
 # noiostd --- this is the case when the function is called
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowin_unpack io standard is determined first and it is known.
@@ -339,10 +350,21 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             if modes:
                 bels[name] = modes
             continue
+        if name.startswith("BSRAM"):
+            # disabled BSRAM cells have no fuse tables
+            if 'BSRAM_SP' not in db.shortval[tiledata.ttyp]:
+                continue
+            idx = _bsram_cells.setdefault(get_bsram_main_cell(db, row, col, name), len(_bsram_cells))
+            #print(row, col, name, idx, tiledata.ttyp)
+            attrvals = parse_attrvals(tile, db.logicinfo['BSRAM'], db.shortval[tiledata.ttyp]['BSRAM_SP'], attrids.bsram_attrids)
+            if not attrvals:
+                continue
+            #print(row, col, name, idx, tiledata.ttyp, attrvals)
+            bels[f'{name}'] = {}
+            continue
         if name.startswith("IOLOGIC"):
             idx = name[-1]
             attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids)
-            #print(row, col, attrvals)
             if not attrvals:
                 continue
             if 'OUTMODE' in attrvals.keys():
@@ -781,7 +803,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC|BSRAM)(\w*)")
     bels_items = move_iologic(bels)
 
     iologic_detected = set()
@@ -890,6 +912,15 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             portmap = db.grid[dbrow][dbcol].bels[bel[:-1]].portmap
             for port, wname in portmap.items():
                 pll.portmap[port] = f"R{row}C{col}_{wname}"
+        elif typ.startswith("BSRAM"):
+            name = f"BSRAM_{idx}"
+            pll = mod.primitives.setdefault(name, codegen.Primitive("BSRAM", name))
+            for paramval in flags:
+                param, _, val = paramval.partition('=')
+                pll.params[param] = val
+            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+            for port, wname in portmap.items():
+                pll.portmap[port] = f"R{row}C{col}_{wname}"
         elif typ == "ALU":
             #print(flags)
             kind, = flags # ALU only have one flag
@@ -916,6 +947,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                 elif kind == "0":
                     alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
+                    alu.portmap['I3'] = f"R{row}C{col}_A{idx}"
                 elif kind == "C2L":
                     alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
