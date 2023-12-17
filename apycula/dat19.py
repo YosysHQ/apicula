@@ -28,10 +28,12 @@ class Datfile:
         self.data = path.read_bytes()
         self._cur = 0x026060
         self.grid = self.read_grid()
-        self.compat_dict = self.read_io()
-        self.compat_dict.update(self.read_io2())
+        self.primitives = self.read_primitives()
+        self.portmap = self.read_portmap()
+        self.compat_dict = self.read_portmap()
+        self.compat_dict.update(self.read_io())
         self.compat_dict.update(self.read_something())
-        self.cmux_ins: dict[int, list[int]] = self.compat_dict["CmuxIns"]
+        self.cmux_ins: dict[int, list[int]] = self.read_io()
 
     def read_u8(self):
         v = self.data[self._cur]
@@ -194,7 +196,7 @@ class Datfile:
             ret.append((a, b))
         return ret
 
-    def read_io(self) -> dict:
+    def read_portmap(self) -> dict:
         self._cur = 0x55D2C
         # These are ordered by position in the file
         ret = {
@@ -255,7 +257,7 @@ class Datfile:
         assert self._cur == 0x58272
         return ret
 
-    def read_io2(self):
+    def read_io(self):
         self._cur = 363662
         ret = {}
         ret["CiuConnection"] = {}
