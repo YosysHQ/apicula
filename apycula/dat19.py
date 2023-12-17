@@ -75,6 +75,24 @@ class Datfile:
         arr = [self.read_i32() for _ in range(num)]
         return arr
 
+    def read_arr8_with_padding(self, num: int, of_which_meaningful: int) -> list[int]:
+        arr = self.read_arr8(num)
+        for i in range(of_which_meaningful, num):
+            assert arr[i] == 0
+        return arr[:of_which_meaningful]
+
+    def read_arr16_with_padding(self, num: int, of_which_meaningful: int) -> list[int]:
+        arr = self.read_arr16(num)
+        for i in range(of_which_meaningful, num):
+            assert arr[i] == -1
+        return arr[:of_which_meaningful]
+
+    def read_arr32_with_padding(self, num: int, of_which_meaningful: int) -> list[int]:
+        arr = self.read_arr32(num)
+        for i in range(of_which_meaningful, num):
+            assert arr[i] == 0
+        return arr[:of_which_meaningful]
+
     def read_primitive(self, name: str) -> Primitive:
         num = self.read_u8()
         num_ins = self.read_u8()
@@ -104,6 +122,10 @@ class Datfile:
 
         assert self._cur == 0x166E, f"Expected to be at 0x166e but am at 0x{self._cur:x}"
         return ret
+
+    @property
+    def grid(self) -> Grid:
+        return self.read_grid()
 
     def read_grid(self) -> Grid:
         self._cur = 0x026060
@@ -284,6 +306,89 @@ class Datfile:
         assert self._cur == 0x7BE5A, hex(self._cur)
         return ret
 
+    def read_something(self):
+
+        _grid = self.read_grid()
+        self._cur = 0x026068
+        ret = {
+            "Dqs": {},
+            "Cfg": {},
+            "SpecCfg": {},
+            "Bank": {},
+            "X16": {},
+            "TrueLvds": {},
+            "Type": {},
+        }
+
+        assert self._cur == 0x026068, hex(self._cur)
+        ret["Dqs"]["TA"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        assert self._cur == 0x261F8, hex(self._cur)
+        ret["Dqs"]["BA"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        assert self._cur == 0x26388, hex(self._cur)
+        ret["Dqs"]["LA"] = self.read_arr16_with_padding(150, _grid.num_rows)
+        ret["Dqs"]["RA"] = self.read_arr16_with_padding(150, _grid.num_rows)
+        ret["Dqs"]["TB"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["Dqs"]["BB"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["Dqs"]["LB"] = self.read_arr16_with_padding(150, _grid.num_rows)
+        ret["Dqs"]["RB"] = self.read_arr16_with_padding(150, _grid.num_rows)
+
+        assert self._cur == 0x26b58, hex(self._cur)
+        ret["Cfg"]["TA"] = self.read_arr32_with_padding(200, _grid.num_cols)
+        ret["Cfg"]["BA"] = self.read_arr32_with_padding(200, _grid.num_cols)
+        ret["Cfg"]["LA"] = self.read_arr32_with_padding(150, _grid.num_rows)
+        ret["Cfg"]["RA"] = self.read_arr32_with_padding(150, _grid.num_rows)
+        ret["Cfg"]["TB"] = self.read_arr32_with_padding(200, _grid.num_cols)
+        ret["Cfg"]["BB"] = self.read_arr32_with_padding(200, _grid.num_cols)
+        ret["Cfg"]["LB"] = self.read_arr32_with_padding(150, _grid.num_rows)
+        ret["Cfg"]["RB"] = self.read_arr32_with_padding(150, _grid.num_rows)
+        ret["SpecCfg"]["IOL"] = self.read_arr32_with_padding(10, 10)
+        ret["SpecCfg"]["IOR"] = self.read_arr32_with_padding(10, 10)
+        assert self._cur == 0x28188, hex(self._cur)
+
+        ret["Bank"]["TA"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["Bank"]["BA"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["Bank"]["LA"] = self.read_arr16_with_padding(150, _grid.num_cols)
+        ret["Bank"]["RA"] = self.read_arr16_with_padding(150, _grid.num_cols)
+        ret["Bank"]["TB"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["Bank"]["BB"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["Bank"]["LB"] = self.read_arr16_with_padding(150, _grid.num_cols)
+        ret["Bank"]["RB"] = self.read_arr16_with_padding(150, _grid.num_cols)
+        ret["Bank"]["SpecIOL"] = self.read_arr16_with_padding(10, 10)
+        ret["Bank"]["SpecIOR"] = self.read_arr16_with_padding(10, 10)
+
+        ret["X16"]["TA"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["X16"]["BA"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["X16"]["LA"] = self.read_arr16_with_padding(150, _grid.num_cols)
+        ret["X16"]["RA"] = self.read_arr16_with_padding(150, _grid.num_cols)
+        ret["X16"]["TB"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["X16"]["BB"] = self.read_arr16_with_padding(200, _grid.num_cols)
+        ret["X16"]["LB"] = self.read_arr16_with_padding(150, _grid.num_cols)
+        ret["X16"]["RB"] = self.read_arr16_with_padding(150, _grid.num_cols)
+        ret["X16"]["SpecIOL"] = self.read_arr16_with_padding(10, 10)
+        ret["X16"]["SpecIOR"] = self.read_arr16_with_padding(10, 10)
+        assert self._cur == 0x297B8, hex(self._cur)
+
+        ret["TrueLvds"]["TopA"] = self.read_arr8_with_padding(200, _grid.num_cols)
+        ret["TrueLvds"]["BottomA"] = self.read_arr8_with_padding(200, _grid.num_cols)
+        ret["TrueLvds"]["LeftA"] = self.read_arr8_with_padding(150, _grid.num_rows)
+        ret["TrueLvds"]["RightA"] = self.read_arr8_with_padding(150, _grid.num_rows)
+        ret["TrueLvds"]["TopB"] = self.read_arr8_with_padding(200, _grid.num_cols)
+        ret["TrueLvds"]["BottomB"] = self.read_arr8_with_padding(200, _grid.num_cols)
+        ret["TrueLvds"]["LeftB"] = self.read_arr8_with_padding(150, _grid.num_rows)
+        ret["TrueLvds"]["RightB"] = self.read_arr8_with_padding(150, _grid.num_rows)
+        ret["TrueLvds"]["SpecIOL"] = self.read_arr8_with_padding(10, 10)
+        ret["TrueLvds"]["SpecIOR"] = self.read_arr8_with_padding(10, 10)
+
+        ret["Type"]["TopA"] = self.read_arr32_with_padding(200, _grid.num_cols)
+        ret["Type"]["BottomA"] = self.read_arr32_with_padding(200, _grid.num_cols)
+        ret["Type"]["LeftA"] = self.read_arr32_with_padding(150, _grid.num_rows)
+        ret["Type"]["RightA"] = self.read_arr32_with_padding(150, _grid.num_rows)
+        ret["Type"]["TopB"] = self.read_arr32_with_padding(200, _grid.num_cols)
+        ret["Type"]["BottomB"] = self.read_arr32_with_padding(200, _grid.num_cols)
+        ret["Type"]["LeftB"] = self.read_arr32_with_padding(150, _grid.num_rows)
+        ret["Type"]["RightB"] = self.read_arr32_with_padding(150, _grid.num_rows)
+        return ret
+
 
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
@@ -296,5 +401,5 @@ df = Datfile(p)
 # print(df.read_primitives())
 import json
 
-json.dump(df.read_io2(), open("out.json", "w"), indent=2)
+json.dump(df.read_something(), open("out.json", "w"), indent=2)
 # Skipping Dqs CFg Bank
