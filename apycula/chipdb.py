@@ -6,6 +6,7 @@ import copy
 from functools import reduce
 from collections import namedtuple
 import numpy as np
+from apycula.dat19 import Datfile
 import apycula.fuse_h4x as fuse
 from apycula.wirenames import wirenames, wirenumbers, clknames, clknumbers, hclknames, hclknumbers
 from apycula import pindef
@@ -527,13 +528,13 @@ _hclk_in = {
             'BBDHCLK0': 4,  'BBDHCLK1': 5,  'BBDHCLK2': 6,  'BBDHCLK3': 7,
             'LBDHCLK0': 8,  'LBDHCLK1': 9,  'LBDHCLK2': 10, 'LBDHCLK3': 11,
             'RBDHCLK0': 12, 'RBDHCLK1': 13, 'RBDHCLK2': 14, 'RBDHCLK3': 15}
-def fse_create_hclk_aliases(db, device, dat):
+def fse_create_hclk_aliases(db, device, dat: Datfile):
     for row in range(db.rows):
         for col in range(db.cols):
             for src_fuses in db.grid[row][col].clock_pips.values():
                 for src in src_fuses.keys():
                     if src in _hclk_in.keys():
-                        source = dat['CmuxIns'][str(90 + _hclk_in[src])]
+                        source = dat.cmux_ins[90 + _hclk_in[src]]
                         db.aliases[(row, col, src)] = (source[0] - 1, source[1] - 1, wirenames[source[2]])
     # hclk->fclk
     # top
@@ -988,7 +989,7 @@ _hclk_to_fclk = {
 
 _global_wire_prefixes = {'PCLK', 'TBDHCLK', 'BBDHCLK', 'RBDHCLK', 'LBDHCLK',
                          'TLPLL', 'TRPLL', 'BLPLL', 'BRPLL'}
-def fse_create_hclk_nodes(dev, device, fse, dat):
+def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
     # XXX
     if device not in _hclk_to_fclk:
         return
@@ -1000,7 +1001,7 @@ def fse_create_hclk_nodes(dev, device, fse, dat):
         # create HCLK nodes
         hclks = {}
         # entries to the HCLK from logic
-        for hclk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(hclknumbers['TBDHCLK0'], hclknumbers['RBDHCLK3'] + 1)}:
+        for hclk_idx, row, col, wire_idx in {(i, dat.cmux_ins[i - 80][0] - 1, dat.cmux_ins[i - 80][1] - 1, dat.cmux_ins[i - 80][2]) for i in range(hclknumbers['TBDHCLK0'], hclknumbers['RBDHCLK3'] + 1)}:
             if row != -2:
                 add_node(dev, hclknames[hclk_idx], "HCLK", row, col, wirenames[wire_idx])
                 # XXX clock router is doing fine with HCLK w/o any buffering
@@ -1285,12 +1286,12 @@ _clock_data = {
         'GW2A-18': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
         'GW2A-18C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
         }
-def fse_create_clocks(dev, device, dat, fse):
-    center_col = dat['center'][1] - 1
+def fse_create_clocks(dev, device, dat: Datfile, fse):
+    center_col = dat.grid.center_x - 1
     clkpin_wires = {}
     taps = {}
     # find center muxes
-    for clk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(clknumbers['PCLKT0'], clknumbers['PCLKR1'] + 1)}:
+    for clk_idx, row, col, wire_idx in {(i, dat.cmux_ins[i - 80][0] - 1, dat.cmux_ins[i - 80][1] - 1, dat.cmux_ins[i - 80][2]) for i in range(clknumbers['PCLKT0'], clknumbers['PCLKR1'] + 1)}:
         if row != -2:
             add_node(dev, clknames[clk_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
             add_buf_bel(dev, row, col, wirenames[wire_idx])
@@ -1381,8 +1382,8 @@ def fse_create_bottom_io(dev, device):
 # BRAM-rows, but for now this is an acceptable mechanism for finding
 # non-standard IOs, taking into account the chip series, eliminating the
 # "magic" coordinates.
-def fse_create_simplio_rows(dev, dat):
-    for row, rd in enumerate(dat['grid']):
+def fse_create_simplio_rows(dev, dat: Datfile):
+    for row, rd in enumerate(dat.grid.rows):
         if [r for r in rd if r in "Bb"]:
             if row > 0:
                 row -= 1
@@ -1390,11 +1391,11 @@ def fse_create_simplio_rows(dev, dat):
                 row -= 1
             dev.simplio_rows.add(row)
 
-def fse_create_tile_types(dev, dat):
+def fse_create_tile_types(dev, dat: Datfile):
     type_chars = 'PCMIB'
     for fn in type_chars:
         dev.tile_types[fn] = set()
-    for row, rd in enumerate(dat['grid']):
+    for row, rd in enumerate(dat.grid.rows):
         for col, fn in enumerate(rd):
             if fn in type_chars:
                 i = row
@@ -1409,10 +1410,10 @@ def fse_create_tile_types(dev, dat):
                     j -= 1
                 dev.tile_types[fn].add(dev.grid[i][j].ttyp)
 
-def get_tile_types_by_func(dev, dat, fse, fn):
+def get_tile_types_by_func(dev, dat: Datfile, fse, fn):
     ttypes = set()
     fse_grid = fse['header']['grid'][61]
-    for row, rd in enumerate(dat['grid']):
+    for row, rd in enumerate(dat.grid.rows):
         for col, type_char in enumerate(rd):
             if type_char == fn:
                 i = row
@@ -1525,7 +1526,7 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
 # already done when we created pure clock pips. But what we need to do is
 # indicate that these CLKs at these coordinates are TRBDCLK0, etc. Therefore,
 # we create Himbaechel nodes.
-def fse_create_logic2clk(dev, device, dat):
+def fse_create_logic2clk(dev, device, dat: Datfile):
     for clkwire_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(clknumbers['TRBDCLK0'], clknumbers['TRMDCLK1'] + 1)}:
         if row != -2:
             add_node(dev, clknames[clkwire_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
@@ -1575,7 +1576,7 @@ def sync_extra_func(dev):
         row, col = loc
         dev.extra_func.setdefault((row, col), {})['hclk_pips'] = pips
 
-def from_fse(device, fse, dat):
+def from_fse(device, fse, dat: Datfile):
     dev = Device()
     fse_create_simplio_rows(dev, dat)
     ttypes = {t for row in fse['header']['grid'][61] for t in row}

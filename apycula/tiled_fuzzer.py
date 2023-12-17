@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import subprocess
+from pathlib import Path
 from collections import deque, Counter, namedtuple
 from itertools import chain, count, zip_longest
 from functools import reduce
@@ -12,7 +13,6 @@ from math import factorial
 import numpy as np
 from multiprocessing.dummy import Pool
 import pickle
-import json
 from shutil import copytree
 
 from apycula import codegen
@@ -20,8 +20,7 @@ from apycula import bslib
 from apycula import pindef
 from apycula import fuse_h4x
 from apycula.wirenames import wirenames, clknames, wirenumbers, clknumbers
-#TODO proper API
-#from apycula import dat19_h4x
+from apycula import dat19
 from apycula import tm_h4x
 from apycula import chipdb
 from apycula import attrids
@@ -220,8 +219,7 @@ if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
 
-    with open(f"{device}.json") as f:
-        dat = json.load(f)
+    dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{device}/{device}.dat"))
 
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
         tm = tm_h4x.read_tm(f, device)
