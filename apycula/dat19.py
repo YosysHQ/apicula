@@ -33,7 +33,7 @@ class Datfile:
         self.compat_dict = self.read_portmap()
         self.compat_dict.update(self.read_io())
         self.compat_dict.update(self.read_something())
-        self.cmux_ins: dict[int, list[int]] = self.read_io()
+        self.cmux_ins: dict[int, list[int]] = self.read_io()['CmuxIns']
 
     def read_u8(self):
         v = self.data[self._cur]

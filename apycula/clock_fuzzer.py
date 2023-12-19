@@ -39,7 +39,7 @@ def ibuf(mod, cst, loc, clk=None):
 with open(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.fse", 'rb') as f:
     fse = fuse_h4x.readFse(f)
 
-dat = dat19.Datfile(Path(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.fse""{gowinhome}/IDE/share/device/{device}/{device}.dat"))
+dat = dat19.Datfile(Path(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.dat"))
 
 
 with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
