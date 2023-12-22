@@ -269,8 +269,8 @@ if __name__ == "__main__":
     if device == 'GW1N-9' :
         loc = locations[52][0]
         bel = db.grid[loc[0]][loc[1]].bels['IOBA']
-        bel.portmap['GW9_ALWAYS_LOW0'] = wirenames[dat[f'IologicAIn'][40]]
-        bel.portmap['GW9_ALWAYS_LOW1'] = wirenames[dat[f'IologicAIn'][42]]
+        bel.portmap['GW9_ALWAYS_LOW0'] = wirenames[dat.portmap['IologicAIn'][40]]
+        bel.portmap['GW9_ALWAYS_LOW1'] = wirenames[dat.portmap['IologicAIn'][42]]
     chipdb.dat_aliases(dat, db)
 
     # GSR
