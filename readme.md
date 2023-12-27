@@ -20,6 +20,7 @@ Currently supported boards are
  * Sipeed Tang Primer 20K: GW2A-LV18PG256C8/I7
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
  * @Disasm honeycomb: GW1NS-UX2CQN48C5/I4
+ * szfpga: GW1NR-LV9LQ144PC6/I5
 
 [^1]: `C` devices require passing the `--family` flag as well as `--device` to Nextpnr, and stating the family in place of device when passing `-d` to `gowin_pack` because the C isn't part of the device ID but only present in the date code. Check `examples/Makefile` for the correct command.
 
