@@ -6,6 +6,7 @@ import copy
 from functools import reduce
 from collections import namedtuple
 import numpy as np
+from apycula.dat19 import Datfile
 import apycula.fuse_h4x as fuse
 from apycula.wirenames import wirenames, wirenumbers, clknames, clknumbers, hclknames, hclknumbers
 from apycula import pindef
@@ -155,7 +156,7 @@ class Device:
                     res.update({ bel[4:] : pos })
         return res
 
-# XXX GW1N-4 and GW1NS-4 have next data in dat['CmuxIns']:
+# XXX GW1N-4 and GW1NS-4 have next data in dat.portmap['CmuxIns']:
 # 62 [11, 1, 126]
 # 63 [11, 1, 126]
 # this means that the same wire (11, 1, 126) is connected implicitly to two
@@ -527,13 +528,13 @@ _hclk_in = {
             'BBDHCLK0': 4,  'BBDHCLK1': 5,  'BBDHCLK2': 6,  'BBDHCLK3': 7,
             'LBDHCLK0': 8,  'LBDHCLK1': 9,  'LBDHCLK2': 10, 'LBDHCLK3': 11,
             'RBDHCLK0': 12, 'RBDHCLK1': 13, 'RBDHCLK2': 14, 'RBDHCLK3': 15}
-def fse_create_hclk_aliases(db, device, dat):
+def fse_create_hclk_aliases(db, device, dat: Datfile):
     for row in range(db.rows):
         for col in range(db.cols):
             for src_fuses in db.grid[row][col].clock_pips.values():
                 for src in src_fuses.keys():
                     if src in _hclk_in.keys():
-                        source = dat['CmuxIns'][str(90 + _hclk_in[src])]
+                        source = dat.cmux_ins[90 + _hclk_in[src]]
                         db.aliases[(row, col, src)] = (source[0] - 1, source[1] - 1, wirenames[source[2]])
     # hclk->fclk
     # top
@@ -988,7 +989,7 @@ _hclk_to_fclk = {
 
 _global_wire_prefixes = {'PCLK', 'TBDHCLK', 'BBDHCLK', 'RBDHCLK', 'LBDHCLK',
                          'TLPLL', 'TRPLL', 'BLPLL', 'BRPLL'}
-def fse_create_hclk_nodes(dev, device, fse, dat):
+def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
     # XXX
     if device not in _hclk_to_fclk:
         return
@@ -1000,7 +1001,7 @@ def fse_create_hclk_nodes(dev, device, fse, dat):
         # create HCLK nodes
         hclks = {}
         # entries to the HCLK from logic
-        for hclk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(hclknumbers['TBDHCLK0'], hclknumbers['RBDHCLK3'] + 1)}:
+        for hclk_idx, row, col, wire_idx in {(i, dat.cmux_ins[i - 80][0] - 1, dat.cmux_ins[i - 80][1] - 1, dat.cmux_ins[i - 80][2]) for i in range(hclknumbers['TBDHCLK0'], hclknumbers['RBDHCLK3'] + 1)}:
             if row != -2:
                 add_node(dev, hclknames[hclk_idx], "HCLK", row, col, wirenames[wire_idx])
                 # XXX clock router is doing fine with HCLK w/o any buffering
@@ -1202,7 +1203,7 @@ def fse_iologic(device, fse, ttyp):
 
 # We're not done with that yet - what matters is how the columns of each
 # quadrant end.
-# For GW1N-1 dat['center'] = [6, 10]
+# For GW1N-1 [dat.grid.center_x, dat.grid.center_y] = [6, 10]
 # From Out[26]: 5: {4, 5, 6, 7, 8, 9}, why is the 5th column responsible not
 # for four, but for so many columns, including the end of the quadrant, column
 # 9 (we have a 0 based system, remember)?
@@ -1238,21 +1239,21 @@ def fse_iologic(device, fse, ttyp):
 # is why the HCLK wires, which have the same numbers as the clock spines, are
 # stored separately.
 
-# dat['CmuxIns'] and 80 - here, the places of entry points into the clock
+# dat.cmux_ins and 80 - here, the places of entry points into the clock
 # system are stored in the form [row, col, wire], that is, in order to send a
 # signal for propagation through the global clock network, you need to send it
 # to this particular wire in this cell. In most cases it will not be possible
 # to connect to this wire as they are basically outputs (IO output, PLL output
 # etc).
 
-# Let's look at the dat['CmuxIns'] fragment for GW1N-1. We know that this board
+# Let's look at the dat.cmux_ins fragment for GW1N-1. We know that this board
 # has an external clock generator connected to the IOR5A pin and this is one of
 # the PCLKR clock wires (R is for right here). We see that this is index 47,
 # and index 48 belongs to another pin on the same side of the chip. If we
 # consider the used fuses from the ['wire'][38] table on the simplest example,
 # we will see that 47 corresponds to the PCLKR0 wire, whose index in the
 # clknames table (irenames.py) is 127.
-# For lack of a better way, we assume that the indexes in the dat['CmuxIns']
+# For lack of a better way, we assume that the indexes in the dat.cmux_ins
 # table are the wire numbers in clknames minus 80.
 
 # We check on a couple of other chips and leave it that way. This is neither the
@@ -1285,12 +1286,12 @@ _clock_data = {
         'GW2A-18': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
         'GW2A-18C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
         }
-def fse_create_clocks(dev, device, dat, fse):
-    center_col = dat['center'][1] - 1
+def fse_create_clocks(dev, device, dat: Datfile, fse):
+    center_col = dat.grid.center_x - 1
     clkpin_wires = {}
     taps = {}
     # find center muxes
-    for clk_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(clknumbers['PCLKT0'], clknumbers['PCLKR1'] + 1)}:
+    for clk_idx, row, col, wire_idx in {(i, dat.cmux_ins[i - 80][0] - 1, dat.cmux_ins[i - 80][1] - 1, dat.cmux_ins[i - 80][2]) for i in range(clknumbers['PCLKT0'], clknumbers['PCLKR1'] + 1)}:
         if row != -2:
             add_node(dev, clknames[clk_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
             add_buf_bel(dev, row, col, wirenames[wire_idx])
@@ -1381,8 +1382,8 @@ def fse_create_bottom_io(dev, device):
 # BRAM-rows, but for now this is an acceptable mechanism for finding
 # non-standard IOs, taking into account the chip series, eliminating the
 # "magic" coordinates.
-def fse_create_simplio_rows(dev, dat):
-    for row, rd in enumerate(dat['grid']):
+def fse_create_simplio_rows(dev, dat: Datfile):
+    for row, rd in enumerate(dat.grid.rows):
         if [r for r in rd if r in "Bb"]:
             if row > 0:
                 row -= 1
@@ -1390,11 +1391,11 @@ def fse_create_simplio_rows(dev, dat):
                 row -= 1
             dev.simplio_rows.add(row)
 
-def fse_create_tile_types(dev, dat):
+def fse_create_tile_types(dev, dat: Datfile):
     type_chars = 'PCMIB'
     for fn in type_chars:
         dev.tile_types[fn] = set()
-    for row, rd in enumerate(dat['grid']):
+    for row, rd in enumerate(dat.grid.rows):
         for col, fn in enumerate(rd):
             if fn in type_chars:
                 i = row
@@ -1409,10 +1410,10 @@ def fse_create_tile_types(dev, dat):
                     j -= 1
                 dev.tile_types[fn].add(dev.grid[i][j].ttyp)
 
-def get_tile_types_by_func(dev, dat, fse, fn):
+def get_tile_types_by_func(dev, dat: Datfile, fse, fn):
     ttypes = set()
     fse_grid = fse['header']['grid'][61]
-    for row, rd in enumerate(dat['grid']):
+    for row, rd in enumerate(dat.grid.rows):
         for col, type_char in enumerate(rd):
             if type_char == fn:
                 i = row
@@ -1525,8 +1526,8 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
 # already done when we created pure clock pips. But what we need to do is
 # indicate that these CLKs at these coordinates are TRBDCLK0, etc. Therefore,
 # we create Himbaechel nodes.
-def fse_create_logic2clk(dev, device, dat):
-    for clkwire_idx, row, col, wire_idx in {(i, dat['CmuxIns'][str(i - 80)][0] - 1, dat['CmuxIns'][str(i - 80)][1] - 1, dat['CmuxIns'][str(i - 80)][2]) for i in range(clknumbers['TRBDCLK0'], clknumbers['TRMDCLK1'] + 1)}:
+def fse_create_logic2clk(dev, device, dat: Datfile):
+    for clkwire_idx, row, col, wire_idx in {(i, dat.cmux_ins[i - 80][0] - 1, dat.cmux_ins[i - 80][1] - 1, dat.cmux_ins[i - 80][2]) for i in range(clknumbers['TRBDCLK0'], clknumbers['TRMDCLK1'] + 1)}:
         if row != -2:
             add_node(dev, clknames[clkwire_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
             add_buf_bel(dev, row, col, wirenames[wire_idx])
@@ -1575,7 +1576,7 @@ def sync_extra_func(dev):
         row, col = loc
         dev.extra_func.setdefault((row, col), {})['hclk_pips'] = pips
 
-def from_fse(device, fse, dat):
+def from_fse(device, fse, dat: Datfile):
     dev = Device()
     fse_create_simplio_rows(dev, dat)
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
@@ -1832,19 +1833,19 @@ def dat_portmap(dat, dev, device):
                 if name.startswith("IOB"):
                     if row in dev.simplio_rows:
                         idx = ord(name[-1]) - ord('A')
-                        inp = wirenames[dat['IobufIns'][idx]]
+                        inp = wirenames[dat.portmap['IobufIns'][idx]]
                         bel.portmap['I'] = inp
-                        out = wirenames[dat['IobufOuts'][idx]]
+                        out = wirenames[dat.portmap['IobufOuts'][idx]]
                         bel.portmap['O'] = out
-                        oe = wirenames[dat['IobufOes'][idx]]
+                        oe = wirenames[dat.portmap['IobufOes'][idx]]
                         bel.portmap['OE'] = oe
                     else:
                         pin = name[-1]
-                        inp = wirenames[dat[f'Iobuf{pin}Out']]
+                        inp = wirenames[dat.portmap[f'Iobuf{pin}Out']]
                         bel.portmap['O'] = inp
-                        out = wirenames[dat[f'Iobuf{pin}In']]
+                        out = wirenames[dat.portmap[f'Iobuf{pin}In']]
                         bel.portmap['I'] = out
-                        oe = wirenames[dat[f'Iobuf{pin}OE']]
+                        oe = wirenames[dat.portmap[f'Iobuf{pin}OE']]
                         bel.portmap['OE'] = oe
                         if row == dev.rows - 1:
                             # bottom io
@@ -1853,32 +1854,32 @@ def dat_portmap(dat, dev, device):
                 elif name.startswith("IOLOGIC"):
                     buf = name[-1]
                     for idx, nam in _iologic_inputs:
-                        w_idx = dat[f'Iologic{buf}In'][idx]
+                        w_idx = dat.portmap[f'Iologic{buf}In'][idx]
                         if w_idx >= 0:
                             bel.portmap[nam] = wirenames[w_idx]
                         elif nam == 'FCLK':
                             # dummy Input, we'll make a special pips for it
                             bel.portmap[nam] = "FCLK"
                     for idx, nam in _iologic_outputs:
-                        w_idx = dat[f'Iologic{buf}Out'][idx]
+                        w_idx = dat.portmap[f'Iologic{buf}Out'][idx]
                         if w_idx >= 0:
                             bel.portmap[nam] = wirenames[w_idx]
                 elif name.startswith("OSER16"):
                     for idx, nam in _oser16_inputs:
-                        w_idx = dat[f'IologicAIn'][idx]
+                        w_idx = dat.portmap[f'IologicAIn'][idx]
                         if w_idx >= 0:
                             bel.portmap[nam] = wirenames[w_idx]
                         elif nam == 'FCLK':
                             # dummy Input, we'll make a special pips for it
                             bel.portmap[nam] = "FCLK"
                     for idx, nam in _oser16_outputs:
-                        w_idx = dat[f'IologicAOut'][idx]
+                        w_idx = dat.portmap[f'IologicAOut'][idx]
                         if w_idx >= 0:
                             bel.portmap[nam] = wirenames[w_idx]
                     bel.portmap.update(_oser16_fixed_inputs)
                 elif name.startswith("IDES16"):
                     for idx, nam in _ides16_inputs:
-                        w_idx = dat[f'IologicAIn'][idx]
+                        w_idx = dat.portmap[f'IologicAIn'][idx]
                         if w_idx >= 0:
                             bel.portmap[nam] = wirenames[w_idx]
                         elif nam == 'FCLK':
@@ -1886,11 +1887,11 @@ def dat_portmap(dat, dev, device):
                             bel.portmap[nam] = "FCLK"
                     bel.portmap.update(_ides16_fixed_outputs)
                 elif name == 'BSRAM':
-                    # dat['BsramOutDlt'] and dat['BsramOutDlt'] indicate port offset in cells
+                    # dat.portmap['BsramOutDlt'] and dat.portmap['BsramOutDlt'] indicate port offset in cells
                     wire2node = {} # some wires used for >1 port, remember node
-                    for i in range(len(dat['BsramOut'])):
-                        off = dat['BsramOutDlt'][i]
-                        wire_idx = dat['BsramOut'][i]
+                    for i in range(len(dat.portmap['BsramOut'])):
+                        off = dat.portmap['BsramOutDlt'][i]
+                        wire_idx = dat.portmap['BsramOut'][i]
                         if wire_idx < 0:
                             continue
                         wire = wirenames[wire_idx]
@@ -1912,15 +1913,15 @@ def dat_portmap(dat, dev, device):
                                 wire2node[(row, col + off, wire)] = f'X{col}Y{row}/BSRAM{nam}{wire}'
                         else:
                             bel.portmap[nam] = wire
-                    for i in range(len(dat['BsramIn']) + 6):
+                    for i in range(len(dat.portmap['BsramIn']) + 6):
                         if i < 132:
-                            off = dat['BsramInDlt'][i]
-                            wire_idx = dat['BsramIn'][i]
+                            off = dat.portmap['BsramInDlt'][i]
+                            wire_idx = dat.portmap['BsramIn'][i]
                             if wire_idx < 0:
                                 continue
                         elif i in range(132, 135):
                             nam = f'BLKSELA{i - 132}'
-                            wire_idx = dat['BsramIn'][i - 132 + 15]
+                            wire_idx = dat.portmap['BsramIn'][i - 132 + 15]
                             off = [0, 0, 2][i - 132]
                         else:
                             nam = f'BLKSELB{i - 135}'
@@ -1969,11 +1970,11 @@ def dat_portmap(dat, dev, device):
                     offx = 1
                     if device in {'GW1N-9C', 'GW1N-9', 'GW2A-18', 'GW2A-18C'}:
                         # two mirrored PLLs
-                        if col > dat['center'][1] - 1:
+                        if col > dat.grid.center_x - 1:
                             offx = -1
                     for idx, nam in _pll_inputs:
-                        wire = wirenames[dat['PllIn'][idx]]
-                        off = dat['PllInDlt'][idx] * offx
+                        wire = wirenames[dat.portmap['PllIn'][idx]]
+                        off = dat.portmap['PllInDlt'][idx] * offx
                         if device in {'GW1NS-2'}:
                             # NS-2 is a strange thingy
                             if nam in {'RESET', 'RESET_P', 'IDSEL1', 'IDSEL2', 'ODSEL5'}:
@@ -1991,8 +1992,8 @@ def dat_portmap(dat, dev, device):
                             dev.nodes.setdefault(f'X{col}Y{row}/rPLL{nam}{wire}', ("PLL_I", {(row, col, f'rPLL{nam}{wire}')}))[1].add((row, col + off, wire))
 
                     for idx, nam in _pll_outputs:
-                        wire = wirenames[dat['PllOut'][idx]]
-                        off = dat['PllOutDlt'][idx] * offx
+                        wire = wirenames[dat.portmap['PllOut'][idx]]
+                        off = dat.portmap['PllOutDlt'][idx] * offx
                         if off == 0 or device in {'GW1NS-2'}:
                             bel.portmap[nam] = wire
                         else:
@@ -2007,8 +2008,8 @@ def dat_portmap(dat, dev, device):
                         dev.nodes.setdefault(global_name, ("PLL_O", set()))[1].update({(row, col, f'rPLL{nam}{wire}'), (row, col + off, wire)})
                     # clock input
                     nam = 'CLKIN'
-                    wire = wirenames[dat['PllClkin'][1][0]]
-                    off = dat['PllClkin'][1][1] * offx
+                    wire = wirenames[dat.portmap['PllClkin'][1][0]]
+                    off = dat.portmap['PllClkin'][1][1] * offx
                     if off == 0:
                         bel.portmap[nam] = wire
                     else:
@@ -2022,8 +2023,8 @@ def dat_portmap(dat, dev, device):
                     if col != 27:
                         pll_idx = 1
                     for idx, nam in _pll_inputs:
-                        pin_row = dat[f'SpecPll{pll_idx}Ins'][idx * 3 + 0]
-                        wire = wirenames[dat[f'SpecPll{pll_idx}Ins'][idx * 3 + 2]]
+                        pin_row = dat.portmap[f'SpecPll{pll_idx}Ins'][idx * 3 + 0]
+                        wire = wirenames[dat.portmap[f'SpecPll{pll_idx}Ins'][idx * 3 + 2]]
                         if pin_row == 1:
                             bel.portmap[nam] = wire
                         else:
@@ -2038,7 +2039,7 @@ def dat_portmap(dat, dev, device):
                             # Himbaechel node
                             dev.nodes.setdefault(f'X{col}Y{row}/PLLVR{nam}{wire}', ("PLL_I", {(row, col, f'PLLVR{nam}{wire}')}))[1].add((9, 37, wire))
                     for idx, nam in _pll_outputs:
-                        wire = wirenames[dat[f'SpecPll{pll_idx}Outs'][idx * 3 + 2]]
+                        wire = wirenames[dat.portmap[f'SpecPll{pll_idx}Outs'][idx * 3 + 2]]
                         bel.portmap[nam] = wire
                         # Himbaechel node
                         if nam != 'LOCK':
@@ -2047,7 +2048,7 @@ def dat_portmap(dat, dev, device):
                             global_name = f'X{col}Y{row}/PLLVR{nam}{wire}'
                         dev.nodes.setdefault(global_name, ("PLL_O", set()))[1].update({(row, col, f'PLLVR{nam}{wire}'), (row, col, wire)})
                     bel.portmap['CLKIN'] = wirenames[124];
-                    reset = wirenames[dat[f'SpecPll{pll_idx}Ins'][0 + 2]]
+                    reset = wirenames[dat.portmap[f'SpecPll{pll_idx}Ins'][0 + 2]]
                     # VREN pin is placed in another cell
                     if pll_idx == 0:
                         vren = 'D0'
@@ -2065,10 +2066,11 @@ def dat_portmap(dat, dev, device):
                         bel.portmap[port] = port
                         dev.aliases[row, col, port] = alias
 
-def dat_aliases(dat, dev):
+def dat_aliases(dat: Datfile, dev):
+    x11 = [p for p in dat.primitives if p.name == 'X11'][0]
     for row in dev.grid:
         for td in row:
-            for dest, (src,) in zip(dat['X11s'], dat['X11Ins']):
+            for dest, (src,) in zip(x11.obj, x11.ins):
                 td.aliases[wirenames[dest]] = wirenames[src]
 
 def tile_bitmap(dev, bitmap, empty=False):

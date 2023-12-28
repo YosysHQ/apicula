@@ -1,12 +1,13 @@
+from pathlib import Path
 from multiprocessing.dummy import Pool
 import pickle
-import json
 import re
 from apycula import tiled_fuzzer
 from apycula import codegen
 from apycula import pindef
 from apycula import chipdb
 from apycula import fuse_h4x
+from apycula import dat19
 from apycula import gowin_unpack
 from apycula.wirenames import clknumbers
 
@@ -38,8 +39,8 @@ def ibuf(mod, cst, loc, clk=None):
 with open(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.fse", 'rb') as f:
     fse = fuse_h4x.readFse(f)
 
-with open(f"{tiled_fuzzer.device}.json") as f:
-    dat = json.load(f)
+dat = dat19.Datfile(Path(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.dat"))
+
 
 with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
     db = pickle.load(f)
@@ -286,7 +287,7 @@ def tap_aliases(quads):
     for _, (rows, cols, spine_row) in quads.items():
         add_rim(rows, cols, spine_row)
         for col in cols:
-            if col == dat['center'][1] - 1:
+            if col == dat.grid.center_x - 1:
                 continue
             for row in rows:
                 for src in ["GT00", "GT10"]:
@@ -322,7 +323,7 @@ def get_bufs_bits(fse, ttyp, win, wout):
     return {fuse_h4x.fuse_lookup(fse, ttyp, f) for f in fuses}
 
 # create aliases and pips for long wires
-def make_lw_aliases(fse, dat, db, quads, clks):
+def make_lw_aliases(fse, dat: dat19.Datfile, db, quads, clks):
     # branches
     # {lw#: {tap_col: {cols}}
     taps = {}
