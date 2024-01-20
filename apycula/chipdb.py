@@ -1293,8 +1293,20 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
     # find center muxes
     for clk_idx, row, col, wire_idx in {(i, dat.cmux_ins[i - 80][0] - 1, dat.cmux_ins[i - 80][1] - 1, dat.cmux_ins[i - 80][2]) for i in range(clknumbers['PCLKT0'], clknumbers['PCLKR1'] + 1)}:
         if row != -2:
-            add_node(dev, clknames[clk_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
-            add_buf_bel(dev, row, col, wirenames[wire_idx])
+            # XXX GW1NR-9C has an interesting feature not found in any other
+            # chip - the external pins for the clock are connected to the
+            # central clock MUX not directly, but through auxiliary wires that
+            # lead to the corner cells and only there the connection occurs.
+            if device == 'GW1N-9C' and row == dev.rows - 1:
+                add_node(dev, f'{clknames[clk_idx]}-9C', "GLOBAL_CLK", row, col, wirenames[wire_idx])
+                if clknames[clk_idx][-1] == '1':
+                    add_node(dev, f'{clknames[clk_idx]}-9C', "GLOBAL_CLK", row, dev.cols - 1, 'LWT6')
+                else:
+                    add_node(dev, f'{clknames[clk_idx]}-9C', "GLOBAL_CLK", row, 0, 'LWT6')
+            else:
+                add_node(dev, clknames[clk_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
+                add_buf_bel(dev, row, col, wirenames[wire_idx])
+
 
     spines = {f'SPINE{i}' for i in range(32)}
     for row, rd in enumerate(dev.grid):
