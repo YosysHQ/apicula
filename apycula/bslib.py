@@ -1,8 +1,8 @@
 from math import ceil
 import numpy as np
-from crcmod.predefined import mkPredefinedCrcFun
+import crc
 
-crc16arc = mkPredefinedCrcFun('crc-16')
+crc16arc = crc.Calculator(crc.Configuration(width=16, polynomial=0x8005, reverse_input=True, reverse_output=True))
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -64,7 +64,7 @@ def read_bitstream(fname):
                 continue
             crcdat.extend(ba[:-8])
             crc1 = (ba[-7] << 8) + ba[-8]
-            crc2 = crc16arc(crcdat)
+            crc2 = crc16arc.checksum(crcdat)
             assert crc1 == crc2, f"Not equal {crc1} {crc2}"
             crcdat = ba[-6:]
             bitmap.append(bitarr(line, padding))
@@ -122,7 +122,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
                 ba = compressLine(ba, key8Z, key4Z, key2Z)
             f.write(''.join(f"{b:08b}" for b in ba))
             crcdat.extend(ba)
-            crc = crc16arc(crcdat)
+            crc = crc16arc.checksum(crcdat)
             crcdat = bytearray(b'\xff'*6)
             f.write(f"{crc&0xff:08b}{crc>>8:08b}")
             f.write('1'*48)
