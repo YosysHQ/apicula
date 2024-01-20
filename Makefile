@@ -18,6 +18,6 @@ apycula/%.pickle: %_stage2.pickle
 	gzip -c $< > $@
 
 clean:
-	rm *.json
-	rm *.pickle
-	rm apycula/*.pickle
+	rm -f *.json
+	rm -f *.pickle
+	rm -f apycula/*.pickle
