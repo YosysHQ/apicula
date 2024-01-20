@@ -124,9 +124,9 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
                 ba = compressLine(ba, key8Z, key4Z, key2Z)
             f.write(''.join(f"{b:08b}" for b in ba))
             crcdat.extend(ba)
-            crc = calc.checksum(crcdat)
+            crc_ = calc.checksum(crcdat)
             crcdat = bytearray(b'\xff'*6)
-            f.write(f"{crc&0xff:08b}{crc>>8:08b}")
+            f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
             f.write('1'*48)
             f.write('\n')
         for ba in ftr:
