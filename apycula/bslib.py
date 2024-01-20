@@ -1,8 +1,8 @@
 from math import ceil
 import numpy as np
-from crcmod.predefined import mkPredefinedCrcFun
+import crc
 
-crc16arc = mkPredefinedCrcFun('crc-16')
+crc16arc = crc.Configuration(width=16, polynomial=0x8005, reverse_input=True, reverse_output=True)
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -27,6 +27,7 @@ def read_bitstream(fname):
     crcdat = bytearray()
     preamble = 3
     frames = 0
+    calc = crc.Calculator(crc16arc)
     with open(fname) as inp:
         for line in inp:
             if line.startswith("//"): continue
@@ -64,8 +65,8 @@ def read_bitstream(fname):
                 continue
             crcdat.extend(ba[:-8])
             crc1 = (ba[-7] << 8) + ba[-8]
-            crc2 = crc16arc(crcdat)
-            assert crc1 == crc2, f"Not equal {crc1} {crc2}"
+            crc2 = calc.checksum(crcdat)
+            assert crc1 == crc2, f"Not equal {crc1} {crc2} for {crcdat}"
             crcdat = ba[-6:]
             bitmap.append(bitarr(line, padding))
             frames = max(0, frames-1)
@@ -110,6 +111,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
 
     crcdat = bytearray()
     preamble = 3
+    calc = crc.Calculator(crc16arc)
     with open(fname, 'w') as f:
         for ba in hdr:
             if not preamble and ba[0] != 0xd2: # SPI address
@@ -122,9 +124,9 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
                 ba = compressLine(ba, key8Z, key4Z, key2Z)
             f.write(''.join(f"{b:08b}" for b in ba))
             crcdat.extend(ba)
-            crc = crc16arc(crcdat)
+            crc_ = calc.checksum(crcdat)
             crcdat = bytearray(b'\xff'*6)
-            f.write(f"{crc&0xff:08b}{crc>>8:08b}")
+            f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
             f.write('1'*48)
             f.write('\n')
         for ba in ftr:
