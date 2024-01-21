@@ -54,6 +54,7 @@ all: \
 	bsram-pROM-tangnano9k.fs bsram-SDPB-tangnano9k.fs bsram-SP-tangnano9k.fs \
 	bsram-DPB-tangnano9k.fs bsram-pROMX9-tangnano9k.fs bsram-SDPX9B-tangnano9k.fs \
 	bsram-SPX9-tangnano9k.fs bsram-DPX9B-tangnano9k.fs \
+	oser10-elvds-tangnano9k.fs \
 	\
 	blinky-szfpga.fs shift-szfpga.fs blinky-tbuf-szfpga.fs blinky-oddr-szfpga.fs \
 	blinky-osc-szfpga.fs tlvds-szfpga.fs elvds-szfpga.fs oddr-tlvds-szfpga.fs \
