@@ -868,8 +868,10 @@ def place(db, tilemap, bels, cst, args):
                 parms['ENABLE_USED'] = "0"
             typ = 'IOB'
 
-        if is_himbaechel and typ in {'IOLOGIC', 'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4', 'OSER8', 'OSER10', 'OVIDEO',
-                   'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}:
+        if is_himbaechel and typ in {'IOLOGIC', 'IOLOGICI', 'IOLOGICO', 'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4',
+                                     'OSER8', 'OSER10', 'OVIDEO', 'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}:
+            if num[-1] in {'I', 'O'}:
+                num = num[:-1]
             if typ == 'IOLOGIC_DUMMY':
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
             attrs['IOLOGIC_TYPE'] = typ
@@ -1030,7 +1032,7 @@ def place(db, tilemap, bels, cst, args):
                 typ = cell['type']
             bsram_attrs = set_bsram_attrs(db, typ, parms)
             bsrambits = get_shortval_fuses(db, tiledata.ttyp, bsram_attrs, f'BSRAM_{typ}')
-            print(f'({row - 1}, {col - 1}) attrs:{bsram_attrs}, bits:{bsrambits}')
+            #print(f'({row - 1}, {col - 1}) attrs:{bsram_attrs}, bits:{bsrambits}')
             for brow, bcol in bsrambits:
                 tile[brow][bcol] = 1
         elif typ.startswith('RPLL'):
