@@ -8,7 +8,7 @@ This project is supported by our generous sponsors. Have a look at our [contribu
 
 ## Getting Started
 
-Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr-gowin](https://github.com/YosysHQ/nextpnr#nextpnr-gowin), [openFPGALoader](https://github.com/trabucayre/openFPGALoader), and Python 3.8 or higher. [Yowasp](http://yowasp.org/) versions of Yosys and Nextpnr are also supported.
+Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr-himbaechel](https://github.com/YosysHQ/nextpnr#gowin), [openFPGALoader](https://github.com/trabucayre/openFPGALoader), and Python 3.8 or higher. [Yowasp](http://yowasp.org/) versions of Yosys and Nextpnr are also supported.
 
 Currently supported boards are
  * Trenz TEC0117: GW1NR-UV9QN881C6/I5
@@ -49,10 +49,10 @@ cd examples
 yosys -D LEDS_NR=8 -p "read_verilog blinky.v; synth_gowin -json blinky.json"
 DEVICE='GW1NR-UV9QN881C6/I5'  # change to your device
 BOARD='tec0117' # change to your board
-nextpnr-gowin --json blinky.json \
-              --write pnrblinky.json \
-              --device $DEVICE \
-              --cst $BOARD.cst
+nextpnr-himbaechel --json blinky.json \
+                   --write pnrblinky.json \
+                   --device $DEVICE \
+                   --vopt cst=$BOARD.cst
 gowin_pack -d $DEVICE -o pack.fs pnrblinky.json # chango to your device
 # gowin_unpack -d $DEVICE -o unpack.v pack.fs
 # yosys -p "read_verilog -lib +/gowin/cells_sim.v; clean -purge; show" unpack.v
@@ -61,11 +61,11 @@ openFPGALoader -b $BOARD pack.fs
 
 For the Tangnano9k board, you need to call nextpnr and gowin_pack with the chip family as follows:
 ```
-nextpnr-gowin --json blinky.json \
-              --write pnrblinky.json \
-              --device $DEVICE \
-              --family GW1N-9C \
-              --cst $BOARD.cst
+nextpnr-himbaechel --json blinky.json \
+                   --write pnrblinky.json \
+                   --device $DEVICE \
+                   --vopt family=GW1N-9C \
+                   --vopt cst=$BOARD.cst
 gowin_pack -d GW1N-9C -o pack.fs pnrblinky.json
 ```
 
