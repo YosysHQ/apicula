@@ -1,5 +1,7 @@
 # Project Apicula
 
+<img src="apicula.svg" width="250" />
+
 Documentation and open source tools for the Gowin FPGA bitstream format.
 
 Project Apicula uses a combination of fuzzing and parsing of the vendor data files to provide Python tools for generating bitstreams.
