@@ -9,6 +9,7 @@ from apycula import chipdb
 from apycula import fuse_h4x
 from apycula import dat19
 from apycula import gowin_unpack
+from apycula import bitmatrix
 from apycula.wirenames import clknumbers
 
 def dff(mod, cst, row, col, clk=None):
@@ -99,7 +100,7 @@ def quadrants():
 
     res = {}
     for (row, col), (mybs, *_) in zip(idxes, pnr_res):
-        sweep_tiles = fuse_h4x.tile_bitmap(fse, mybs^pnr.bitmap)
+        sweep_tiles = fuse_h4x.tile_bitmap(fse, bitmatrix.xor(mybs, pnr.bitmap))
 
         # find which tap was used
         taps = [r for (r, c, typ), t in sweep_tiles.items() if typ in {13, 14, 15, 16, 18, 19}]
@@ -148,7 +149,7 @@ def center_muxes(ct, rows, cols):
     base = pnr.bitmap
     for i, (bs_sweep, *_) in enumerate(pnr_res):
         pin = true_pins[i]
-        new = base ^ bs_sweep
+        new = bitmatrix.xor(base, bs_sweep)
         tiles = chipdb.tile_bitmap(db, new)
 
         try:

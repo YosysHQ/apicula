@@ -1,6 +1,6 @@
 import sys
-import numpy as np
 import random
+from apycula import bitmatrix
 
 def rint(f, w):
     val = int.from_bytes(f.read(w), 'little', signed=True)
@@ -74,7 +74,7 @@ def readOneFile(f, fuselength):
 def render_tile(d, ttyp):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
-    tile = np.zeros((h, w), np.uint8)#+(255-ttyp)
+    tile = bitmatrix.zeros(h, w)#+(255-ttyp)
     for start, table in [(2, 'shortval'), (2, 'wire'), (16, 'longval'),
                          (1, 'longfuse'), (0, 'const')]:
         if table in d[ttyp]:
@@ -104,17 +104,24 @@ def render_bitmap(d):
     tiles = d['header']['grid'][61]
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
-    bitmap = np.zeros((height, width), np.uint8)
+    bitmap = bitmatrix.zeros(height, width)
     y = 0
     for row in tiles:
         x=0
         for typ in row:
-            #if typ==12: pdb.set_trace()
             td = d[typ]
             w = td['width']
             h = td['height']
             #bitmap[y:y+h,x:x+w] += render_tile(d, typ)
-            bitmap[y:y+h,x:x+w] = typ
+            #bitmap[y:y+h,x:x+w] = typ
+            rtile = render_tile(d, typ)
+            y0 = y
+            for row in rtile:
+                x0 = x
+                for val in row:
+                    bitmap[y0][x0] += val
+                    x0 += 1
+                y0 += 1
             x+=w
         y+=h
 
@@ -122,6 +129,8 @@ def render_bitmap(d):
 
 def display(fname, data):
     from PIL import Image
+    import numpy as np
+    data = np.array(data, dtype = np.uint8)
     im = Image.frombytes(
             mode='P',
             size=data.shape[::-1],
@@ -148,12 +157,11 @@ def tile_bitmap(d, bitmap, empty=False):
     for idx, row in enumerate(tiles):
         x=0
         for jdx, typ in enumerate(row):
-            #if typ==87: pdb.set_trace()
             td = d[typ]
             w = td['width']
             h = td['height']
-            tile = bitmap[y:y+h,x:x+w]
-            if tile.any() or empty:
+            tile = [row[x:x+w] for row in bitmap[y:y+h]]
+            if bitmatrix.any(tile) or empty:
                 res[(idx, jdx, typ)] = tile
             x+=w
         y+=h
@@ -164,7 +172,7 @@ def fuse_bitmap(d, bitmap):
     tiles = d['header']['grid'][61]
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
-    res = np.zeros((height, width), dtype=np.uint8)
+    res = bitmatrix.zeros(height, width)
     y = 0
     for idx, row in enumerate(tiles):
         x=0
@@ -172,7 +180,13 @@ def fuse_bitmap(d, bitmap):
             td = d[typ]
             w = td['width']
             h = td['height']
-            res[y:y+h,x:x+w] = bitmap[(idx, jdx, typ)]
+            y0 = y
+            for row in bitmap[(idx, jdx, typ)]:
+                x0 = x
+                for val in row:
+                    res[y0][x0] = val
+                    x0 += 1
+                y0 += 1
             x+=w
         y+=h
 
@@ -207,7 +221,7 @@ def scan_fuses(d, ttyp, tile):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
     fuses = []
-    rows, cols = np.where(tile==1)
+    rows, cols = bitmatrix.nonzero(tile)
     for row, col in zip(rows, cols):
         # ripe for optimization
         for fnum, fuse in enumerate(d['header']['fuse'][1]):

@@ -10,7 +10,6 @@ from functools import reduce
 from random import shuffle, seed
 from warnings import warn
 from math import factorial
-import numpy as np
 from multiprocessing.dummy import Pool
 import pickle
 from shutil import copytree

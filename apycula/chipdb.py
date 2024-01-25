@@ -5,11 +5,11 @@ import re
 import copy
 from functools import reduce
 from collections import namedtuple
-import numpy as np
 from apycula.dat19 import Datfile
 import apycula.fuse_h4x as fuse
 from apycula.wirenames import wirenames, wirenumbers, clknames, clknumbers, hclknames, hclknumbers
 from apycula import pindef
+from apycula import bitmatrix
 
 # the character that marks the I/O attributes that come from the nextpnr
 mode_attr_sep = '&'
@@ -75,7 +75,7 @@ class Device:
     pin_bank: Dict[str, int] = field(default_factory = dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)
-    template: np.ndarray = None
+    template: List[List[int]] = None
     # allowable values of bel attributes
     # {table_name: [(attr_id, attr_value)]}
     logicinfo: Dict[str, List[Tuple[int, int]]] = field(default_factory=dict)
@@ -2093,8 +2093,8 @@ def tile_bitmap(dev, bitmap, empty=False):
         for jdx, td in enumerate(row):
             w = td.width
             h = td.height
-            tile = bitmap[y:y+h,x:x+w]
-            if tile.any() or empty:
+            tile = [row[x:x+w] for row in bitmap[y:y+h]]
+            if bitmatrix.any(tile) or empty:
                 res[(idx, jdx)] = tile
             x+=w
         y+=h
@@ -2102,16 +2102,22 @@ def tile_bitmap(dev, bitmap, empty=False):
     return res
 
 def fuse_bitmap(db, bitmap):
-    res = np.zeros((db.height, db.width), dtype=np.uint8)
+    res = bitmatrix.zeros(db.height, db.width)
     y = 0
     for idx, row in enumerate(db.grid):
         x=0
         for jdx, td in enumerate(row):
             w = td.width
             h = td.height
-            res[y:y+h,x:x+w] = bitmap[(idx, jdx)]
-            x+=w
-        y+=h
+            y0 = y
+            for row in bitmap[(idx, jdx)]:
+                x0 = x
+                for val in row:
+                    res[y0][x0] = val
+                    x0 += 1
+                y0 += 1
+            x += w
+        y += h
 
     return res
 

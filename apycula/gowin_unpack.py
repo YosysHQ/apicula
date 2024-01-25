@@ -2,7 +2,6 @@ import sys
 import os
 import re
 import random
-import numpy as np
 from itertools import chain, count
 import pickle
 import gzip
