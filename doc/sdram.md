@@ -11,46 +11,47 @@ This is what has been done in `/legacy/sdram`, which is a standalone script not 
 
 The result for GW1NR-9 is as below. A daring adventurer could use these to develop their own SDRAM controller or try to add support for LiteX on open source Gowin tools.
 
-```
-IO_sdram_dq(0) -> R29C26_IOA
-IO_sdram_dq(1) -> R29C27_IOA
-IO_sdram_dq(2) -> R29C35_IOA
-IO_sdram_dq(3) -> R29C36_IOA
-IO_sdram_dq(4) -> R29C37_IOA
-IO_sdram_dq(5) -> R29C38_IOA
-IO_sdram_dq(6) -> R29C39_IOA
-IO_sdram_dq(7) -> R29C40_IOA
-IO_sdram_dq(8) -> R29C16_IOB
-IO_sdram_dq(9) -> R29C17_IOB
-IO_sdram_dq(10) -> R29C18_IOA
-IO_sdram_dq(11) -> R29C18_IOB
-IO_sdram_dq(12) -> R29C19_IOB
-IO_sdram_dq(13) -> R29C20_IOB
-IO_sdram_dq(14) -> R29C21_IOB
-IO_sdram_dq(15) -> R29C22_IOB
-O_sdram_clk -> R1C4_IOB
-O_sdram_cke -> R1C9_IOA
-O_sdram_cs_n -> R1C35_IOB
-O_sdram_cas_n -> R1C40_IOB
-O_sdram_ras_n -> R1C40_IOA
-O_sdram_wen_n -> R1C44_IOA
-O_sdram_addr(0) -> R1C31_IOA
-O_sdram_addr(1) -> R1C28_IOA
-O_sdram_addr(2) -> R1C27_IOA
-O_sdram_addr(3) -> R1C26_IOA
-O_sdram_addr(4) -> R1C22_IOB
-O_sdram_addr(5) -> R1C21_IOB
-O_sdram_addr(6) -> R1C18_IOB
-O_sdram_addr(7) -> R1C18_IOA
-O_sdram_addr(8) -> R1C14_IOB
-O_sdram_addr(9) -> R1C14_IOA
-O_sdram_addr(10) -> R1C31_IOB
-O_sdram_addr(11) -> R1C9_IOB
-O_sdram_dqm(0) -> R1C44_IOB
-O_sdram_dqm(1) -> R1C4_IOA
-O_sdram_ba(0) -> R1C35_IOA
-O_sdram_ba(1) -> R1C32_IOA
-```
+| SIGNAL NAME      | PIN LOCATION |
+| ---------------- | ------------ |
+| IO_sdram_dq(0)   | R29C26_IOA   |
+| IO_sdram_dq(1)   | R29C27_IOA   |
+| IO_sdram_dq(2)   | R29C35_IOA   |
+| IO_sdram_dq(3)   | R29C36_IOA   |
+| IO_sdram_dq(4)   | R29C37_IOA   |
+| IO_sdram_dq(5)   | R29C38_IOA   |
+| IO_sdram_dq(6)   | R29C39_IOA   |
+| IO_sdram_dq(7)   | R29C40_IOA   |
+| IO_sdram_dq(8)   | R29C16_IOB   |
+| IO_sdram_dq(9)   | R29C17_IOB   |
+| IO_sdram_dq(10)  | R29C18_IOA   |
+| IO_sdram_dq(11)  | R29C18_IOB   |
+| IO_sdram_dq(12)  | R29C19_IOB   |
+| IO_sdram_dq(13)  | R29C20_IOB   |
+| IO_sdram_dq(14)  | R29C21_IOB   |
+| IO_sdram_dq(15)  | R29C22_IOB   |
+| O_sdram_clk      | R1C4_IOB     |
+| O_sdram_cke      | R1C9_IOA     |
+| O_sdram_cs_n     | R1C35_IOB    |
+| O_sdram_cas_n    | R1C40_IOB    |
+| O_sdram_ras_n    | R1C40_IOA    |
+| O_sdram_wen_n    | R1C44_IOA    |
+| O_sdram_addr(0)  | R1C31_IOA    |
+| O_sdram_addr(1)  | R1C28_IOA    |
+| O_sdram_addr(2)  | R1C27_IOA    |
+| O_sdram_addr(3)  | R1C26_IOA    |
+| O_sdram_addr(4)  | R1C22_IOB    |
+| O_sdram_addr(5)  | R1C21_IOB    |
+| O_sdram_addr(6)  | R1C18_IOB    |
+| O_sdram_addr(7)  | R1C18_IOA    |
+| O_sdram_addr(8)  | R1C14_IOB    |
+| O_sdram_addr(9)  | R1C14_IOA    |
+| O_sdram_addr(10) | R1C31_IOB    |
+| O_sdram_addr(11) | R1C9_IOB     |
+| O_sdram_dqm(0)   | R1C44_IOB    |
+| O_sdram_dqm(1)   | R1C4_IOA     |
+| O_sdram_ba(0)    | R1C35_IOA    |
+| O_sdram_ba(1)    | R1C32_IOA    |
+
 
 Similarly, the results for the GW2AR-18 are below. When the SDRAM is used, the Bank Voltage for banks 2 and 7 must be set to 3.3V. The ID jump from ```21``` to ```24``` is due to two address wires that are not used on the GW2AR-18. 
 
