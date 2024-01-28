@@ -1,10 +1,10 @@
 # SDRAM
 
 Gowin devices with the R suffic such as the GW1NR-9 have built-in SDRAM.
-This SDRAM is a System-in-Package wirdebonded off-the-shelf SDRAM module.
+This SDRAM is a System-in-Package wirdebonded of the shelf SDRAM module.
 So there isn't so much to fuzz, you just have to know the pinout and the model.
 
-Gowin has been so kind as to provide LiteX with [the details](https	//github.com/litex-hub/litex-boards/blob/8a33c2aa312dddc66297f7cd6e39107fda5a2efb/litex_boards/targets/trenz_tec0117.py#L92-L118) of the model and pinout. That is... the magic wire names that result in the vendor placing the IOB in the correct place.
+Gowin has been so kind as to provide LiteX with [the details](https://github.com/litex-hub/litex-boards/blob/8a33c2aa312dddc66297f7cd6e39107fda5a2efb/litex_boards/targets/trenz_tec0117.py#L92-L118) of the model and pinout. That is... the magic wire names that result in the vendor placing the IOB in the correct place.
 
 For the open source tools, you can't use the magic wire names. But what you can do is feed the magic wire names to the vendor and look at the generated placement.
 This is what has been done in `/legacy/sdram`, which is a standalone script not tied into the rest of Apicula.
