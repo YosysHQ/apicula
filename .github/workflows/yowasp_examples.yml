@@ -10,9 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python 3.x
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
       - name: Display Python version
@@ -27,7 +27,7 @@ jobs:
           cd examples
           YOSYS=yowasp-yosys NEXTPNR=yowasp-nextpnr-gowin make all
       - name: Archive artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
             name: bitstreams
             path: examples/*.fs

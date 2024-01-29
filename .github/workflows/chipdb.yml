@@ -14,162 +14,162 @@ jobs:
   gw1n1:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw1n-1 chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1N-1.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1n-1-chipdb
           path: apycula/GW1N-1.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1n-1-stage
           path: GW1N-1*
   gw1nz1:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw1nz-1 chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1NZ-1.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1nz-1-chipdb
           path: apycula/GW1NZ-1.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1nz-1-stage
           path: GW1NZ-1*
   gw1n9:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw1n-9 chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1N-9.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1n-9-chipdb
           path: apycula/GW1N-9.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1n-9-stage
           path: GW1N-9*
   gw1n9c:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw1n-9c chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1N-9C.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1n-9c-chipdb
           path: apycula/GW1N-9C.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1n-9c-stage
           path: GW1N-9C*
   gw1n4:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw1n-4 chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1N-4.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1n-4-chipdb
           path: apycula/GW1N-4.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1n-4-stage
           path: GW1N-4*
   gw1ns2:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw1ns-2 chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1NS-2.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1ns-2-chipdb
           path: apycula/GW1NS-2.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1ns-2-stage
           path: GW1NS-2*
   gw1ns4:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw1ns-4 chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW1NS-4.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1ns-4-chipdb
           path: apycula/GW1NS-4.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw1ns-4-stage
           path: GW1NS-4*
   gw2a18:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw2a-18 chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW2A-18.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw2a-18-chipdb
           path: apycula/GW2A-18.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw2a-18-stage
           path: GW2A-18*
   gw2a18c:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build gw2a-18c chipdb
       run: |
         docker pull pepijndevos/apicula:1.9.8
         docker run -v $(pwd):/usr/src/apicula pepijndevos/apicula:1.9.8 make apycula/GW2A-18C.pickle
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw2a-18c-chipdb
           path: apycula/GW2A-18C.pickle
     - name: Archive stage artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: gw2a-18C-stage
           path: GW2A-18C*
@@ -177,54 +177,54 @@ jobs:
     runs-on: ubuntu-latest
     needs: [gw1n1, gw1nz1, gw1n9, gw1n9c, gw1n4, gw1ns2, gw1ns4, gw2a18, gw2a18c]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Download gw1n-1 chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw1n-1-chipdb
         path: apycula
     - name: Download gw1nz-1 chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw1nz-1-chipdb
         path: apycula
     - name: Download gw1n-4 chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw1n-4-chipdb
         path: apycula
     - name: Download gw1n-9 chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw1n-9-chipdb
         path: apycula
     - name: Download gw1n-9c chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw1n-9c-chipdb
         path: apycula
     - name: Download gw1ns-2 chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw1ns-2-chipdb
         path: apycula
     - name: Download gw1ns-4 chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw1ns-4-chipdb
         path: apycula
     - name: Download gw2a-18 chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw2a-18-chipdb
         path: apycula
     - name: Download gw2a-18c chipdb
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: gw2a-18c-chipdb
         path: apycula
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.8'
     - name: Install and build
@@ -237,7 +237,7 @@ jobs:
         pip install dist/Apycula-$(python setup.py --version)-py3-none-any.whl
         gowin_pack --help
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: python-dist
           path: dist
@@ -274,14 +274,14 @@ jobs:
         yosys: [master, yosys-0.37]
         nextpnr: [master, nextpnr-0.7]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Download python package
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: python-dist
         path: dist
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       id: pysetup
       with:
         python-version: '3.9'
@@ -313,7 +313,7 @@ jobs:
         cd himbaechel
         make -j$(nproc) -f Makefile.himbaechel all 
     - name: Archive artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
           name: examples-${{ matrix.yosys }}-${{ matrix.nextpnr }}
           path: examples
