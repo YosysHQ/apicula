@@ -5,7 +5,6 @@ import pickle
 import gzip
 import itertools
 import math
-import numpy as np
 import json
 import argparse
 import importlib.resources
@@ -16,6 +15,7 @@ from apycula import chipdb
 from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses
 from apycula import attrids
 from apycula import bslib
+from apycula import bitmatrix
 from apycula.wirenames import wirenames, wirenumbers
 
 device = ""
@@ -110,9 +110,9 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
     if not has_bsram_init:
         has_bsram_init = True
         # 256 * bsram rows * chip bit width
-        bsram_init_map = np.zeros((256 * len(db.simplio_rows), db.template.shape[1]), dtype=np.uint8)
+        bsram_init_map = bitmatrix.zeros(256 * len(db.simplio_rows), bitmatrix.shape(db.template)[1])
     # 3 BSRAM cells have width 3 * 60
-    loc_map = np.zeros((256, 3 * 60), dtype = np.int8)
+    loc_map = bitmatrix.zeros(256, 3 * 60)
     #print("mapping")
     if not subtype.strip():
         width = 256
@@ -162,8 +162,13 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
     x = 0
     for jdx in range(col):
         x += db.grid[0][jdx].width
-    loc_map = np.flipud(loc_map)
-    bsram_init_map[y:y + height, x:x + 3 * 60] = loc_map
+    loc_map = bitmatrix.flipud(loc_map)
+    for row in loc_map:
+        x0 = x
+        for val in row:
+            bsram_init_map[y][x0] = val
+            x0 += 1
+        y += 1
 
 _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 def get_bels(data):
@@ -1245,13 +1250,11 @@ def header_footer(db, bs, compress):
     Currently limited to checksum with
     CRC_check and security_bit_enable set
     """
-    bs = np.fliplr(bs)
-    bs=np.packbits(bs)
+    bs = bitmatrix.fliplr(bs)
+    bs = bitmatrix.packbits(bs)
     # configuration data checksum is computed on all
     # data in 16bit format
-    bb = np.array(bs)
-
-    res = int(bb[0::2].sum() * pow(2,8) + bb[1::2].sum())
+    res = int(sum(bs[0::2]) * pow(2,8) + sum(bs[1::2]))
     checksum = res & 0xffff
 
     if compress:

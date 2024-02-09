@@ -1,6 +1,6 @@
 from math import ceil
-import numpy as np
 import crc
+from apycula import bitmatrix
 
 crc16arc = crc.Configuration(width=16, polynomial=0x8005, reverse_input=True, reverse_output=True)
 
@@ -71,7 +71,7 @@ def read_bitstream(fname):
             bitmap.append(bitarr(line, padding))
             frames = max(0, frames-1)
 
-    return np.fliplr(np.array(bitmap)), hdr, ftr
+    return bitmatrix.fliplr(bitmap), hdr, ftr
 
 def compressLine(line, key8Z, key4Z, key2Z):
     newline = []
@@ -82,26 +82,26 @@ def compressLine(line, key8Z, key4Z, key2Z):
     return newline
 
 def write_bitstream_with_bsram_init(fname, bs, hdr, ftr, compress, bsram_init):
-    new_bs = np.vstack((bs, bsram_init))
+    new_bs = bitmatrix.vstack(bs, bsram_init)
     new_hdr = hdr.copy()
-    frames = int.from_bytes(new_hdr[-1][2:], 'big') + bsram_init.shape[0]
+    frames = int.from_bytes(new_hdr[-1][2:], 'big') + bitmatrix.shape(bsram_init)[0]
     new_hdr[-1][2:] = frames.to_bytes(2, 'big')
     write_bitstream(fname, new_bs, new_hdr, ftr, compress)
 
 def write_bitstream(fname, bs, hdr, ftr, compress):
-    bs = np.fliplr(bs)
+    bs = bitmatrix.fliplr(bs)
     if compress:
-        padlen = (ceil(bs.shape[1] / 64) * 64) - bs.shape[1]
+        padlen = (ceil(bitmatrix.shape(bs)[1] / 64) * 64) - bitmatrix.shape(bs)[1]
     else:
-        padlen = bs.shape[1] % 8
-    pad = np.ones((bs.shape[0], padlen), dtype=np.uint8)
-    bs = np.hstack([pad, bs])
-    assert bs.shape[1] % 8 == 0
-    bs=np.packbits(bs, axis=1)
+        padlen = bitmatrix.shape(bs)[1] % 8
+    pad = bitmatrix.ones(bitmatrix.shape(bs)[0], padlen)
+    bs = bitmatrix.hstack(pad, bs)
+    assert bitmatrix.shape(bs)[1] % 8 == 0
+    bs=bitmatrix.packbits(bs, axis = 1)
 
     if compress:
         # search for smallest values not used in the bitstream
-        lst, _ = np.histogram(bs, bins=[i for i in range(256)])
+        lst = bitmatrix.histogram(bs, bins=[i for i in range(257)]) # 257 iso that the last basket is [255, 256] and not [254, 255]
         [key8Z, key4Z, key2Z] = [i for i,val in enumerate(lst) if val==0][0:3]
 
         # update line 0x51 with keys
@@ -140,7 +140,7 @@ def display(fname, data):
     im = Image.frombytes(
             mode='1',
             size=data.shape[::-1],
-            data=np.packbits(data, axis=1))
+            data=bitmatrix.packbits(data, axis = 1))
     if fname:
         im.save(fname)
     return im
