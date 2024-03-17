@@ -10,9 +10,16 @@ IO_LOC "led[5]" 16;
 IO_LOC "key_i" 3;
 IO_LOC "rst_i" 4;
 
+IO_LOC "clk_i" 52;
+
 IO_LOC "LED_R" 10;
 IO_LOC "LED_G" 11;
 IO_LOC "LED_B" 13;
+
+IO_LOC "TXD" 32;
+IO_PORT "TXD" PULL_MODE=UP;
+IO_LOC "RXD" 31;
+IO_PORT "RXD" PULL_MODE=UP;
 
 // fake
 IO_LOC "led[6]" 35;
