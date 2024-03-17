@@ -102,7 +102,7 @@ def tbrl2rc(fse, side, num):
 
 # Read the packer vendor log to identify problem with primitives/attributes
 # returns dictionary {(primitive name, error code) : [full error text]}
-_err_parser = re.compile("(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
+_err_parser = re.compile(r"(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
 def read_err_log(fname):
     errs = {}
     with open(fname, 'r') as f:

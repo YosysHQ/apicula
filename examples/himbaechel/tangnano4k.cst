@@ -11,9 +11,17 @@ IO_LOC "rst_i" 14;
 IO_LOC "clk" 45;
 CLOCK_LOC "clk" BUFG;
 
+IO_LOC "clk_i" 45;
+CLOCK_LOC "clk_i" BUFG;
 
 IO_PORT "key_i" PULL_MODE=UP;
 IO_PORT "rst_i" PULL_MODE=UP;
+
+// UART
+IO_LOC "TXD" 44;
+IO_PORT "TXD" PULL_MODE=UP;
+IO_LOC "RXD" 46;
+IO_PORT "RXD" PULL_MODE=UP;
 
 // oser
 IO_LOC "oser_out" 35;
