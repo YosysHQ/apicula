@@ -1,8 +1,6 @@
 /**
- *  
- * Step 15: Creating a RISC-V processor
- *         Load
- * 
+ * a RISC-V processor
+ *
  * Copyright (c) 2020, Bruno Levy
  * All rights reserved.
  * 
@@ -34,67 +32,44 @@
 
 `default_nettype none
 `include "clockworks.v"
+`include "emitter_uart.v"
 
 module Memory (
-   input             clk,
-   input      [31:0] mem_addr,  // address to be read
-   output reg [31:0] mem_rdata, // data read from memory
-   input   	     mem_rstrb  // goes high when processor wants to read
+   input wire            clk,
+   input wire     [31:0] mem_addr,  // address to be read
+   output reg     [31:0] mem_rdata, // data read from memory
+   input wire  	         mem_rstrb, // goes high when processor wants to read
+   input wire     [31:0] mem_wdata, // data to be written
+   input wire     [3:0]  mem_wmask	// masks for writing the 4 bytes (1=write byte)
 );
 
-   reg [31:0] MEM [0:255]; 
+   reg [31:0] MEM [0:1535]; // 1536 4-bytes words = 6 Kb of RAM in total
 
-   localparam slow_bit=20;
-   
-`include "riscv_assembly.v"
-   integer L0_   = 8;
-   integer wait_ = 32;
-   integer L1_   = 40;
-   
    initial begin
-      LI(s0,0);   
-      LI(s1,16);
-   Label(L0_); 
-      LB(a0,s0,400); // LEDs are plugged on a0 (=x10)
-      CALL(LabelRef(wait_));
-      ADDI(s0,s0,1); 
-      BNE(s0,s1, LabelRef(L0_));
-      EBREAK();
-      
-   Label(wait_);
-      LI(t0,1);
-      SLLI(t0,t0,slow_bit);
-   Label(L1_);
-      ADDI(t0,t0,-1);
-      BNEZ(t0,LabelRef(L1_));
-      RET();
-
-      endASM();
-
-      // Note: index 100 (word address)
-      //     corresponds to 
-      // address 400 (byte address)
-      MEM[100] = {8'h4, 8'h3, 8'h2, 8'h1};
-      MEM[101] = {8'h8, 8'h7, 8'h6, 8'h5};
-      MEM[102] = {8'hc, 8'hb, 8'ha, 8'h9};
-      MEM[103] = {8'hff, 8'hf, 8'he, 8'hd};            
+       $readmemh(`FIRMWARE, MEM);
    end
 
+   wire [29:0] word_addr = mem_addr[31:2];
+   
    always @(posedge clk) begin
       if(mem_rstrb) begin
-         mem_rdata <= MEM[mem_addr[31:2]];
+         mem_rdata <= MEM[word_addr];
       end
+      if(mem_wmask[0]) MEM[word_addr][ 7:0 ] <= mem_wdata[ 7:0 ];
+      if(mem_wmask[1]) MEM[word_addr][15:8 ] <= mem_wdata[15:8 ];
+      if(mem_wmask[2]) MEM[word_addr][23:16] <= mem_wdata[23:16];
+      if(mem_wmask[3]) MEM[word_addr][31:24] <= mem_wdata[31:24];	 
    end
 endmodule
 
-
 module Processor (
-    input 	      clk,
-    input 	      resetn,
-    output     [31:0] mem_addr, 
-    input      [31:0] mem_rdata, 
-    output 	      mem_rstrb,
-    output reg [31:0] x10 = 0		  
+    input  wire	  clk,
+    input wire	  resetn,
+    output wire [31:0] mem_addr, 
+    input wire [31:0]  mem_rdata, 
+    output wire	  mem_rstrb,
+    output wire [31:0] mem_wdata,
+    output wire [3:0]  mem_wmask
 );
 
    reg [31:0] PC=0;        // program counter
@@ -139,6 +114,7 @@ module Processor (
    reg [31:0] rs2; //  registers.
    wire [31:0] writeBackData; // data to be written to rd
    wire        writeBackEn;   // asserted if data should be written to rd
+
 
    // The ALU
    wire [31:0] aluIn1 = rs1;
@@ -229,14 +205,11 @@ module Processor (
 			      isLoad        ? LOAD_data :
 			                      aluOut;
 
-   assign writeBackEn = (state==EXECUTE && !isBranch && !isStore && !isLoad) ||
-			(state==WAIT_DATA) ;
-   
    wire [31:0] nextPC = ((isBranch && takeBranch) || isJAL) ? PCplusImm   :
 	                                  isJALR   ? {aluPlus[31:1],1'b0} :
 	                                             PCplus4;
 
-   wire [31:0] loadstore_addr = rs1 + Iimm;
+   wire [31:0] loadstore_addr = rs1 + (isStore ? Simm : Iimm);
    
    // Load
    // All memory accesses are aligned on 32 bits boundary. For this
@@ -265,6 +238,31 @@ module Processor (
      mem_halfwordAccess ? {{16{LOAD_sign}}, LOAD_halfword} :
                           mem_rdata ;
 
+   // Store
+   // ------------------------------------------------------------------------
+
+   assign mem_wdata[ 7: 0] = rs2[7:0];
+   assign mem_wdata[15: 8] = loadstore_addr[0] ? rs2[7:0]  : rs2[15: 8];
+   assign mem_wdata[23:16] = loadstore_addr[1] ? rs2[7:0]  : rs2[23:16];
+   assign mem_wdata[31:24] = loadstore_addr[0] ? rs2[7:0]  :
+			     loadstore_addr[1] ? rs2[15:8] : rs2[31:24];
+
+   // The memory write mask:
+   //    1111                     if writing a word
+   //    0011 or 1100             if writing a halfword
+   //                                (depending on loadstore_addr[1])
+   //    0001, 0010, 0100 or 1000 if writing a byte
+   //                                (depending on loadstore_addr[1:0])
+
+   wire [3:0] STORE_wmask =
+	      mem_byteAccess      ?
+	            (loadstore_addr[1] ?
+		          (loadstore_addr[0] ? 4'b1000 : 4'b0100) :
+		          (loadstore_addr[0] ? 4'b0010 : 4'b0001)
+                    ) :
+	      mem_halfwordAccess ?
+	            (loadstore_addr[1] ? 4'b1100 : 4'b0011) :
+              4'b1111;
    
    // The state machine
    localparam FETCH_INSTR = 0;
@@ -273,6 +271,7 @@ module Processor (
    localparam EXECUTE     = 3;
    localparam LOAD        = 4;
    localparam WAIT_DATA   = 5;
+   localparam STORE       = 6;
    reg [2:0] state = FETCH_INSTR;
    
    always @(posedge clk) begin
@@ -282,9 +281,6 @@ module Processor (
       end else begin
 	 if(writeBackEn && rdId != 0) begin
 	    RegisterBank[rdId] <= writeBackData;
-		if(rdId == 10) begin
-           x10 <= writeBackData;
-        end
 	 end
 	 case(state)
 	   FETCH_INSTR: begin
@@ -303,7 +299,9 @@ module Processor (
 	      if(!isSYSTEM) begin
 		 PC <= nextPC;
 	      end
-	      state <= isLoad ? LOAD : FETCH_INSTR;
+	      state <= isLoad  ? LOAD  : 
+		       isStore ? STORE : 
+		       FETCH_INSTR;
 	   end
 	   LOAD: begin
 	      state <= WAIT_DATA;
@@ -311,39 +309,39 @@ module Processor (
 	   WAIT_DATA: begin
 	      state <= FETCH_INSTR;
 	   end
+	   STORE: begin
+	      state <= FETCH_INSTR;
+	   end
 	 endcase 
       end
    end
 
+   assign writeBackEn = (state==EXECUTE && !isBranch && !isStore) ||
+			(state==WAIT_DATA) ;
+   
    assign mem_addr = (state == WAIT_INSTR || state == FETCH_INSTR) ?
 		     PC : loadstore_addr ;
    assign mem_rstrb = (state == FETCH_INSTR || state == LOAD);
-   
+   assign mem_wmask = {4{(state == STORE)}} & STORE_wmask;
+
 endmodule
 
-
 module top (
-    input  clk_i,      // system clock 
-    input  rst_i,      // reset button
-    output [5:0] led,  // system LEDs
-    input  RXD,        // UART receive
-    output TXD         // UART transmit
+    input wire	     clk_i, // system clock 
+    input wire 	     rst_i, // reset button
+    output reg [5:0] led,   // system LEDs
+    input wire	     RXD,   // UART receive
+    output wire	     TXD    // UART transmit
 );
 
    wire clk;
    wire resetn;
 
-   Memory RAM(
-      .clk(clk),
-      .mem_addr(mem_addr),
-      .mem_rdata(mem_rdata),
-      .mem_rstrb(mem_rstrb)
-   );
-
    wire [31:0] mem_addr;
    wire [31:0] mem_rdata;
    wire mem_rstrb;
-   wire [31:0] x10;
+   wire [31:0] mem_wdata;
+   wire [3:0]  mem_wmask;
 
    Processor CPU(
       .clk(clk),
@@ -351,21 +349,97 @@ module top (
       .mem_addr(mem_addr),
       .mem_rdata(mem_rdata),
       .mem_rstrb(mem_rstrb),
-      .x10(x10)		 
+      .mem_wdata(mem_wdata),
+      .mem_wmask(mem_wmask)
    );
-   assign led = ~x10[5:0];
+   
+   wire [31:0] RAM_rdata;
+   wire [29:0] mem_wordaddr = mem_addr[31:2];
+   wire isIO  = mem_addr[22];
+   wire isRAM = !isIO;
+   wire mem_wstrb = |mem_wmask;
+   
+   Memory RAM(
+      .clk(clk),
+      .mem_addr(mem_addr),
+      .mem_rdata(RAM_rdata),
+      .mem_rstrb(isRAM & mem_rstrb),
+      .mem_wdata(mem_wdata),
+      .mem_wmask({4{isRAM}}&mem_wmask)
+   );
 
+
+   // Memory-mapped IO in IO page, 1-hot addressing in word address.   
+   localparam IO_LEDS_bit      =  0;  // W five leds
+   localparam IO_UART_DAT_bit  =  1;  // W data to send (8 bits) 
+   localparam IO_UART_CNTL_bit =  2;  // R status. bit 9: busy sending
+   localparam IO_DSP_CLK_bit   =  3;  // DSP clock
+   localparam IO_DSP_OUTL_bit  =  4;  // low 32 bits of the DSP result
+   localparam IO_DSP_OUTH_bit  =  5;  // high 32 bits of the DSP result
+   localparam IO_DSP_OUTL1_bit =  6;  // low 32 bits of the DSP result
+   localparam IO_DSP_OUTH1_bit =  7;  // high 32 bits of the DSP result
+   localparam IO_DSP_OUTL2_bit =  8;  // low 32 bits of the DSP result
+   localparam IO_DSP_OUTH2_bit =  9;  // high 32 bits of the DSP result
+   localparam IO_DSP_OUTL3_bit = 10;  // low 32 bits of the DSP result
+   localparam IO_DSP_OUTH3_bit = 11;  // high 32 bits of the DSP result
+   localparam IO_DSP_OUTL4_bit = 12;  // low 32 bits of the DSP result
+   localparam IO_DSP_OUTH4_bit = 13;  // high 32 bits of the DSP result
+  
+   wire uart_valid = isIO & mem_wstrb & mem_wordaddr[IO_UART_DAT_bit];
+   wire uart_ready;
+   
+   corescore_emitter_uart #(
+      .clk_freq_hz(`CPU_FREQ*1000000),
+      .baud_rate(115200)
+   ) UART(
+      .i_clk(clk),
+      .i_rst(!resetn),
+      .i_data(mem_wdata[7:0]),
+      .i_valid(uart_valid),
+      .o_ready(uart_ready),
+      .o_uart_tx(TXD)      			       
+   );
+
+   wire [63:0] dsp_out;
+   wire [63:0] dsp_out1;
+   wire [63:0] dsp_out2;
+   wire [63:0] dsp_out3;
+   wire [63:0] dsp_out4;
+   assign led = dsp_out1[5:0];
+   wire dsp_clk = isIO & mem_wstrb & mem_wordaddr[IO_DSP_CLK_bit];
+   idsp DSP(
+	  .clk(dsp_clk),
+	  .reset(!resetn),
+	  .product(dsp_out),
+	  .product1(dsp_out1),
+	  .product2(dsp_out2),
+	  .product3(dsp_out3),
+	  .product4(dsp_out4)
+   );
+
+   wire [31:0] IO_rdata = 
+	       mem_wordaddr[IO_UART_CNTL_bit] ? { 22'b0, !uart_ready, 9'b0} :
+		   mem_wordaddr[IO_DSP_OUTL_bit]   ? dsp_out[31:0] :
+		   mem_wordaddr[IO_DSP_OUTH_bit]   ? dsp_out[63:32] :
+		   mem_wordaddr[IO_DSP_OUTL1_bit]  ? dsp_out1[31:0] :
+		   mem_wordaddr[IO_DSP_OUTH1_bit]  ? dsp_out1[63:32] :
+		   mem_wordaddr[IO_DSP_OUTL2_bit]  ? dsp_out2[31:0] :
+		   mem_wordaddr[IO_DSP_OUTH2_bit]  ? dsp_out2[63:32] :
+		   mem_wordaddr[IO_DSP_OUTL3_bit]  ? dsp_out3[31:0] :
+		   mem_wordaddr[IO_DSP_OUTH3_bit]  ? dsp_out3[63:32] :
+		   mem_wordaddr[IO_DSP_OUTL4_bit]  ? dsp_out4[31:0] :
+		   mem_wordaddr[IO_DSP_OUTH4_bit]  ? dsp_out4[63:32] :
+	                                        32'b0;
+   
+   assign mem_rdata = isRAM ? RAM_rdata :
+	                      IO_rdata ;
+   
    // Gearbox and reset circuitry.
-   Clockworks #(
-	 .SLOW(0)    //Specifying a value other than zero here may result in
-				 // nextpnr being unable to route the clock for some boards. BUGFIX is under development. 
-   ) CW (
+   Clockworks CW(
      .CLK(clk_i),
      .RESET(rst_i),
      .clk(clk),
      .resetn(resetn)
    );
-   
-   assign TXD  = 1'b0; // not used for now         
 endmodule
 

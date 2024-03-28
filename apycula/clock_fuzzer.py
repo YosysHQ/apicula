@@ -359,7 +359,7 @@ def make_lw_aliases(fse, dat: dat19.Datfile, db, quads, clks):
                     db.aliases.update({(row, col, f'LB{lw + 4}1') : (row, tap_col, f'LBO1')})
 
 if __name__ == "__main__":
-    if True:
+    if False:
         quads = quadrants()
 
         srcs = {}

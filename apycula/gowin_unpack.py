@@ -22,6 +22,12 @@ _packages = {
         'GW2A-18C' : 'PBGA256S'
 }
 
+def print_sorted_dict(start, d):
+    print(start, end='{')
+    for i in sorted(d):
+        print(f'{i}:{d[i]}, ', end='')
+    print('}')
+
 # bank iostandards
 # XXX default io standard may be board-dependent!
 _banks = {'0': "LVCMOS18", '1': "LVCMOS18", '2': "LVCMOS18", '3': "LVCMOS18"}
@@ -59,6 +65,7 @@ def get_attr_name(attrname_table, code):
     for name, cod in attrname_table.items():
         if cod == code:
             return name
+    print(f'Unknown attr name for {code}/0x{code:x}.')
     return ''
 
 # fix names and types of the PLL attributes
@@ -293,7 +300,7 @@ _iologic_mode = {
         'IDDRX8': 'IDES16',
         }
 
-# BSRAM have 3 cells: BSRAM, BSRAM0 and BSRAM1
+# BSRAM has 3 cells: BSRAM, BSRAM0 and BSRAM1
 # { (row, col) : idx }
 _bsram_cells = {}
 def get_bsram_main_cell(db, row, col, typ):
@@ -301,6 +308,12 @@ def get_bsram_main_cell(db, row, col, typ):
         col -= 1
         if 'BSRAM_AUX' in db.grid[row][col].bels:
             col -= 2
+    return row, col
+
+# The DSP has 9 cells: the main one and a group of auxiliary ones.
+def get_dsp_main_cell(db, row, col, typ):
+    if type[-6:-2] == '_AUX':
+        col = 1 + (col - 1) // 9
     return row, col
 
 # noiostd --- this is the case when the function is called
@@ -360,6 +373,23 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                 continue
             #print(row, col, name, idx, tiledata.ttyp, attrvals)
             bels[f'{name}'] = {}
+            continue
+        if name.startswith("ALU54D"):
+            continue
+        if name.startswith("DSP") or name.startswith("DSP_AUX"):
+            modes = set()
+            idx = name[-1]
+            #print(row, col, name, idx, tiledata.ttyp)
+            if name.startswith("DSP_AUX"):
+                row, col = get_dsp_main_cell(db, row, col, name)
+
+            if f'DSP{idx}' in db.shortval[tiledata.ttyp]:
+                attrvals = parse_attrvals(tile, db.logicinfo['DSP'], db.shortval[tiledata.ttyp][f'DSP{idx}'], attrids.dsp_attrids)
+                #print_sorted_dict(f'{row}, {col}, {name}, {idx}, {tiledata.ttyp} - ', attrvals)
+                for attrval in attrvals:
+                    modes.add(attrval)
+            if modes and not name.startswith("DSP_AUX"):
+                bels[f'{name}{idx}'] = modes
             continue
         if name.startswith("IOLOGIC"):
             idx = name[-1]
@@ -802,7 +832,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
         mod.wires.update({srcg, destg})
         mod.assigns.append((destg, srcg))
 
-    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC|BSRAM)(\w*)")
+    belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC|BSRAM|DSP)(\w*)")
     bels_items = move_iologic(bels)
 
     iologic_detected = set()
