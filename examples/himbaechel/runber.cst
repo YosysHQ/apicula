@@ -1,4 +1,5 @@
 IO_LOC "clk" 4;
+IO_LOC "clk_i" 4;
 IO_LOC "rst_i" 58;
 IO_LOC "key_i" 59;
 IO_LOC "led[0]" 25;
@@ -9,6 +10,11 @@ IO_LOC "led[4]" 27;
 IO_LOC "led[5]" 28;
 IO_LOC "led[6]" 29;
 IO_LOC "led[7]" 30;
+
+IO_LOC "TXD" 39;
+IO_PORT "TXD" PULL_MODE=UP;
+IO_LOC "RXD" 40;
+IO_PORT "RXD" PULL_MODE=UP;
 
 IO_LOC "tlvds_p" 27;
 IO_LOC "tlvds_n" 28;
