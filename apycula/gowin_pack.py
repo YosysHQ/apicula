@@ -86,6 +86,11 @@ def extra_bsram_bels(cell, row, col, num, cellname):
         yield ('BSRAM_AUX', int(row), int(col) + off, num,
             cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'AUX{off}', cell)
 
+def extra_dsp_bels(cell, row, col, num, cellname):
+    for off in range(1,9):
+        yield ('DSP_AUX', int(row), int(col) + off, num,
+            cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'AUX{off}', cell)
+
 # Explanation of what comes from and magic numbers. The process is this: you
 # create a file with one primitive from the BSRAM family. In my case pROM. You
 # give it a completely zero initialization. You generate an image. You specify
@@ -171,10 +176,11 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
         y += 1
 
 _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
+_dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9'}
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|BSRAM)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -207,6 +213,8 @@ def get_bels(data):
             yield from extra_pll_bels(cell, row, col, num, cellname)
         if cell_type in _bsram_cell_types:
             yield from extra_bsram_bels(cell, row, col, num, cellname)
+        if cell_type in _dsp_cell_types:
+            yield from extra_dsp_bels(cell, row, col, num, cellname)
         yield (cell_type, int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
@@ -597,6 +605,1332 @@ def set_bsram_attrs(db, typ, params):
         add_attr_val(db, 'BSRAM', fin_attrs, attrids.bsram_attrids[attr], val)
     return fin_attrs
 
+# MULTALU18X18
+_ABLH = [('A', 'L'), ('A', 'H'), ('B', 'L'), ('B', 'H')]
+_01LH = [(0, 'L'), (1, 'H')]
+def set_multalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    ce_val = 'UNKNOWN'
+    if int(attrs['CE'], 2):
+        ce_val = f"CEIN{int(attrs['CE'], 2)}"
+    clk_val = 'UNKNOWN'
+    if int(attrs['CLK'], 2):
+        clk_val = f"CLKIN{int(attrs['CLK'], 2)}"
+    reset_val = 'UNKNOWN'
+    if int(attrs['RESET'], 2):
+        reset_val = f"RSTIN{int(attrs['RESET'], 2)}"
+
+    # The mode determines which multiplier is used, and this in turn selects
+    # the registers and pins used. We rely on nextpnr so that MULTALU18X18_MODE
+    # is from the set {0, 1, 2}
+    mode = int(params['MULTALU18X18_MODE'], 2)
+    mode_01 = 0
+    if mode != 2:
+        mode_01 = 1
+
+    accload = attrs['NET_ACCLOAD']
+
+    dsp_attrs["RCISEL_3"] = "1"
+    if mode_01:
+        dsp_attrs["RCISEL_1"] = "1"
+
+    dsp_attrs['OR2CIB_EN0L_0'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN0H_1'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN1L_2'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN1H_3'] = "ENABLE"
+
+    if 'B_ADD_SUB' in params:
+        if int(params['B_ADD_SUB'], 2) == 1:
+            dsp_attrs['OPCD_7'] = "1"
+
+    dsp_attrs['ALU_EN'] = "ENABLE"
+    dsp_attrs['OPCD_5'] = "1"
+    dsp_attrs['OPCD_9'] = "1"
+    for i in {5, 6}:
+        dsp_attrs[f'CINBY_{i}'] = "ENABLE"
+        dsp_attrs[f'CINNS_{i}'] = "ENABLE"
+        dsp_attrs[f'CPRBY_{i}'] = "ENABLE"
+        dsp_attrs[f'CPRNS_{i}'] = "ENABLE"
+
+    if "USE_CASCADE_IN" in attrs:
+        dsp_attrs['CSGIN_EXT'] = "ENABLE"
+        dsp_attrs['CSIGN_PRE'] = "ENABLE"
+    if "USE_CASCADE_OUT" in attrs:
+        dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+
+    if mode_01:
+        dsp_attrs['OPCD_2'] = "1"
+        if accload == "VCC":
+            dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+        elif accload == "GND":
+            dsp_attrs['OPCD_0'] = "1"
+            dsp_attrs['OPCD_1'] = "1"
+        else:
+            dsp_attrs['OPCDDYN_0'] = "ENABLE"
+            dsp_attrs['OPCDDYN_1'] = "ENABLE"
+            dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+            dsp_attrs['OPCDDYN_INV_0'] = "ENABLE"
+            dsp_attrs['OPCDDYN_INV_1'] = "ENABLE"
+        if mode == 0:
+            dsp_attrs['OPCD_4'] = "1"
+            if 'C_ADD_SUB' in params:
+                if int(params['C_ADD_SUB'], 2) == 1:
+                    dsp_attrs['OPCD_8'] = "1"
+    else:
+        dsp_attrs['OPCD_0'] = "1"
+        dsp_attrs['OPCD_3'] = "1"
+
+    for parm, val in params.items():
+        if parm == 'AREG':
+            if val == '0':
+                for i, h in _01LH:
+                    dsp_attrs[f'IRBY_IREG{mode_01}A{h}_{4 * mode_01 + i}']  = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG{mode_01}A{h}_{4 * mode_01 + i}']  = "ENABLE"
+            else:
+                for h in "LH":
+                    dsp_attrs[f'CE{h}MUX_REGMA{mode_01}']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_REGMA{mode_01}'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_REGMA{mode_01}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_REGMA{mode_01}'] = 'SYNC'
+        if parm == 'BREG':
+            if val == '0':
+                for i, h in _01LH:
+                    dsp_attrs[f'IRBY_IREG{mode_01}B{h}_{4 * mode_01 + 2 + i}']  = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG{mode_01}B{h}_{4 * mode_01 + 2 + i}']  = "ENABLE"
+            else:
+                for h in "LH":
+                    dsp_attrs[f'CE{h}MUX_REGMB{mode_01}']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_REGMB{mode_01}'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_REGMB{mode_01}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_REGMB{mode_01}'] = 'SYNC'
+        if parm == 'CREG' and mode_01:
+            if val == '0':
+                for i, h in _01LH:
+                    dsp_attrs[f'CIR_BYP{h}_{i}'] = "1"
+            else:
+                for h in "LH":
+                    dsp_attrs[f'CE{h}MUX_CREG']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_CREG'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_CREG'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_REGC0'] = 'SYNC'
+        if parm == 'DREG' and not mode_01:
+            if val == '0':
+                dsp_attrs['CIR_BYPH_1'] = "1"
+                ii = 4
+                for i, h in _ABLH:
+                    dsp_attrs[f'IRBY_IREG1{i}{h}_{ii}'] = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG1{i}{h}_{ii}'] = "ENABLE"
+                    ii += 1
+            else:
+                dsp_attrs['CEHMUX_CREG']  = ce_val
+                dsp_attrs['CLKHMUX_CREG'] = clk_val
+                dsp_attrs['RSTHMUX_CREG'] = reset_val
+                for i, h in _ABLH:
+                    dsp_attrs[f'CE{h}MUX_REGM{i}1']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_REGM{i}1'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_REGM{i}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENHMUX_REGC0'] = 'SYNC'
+                        for i, h in _ABLH:
+                            dsp_attrs[f'RSTGEN{h}MUX_REGM{i}1'] = 'SYNC'
+        if parm == 'ASIGN_REG':
+            if val == '0':
+                dsp_attrs[f'CINNS_{3 * mode_01}'] = "ENABLE"
+                dsp_attrs[f'CINBY_{3 * mode_01}'] = "ENABLE"
+            else:
+                dsp_attrs[f'CEMUX_ASIGN{mode_01}1']  = ce_val
+                dsp_attrs[f'CLKMUX_ASIGN{mode_01}1'] = clk_val
+                dsp_attrs[f'RSTMUX_ASIGN{mode_01}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_ASIGN{mode_01}1'] = 'SYNC'
+        if parm == 'BSIGN_REG':
+            if val == '0':
+                dsp_attrs[f'CINNS_{1 + 3 * mode_01}'] = "ENABLE"
+                dsp_attrs[f'CINBY_{1 + 3 * mode_01}'] = "ENABLE"
+            else:
+                dsp_attrs[f'CEMUX_BSIGN{mode_01}1']  = ce_val
+                dsp_attrs[f'CLKMUX_BSIGN{mode_01}1'] = clk_val
+                dsp_attrs[f'RSTMUX_BSIGN{mode_01}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_BSIGN{mode_01}1'] = 'SYNC'
+        if parm == 'DSIGN_REG' and not mode_01:
+            if val == '0':
+                dsp_attrs['CINNS_4'] = "ENABLE"
+                dsp_attrs['CINBY_4'] = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_BSIGN11']  = ce_val
+                dsp_attrs['CLKMUX_BSIGN11'] = clk_val
+                dsp_attrs['RSTMUX_BSIGN11'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_BSIGN11'] = 'SYNC'
+            if 'PIPE_REG' in params:
+                if params['PIPE_REG'] == '0':
+                    dsp_attrs['CPRNS_4'] = "ENABLE"
+                    dsp_attrs['CPRBY_4'] = "ENABLE"
+                else:
+                    dsp_attrs['CLK_BSIGN12'] = clk_val
+                    dsp_attrs['RST_BSIGN12'] = reset_val
+                    if 'MULT_RESET_MODE' in params:
+                        if params['MULT_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENMUX_BSIGN12'] = 'SYNC'
+
+        if parm == 'PIPE_REG':
+            if val == '0':
+                dsp_attrs[f'CPRNS_{3 * mode_01}'] = "ENABLE"
+                dsp_attrs[f'CPRBY_{3 * mode_01}'] = "ENABLE"
+                dsp_attrs[f'CPRNS_{1 + 3 * mode_01}'] = "ENABLE"
+                dsp_attrs[f'CPRBY_{1 + 3 * mode_01}'] = "ENABLE"
+                for i, h in _01LH:
+                    dsp_attrs[f'PPREG{mode_01}_NS{h}_{2 * mode_01 + i}']  = "ENABLE"
+                    dsp_attrs[f'PPREG{mode_01}_BYP{h}_{2 * mode_01 + i}']  = "ENABLE"
+            else:
+                for i in "AB":
+                    dsp_attrs[f'CEMUX_{i}SIGN{1 - mode_01}2']  = ce_val
+                    dsp_attrs[f'CLKMUX_{i}SIGN{1 - mode_01}2'] = clk_val
+                    dsp_attrs[f'RSTMUX_{i}SIGN{1 - mode_01}2'] = reset_val
+                for i in "LH":
+                    dsp_attrs[f'CE{i}MUX_REGP{1 - mode_01}']  = ce_val
+                    dsp_attrs[f'CLK{i}MUX_REGP{1 - mode_01}'] = clk_val
+                    dsp_attrs[f'RST{i}MUX_REGP{1 - mode_01}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_ASIGN{1 - mode_01}2'] = 'SYNC'
+                        dsp_attrs[f'RSTGENMUX_BSIGN{1 - mode_01}2'] = 'SYNC'
+                        dsp_attrs[f'RSTGENLMUX_REGP{1 - mode_01}'] = 'SYNC'
+                        dsp_attrs[f'RSTGENHMUX_REGP{1 - mode_01}'] = 'SYNC'
+        if parm == 'OUT_REG':
+            if val == '0':
+                for i in range(2):
+                    dsp_attrs[f'OREG{i}_NSL_{2 * i}'] = "ENABLE"
+                    dsp_attrs[f'OREG{i}_BYPL_{2 * i}'] = "ENABLE"
+                    dsp_attrs[f'OREG{i}_NSH_{2 * i + 1}'] = "ENABLE"
+                    dsp_attrs[f'OREG{i}_BYPH_{2 * i + 1}'] = "ENABLE"
+            else:
+                for i in range(2):
+                    for h in "LH":
+                        dsp_attrs[f'CE{h}MUX_OREG{i}']  = ce_val
+                        dsp_attrs[f'CLK{h}MUX_OREG{i}'] = clk_val
+                        dsp_attrs[f'RST{h}MUX_OREG{i}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_OREG0'] = 'SYNC'
+                            dsp_attrs[f'RSTGEN{h}MUX_OREG1'] = 'SYNC'
+        if parm == 'ACCLOAD_REG0':
+            if val == '0':
+                dsp_attrs['CINNS_2'] = "ENABLE"
+                dsp_attrs['CINBY_2'] = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_ALUSEL1']  = ce_val
+                dsp_attrs['CLKMUX_ALUSEL1'] = clk_val
+                dsp_attrs['RSTMUX_ALUSEL1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_ALUSEL1'] = 'SYNC'
+        if parm == 'ACCLOAD_REG1':
+            if val == '0':
+                dsp_attrs['CPRNS_2'] = "ENABLE"
+                dsp_attrs['CPRBY_2'] = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_ALUSEL2']  = ce_val
+                dsp_attrs['CLKMUX_ALUSEL2'] = clk_val
+                dsp_attrs['RSTMUX_ALUSEL2'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_ALUSEL2'] = 'SYNC'
+
+# MULTADDALU18X18
+def set_multaddalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    ce_val = 'UNKNOWN'
+    if int(attrs['CE'], 2):
+        ce_val = f"CEIN{int(attrs['CE'], 2)}"
+    clk_val = 'UNKNOWN'
+    if int(attrs['CLK'], 2):
+        clk_val = f"CLKIN{int(attrs['CLK'], 2)}"
+    reset_val = 'UNKNOWN'
+    if int(attrs['RESET'], 2):
+        reset_val = f"RSTIN{int(attrs['RESET'], 2)}"
+
+    mode = int(params['MULTADDALU18X18_MODE'], 2)
+    accload = attrs['NET_ACCLOAD']
+
+    if mode == 0:
+        dsp_attrs["RCISEL_3"] = "1"
+        dsp_attrs["RCISEL_1"] = "1"
+
+    dsp_attrs['OR2CIB_EN0L_0'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN0H_1'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN1L_2'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN1H_3'] = "ENABLE"
+
+    if 'B_ADD_SUB' in params:
+        if int(params['B_ADD_SUB'], 2) == 1:
+            dsp_attrs['OPCD_7'] = "1"
+
+    if "USE_CASCADE_IN" in attrs:
+        dsp_attrs['CSGIN_EXT'] = "ENABLE"
+        dsp_attrs['CSIGN_PRE'] = "ENABLE"
+    if "USE_CASCADE_OUT" in attrs:
+        dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+
+    dsp_attrs['ALU_EN'] = "ENABLE"
+    dsp_attrs['OPCD_0'] = "1"
+    dsp_attrs['OPCD_2'] = "1"
+    dsp_attrs['OPCD_9'] = "1"
+    for i in {5, 6}:
+        dsp_attrs[f'CINBY_{i}'] = "ENABLE"
+        dsp_attrs[f'CINNS_{i}'] = "ENABLE"
+        dsp_attrs[f'CPRBY_{i}'] = "ENABLE"
+        dsp_attrs[f'CPRNS_{i}'] = "ENABLE"
+
+    if mode == 0:
+        dsp_attrs['OPCD_4'] = "1"
+        dsp_attrs['OPCD_5'] = "1"
+        if 'C_ADD_SUB' in params:
+            if int(params['C_ADD_SUB'], 2) == 1:
+                dsp_attrs['OPCD_8'] = "1"
+    elif mode == 2:
+        dsp_attrs['OPCD_5'] = "1"
+    else:
+        if accload == "VCC":
+            dsp_attrs['OPCD_4'] = "1"
+            dsp_attrs['OPCD_6'] = "1"
+            dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+        elif accload != "GND":
+            dsp_attrs['OPCDDYN_4'] = "ENABLE"
+            dsp_attrs['OPCDDYN_6'] = "ENABLE"
+            dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+
+    if attrs['NET_ASEL0'] == 'VCC':
+        dsp_attrs['AIRMUX1_0'] = "ENABLE"
+    elif attrs['NET_ASEL0'] and attrs['NET_ASEL0'] != 'GND':
+        dsp_attrs['AIRMUX1_SEL_0'] = "ENABLE"
+
+    if attrs['NET_ASEL1'] == 'VCC':
+        dsp_attrs['AIRMUX1_1'] = "ENABLE"
+    elif attrs['NET_ASEL1'] and attrs['NET_ASEL1'] != 'GND':
+        dsp_attrs['AIRMUX1_SEL_1'] = "ENABLE"
+
+    if attrs['NET_BSEL0'] == 'VCC':
+        dsp_attrs['BIRMUX1_0'] = "ENABLE"
+    elif attrs['NET_BSEL0'] and attrs['NET_BSEL0'] != 'GND':
+        dsp_attrs['BIRMUX0_0'] = "ENABLE"
+        dsp_attrs['BIRMUX0_1'] = "ENABLE"
+        dsp_attrs['BIRMUX1_0'] = "ENABLE"
+        dsp_attrs['BIRMUX1_1'] = "ENABLE"
+
+    if attrs['NET_BSEL1'] == 'VCC':
+        dsp_attrs['BIRMUX1_2'] = "ENABLE"
+    elif attrs['NET_BSEL1'] and attrs['NET_BSEL1'] != 'GND':
+        dsp_attrs['BIRMUX1_2'] = "ENABLE"
+        dsp_attrs['BIRMUX1_3'] = "ENABLE"
+
+    dsp_attrs['MATCH_SHFEN'] = "ENABLE"
+    dsp_attrs['IRASHFEN_0'] = "1"
+    dsp_attrs['IRASHFEN_1'] = "1"
+    dsp_attrs['IRBSHFEN_0'] = "1"
+    dsp_attrs['IRBSHFEN_1'] = "1"
+
+    for parm, val in params.items():
+        if parm in {'A0REG', 'A1REG'}:
+            k = int(parm[1], 2)
+            if val == '0':
+                for i, h in _01LH:
+                    dsp_attrs[f'IRBY_IREG{k}A{h}_{4 * k + i}']  = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG{k}A{h}_{4 * k + i}']  = "ENABLE"
+            else:
+                for h in "LH":
+                    dsp_attrs[f'CE{h}MUX_REGMA{k}']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_REGMA{k}'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_REGMA{k}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_REGMA{k}'] = 'SYNC'
+        if parm in {'B0REG', 'B1REG'}:
+            k = int(parm[1], 2)
+            if val == '0':
+                for i, h in _01LH:
+                    dsp_attrs[f'IRBY_IREG{k}B{h}_{4 * k + 2 + i}']  = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG{k}B{h}_{4 * k + 2 + i}']  = "ENABLE"
+            else:
+                for h in "LH":
+                    dsp_attrs[f'CE{h}MUX_REGMB{k}']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_REGMB{k}'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_REGMB{k}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_REGMB{k}'] = 'SYNC'
+        if parm == 'CREG' and mode == 0:
+            if val == '0':
+                for i, h in _01LH:
+                    dsp_attrs[f'CIR_BYP{h}_{i}'] = "1"
+            else:
+                for h in "LH":
+                    dsp_attrs[f'CE{h}MUX_CREG']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_CREG'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_CREG'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_REGC0'] = 'SYNC'
+        if parm in {'ASIGN0_REG', 'ASIGN1_REG'}:
+            k = int(parm[5], 2)
+            if val == '0':
+                dsp_attrs[f'CINNS_{3 * k}'] = "ENABLE"
+                dsp_attrs[f'CINBY_{3 * k}'] = "ENABLE"
+            else:
+                dsp_attrs[f'CEMUX_ASIGN{k}1']  = ce_val
+                dsp_attrs[f'CLKMUX_ASIGN{k}1'] = clk_val
+                dsp_attrs[f'RSTMUX_ASIGN{k}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_ASIGN{k}1'] = 'SYNC'
+        if parm in {'BSIGN0_REG', 'BSIGN1_REG'}:
+            k = int(parm[5], 2)
+            if val == '0':
+                dsp_attrs[f'CINNS_{1 + 3 * k}'] = "ENABLE"
+                dsp_attrs[f'CINBY_{1 + 3 * k}'] = "ENABLE"
+            else:
+                dsp_attrs[f'CEMUX_BSIGN{k}1']  = ce_val
+                dsp_attrs[f'CLKMUX_BSIGN{k}1'] = clk_val
+                dsp_attrs[f'RSTMUX_BSIGN{k}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_BSIGN{k}1'] = 'SYNC'
+        if parm in {'PIPE0_REG', 'PIPE1_REG'}:
+            k = int(parm[4], 2)
+            if val == '0':
+                dsp_attrs[f'CPRNS_{3 * k}'] = "ENABLE"
+                dsp_attrs[f'CPRBY_{3 * k}'] = "ENABLE"
+                dsp_attrs[f'CPRNS_{1 + 3 * k}'] = "ENABLE"
+                dsp_attrs[f'CPRBY_{1 + 3 * k}'] = "ENABLE"
+                for i, h in _01LH:
+                    dsp_attrs[f'PPREG{k}_NS{h}_{2 * k + i}']  = "ENABLE"
+                    dsp_attrs[f'PPREG{k}_BYP{h}_{2 * k + i}']  = "ENABLE"
+            else:
+                for i in "AB":
+                    dsp_attrs[f'CEMUX_{i}SIGN{k}2']  = ce_val
+                    dsp_attrs[f'CLKMUX_{i}SIGN{k}2'] = clk_val
+                    dsp_attrs[f'RSTMUX_{i}SIGN{k}2'] = reset_val
+                for i in "LH":
+                    dsp_attrs[f'CE{i}MUX_REGP{k}']  = ce_val
+                    dsp_attrs[f'CLK{i}MUX_REGP{k}'] = clk_val
+                    dsp_attrs[f'RST{i}MUX_REGP{k}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_ASIGN{k}2'] = 'SYNC'
+                        dsp_attrs[f'RSTGENMUX_BSIGN{k}2'] = 'SYNC'
+                        dsp_attrs[f'RSTGENLMUX_REGP{k}'] = 'SYNC'
+                        dsp_attrs[f'RSTGENHMUX_REGP{k}'] = 'SYNC'
+        if parm == 'SOA_REG':
+            if val == '0':
+                dsp_attrs['IRBY_IRMATCHH_9'] = "ENABLE"
+                dsp_attrs['IRNS_IRMATCHH_9'] = "ENABLE"
+                dsp_attrs['IRBY_IRMATCHL_8'] = "ENABLE"
+                dsp_attrs['IRNS_IRMATCHL_8'] = "ENABLE"
+            else:
+                dsp_attrs[f'CEHMUX_REGSD']  = ce_val
+                dsp_attrs[f'CLKHMUX_REGSD'] = clk_val
+                dsp_attrs[f'RSTHMUX_REGSD'] = reset_val
+                dsp_attrs[f'CELMUX_REGSD']  = ce_val
+                dsp_attrs[f'CLKLMUX_REGSD'] = clk_val
+                dsp_attrs[f'RSTLMUX_REGSD'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENHMUX_REGSD'] = 'SYNC'
+                        dsp_attrs[f'RSTGENLMUX_REGSD'] = 'SYNC'
+        if parm == 'OUT_REG':
+            if val == '0':
+                for k in range(2):
+                    dsp_attrs[f'OREG{k}_NSL_{2 * k}'] = "ENABLE"
+                    dsp_attrs[f'OREG{k}_BYPL_{2 * k}'] = "ENABLE"
+                    dsp_attrs[f'OREG{k}_NSH_{2 * k + 1}'] = "ENABLE"
+                    dsp_attrs[f'OREG{k}_BYPH_{2 * k + 1}'] = "ENABLE"
+            else:
+                for k in range(2):
+                    for h in "LH":
+                        dsp_attrs[f'CE{h}MUX_OREG{k}']  = ce_val
+                        dsp_attrs[f'CLK{h}MUX_OREG{k}'] = clk_val
+                        dsp_attrs[f'RST{h}MUX_OREG{k}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_OREG0'] = 'SYNC'
+                            dsp_attrs[f'RSTGEN{h}MUX_OREG1'] = 'SYNC'
+        if parm == 'ACCLOAD_REG0':
+            if val == '0':
+                dsp_attrs['CINNS_2'] = "ENABLE"
+                dsp_attrs['CINBY_2'] = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_ALUSEL1']  = ce_val
+                dsp_attrs['CLKMUX_ALUSEL1'] = clk_val
+                dsp_attrs['RSTMUX_ALUSEL1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_ALUSEL1'] = 'SYNC'
+        if parm == 'ACCLOAD_REG1':
+            if val == '0':
+                dsp_attrs['CPRNS_2'] = "ENABLE"
+                dsp_attrs['CPRBY_2'] = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_ALUSEL2']  = ce_val
+                dsp_attrs['CLKMUX_ALUSEL2'] = clk_val
+                dsp_attrs['RSTMUX_ALUSEL2'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_ALUSEL2'] = 'SYNC'
+
+
+# MULTALU36X18
+def set_multalu36x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    ce_val = 'UNKNOWN'
+    if int(attrs['CE'], 2):
+        ce_val = f"CEIN{int(attrs['CE'], 2)}"
+    clk_val = 'UNKNOWN'
+    if int(attrs['CLK'], 2):
+        clk_val = f"CLKIN{int(attrs['CLK'], 2)}"
+    reset_val = 'UNKNOWN'
+    if int(attrs['RESET'], 2):
+        reset_val = f"RSTIN{int(attrs['RESET'], 2)}"
+
+    # the mode is not as important as in the case of MULTALU18X18 since the
+    # registers do not change places yet and both multipliers are always used,
+    # but let’s remember it just in case
+    mode = int(params['MULTALU36X18_MODE'], 2)
+    accload = attrs['NET_ACCLOAD']
+
+    dsp_attrs["RCISEL_1"] = "1"
+    dsp_attrs["RCISEL_3"] = "1"
+
+    dsp_attrs['OR2CIB_EN0L_0'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN0H_1'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN1L_2'] = "ENABLE"
+    dsp_attrs['OR2CIB_EN1H_3'] = "ENABLE"
+
+    dsp_attrs['ALU_EN'] = "ENABLE"
+    for i in {5, 6}:
+        dsp_attrs[f'CINBY_{i}'] = "ENABLE"
+        dsp_attrs[f'CINNS_{i}'] = "ENABLE"
+        dsp_attrs[f'CPRBY_{i}'] = "ENABLE"
+        dsp_attrs[f'CPRNS_{i}'] = "ENABLE"
+
+    if "USE_CASCADE_IN" in attrs:
+        dsp_attrs['CSGIN_EXT'] = "ENABLE"
+        dsp_attrs['CSIGN_PRE'] = "ENABLE"
+    if "USE_CASCADE_OUT" in attrs:
+        dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+
+    dsp_attrs['OPCD_0'] = "1"
+    dsp_attrs['OPCD_9'] = "1"
+    if mode == 0:
+        dsp_attrs['OPCD_4'] = "1"
+        dsp_attrs['OPCD_5'] = "1"
+        if 'C_ADD_SUB' in params:
+            if int(params['C_ADD_SUB'], 2) == 1:
+                dsp_attrs['OPCD_8'] = "1"
+    elif mode == 2:
+        dsp_attrs['OPCD_5'] = "1"
+    else:
+        if accload == "VCC":
+            dsp_attrs['OPCD_4'] = "1"
+            dsp_attrs['OPCD_6'] = "1"
+            dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+        elif accload != "GND":
+            dsp_attrs['OPCDDYN_4'] = "ENABLE"
+            dsp_attrs['OPCDDYN_6'] = "ENABLE"
+            dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+
+    for parm, val in params.items():
+        if parm == 'AREG':
+            if val == '0':
+                for k in range(2):
+                    for i, h in _01LH:
+                        dsp_attrs[f'IRBY_IREG{k}A{h}_{4 * k + i}']  = "ENABLE"
+                        dsp_attrs[f'IRNS_IREG{k}A{h}_{4 * k + i}']  = "ENABLE"
+            else:
+                for k in range(2):
+                    for h in "LH":
+                        dsp_attrs[f'CE{h}MUX_REGMA{k}']  = ce_val
+                        dsp_attrs[f'CLK{h}MUX_REGMA{k}'] = clk_val
+                        dsp_attrs[f'RST{h}MUX_REGMA{k}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for k in range(2):
+                            for h in "LH":
+                                dsp_attrs[f'RSTGEN{h}MUX_REGMA{k}'] = 'SYNC'
+        if parm == 'BREG':
+            if val == '0':
+                for k in range(2):
+                    for i, h in _01LH:
+                        dsp_attrs[f'IRBY_IREG{k}B{h}_{4 * k + 2 + i}']  = "ENABLE"
+                        dsp_attrs[f'IRNS_IREG{k}B{h}_{4 * k + 2 + i}']  = "ENABLE"
+            else:
+                for k in range(2):
+                    for h in "LH":
+                        dsp_attrs[f'CE{h}MUX_REGMB{k}']  = ce_val
+                        dsp_attrs[f'CLK{h}MUX_REGMB{k}'] = clk_val
+                        dsp_attrs[f'RST{h}MUX_REGMB{k}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for k in range(2):
+                            for h in "LH":
+                                dsp_attrs[f'RSTGEN{h}MUX_REGMB{k}'] = 'SYNC'
+        if parm == 'CREG':
+            if val == '0':
+                for i, h in _01LH:
+                    dsp_attrs[f'CIR_BYP{h}_{i}'] = "1"
+            else:
+                for h in "LH":
+                    dsp_attrs[f'CE{h}MUX_CREG']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_CREG'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_CREG'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for h in "LH":
+                            dsp_attrs[f'RSTGEN{h}MUX_REGC0'] = 'SYNC'
+        if parm == 'ASIGN_REG':
+            if val == '0':
+                for k in range(2):
+                    dsp_attrs[f'CINNS_{3 * k}'] = "ENABLE"
+                    dsp_attrs[f'CINBY_{3 * k}'] = "ENABLE"
+            else:
+                for k in range(2):
+                    dsp_attrs[f'CEMUX_ASIGN{k}1']  = ce_val
+                    dsp_attrs[f'CLKMUX_ASIGN{k}1'] = clk_val
+                    dsp_attrs[f'RSTMUX_ASIGN{k}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for k in range(2):
+                            dsp_attrs[f'RSTGENMUX_ASIGN{k}1'] = 'SYNC'
+        if parm == 'BSIGN_REG':
+            if val == '0':
+                for k in range(2):
+                    dsp_attrs[f'CINNS_{1 + 3 * k}'] = "ENABLE"
+                    dsp_attrs[f'CINBY_{1 + 3 * k}'] = "ENABLE"
+            else:
+                for k in range(2):
+                    dsp_attrs[f'CEMUX_BSIGN{k}1']  = ce_val
+                    dsp_attrs[f'CLKMUX_BSIGN{k}1'] = clk_val
+                    dsp_attrs[f'RSTMUX_BSIGN{k}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for k in range(2):
+                            dsp_attrs[f'RSTGENMUX_BSIGN{k}1'] = 'SYNC'
+        if parm == 'PIPE_REG':
+            if val == '0':
+                for k in range(2):
+                    dsp_attrs[f'CPRNS_{3 * k}'] = "ENABLE"
+                    dsp_attrs[f'CPRBY_{3 * k}'] = "ENABLE"
+                    dsp_attrs[f'CPRNS_{1 + 3 * k}'] = "ENABLE"
+                    dsp_attrs[f'CPRBY_{1 + 3 * k}'] = "ENABLE"
+                    for i, h in _01LH:
+                        dsp_attrs[f'PPREG{k}_NS{h}_{2 * k + i}']  = "ENABLE"
+                        dsp_attrs[f'PPREG{k}_BYP{h}_{2 * k + i}']  = "ENABLE"
+            else:
+                for k in range(2):
+                    for i in "AB":
+                        dsp_attrs[f'CEMUX_{i}SIGN{k}2']  = ce_val
+                        dsp_attrs[f'CLKMUX_{i}SIGN{k}2'] = clk_val
+                        dsp_attrs[f'RSTMUX_{i}SIGN{k}2'] = reset_val
+                    for i in "LH":
+                        dsp_attrs[f'CE{i}MUX_REGP{k}']  = ce_val
+                        dsp_attrs[f'CLK{i}MUX_REGP{k}'] = clk_val
+                        dsp_attrs[f'RST{i}MUX_REGP{k}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        for k in range(2):
+                            dsp_attrs[f'RSTGENMUX_ASIGN{k}2'] = 'SYNC'
+                            dsp_attrs[f'RSTGENMUX_BSIGN{k}2'] = 'SYNC'
+                            dsp_attrs[f'RSTGENLMUX_REGP{k}'] = 'SYNC'
+                            dsp_attrs[f'RSTGENHMUX_REGP{k}'] = 'SYNC'
+        if parm == 'OUT_REG':
+            # do out reg in unoptimal way because of MULT36X36
+            if mac == 0 and typ == 'MULT36X36':
+                dsp_attrs['OREG0_NSH_1'] = "ENABLE"
+                dsp_attrs['OREG0_BYPH_1'] = "ENABLE"
+                dsp_attrs['OREG1_NSL_2'] = "ENABLE"
+                dsp_attrs['OREG1_BYPL_2'] = "ENABLE"
+                dsp_attrs['OREG1_NSH_3'] = "ENABLE"
+                dsp_attrs['OREG1_BYPH_3'] = "ENABLE"
+                if val == '0':
+                    dsp_attrs['OREG0_NSL_0'] = "ENABLE"
+                    dsp_attrs['OREG0_BYPL_0'] = "ENABLE"
+                else:
+                    dsp_attrs['CELMUX_OREG0']  = ce_val
+                    dsp_attrs['CLKLMUX_OREG0'] = clk_val
+                    dsp_attrs['RSTLMUX_OREG0'] = reset_val
+                    if 'MULT_RESET_MODE' in params:
+                        if params['MULT_RESET_MODE'] == 'SYNC':
+                            dsp_attrs['RSTGENLMUX_OREG0'] = 'SYNC'
+            else:
+                if val == '0':
+                    for k in range(2):
+                        dsp_attrs[f'OREG{k}_NSL_{2 * k}'] = "ENABLE"
+                        dsp_attrs[f'OREG{k}_BYPL_{2 * k}'] = "ENABLE"
+                        dsp_attrs[f'OREG{k}_NSH_{2 * k + 1}'] = "ENABLE"
+                        dsp_attrs[f'OREG{k}_BYPH_{2 * k + 1}'] = "ENABLE"
+                else:
+                    for k in range(2):
+                        for h in "LH":
+                            dsp_attrs[f'CE{h}MUX_OREG{k}']  = ce_val
+                            dsp_attrs[f'CLK{h}MUX_OREG{k}'] = clk_val
+                            dsp_attrs[f'RST{h}MUX_OREG{k}'] = reset_val
+                    if 'MULT_RESET_MODE' in params:
+                        if params['MULT_RESET_MODE'] == 'SYNC':
+                            for h in "LH":
+                                dsp_attrs[f'RSTGEN{h}MUX_OREG0'] = 'SYNC'
+                                dsp_attrs[f'RSTGEN{h}MUX_OREG1'] = 'SYNC'
+        if parm == 'ACCLOAD_REG0':
+            if val == '0':
+                dsp_attrs['CINNS_2'] = "ENABLE"
+                dsp_attrs['CINBY_2'] = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_ALUSEL1']  = ce_val
+                dsp_attrs['CLKMUX_ALUSEL1'] = clk_val
+                dsp_attrs['RSTMUX_ALUSEL1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_ALUSEL1'] = 'SYNC'
+        if parm == 'ACCLOAD_REG1':
+            if val == '0':
+                dsp_attrs['CPRNS_2'] = "ENABLE"
+                dsp_attrs['CPRBY_2'] = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_ALUSEL2']  = ce_val
+                dsp_attrs['CLKMUX_ALUSEL2'] = clk_val
+                dsp_attrs['RSTMUX_ALUSEL2'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_ALUSEL2'] = 'SYNC'
+# ALU54D
+def set_alu54d_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    dsp_attrs['ALU_EN'] = "ENABLE"
+    for i in range(2, 7):
+        dsp_attrs[f'CPRNS_{i}'] = "ENABLE"
+        dsp_attrs[f'CPRBY_{i}'] = "ENABLE"
+        if i > 4:
+            dsp_attrs[f'CINNS_{i}'] = "ENABLE"
+            dsp_attrs[f'CINBY_{i}'] = "ENABLE"
+
+    dsp_attrs["OPCD_3"] = "1"
+    dsp_attrs["OPCD_9"] = "1"
+    if params['B_ADD_SUB'] == '1':
+        dsp_attrs['OPCD_7'] = "1"
+
+    # cascade link
+    if "USE_CASCADE_IN" in attrs:
+        dsp_attrs['CSGIN_EXT'] = "ENABLE"
+        dsp_attrs['CSIGN_PRE'] = "ENABLE"
+    if "USE_CASCADE_OUT" in attrs:
+        dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+
+    ce_val = 'UNKNOWN'
+    if int(attrs['CE'], 2):
+        ce_val = f"CEIN{int(attrs['CE'], 2)}"
+    clk_val = 'UNKNOWN'
+    if int(attrs['CLK'], 2):
+        clk_val = f"CLKIN{int(attrs['CLK'], 2)}"
+    reset_val = 'UNKNOWN'
+    if int(attrs['RESET'], 2):
+        reset_val = f"RSTIN{int(attrs['RESET'], 2)}"
+
+    for parm, val in params.items():
+        if parm == 'ALUD_MODE':
+            ival = int(val, 2)
+            if ival == 2:
+                dsp_attrs['OPCD_1'] = "1"
+                dsp_attrs['OPCD_5'] = "1"
+            else:
+                if ival == 0:
+                    dsp_attrs['OPCD_6'] = "1"
+                    if params['C_ADD_SUB'] == "1":
+                        dsp_attrs['OPCD_8'] = "1"
+                else:
+                    dsp_attrs['OPCD_5'] = "1"
+                if attrs['NET_ACCLOAD'] == "GND":
+                    dsp_attrs['OPCD_0'] = "1"
+                    dsp_attrs['OPCD_1'] = "1"
+                elif attrs['NET_ACCLOAD'] == "VCC":
+                    dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+                else:
+                    dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+                    dsp_attrs['OPCDDYN_0'] = "ENABLE"
+                    dsp_attrs['OPCDDYN_1'] = "ENABLE"
+                    dsp_attrs['OPCDDYN_INV_0'] = "ENABLE"
+                    dsp_attrs['OPCDDYN_INV_1'] = "ENABLE"
+
+        if parm == 'OUT_REG':
+            ii = 0
+            if val == '0':
+                for i, h in [(i, h) for i in range(2) for h in "LH"]:
+                    dsp_attrs[f'OREG{i}_NS{h}_{ii}']  = "ENABLE"
+                    dsp_attrs[f'OREG{i}_BYP{h}_{ii}']  = "ENABLE"
+                    dsp_attrs[f'OR2CIB_EN{i}{h}_{ii}']  = "ENABLE"
+                    ii += 1
+            else:
+                for i, h in [(i, h) for i in range(2) for h in "LH"]:
+                    dsp_attrs[f'CE{h}MUX_OREG{i}']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_OREG{i}'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_OREG{i}'] = reset_val
+                    dsp_attrs[f'OR2CIB_EN{i}{h}_{ii}']  = "ENABLE"
+                    ii += 1
+
+                if 'ALU_RESET_MODE' in params:
+                    if params['ALU_RESET_MODE'] == 'SYNC':
+                        for i, h in [(i, h) for h in "HL" for i in range(2)]:
+                            dsp_attrs[f'RSTGEN{h}MUX_OREG{i}'] = 'SYNC'
+        if parm == 'AREG':
+            if val == '0':
+                ii = 0
+                dsp_attrs['CIR_BYPL_0']  = "1"
+                for i, h in [(i, h) for i in "AB" for h in "LH"]:
+                    dsp_attrs[f'IRBY_IREG0{i}{h}_{ii}']  = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG0{i}{h}_{ii}']  = "ENABLE"
+                    ii += 1
+            else:
+                dsp_attrs['CELMUX_CREG'] = ce_val
+                dsp_attrs['CLKLMUX_CREG'] = clk_val
+                dsp_attrs['RSTLMUX_CREG'] = reset_val
+                for i, h in [(i, h) for i in "AB" for h in "LH"]:
+                    dsp_attrs[f'CE{h}MUX_REGM{i}0']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_REGM{i}0'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_REGM{i}0'] = reset_val
+
+                if 'ALU_RESET_MODE' in params:
+                    if params['ALU_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENLMUX_REGC0'] = 'SYNC'
+                        for i, h in [(i, h) for i in "AB" for h in "LH"]:
+                            dsp_attrs[f'RSTGEN{h}MUX_REGM{i}0'] = 'SYNC'
+
+        if parm == 'BREG':
+            if val == '0':
+                ii = 4
+                dsp_attrs['CIR_BYPH_1']  = "1"
+                for i, h in [(i, h) for i in "AB" for h in "LH"]:
+                    dsp_attrs[f'IRBY_IREG1{i}{h}_{ii}']  = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG1{i}{h}_{ii}']  = "ENABLE"
+                    ii += 1
+            else:
+                dsp_attrs['CEHMUX_CREG'] = ce_val
+                dsp_attrs['CLKHMUX_CREG'] = clk_val
+                dsp_attrs['RSTHMUX_CREG'] = reset_val
+                for i, h in [(i, h) for i in "AB" for h in "LH"]:
+                    dsp_attrs[f'CE{h}MUX_REGM{i}1']  = ce_val
+                    dsp_attrs[f'CLK{h}MUX_REGM{i}1'] = clk_val
+                    dsp_attrs[f'RST{h}MUX_REGM{i}1'] = reset_val
+
+                if 'ALU_RESET_MODE' in params:
+                    if params['ALU_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENLMUX_REGC0'] = 'SYNC'
+                        for i, h in [(i, h) for i in "AB" for h in "LH"]:
+                            dsp_attrs[f'RSTGEN{h}MUX_REGM{i}0'] = 'SYNC'
+
+        if parm == 'ASIGN_REG':
+            if val == '0':
+                dsp_attrs['CINBY_3']  = "ENABLE"
+                dsp_attrs['CINNS_3']  = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_ASIGN11'] = ce_val
+                dsp_attrs['CLKMUX_ASIGN11'] = clk_val
+                dsp_attrs['RSTMUX_ASIGN11'] = reset_val
+
+                if 'ALU_RESET_MODE' in params:
+                    if params['ALU_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_ASIGN11'] = 'SYNC'
+
+        if parm == 'BSIGN_REG':
+            if val == '0':
+                dsp_attrs['CINBY_4']  = "ENABLE"
+                dsp_attrs['CINNS_4']  = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_BSIGN11'] = ce_val
+                dsp_attrs['CLKMUX_BSIGN11'] = clk_val
+                dsp_attrs['RSTMUX_BSIGN11'] = reset_val
+
+                if 'ALU_RESET_MODE' in params:
+                    if params['ALU_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_BSIGN11'] = 'SYNC'
+
+        if parm == 'ACCLOAD_REG':
+            if val == '0':
+                dsp_attrs['CINBY_2']  = "ENABLE"
+                dsp_attrs['CINNS_2']  = "ENABLE"
+            else:
+                dsp_attrs['CEMUX_ALUSEL1'] = ce_val
+                dsp_attrs['CLKMUX_ALUSEL1'] = clk_val
+                dsp_attrs['RSTMUX_ALUSEL1'] = reset_val
+
+                if 'ALU_RESET_MODE' in params:
+                    if params['ALU_RESET_MODE'] == 'SYNC':
+                        dsp_attrs['RSTGENMUX_ALUSEL1'] = 'SYNC'
+
+    dsp_attrs['RCISEL_1'] = "1"
+    dsp_attrs['RCISEL_3'] = "1"
+
+# DSP PADD9
+def set_padd9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx):
+    dsp_attrs[f'CINBY_{pair_idx + 7}'] = "ENABLE"
+    dsp_attrs[f'CINNS_{pair_idx + 7}'] = "ENABLE"
+    if pair_idx:
+        dsp_attrs['CIR_BYPH_1'] = "1"
+        dsp_attrs['RCISEL_3'] = "1"
+    else:
+        dsp_attrs['CIR_BYPL_0'] = "1"
+        dsp_attrs['RCISEL_1'] = "1"
+
+    if pair_idx == 0 and 'LAST_IN_CHAIN' in attrs:
+        dsp_attrs['PRAD_FBB1'] = "ENABLE"
+
+    dsp_attrs[f'PRAD_MUXA0EN_{pair_idx}']   = "ENABLE"
+    # sel nets
+    if attrs['NET_ASEL'] == 'VCC':
+        dsp_attrs[f'PRAD_MUXA1_{pair_idx * 2}'] = "ENABLE"
+    elif attrs['NET_ASEL'] and attrs['NET_ASEL'] != 'GND':
+        dsp_attrs[f'PRAD_MUXA1_{pair_idx * 2}'] = "ENABLE"
+        dsp_attrs[f'PRAD_MUXA1_{pair_idx * 2 + 1}'] = "ENABLE"
+
+    # ctrl nets
+    ce_val = 'UNKNOWN'
+    if int(attrs['CE'], 2):
+        ce_val = f"CEIN{int(attrs['CE'], 2)}"
+    clk_val = 'UNKNOWN'
+    if int(attrs['CLK'], 2):
+        clk_val = f"CLKIN{int(attrs['CLK'], 2)}"
+    reset_val = 'UNKNOWN'
+    if int(attrs['RESET'], 2):
+        reset_val = f"RSTIN{int(attrs['RESET'], 2)}"
+
+    if pair_idx:
+        dsp_attrs['MATCH'] = "ENABLE"
+        dsp_attrs['MATCH_SHFEN'] = "ENABLE"
+
+    dsp_attrs[f'OR2CIB_EN{pair_idx}L_{pair_idx * 2}'] = "ENABLE"
+
+    for parm, val in params.items():
+        if parm == 'AREG':
+            if val == '0':
+                if even_odd:
+                    dsp_attrs[f'IRNS_PRAD{pair_idx}AH_{pair_idx * 4 + 1}'] = "ENABLE"
+                    dsp_attrs[f'IRBY_PRAD{pair_idx}AH_{pair_idx * 4 + 1}'] = "ENABLE"
+                else:
+                    dsp_attrs[f'IRNS_PRAD{pair_idx}AL_{pair_idx * 4}'] = "ENABLE"
+                    dsp_attrs[f'IRBY_PRAD{pair_idx}AL_{pair_idx * 4}'] = "ENABLE"
+            else:
+                if even_odd:
+                    dsp_attrs[f'CEHMUX_REGA{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKHMUX_REGA{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTHMUX_REGA{pair_idx}'] = reset_val
+                    if 'PADD_RESET_MODE' in params:
+                        if params['PADD_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENHMUX_REGA{pair_idx}'] = 'SYNC'
+                else:
+                    dsp_attrs[f'CELMUX_REGMA{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKLMUX_REGMA{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTLMUX_REGMA{pair_idx}'] = reset_val
+                    if 'PADD_RESET_MODE' in params:
+                        if params['PADD_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENLMUX_REGA{pair_idx}'] = 'SYNC'
+        if parm == 'BREG':
+            if val == '0':
+                if even_odd:
+                    dsp_attrs[f'IRNS_PRAD{pair_idx}BH_{pair_idx * 4 + 3}'] = "ENABLE"
+                    dsp_attrs[f'IRBY_PRAD{pair_idx}BH_{pair_idx * 4 + 3}'] = "ENABLE"
+                else:
+                    dsp_attrs[f'IRNS_PRAD{pair_idx}BL_{pair_idx * 4 + 2}'] = "ENABLE"
+                    dsp_attrs[f'IRBY_PRAD{pair_idx}BL_{pair_idx * 4 + 2}'] = "ENABLE"
+            else:
+                if even_odd:
+                    dsp_attrs[f'CEHMUX_REGB{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKHMUX_REGB{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTHMUX_REGB{pair_idx}'] = reset_val
+                    if 'PADD_RESET_MODE' in params:
+                        if params['PADD_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENHMUX_REGB{pair_idx}'] = 'SYNC'
+                else:
+                    dsp_attrs[f'CELMUX_REGMA{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKLMUX_REGMA{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTLMUX_REGMA{pair_idx}'] = reset_val
+                    if 'PADD_RESET_MODE' in params:
+                        if params['PADD_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENLMUX_REGB{pair_idx}'] = 'SYNC'
+        if parm == 'SOREG':
+            if pair_idx:
+                if val == '0':
+                    if even_odd:
+                        dsp_attrs['IRNS_IRMATCHH_9'] = "ENABLE"
+                        dsp_attrs['IRBY_IRMATCHH_9'] = "ENABLE"
+                    else:
+                        dsp_attrs['IRNS_IRMATCHL_8'] = "ENABLE"
+                        dsp_attrs['IRBY_IRMATCHL_8'] = "ENABLE"
+                else:
+                    if even_odd:
+                        dsp_attrs['CEHMUX_REGSD']  = ce_val
+                        dsp_attrs['CLKHMUX_REGSD'] = clk_val
+                        dsp_attrs['RSTHMUX_REGSD'] = reset_val
+                        if 'PADD_RESET_MODE' in params:
+                            if params['PADD_RESET_MODE'] == 'SYNC':
+                                dsp_attrs['RSTGENHMUX_REGSD'] = 'SYNC'
+                    else:
+                        dsp_attrs['CELMUX_REGSD']  = ce_val
+                        dsp_attrs['CLKLMUX_REGSD'] = clk_val
+                        dsp_attrs['RSTLMUX_REGSD'] = reset_val
+                        if 'PADD_RESET_MODE' in params:
+                            if params['PADD_RESET_MODE'] == 'SYNC':
+                                dsp_attrs['RSTGENLMUX_REGSD'] = 'SYNC'
+
+        if parm == 'BSEL_MODE':
+            if val == '0':
+                dsp_attrs[f'PRAD_MUXB_{pair_idx * 2}'] = "ENABLE"
+            else:
+                dsp_attrs[f'PRAD_MUXB_{pair_idx * 2 + 1}'] = "ENABLE"
+
+    # mult: * C=1
+    dsp_attrs[f'AIRMUX0_{pair_idx}'] = "ENABLE"
+    dsp_attrs[f'BIRMUX0_{pair_idx * 2}'] = "ENABLE"
+    if even_odd:
+        dsp_attrs[f'IRBY_IREG{pair_idx}AH_{pair_idx * 4 + 1}'] = "ENABLE"
+        dsp_attrs[f'IRNS_IREG{pair_idx}AH_{pair_idx * 4 + 1}'] = "ENABLE"
+        dsp_attrs[f'IRBY_IREG{pair_idx}BH_{pair_idx * 4 + 3}'] = "ENABLE"
+        dsp_attrs[f'IRNS_IREG{pair_idx}BH_{pair_idx * 4 + 3}'] = "ENABLE"
+        dsp_attrs[f'CINNS_{pair_idx * 3}'] = "ENABLE"
+        dsp_attrs[f'CINBY_{pair_idx * 3}'] = "ENABLE"
+        dsp_attrs[f'CPRNS_{pair_idx * 3}'] = "ENABLE"
+        dsp_attrs[f'CPRBY_{pair_idx * 3}'] = "ENABLE"
+        dsp_attrs[f'CINNS_{pair_idx * 3 + 1}'] = "ENABLE"
+        dsp_attrs[f'CINBY_{pair_idx * 3 + 1}'] = "ENABLE"
+        dsp_attrs[f'CPRNS_{pair_idx * 3 + 1}'] = "ENABLE"
+        dsp_attrs[f'CPRBY_{pair_idx * 3 + 1}'] = "ENABLE"
+        dsp_attrs[f'PPREG{pair_idx}_NSH_{pair_idx * 2 + 1}'] = "ENABLE"
+        dsp_attrs[f'PPREG{pair_idx}_BYPH_{pair_idx * 2 + 1}'] = "ENABLE"
+        dsp_attrs[f'OREG{pair_idx}_NSH_{pair_idx * 2 + 1}'] = "ENABLE"
+        dsp_attrs[f'OREG{pair_idx}_BYPH_{pair_idx * 2 + 1}'] = "ENABLE"
+        dsp_attrs[f'OR2CIB_EN{pair_idx}H_{pair_idx * 2 + 1}'] = "ENABLE"
+    else:
+        dsp_attrs[f'IRBY_IREG{pair_idx}AL_{pair_idx * 4}'] = "ENABLE"
+        dsp_attrs[f'IRNS_IREG{pair_idx}AL_{pair_idx * 4}'] = "ENABLE"
+        dsp_attrs[f'IRBY_IREG{pair_idx}BL_{pair_idx * 4 + 2}'] = "ENABLE"
+        dsp_attrs[f'IRNS_IREG{pair_idx}BL_{pair_idx * 4 + 2}'] = "ENABLE"
+        dsp_attrs[f'CINNS_{pair_idx * 3}'] = "ENABLE"
+        dsp_attrs[f'CINBY_{pair_idx * 3}'] = "ENABLE"
+        dsp_attrs[f'CPRNS_{pair_idx * 3}'] = "ENABLE"
+        dsp_attrs[f'CPRBY_{pair_idx * 3}'] = "ENABLE"
+        dsp_attrs[f'CINNS_{pair_idx * 3 + 1}'] = "ENABLE"
+        dsp_attrs[f'CINBY_{pair_idx * 3 + 1}'] = "ENABLE"
+        dsp_attrs[f'CPRNS_{pair_idx * 3 + 1}'] = "ENABLE"
+        dsp_attrs[f'CPRBY_{pair_idx * 3 + 1}'] = "ENABLE"
+        dsp_attrs[f'PPREG{pair_idx}_NSL_{pair_idx * 2}'] = "ENABLE"
+        dsp_attrs[f'PPREG{pair_idx}_BYPL_{pair_idx * 2}'] = "ENABLE"
+        dsp_attrs[f'OREG{pair_idx}_NSL_{pair_idx * 2}'] = "ENABLE"
+        dsp_attrs[f'OREG{pair_idx}_BYPL_{pair_idx * 2}'] = "ENABLE"
+        dsp_attrs[f'OR2CIB_EN{pair_idx}L_{pair_idx * 2}'] = "ENABLE"
+
+# DSP mult9x9
+def set_mult9x9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx):
+    ce_val = 'UNKNOWN'
+    if int(attrs['CE'], 2):
+        ce_val = f"CEIN{int(attrs['CE'], 2)}"
+    clk_val = 'UNKNOWN'
+    if int(attrs['CLK'], 2):
+        clk_val = f"CLKIN{int(attrs['CLK'], 2)}"
+    reset_val = 'UNKNOWN'
+    if int(attrs['RESET'], 2):
+        reset_val = f"RSTIN{int(attrs['RESET'], 2)}"
+
+    dsp_attrs[f'IRASHFEN_{pair_idx}'] = "1"
+    dsp_attrs[f'IRBSHFEN_{pair_idx}'] = "1"
+    if pair_idx:
+        dsp_attrs['MATCH_SHFEN'] = "ENABLE"
+    if even_odd:
+        dsp_attrs[f'OR2CIB_EN{pair_idx}H_{idx}'] = "ENABLE"
+    else:
+        dsp_attrs[f'OR2CIB_EN{pair_idx}L_{idx}'] = "ENABLE"
+    # sel nets
+    if attrs['NET_ASEL'] == 'VCC':
+        dsp_attrs[f'AIRMUX1_{pair_idx}'] = "ENABLE"
+    elif attrs['NET_ASEL'] and attrs['NET_ASEL'] != 'GND':
+        dsp_attrs[f'AIRMUX1_SEL_{pair_idx}'] = "ENABLE"
+    if attrs['NET_BSEL'] == 'VCC':
+        dsp_attrs[f'BIRMUX1_{pair_idx * 2}'] = "ENABLE"
+    elif attrs['NET_BSEL'] and attrs['NET_BSEL'] != 'GND':
+        dsp_attrs[f'BIRMUX0_{pair_idx * 2}'] = "ENABLE"
+        dsp_attrs[f'BIRMUX0_{pair_idx * 2 + 1}'] = "ENABLE"
+        dsp_attrs[f'BIRMUX1_{pair_idx * 2}'] = "ENABLE"
+        dsp_attrs[f'BIRMUX1_{pair_idx * 2 + 1}'] = "ENABLE"
+
+    for parm, val in params.items():
+        if parm == 'AREG':
+            if val == '0':
+                if even_odd:
+                    dsp_attrs[f'IRBY_IREG{pair_idx}AH_{pair_idx * 4 + 1}'] = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG{pair_idx}AH_{pair_idx * 4 + 1}'] = "ENABLE"
+                else:
+                    dsp_attrs[f'IRBY_IREG{pair_idx}AL_{pair_idx * 4}'] = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG{pair_idx}AL_{pair_idx * 4}'] = "ENABLE"
+            else:
+                if even_odd:
+                    dsp_attrs[f'CEHMUX_REGMA{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKHMUX_REGMA{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTHMUX_REGMA{pair_idx}'] = reset_val
+                    if 'MULT_RESET_MODE' in params:
+                        if params['MULT_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENHMUX_REGMA{pair_idx}'] = 'SYNC'
+                else:
+                    dsp_attrs[f'CELMUX_REGMA{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKLMUX_REGMA{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTLMUX_REGMA{pair_idx}'] = reset_val
+                    if 'MULT_RESET_MODE' in params:
+                        if params['MULT_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENLMUX_REGMA{pair_idx}'] = 'SYNC'
+        if parm == 'BREG':
+            if val == '0':
+                if even_odd:
+                    dsp_attrs[f'IRBY_IREG{pair_idx}BH_{pair_idx * 4 + 3}'] = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG{pair_idx}BH_{pair_idx * 4 + 3}'] = "ENABLE"
+                else:
+                    dsp_attrs[f'IRBY_IREG{pair_idx}BL_{pair_idx * 4 + 2}'] = "ENABLE"
+                    dsp_attrs[f'IRNS_IREG{pair_idx}BL_{pair_idx * 4 + 2}'] = "ENABLE"
+            else:
+                if even_odd:
+                    dsp_attrs[f'CEHMUX_REGMB{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKHMUX_REGMB{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTHMUX_REGMB{pair_idx}'] = reset_val
+                    if 'MULT_RESET_MODE' in params:
+                        if params['MULT_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENHMUX_REGMB{pair_idx}'] = 'SYNC'
+                else:
+                    dsp_attrs[f'CELMUX_REGMB{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKLMUX_REGMB{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTLMUX_REGMB{pair_idx}'] = reset_val
+                    if 'MULT_RESET_MODE' in params:
+                        if params['MULT_RESET_MODE'] == 'SYNC':
+                            dsp_attrs[f'RSTGENLMUX_REGMB{pair_idx}'] = 'SYNC'
+        if parm == 'ASIGN_REG':
+            if val == '0':
+                dsp_attrs[f'CINNS_{pair_idx * 3}'] = "ENABLE"
+                dsp_attrs[f'CINBY_{pair_idx * 3}'] = "ENABLE"
+            else:
+                dsp_attrs[f'CEMUX_ASIGN{pair_idx}1']  = ce_val
+                dsp_attrs[f'CLKMUX_ASIGN{pair_idx}1'] = clk_val
+                dsp_attrs[f'RSTMUX_ASIGN{pair_idx}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_ASIGN{pair_idx}1'] = 'SYNC'
+        if parm == 'BSIGN_REG':
+            if val == '0':
+                dsp_attrs[f'CINNS_{pair_idx * 3 + 1}'] = "ENABLE"
+                dsp_attrs[f'CINBY_{pair_idx * 3 + 1}'] = "ENABLE"
+            else:
+                dsp_attrs[f'CEMUX_BSIGN{pair_idx}1']  = ce_val
+                dsp_attrs[f'CLKMUX_BSIGN{pair_idx}1'] = clk_val
+                dsp_attrs[f'RSTMUX_BSIGN{pair_idx}1'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_BSIGN{pair_idx}1'] = 'SYNC'
+        if parm == 'PIPE_REG':
+            if val == '0':
+                dsp_attrs[f'CPRNS_{pair_idx * 3}'] = "ENABLE"
+                dsp_attrs[f'CPRBY_{pair_idx * 3}'] = "ENABLE"
+                dsp_attrs[f'CPRNS_{pair_idx * 3 + 1}'] = "ENABLE"
+                dsp_attrs[f'CPRBY_{pair_idx * 3 + 1}'] = "ENABLE"
+                if even_odd:
+                    dsp_attrs[f'PPREG{pair_idx}_NSH_{idx}'] = "ENABLE"
+                    dsp_attrs[f'PPREG{pair_idx}_BYPH_{idx}'] = "ENABLE"
+                else:
+                    dsp_attrs[f'PPREG{pair_idx}_NSL_{idx}'] = "ENABLE"
+                    dsp_attrs[f'PPREG{pair_idx}_BYPL_{idx}'] = "ENABLE"
+            else:
+                dsp_attrs[f'CEMUX_ASIGN{pair_idx}2']  = ce_val
+                dsp_attrs[f'CLKMUX_ASIGN{pair_idx}2'] = clk_val
+                dsp_attrs[f'RSTMUX_ASIGN{pair_idx}2'] = reset_val
+                dsp_attrs[f'CEMUX_BSIGN{pair_idx}2']  = ce_val
+                dsp_attrs[f'CLKMUX_BSIGN{pair_idx}2'] = clk_val
+                dsp_attrs[f'RSTMUX_BSIGN{pair_idx}2'] = reset_val
+                if even_odd:
+                    dsp_attrs[f'CEHMUX_REGP{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKHMUX_REGP{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTHMUX_REGP{pair_idx}'] = reset_val
+                else:
+                    dsp_attrs[f'CELMUX_REGP{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKLMUX_REGP{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTLMUX_REGP{pair_idx}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        dsp_attrs[f'RSTGENMUX_ASIGN{pair_idx}2'] = 'SYNC'
+                        dsp_attrs[f'RSTGENMUX_BSIGN{pair_idx}2'] = 'SYNC'
+                        if even_odd:
+                            dsp_attrs[f'RSTGENHMUX_REGP{pair_idx}'] = 'SYNC'
+                        else:
+                            dsp_attrs[f'RSTGENLMUX_REGP{pair_idx}'] = 'SYNC'
+        if parm == 'OUT_REG':
+            if val == '0':
+                if even_odd:
+                    dsp_attrs[f'OREG{pair_idx}_BYPH_{idx}'] = "ENABLE"
+                    dsp_attrs[f'OREG{pair_idx}_NSH_{idx}'] = "ENABLE"
+                else:
+                    dsp_attrs[f'OREG{pair_idx}_BYPL_{idx}'] = "ENABLE"
+                    dsp_attrs[f'OREG{pair_idx}_NSL_{idx}'] = "ENABLE"
+            else:
+                if even_odd:
+                    dsp_attrs[f'CEHMUX_OREG{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKHMUX_OREG{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTHMUX_OREG{pair_idx}'] = reset_val
+                else:
+                    dsp_attrs[f'CELMUX_OREG{pair_idx}']  = ce_val
+                    dsp_attrs[f'CLKLMUX_OREG{pair_idx}'] = clk_val
+                    dsp_attrs[f'RSTLMUX_OREG{pair_idx}'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        if even_odd:
+                            dsp_attrs[f'RSTGENHMUX_OREG{pair_idx}'] = 'SYNC'
+                        else:
+                            dsp_attrs[f'RSTGENLMUX_OREG{pair_idx}'] = 'SYNC'
+
+        if parm == 'SOA_REG' and pair_idx:
+            if val == '0':
+                if pair_idx:
+                    if even_odd:
+                        dsp_attrs['IRBY_IRMATCHH_9'] = "ENABLE"
+                        dsp_attrs['IRNS_IRMATCHH_9'] = "ENABLE"
+                    else:
+                        dsp_attrs['IRBY_IRMATCHL_8'] = "ENABLE"
+                        dsp_attrs['IRNS_IRMATCHL_8'] = "ENABLE"
+            else:
+                if even_odd:
+                    dsp_attrs[f'CEHMUX_REGSD']  = ce_val
+                    dsp_attrs[f'CLKHMUX_REGSD'] = clk_val
+                    dsp_attrs[f'RSTHMUX_REGSD'] = reset_val
+                else:
+                    dsp_attrs[f'CELMUX_REGSD']  = ce_val
+                    dsp_attrs[f'CLKLMUX_REGSD'] = clk_val
+                    dsp_attrs[f'RSTLMUX_REGSD'] = reset_val
+                if 'MULT_RESET_MODE' in params:
+                    if params['MULT_RESET_MODE'] == 'SYNC':
+                        if even_odd:
+                            dsp_attrs[f'RSTGENHMUX_REGSD'] = 'SYNC'
+                        else:
+                            dsp_attrs[f'RSTGENLMUX_REGSD'] = 'SYNC'
+
+def set_dsp_attrs(db, typ, params, num, attrs):
+    dsp_attrs = {}
+    mac = int(num[0])
+    idx = int(num[1])
+    even_odd = idx & 1
+    pair_idx = idx // 2
+    #print(f"{typ}, mac:{mac}, idx:{idx}, even_odd:{even_odd}, pair_idx:{pair_idx}")
+
+    if typ in {"PADD9", "MULT9X9"}:
+        dsp_attrs['M9MODE_EN'] = "ENABLE"
+
+    if typ == "PADD9":
+        set_padd9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx)
+    elif typ == "PADD18":
+        idx *= 2
+        even_odd = idx & 1
+        pair_idx = idx // 2
+        set_padd9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx)
+        idx += 1
+        even_odd = idx & 1
+        pair_idx = idx // 2
+        set_padd9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx)
+    elif typ == "MULT9X9":
+        set_mult9x9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx)
+    elif typ == "MULT18X18":
+        idx *= 2
+        even_odd = idx & 1
+        pair_idx = idx // 2
+        set_mult9x9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx)
+        idx += 1
+        even_odd = idx & 1
+        pair_idx = idx // 2
+        set_mult9x9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx)
+    elif typ == "ALU54D":
+        set_alu54d_attrs(db, typ, params, num, attrs, dsp_attrs, mac)
+    elif typ == "MULTALU18X18":
+        set_multalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac)
+    elif typ == "MULTALU36X18":
+        set_multalu36x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac)
+    elif typ == "MULTADDALU18X18":
+        set_multaddalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac)
+
+    fin_attrs = set()
+    for attr, val in dsp_attrs.items():
+        if isinstance(val, str):
+            val = attrids.dsp_attrvals[val]
+        add_attr_val(db, 'DSP', fin_attrs, attrids.dsp_attrids[attr], val)
+    return fin_attrs
+
+# special case - returns attrs for two macros []
+def set_dsp_mult36x36_attrs(db, typ, params, attrs):
+    attrs['NET_ASEL'] = 'GND'
+    attrs['NET_BSEL'] = 'GND'
+
+    # macro 0
+    dsp_attrs = {}
+    params['MULTALU36X18_MODE'] = "1"  # ACC/0 + A*B
+    attrs['NET_ACCLOAD'] = "GND"
+    params['OUT_REG'] = params.get('OUT0_REG', "0")
+    params['ACCLOAD_REG0'] = "0"
+    params['ACCLOAD_REG1'] = "0"
+    set_multalu36x18_attrs(db, typ, params, "00", attrs, dsp_attrs, 0)
+    dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
+    dsp_attrs['IRNS_IRMATCHH_9'] = "ENABLE"
+    dsp_attrs['IRNS_IRMATCHL_8'] = "ENABLE"
+    dsp_attrs['IRBY_IRMATCHH_9'] = "ENABLE"
+    dsp_attrs['IRBY_IRMATCHL_8'] = "ENABLE"
+    dsp_attrs['MATCH_SHFEN'] = "ENABLE"
+    dsp_attrs.pop('IRASHFEN_0', None)
+    dsp_attrs.pop('RCISEL_1', None)
+    dsp_attrs.pop('RCISEL_3', None)
+
+    ret_attrs = []
+    fin_attrs = set()
+    for attr, val in dsp_attrs.items():
+        if isinstance(val, str):
+            val = attrids.dsp_attrvals[val]
+        add_attr_val(db, 'DSP', fin_attrs, attrids.dsp_attrids[attr], val)
+    ret_attrs.append(fin_attrs)
+
+    # macro 1
+    dsp_attrs = {}
+    params['MULTALU36X18_MODE'] = "10" # A*B + CASI
+    params['OUT_REG'] = params.get('OUT1_REG', "0")
+    set_multalu36x18_attrs(db, typ, params, "00", attrs, dsp_attrs, 1)
+
+    dsp_attrs['CSGIN_EXT'] = "ENABLE"
+    dsp_attrs['CSIGN_PRE'] = "ENABLE"
+    dsp_attrs['IRNS_IRMATCHH_9'] = "ENABLE"
+    dsp_attrs['IRNS_IRMATCHL_8'] = "ENABLE"
+    dsp_attrs['IRBY_IRMATCHH_9'] = "ENABLE"
+    dsp_attrs['IRBY_IRMATCHL_8'] = "ENABLE"
+    dsp_attrs['MATCH_SHFEN'] = "ENABLE"
+    dsp_attrs.pop('IRASHFEN_0', None)
+    dsp_attrs.pop('RCISEL_1', None)
+    dsp_attrs.pop('RCISEL_3', None)
+    dsp_attrs.pop('OPCD_5', None)
+    dsp_attrs['OPCD_4'] = "1"
+
+    fin_attrs = set()
+    for attr, val in dsp_attrs.items():
+        if isinstance(val, str):
+            val = attrids.dsp_attrvals[val]
+        add_attr_val(db, 'DSP', fin_attrs, attrids.dsp_attrids[attr], val)
+    ret_attrs.append(fin_attrs)
+    return ret_attrs
+
 def set_osc_attrs(db, typ, params):
     osc_attrs = dict()
     for param, val in params.items():
@@ -933,8 +2267,6 @@ def place(db, tilemap, bels, cst, args):
             place_dff(db, tiledata, tile, parms, num, mode)
         elif typ.startswith('LUT'):
             place_lut(db, tiledata, tile, parms, num)
-        elif typ.startswith('ALU'):
-            place_alu(db, tiledata, tile, parms, num)
 
         elif typ[:3] == "IOB":
             edge = 'T'
@@ -1040,6 +2372,26 @@ def place(db, tilemap, bels, cst, args):
             #print(f'({row - 1}, {col - 1}) attrs:{bsram_attrs}, bits:{bsrambits}')
             for brow, bcol in bsrambits:
                 tile[brow][bcol] = 1
+        elif typ in {'MULTADDALU18X18', 'MULTALU36X18', 'MULTALU18X18', 'MULT36X36', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9', 'ALU54D'} or typ == 'DSP_AUX':
+            if typ == 'DSP_AUX':
+                typ = cell['type']
+            if typ in {'MULTADDALU18X18', 'MULTALU36X18', 'MULTALU18X18', 'ALU54D'}:
+                num = num[-1] + num[-1]
+            if typ != 'MULT36X36':
+                dsp_attrs = set_dsp_attrs(db, typ, parms, num, attrs)
+                dspbits = set()
+                if f'DSP{num[-2]}' in db.shortval[tiledata.ttyp]:
+                    dspbits = get_shortval_fuses(db, tiledata.ttyp, dsp_attrs, f'DSP{num[-2]}')
+            else:
+                dsp_attrs = set_dsp_mult36x36_attrs(db, typ, parms, attrs)
+                dspbits = set()
+                for mac in range(2):
+                    if f'DSP{mac}' in db.shortval[tiledata.ttyp]:
+                        dspbits.update(get_shortval_fuses(db, tiledata.ttyp, dsp_attrs[mac], f'DSP{mac}'))
+
+            #1406.0iprint(f'({row - 1}, {col - 1}) attrs:{dsp_attrs}, bits:{sorted(dspbits)}')
+            for brow, bcol in dspbits:
+                tile[brow][bcol] = 1
         elif typ.startswith('RPLL'):
             pll_attrs = set_pll_attrs(db, 'RPLL', 0,  parms)
             bits = set()
@@ -1048,6 +2400,8 @@ def place(db, tilemap, bels, cst, args):
             #print(typ, tiledata.ttyp, bits)
             for r, c in bits:
                 tile[r][c] = 1
+        elif typ.startswith('ALU'):
+            place_alu(db, tiledata, tile, parms, num)
         elif typ == 'PLLVR':
             idx = 0
             if col != 28:

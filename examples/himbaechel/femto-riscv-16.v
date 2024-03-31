@@ -45,13 +45,13 @@ module Memory (
 
    reg [31:0] MEM [0:255]; 
 
-   localparam slow_bit=17;
+   localparam slow_bit=20;
    
 `include "riscv_assembly.v"
    integer L0_   = 12;
-   integer L1_   = 40;
-   integer wait_ = 64;   
-   integer L2_   = 72;
+   integer L1_   = 32;
+   integer wait_ = 56;   
+   integer L2_   = 64;
    
    initial begin
 
@@ -63,7 +63,6 @@ module Memory (
    Label(L0_); 
       LB(a1,s0,400);
       SB(a1,s0,800);       
-      CALL(LabelRef(wait_));
       ADDI(s0,s0,1); 
       BNE(s0,s1, LabelRef(L0_));
 
@@ -355,7 +354,7 @@ module Processor (
 	   end
 	   EXECUTE: begin
 	      if(!isSYSTEM) begin
-		 PC <= nextPC;
+			 PC <= nextPC;
 	      end
 	      state <= isLoad  ? LOAD  : 
 		       isStore ? STORE : 
