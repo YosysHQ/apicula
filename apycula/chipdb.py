@@ -97,6 +97,9 @@ class Device:
     bottom_io: Tuple[str, str, List[Tuple[str, str]]] = field(default_factory = tuple)
     # simplified IO rows
     simplio_rows: Set[int] = field(default_factory = set)
+    # which PLL does this pad belong to. {IOLOC: (row, col, type, bel_name)}
+    # type = {'CLKIN_T', 'CLKIN_C', 'FB_T', 'FB_C'}
+    pad_pll: Dict[str, Tuple[int, int, str, str]] = field(default_factory = dict)
     # tile types by func. The same ttyp number can correspond to different
     # functional blocks on different chips. For example 86 is the PLL head ttyp
     # for GW2A-18 and the same number is used in GW1N-1 where it has nothing to
@@ -3002,4 +3005,72 @@ def loc2bank(db, row, col):
             bank = db.pin_bank[name + 'B']
     return bank
 
+# assign pads with plls
+# for now use static table and store the bel name although it is always PLL without a number
+# theoretically, we can determine which PLL pad belongs to from the list of
+# functions, but for them we will have to write a special parser since the
+# format is very diverse (example: RPLL1_T_IN, RPLL_C_IN, TPLL_T_IN2). And we
+# will still need a table with the coordinates of the PLL itself.
+_pll_pads = {
+    'GW1N-1': { 'IOR5A' : (0, 17, 'CLKIN_T', 'PLL'),
+                'IOR5B' : (0, 17, 'CLKIN_C', 'PLL'),
+                'IOR4A' : (0, 17, 'FB_T', 'PLL'),
+                'IOR4B' : (0, 17, 'FB_C', 'PLL') },
+    'GW1NZ-1': { 'IOR5A' : (0, 17, 'CLKIN_T', 'PLL'),
+                 'IOR5B' : (0, 17, 'CLKIN_C', 'PLL') },
+    'GW1N-4': { 'IOL3A' : (0, 9, 'CLKIN_T', 'PLL'),
+                'IOL3B' : (0, 9, 'CLKIN_C', 'PLL'),
+                'IOL4A' : (0, 9, 'FB_T', 'PLL'),
+                'IOL4B' : (0, 9, 'FB_C', 'PLL'),
+                'IOR3A' : (0, 27, 'CLKIN_T', 'PLL'),
+                'IOR3B' : (0, 27, 'CLKIN_C', 'PLL'),
+                'IOR4A' : (0, 27, 'FB_T', 'PLL'),
+                'IOR4B' : (0, 27, 'FB_C', 'PLL'), },
+    'GW1NS-4': { 'IOR2A' : (0, 36, 'CLKIN_T', 'PLL'),
+                 'IOR2B' : (0, 36, 'CLKIN_C', 'PLL'),
+                 'IOT13A' : (0, 27, 'CLKIN_T', 'PLL'),
+                 'IOT13B' : (0, 27, 'CLKIN_C', 'PLL'), },
+    'GW1N-9': { 'IOL5A' : (9, 0, 'CLKIN_T', 'PLL'),
+                'IOL5B' : (9, 0, 'CLKIN_C', 'PLL'),
+                'IOR5A' : (9, 46, 'CLKIN_T', 'PLL'),
+                'IOR5B' : (9, 46, 'CLKIN_C', 'PLL'),
+                'IOR6A' : (9, 46, 'FB_T', 'PLL'),
+                'IOR6B' : (9, 46, 'FB_C', 'PLL'), },
+    'GW1N-9C': { 'IOL5A' : (9, 0, 'CLKIN_T', 'PLL'),
+                 'IOL5B' : (9, 0, 'CLKIN_C', 'PLL'),
+                 'IOR5A' : (9, 46, 'CLKIN_T', 'PLL'),
+                 'IOR5B' : (9, 46, 'CLKIN_C', 'PLL'),
+                 'IOR6A' : (9, 46, 'FB_T', 'PLL'),
+                 'IOR6B' : (9, 46, 'FB_C', 'PLL'), },
+    'GW1N-9C': { 'IOL5A' : (9, 0, 'CLKIN_T', 'PLL'),
+                 'IOL5B' : (9, 0, 'CLKIN_C', 'PLL'),
+                 'IOR5A' : (9, 46, 'CLKIN_T', 'PLL'),
+                 'IOR5B' : (9, 46, 'CLKIN_C', 'PLL'),
+                 'IOR6A' : (9, 46, 'FB_T', 'PLL'),
+                 'IOR6B' : (9, 46, 'FB_C', 'PLL'), },
+    'GW2A-18': { 'IOL7A'  : (9, 0, 'CLKIN_T', 'PLL'),
+                 'IOL45A' : (45, 0, 'CLKIN_T', 'PLL'),
+                 'IOL47A' : (45, 0, 'FB_T', 'PLL'),
+                 'IOL47B' : (45, 0, 'FB_C', 'PLL'),
+                 'IOR45A' : (45, 0, 'CLKIN_T', 'PLL'), },
+    'GW2A-18C': { 'IOR7A'  : (9, 55, 'CLKIN_T', 'PLL'),
+                  'IOR7B'  : (9, 55, 'CLKIN_C', 'PLL'),
+                  'IOR8A'  : (9, 55, 'FB_T', 'PLL'),
+                  'IOR8B'  : (9, 55, 'FN_C', 'PLL'),
+                  'IOL7A'  : (9, 0, 'CLKIN_T', 'PLL'),
+                  'IOL7B'  : (9, 0, 'CLKIN_C', 'PLL'),
+                  'IOL45A' : (45, 0, 'CLKIN_T', 'PLL'),
+                  'IOL45B' : (45, 0, 'CLKIN_C', 'PLL'),
+                  'IOL47A' : (45, 0, 'FB_T', 'PLL'),
+                  'IOL47B' : (45, 0, 'FB_C', 'PLL'),
+                  'IOR45A' : (45, 55, 'CLKIN_T', 'PLL'),
+                  'IOR45B' : (45, 55, 'CLKIN_C', 'PLL'),
+                  'IOR47A' : (45, 55, 'FB_T', 'PLL'),
+                  'IOR47B' : (45, 55, 'FB_C', 'PLL'), },
+}
+def pll_pads(dev, device, pad_locs):
+    if device not in _pll_pads:
+        return
+    for loc, pll_data in _pll_pads[device].items():
+        dev.pad_pll[loc] = pll_data
 

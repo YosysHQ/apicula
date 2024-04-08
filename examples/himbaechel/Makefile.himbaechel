@@ -291,7 +291,7 @@ bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh %-image-rom.v %-video-ram.v %.
 %-tangnano4k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=27 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
 
-blinky-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh blinky-pll-vr.v
+%-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh %-pll-vr.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -json $@"
 	
 # ============================================================
