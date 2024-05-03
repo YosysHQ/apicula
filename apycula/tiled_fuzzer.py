@@ -208,7 +208,7 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
             bel.is_diff = is_diff
             bel.is_true_lvds = is_true_lvds
             bel.is_diff_p = is_positive
-            print(f"type:{ttyp} [{row}][{col}], IOB{bel_name[-1]}, diff:{is_diff}, true lvds:{is_true_lvds}, p:{is_positive}")
+            #print(f"type:{ttyp} [{row}][{col}], IOB{bel_name[-1]}, diff:{is_diff}, true lvds:{is_true_lvds}, p:{is_positive}")
     for ttyp, bels in iob_bels.items():
         for row, col in locations[ttyp]:
             db.grid[row][col].bels.update(iob_bels[ttyp])
@@ -261,6 +261,9 @@ if __name__ == "__main__":
     # IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
     fse_iob(fse, db, pin_locations, diff_cap_info, locations);
+
+    pad_locs = pindef.get_pll_pads_locs(device, params['package'])
+    chipdb.pll_pads(db, device, pad_locs)
 
     chipdb.dat_portmap(dat, db, device)
 
