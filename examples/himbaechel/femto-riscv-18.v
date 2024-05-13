@@ -46,7 +46,7 @@ module Memory (
 
    reg [31:0] MEM [0:1535]; // 1536 4-bytes words = 6 Kb of RAM in total
 
-   localparam slow_bit=17;
+   localparam slow_bit=19;
 
    // Memory-mapped IO in IO page, 1-hot addressing in word address.   
    localparam IO_LEDS_bit      = 0;  // W five leds

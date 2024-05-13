@@ -97,6 +97,9 @@ class Device:
     bottom_io: Tuple[str, str, List[Tuple[str, str]]] = field(default_factory = tuple)
     # simplified IO rows
     simplio_rows: Set[int] = field(default_factory = set)
+    # which PLL does this pad belong to. {IOLOC: (row, col, type, bel_name)}
+    # type = {'CLKIN_T', 'CLKIN_C', 'FB_T', 'FB_C'}
+    pad_pll: Dict[str, Tuple[int, int, str, str]] = field(default_factory = dict)
     # tile types by func. The same ttyp number can correspond to different
     # functional blocks on different chips. For example 86 is the PLL head ttyp
     # for GW2A-18 and the same number is used in GW1N-1 where it has nothing to
@@ -163,7 +166,7 @@ class Device:
 # other logical wires. Let's remember such connections.
 # If suddenly a command is given to assign an already used wire to another
 # node, then all the contents of this node are combined with the existing one,
-# and the node itself is destroyed.  only for HCLK and clock nets for now
+# and the node itself is destroyed.
 wire2node = {}
 def add_node(dev, node_name, wire_type, row, col, wire):
     if (row, col, wire) not in wire2node:
@@ -470,6 +473,8 @@ _known_tables = {
             30: 'BSRAM_SDP',
             31: 'BSRAM_SP',
             32: 'BSRAM_ROM',
+            33: 'DSP0',
+            34: 'DSP1',
             35: 'PLL',
             37: 'BANK',
             40: 'IOBC',
@@ -1404,7 +1409,7 @@ def fse_create_simplio_rows(dev, dat: Datfile):
             dev.simplio_rows.add(row)
 
 def fse_create_tile_types(dev, dat: Datfile):
-    type_chars = 'PCMIB'
+    type_chars = 'PCMIBD'
     for fn in type_chars:
         dev.tile_types[fn] = set()
     for row, rd in enumerate(dat.grid.rows):
@@ -1575,6 +1580,60 @@ def fse_bram(fse, aux = False):
     bels[name] = Bel()
     return bels
 
+def fse_dsp(fse, aux = False):
+    bels = {}
+    if aux:
+        bels['DSP_AUX0'] = Bel()
+        bels['DSP_AUX1'] = Bel()
+    else:
+        # These are two macro DSPs, their purpose is to manage the control
+        # signals CE, CLK and RESET, which seem to be allocated to different
+        # subblocks from a common pool, the size of which reaches 4 possible
+        # PIPs for each type of signal.
+        # In other words, only the portmap that describes the pool is important here.
+        bels['DSP'] = Bel()
+        bels['DSP0'] = Bel()  # Macro 0
+        bels['DSP1'] = Bel()  # Macro 1
+        # Padd
+        bels['PADD900'] = Bel()  # macro 0 padd9 0
+        bels['PADD901'] = Bel()  # macro 0 padd9 1
+        bels['PADD902'] = Bel()  # macro 0 padd9 2
+        bels['PADD903'] = Bel()  # macro 0 padd9 3
+        bels['PADD1800'] = Bel() # macro 0 padd18 0
+        bels['PADD1801'] = Bel() # macro 0 padd18 1
+        bels['PADD910'] = Bel()  # macro 1 padd9 0
+        bels['PADD911'] = Bel()  # macro 1 padd9 1
+        bels['PADD912'] = Bel()  # macro 1 padd9 2
+        bels['PADD913'] = Bel()  # macro 1 padd9 3
+        bels['PADD1810'] = Bel() # macro 1 padd18 0
+        bels['PADD1811'] = Bel() # macro 1 padd18 1
+        # mult
+        bels['MULT9X900'] = Bel()   # macro 0 mult9x9 0
+        bels['MULT9X901'] = Bel()   # macro 0 mult9x9 1
+        bels['MULT9X902'] = Bel()   # macro 0 mult9x9 2
+        bels['MULT9X903'] = Bel()   # macro 0 mult9x9 3
+        bels['MULT18X1800'] = Bel() # macro 0 mult18x18 0
+        bels['MULT18X1801'] = Bel() # macro 0 mult18x18 1
+        bels['MULT9X910'] = Bel()   # macro 1 mult9x9 0
+        bels['MULT9X911'] = Bel()   # macro 1 mult9x9 1
+        bels['MULT9X912'] = Bel()   # macro 1 mult9x9 2
+        bels['MULT9X913'] = Bel()   # macro 1 mult9x9 3
+        bels['MULT18X1810'] = Bel() # macro 1 mult18x18 0
+        bels['MULT18X1811'] = Bel() # macro 1 mult18x18 1
+        # alu
+        bels['ALU54D0'] = Bel()     # macro 0 ALU54D
+        bels['ALU54D1'] = Bel()     # macro 1 ALU54D
+        # multalu
+        bels['MULTALU18X180'] = Bel()     # macro 0 multalu 18x18
+        bels['MULTALU18X181'] = Bel()     # macro 1 multalu 18x18
+        bels['MULTALU36X180'] = Bel()     # macro 0 multalu 36x18
+        bels['MULTALU36X181'] = Bel()     # macro 1 multalu 36x18
+        bels['MULTADDALU18X180'] = Bel()     # macro 0 multaddalu 18x18
+        bels['MULTADDALU18X181'] = Bel()     # macro 1 multaddalu 18x18
+
+        bels['MULT36X36'] = Bel()   # entire DSP mult36x36
+
+    return bels
 
 def disable_plls(dev, device):
     if device in {'GW2A-18C'}:
@@ -1595,6 +1654,8 @@ def from_fse(device, fse, dat: Datfile):
     tiles = {}
     bram_ttypes = get_tile_types_by_func(dev, dat, fse, 'B')
     bram_aux_ttypes = get_tile_types_by_func(dev, dat, fse, 'b')
+    dsp_ttypes = get_tile_types_by_func(dev, dat, fse, 'D')
+    dsp_aux_ttypes = get_tile_types_by_func(dev, dat, fse, 'd')
     for ttyp in ttypes:
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
@@ -1613,6 +1674,10 @@ def from_fse(device, fse, dat: Datfile):
             tile.bels = fse_bram(fse)
         elif ttyp in bram_aux_ttypes:
             tile.bels = fse_bram(fse, True)
+        elif ttyp in dsp_ttypes:
+            tile.bels = fse_dsp(fse)
+        elif ttyp in dsp_aux_ttypes:
+            tile.bels = fse_dsp(fse, True)
         # These are the cell types in which PLLs can be located. To determine,
         # we first take the coordinates of the cells with the letters P and p
         # from the dat['grid'] table, and then, using these coordinates,
@@ -1828,19 +1893,34 @@ _ides16_fixed_outputs = { 'Q0': 'F2', 'Q1': 'F3', 'Q2': 'F4', 'Q3': 'F5', 'Q4': 
                           'Q5': 'Q1', 'Q6': 'Q2', 'Q7': 'Q3', 'Q8': 'Q4', 'Q9': 'Q5', 'Q10': 'F0',
                          'Q11': 'F1', 'Q12': 'F2', 'Q13': 'F3', 'Q14': 'F4', 'Q15': 'F5'}
 _bsram_control_ins = ['CLK', 'OCE', 'CE', 'RESET', 'WRE']
+_alusel = [[('CE0', 0), ('LSR2', 0), ('LSR0', 1), ('LSR1', 1), ('LSR2', 1), ('CE2', 2),  ('LSR2', 2)],
+           [('CE0', 5), ('CE1', 5),  ('CE2', 5),  ('LSR2', 5), ('CE2', 6),  ('LSR2', 6), ('CE2', 7)]]
 def get_pllout_global_name(row, col, wire, device):
     for name, loc in _pll_loc[device].items():
         if loc == (row, col, wire):
             return name
     raise Exception(f"bad PLL output {device} ({row}, {col}){wire}")
 
+def need_create_multiple_nodes(device, name):
+    return (name.startswith("RPLLA") and device in {'GW2A-18', 'GW2A-18C'}) or name == "BSRAM" or name.startswith("MULT") or name.startswith("PADD") or name.startswith("ALU54D")
+
+# create simple port or the Himbaechel node
+def create_port_wire(dev, row, col, off, bel, bel_name, port, wire, wire_type):
+    # for aux cells create Himbaechel nodes
+    if off:
+        bel.portmap[port] = f'{bel_name}{port}{wire}'
+        node_name = f'X{col}Y{row}/{bel_name}{port}{wire}'
+        add_node(dev, node_name, wire_type, row, col, f'{bel_name}{port}{wire}')
+        add_node(dev, node_name, wire_type, row, col + off, wire)
+    else:
+        bel.portmap[port] = wire
+
 def dat_portmap(dat, dev, device):
     for row, row_dat in enumerate(dev.grid):
         for col, tile in enumerate(row_dat):
             for name, bel in tile.bels.items():
                 if bel.portmap:
-                    # GW2A has same PLL in different rows
-                    if (not (name.startswith("RPLLA") and device in {'GW2A-18', 'GW2A-18C'})) and name != "BSRAM":
+                    if not need_create_multiple_nodes(device, name):
                         continue
                 if name.startswith("IOB"):
                     if row in dev.simplio_rows:
@@ -1898,9 +1978,756 @@ def dat_portmap(dat, dev, device):
                             # dummy Input, we'll make a special pips for it
                             bel.portmap[nam] = "FCLK"
                     bel.portmap.update(_ides16_fixed_outputs)
+                elif name.startswith('PADD9'):
+                    mac = int(name[-2])
+                    idx = int(name[-1])
+                    column = mac * 2 + (idx // 2)
+
+                    for i in range(12):
+                        off = dat.portmap['CtrlInDlt'][i][column]
+                        wire_idx = dat.portmap['CtrlIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = ["CE", "CLK", "RESET"][i // 4] + str(i % 4)
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+                    # see PADD18
+                    nam = 'ADDSUB'
+                    wire, off = [[('CE2', 4), ('LSR2', 4)], [('CLK0', 5), ('CLK1', 8)]][mac][idx >> 1]
+                    bel.portmap[nam] = f'{name}{nam}{wire}'
+                    node_name = f'X{col}Y{row}/{name}{nam}{wire}'
+                    add_node(dev, node_name, "DSP_I", row, col, f'{name}{nam}{wire}')
+                    add_node(dev, node_name, "DSP_I", row, col + off, wire)
+
+                    # from alu - we need input C as a constant 1
+                    # input wire sequence: C0-53
+                    # for padd9 0 use C0-8
+                    # for padd9 1 use C9-17
+                    # for padd9 2 use C27-35
+                    # for padd9 3 use C36-44
+                    padd_c_start = (idx // 2) * 27 + (idx & 1) * 9
+                    padd_c_range = range(padd_c_start, padd_c_start + 9)
+                    for i in range(len(dat.portmap['MdicIn'])):
+                        off = dat.portmap['MdicInDlt'][i][mac]
+                        wire_idx = dat.portmap['MdicIn'][i][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        if i in padd_c_range:
+                            nam = f'C{i - padd_c_start}'
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # dat.portmap['PaddIn'] and dat.portmap['PaddInDlt'] indicate port offset in cells
+                    # Each port in these tables has 4 elements - to describe
+                    # the pre-adders, of which there are 4 per macro.  Of
+                    # course, 2 columns per macro are not enough to describe 4
+                    # pre-adds, so different lines are used for different
+                    # pre-adds.
+                    for i in range(len(dat.portmap['PaddIn'])):
+                        off = dat.portmap['PaddInDlt'][i][column]
+                        wire_idx = dat.portmap['PaddIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # input wire sequence: A0-8, B0-8,
+                        # unknown -1
+                        # ASEL
+                        odd_idx = 9 * (idx & 1)
+                        if i in range(odd_idx , 9 + odd_idx):
+                            nam = f'A{i - odd_idx}'
+                        elif i in range(18 + odd_idx, 27 + odd_idx):
+                            nam = f'B{i - 18 - odd_idx}'
+                        elif i == 72:
+                            nam = 'ASEL'
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # outputs The odd pre-adders, to my surprise, used wires
+                    # for the output pins that were not mentioned in
+                    # dat['PaddOut'], a similar sequence of wires was found in
+                    # the tables dat['MultOut'], I don't like this, but for now
+                    # let's leave it like that for lack of a better one.
+                    if not odd_idx:
+                        for i in range(len(dat.portmap['PaddOut'])):
+                            off = dat.portmap['PaddOutDlt'][i][column]
+                            wire_idx = dat.portmap['PaddOut'][i][column]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            # output wire sequence:
+                            # unknown -1
+                            # DOUT0-8
+                            if i < 36:
+                                raise Exception(f"{name} has unexpected wire {wire} at position {i}")
+                            elif i < 9 + 36:
+                                nam = f'DOUT{i - 36}'
+                            else:
+                                continue
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+                    else:
+                        for i in range(36 + 18, 36 + 18 + 9):
+                            off = dat.portmap['MultOutDlt'][i][column]
+                            wire_idx = dat.portmap['MultOut'][i][column]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            # output wire sequence:
+                            # unknown -1
+                            # DOUT0-8
+                            nam = f'DOUT{i - 36 - 18}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+
+                elif name.startswith('PADD18'):
+                    mac = int(name[-2])
+                    idx = int(name[-1])
+                    column = mac * 2 + idx
+
+                    for i in range(12):
+                        off = dat.portmap['CtrlInDlt'][i][column]
+                        wire_idx = dat.portmap['CtrlIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = ["CE", "CLK", "RESET"][i // 4] + str(i % 4)
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # First experiments with PADD18 showed that, unlike the
+                    # vendor-generated one, this primitive performs subtraction
+                    # instead of addition. I didn’t find any difference in the
+                    # functional fuses, so I started looking for wires that
+                    # connect in the vendor’s version, but not in mine. These
+                    # have been discovered. These ports are not listed in the
+                    # documentation, so we will have to connect them in
+                    # nextpnr.
+                    nam = 'ADDSUB'
+                    wire, off = [[('CE2', 4), ('LSR2', 4)], [('CLK0', 5), ('CLK1', 8)]][mac][idx]
+                    create_port_wire(dev, row, col, off, bel, name, nam, wire, "TILE_CLK")
+
+                    # XXX from alu
+                    # input wire sequence: C0-53, D0-53
+                    # for padd18 0 use C0-17
+                    # for padd18 1 use C27-44
+                    padd_c_start = 27 * idx
+                    padd_c_range = range(padd_c_start, padd_c_start + 18)
+                    for i in range(len(dat.portmap['MdicIn'])):
+                        off = dat.portmap['MdicInDlt'][i][mac]
+                        wire_idx = dat.portmap['MdicIn'][i][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        if i in padd_c_range:
+                            nam = f'C{i - padd_c_start}'
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # dat.portmap['PaddIn'] and dat.portmap['PaddInDlt'] indicate port offset in cells
+                    # Each port in these tables has 4 elements - to describe
+                    # all the pre-adders, of which there are 2 per macro.
+                    for i in range(len(dat.portmap['PaddIn'])):
+                        off = dat.portmap['PaddInDlt'][i][column]
+                        wire_idx = dat.portmap['PaddIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # input wire sequence: A0-17, B0-17,
+                        # unknown -1
+                        # ASEL
+                        if i < 18:
+                            nam = f'A{i}'
+                        elif i < 36:
+                            nam = f'B{i - 18}'
+                        elif i == 72:
+                            nam = 'ASEL'
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+                    # outputs
+                    for i in range(len(dat.portmap['PaddOut'])):
+                        off = dat.portmap['PaddOutDlt'][i][column]
+                        wire_idx = dat.portmap['PaddOut'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # output wire sequence:
+                        # unknown -1
+                        # DOUT0-17
+                        if i < 36:
+                            raise Exception(f"{name} has unexpected wire {wire} at position {i}")
+                        else:
+                            nam = f'DOUT{i - 36}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+                elif name.startswith('MULT9X9'):
+                    mac = int(name[-2])
+                    idx = int(name[-1])
+                    column = mac * 2 + (idx // 2)
+                    for i in range(12):
+                        off = dat.portmap['CtrlInDlt'][i][column]
+                        wire_idx = dat.portmap['CtrlIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = ["CE", "CLK", "RESET"][i // 4] + str(i % 4)
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # dat.portmap['MultIn'] and dat.portmap['MultInDlt'] indicate port offset in cells
+                    for i in range(len(dat.portmap['MultIn'])):
+                        off = dat.portmap['MultInDlt'][i][column]
+                        wire_idx = dat.portmap['MultIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # input wire sequence: A0-8, B0-8,
+                        # unknown -1
+                        # ASIGN, BSIGN, ASEL, BSEL
+                        odd_idx = 9 * (idx & 1)
+                        if i in range(odd_idx , 9 + odd_idx):
+                            nam = f'A{i - odd_idx}'
+                        elif i in range(18 + odd_idx, 27 + odd_idx):
+                            nam = f'B{i - 18 - odd_idx}'
+                        elif i in range(72, 76):
+                            nam = ['ASIGN', 'BSIGN', 'ASEL', 'BSEL'][i - 72]
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # outputs
+                    for i in range(len(dat.portmap['MultOut'])):
+                        off = dat.portmap['MultOutDlt'][i][column]
+                        wire_idx = dat.portmap['MultOut'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # output wire sequence:
+                        # unknown -1
+                        # DOUT0-8
+                        odd_idx = 36 + 18 * (idx & 1)
+                        if i in range(odd_idx , 18 + odd_idx):
+                            nam = f'DOUT{i - odd_idx}'
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+
+                elif name.startswith('MULT18X18'):
+                    mac = int(name[-2])
+                    idx = int(name[-1])
+                    column = mac * 2 + idx
+                    for i in range(12):
+                        off = dat.portmap['CtrlInDlt'][i][column]
+                        wire_idx = dat.portmap['CtrlIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = ["CE", "CLK", "RESET"][i // 4] + str(i % 4)
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # dat.portmap['MultIn'] and dat.portmap['MultInDlt'] indicate port offset in cells
+                    for i in range(len(dat.portmap['MultIn'])):
+                        off = dat.portmap['MultInDlt'][i][column]
+                        wire_idx = dat.portmap['MultIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # input wire sequence: A0-17, B0-17,
+                        # unknown -1
+                        # ASIGN, BSIGN, ASEL, BSEL
+                        if i in range(18):
+                            nam = f'A{i}'
+                        elif i in range(18, 36):
+                            nam = f'B{i - 18}'
+                        elif i in range(72, 76):
+                            nam = ['ASIGN', 'BSIGN', 'ASEL', 'BSEL'][i - 72]
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # outputs
+                    for i in range(len(dat.portmap['MultOut'])):
+                        off = dat.portmap['MultOutDlt'][i][column]
+                        wire_idx = dat.portmap['MultOut'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # output wire sequence:
+                        # unknown -1
+                        # DOUT0-35
+                        if i in range(36 , 72):
+                            nam = f'DOUT{i - 36}'
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+                elif name.startswith('ALU54D'):
+                    mac = int(name[-1])
+                    column = mac
+                    for i in range(12):
+                        off = dat.portmap['CtrlInDlt'][i][column * 2]
+                        wire_idx = dat.portmap['CtrlIn'][i][column * 2]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = ["CE", "CLK", "RESET"][i // 4] + str(i % 4)
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    for i in range(2):
+                        off = dat.portmap['CtrlInDlt'][i + 12][column]
+                        wire_idx = dat.portmap['CtrlIn'][i + 12][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'ACCLOAD{i}'
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # dat.portmap['AluIn'] and dat.portmap['AluInDlt'] indicate port offset in cells
+                    for i in range(len(dat.portmap['AluIn'])):
+                        off = dat.portmap['AluInDlt'][i][column]
+                        wire_idx = dat.portmap['AluIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # input wire sequence: A0-53, B0-53, CASI0-54
+                        # ASIGN, BSIGN
+                        if i in range(54):
+                            nam = f'A{i}'
+                        elif i in range(54, 108):
+                            nam = f'B{i - 54}'
+                        elif i in range(163, 165):
+                            nam = ['ASIGN', 'BSIGN'][i - 163]
+                        else:
+                            continue
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # outputs
+                    for i in range(len(dat.portmap['AluOut'])):
+                        off = dat.portmap['AluOutDlt'][i][column]
+                        wire_idx = dat.portmap['AluOut'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        # output wire sequence:
+                        # DOUT0-54
+                        # unknown -1
+                        if i > 53:
+                            break
+                        nam = f'DOUT{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+
+                elif name.startswith('MULT36X36'):
+                    # 36x36 are assembled from 4 18x18 multipliers and two
+                    # ALU54D.
+                    # macro:          0       |       1
+                    # mult18x18:   0     1    |   0       1
+                    # A:  0-17    0-17        |  0-17
+                    #    18-35          0-17  |          0-17
+                    # -----------------------------------------------------
+                    # B:  0-17    0-17  0-17  |
+                    #    18-35                |  0-17    0-17
+                    # The ALU54D outputs turned out to be the easiest to find.
+                    # outputs
+                    for i in range(72):
+                        if i < 18:
+                            column = 0
+                            idx_off = 0
+                        else:
+                            column = 1
+                            idx_off = -18
+                        off = dat.portmap['AluOutDlt'][i + idx_off][column]
+                        wire_idx = dat.portmap['AluOut'][i + idx_off][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'DOUT{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+                    # In order to make 36x36 using 4 multiplications, we need
+                    # to make sure that each multiplier receives its own unique
+                    # combination of 18 bits A and 18 bits B. But this means
+                    # that each port (A and B) of our MULT36X36 primitive must
+                    # be connected to the ports of two multipliers at the same
+                    # time. For simplicity, we add one more number to the end
+                    # of the port name, that is, port A0 is represented as two
+                    # A00 and A01. Of course, there are more beautiful
+                    # solutions, but for now we will leave this one as simpler.
+                    # A
+                    for i in range(36):
+                        if i < 18:
+                            column = 0
+                            idx_off = 0
+                        else:
+                            column = 1
+                            idx_off = -18
+                        off = dat.portmap['MultInDlt'][i + idx_off][column]
+                        wire_idx = dat.portmap['MultIn'][i + idx_off][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'A{i}0'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                        off = dat.portmap['MultInDlt'][i + idx_off][column + 2]
+                        wire_idx = dat.portmap['MultIn'][i + idx_off][column + 2]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'A{i}1'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+                    # B
+                    for i in range(36):
+                        if i < 18:
+                            column = 0
+                            idx_off = 18
+                        else:
+                            column = 2
+                            idx_off = 0
+                        off = dat.portmap['MultInDlt'][i + idx_off][column]
+                        wire_idx = dat.portmap['MultIn'][i + idx_off][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'B{i}0'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                        off = dat.portmap['MultInDlt'][i + idx_off][column + 1]
+                        wire_idx = dat.portmap['MultIn'][i + idx_off][column + 1]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'B{i}1'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+                    # We connect the sign wires only to MSB multipliers.
+                    for column in range(2):
+                        off = dat.portmap['MultInDlt'][72][column * 2 + 1]
+                        wire_idx = dat.portmap['MultIn'][72][column * 2 + 1]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'ASIGN{column}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                        off = dat.portmap['MultInDlt'][73][column + 2]
+                        wire_idx = dat.portmap['MultIn'][73][column + 2]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'BSIGN{column}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                        # and the register control wires
+                        for i in range(12):
+                            off = dat.portmap['CtrlInDlt'][i][column * 2]
+                            wire_idx = dat.portmap['CtrlIn'][i][column * 2]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'{["CE", "CLK", "RESET"][i // 4]}{i % 4}{column}'
+                            # for aux cells create Himbaechel nodes
+                            wire_type = 'DSP_I'
+                            if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                                wire_type = 'TILE_CLK'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                elif name.startswith('MULTALU18X18'):
+                    mac = int(name[-1])
+                    column = mac * 2
+
+                    # Modes 0 and 1 of MULTALU18X18 use multiplier 1, and mode
+                    # 2 uses multiplier 0. Now we don’t know which one will be
+                    # used, so we indicate both options for A, B and their
+                    # signs.
+                    for opt in range(2):
+                        # A
+                        for i in range(18):
+                            off = dat.portmap['MultInDlt'][i][column + opt]
+                            wire_idx = dat.portmap['MultIn'][i][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'A{i}{opt}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                        # B
+                        for i in range(18):
+                            off = dat.portmap['MultInDlt'][i + 18][column + opt]
+                            wire_idx = dat.portmap['MultIn'][i + 18][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'B{i}{opt}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                        # ASIGN, BSIGN
+                        for sign_str, dat_off in [('ASIGN', 72), ('BSIGN', 73)]:
+                            off = dat.portmap['MultInDlt'][dat_off][column + opt]
+                            wire_idx = dat.portmap['MultIn'][dat_off][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'{sign_str}{opt}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # C
+                    for i in range(54):
+                        off = dat.portmap['MdicInDlt'][i][mac]
+                        wire_idx = dat.portmap['MdicIn'][i][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'C{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # D
+                    for i in range(54):
+                        off = dat.portmap['AluInDlt'][i + 54][mac]
+                        wire_idx = dat.portmap['AluIn'][i + 54][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'D{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # DSIGN
+                    off = dat.portmap['AluInDlt'][164][mac]
+                    wire_idx = dat.portmap['AluIn'][164][mac]
+                    if wire_idx < 0:
+                        continue
+                    wire = wirenames[wire_idx]
+                    nam = f'DSIGN'
+                    create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+
+                    # ACCLOAD
+                    for i in range(2):
+                        off = dat.portmap['CtrlInDlt'][i + 12][mac]
+                        wire_idx = dat.portmap['CtrlIn'][i + 12][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'ACCLOAD{i}'
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # controls
+                    for i in range(12):
+                        off = dat.portmap['CtrlInDlt'][i][column]
+                        wire_idx = dat.portmap['CtrlIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'{["CE", "CLK", "RESET"][i // 4]}{i % 4}'
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # outputs
+                    for i in range(54):
+                        off = dat.portmap['AluOutDlt'][i][mac]
+                        wire_idx = dat.portmap['AluOut'][i][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'DOUT{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+
+                elif name.startswith('MULTALU36X18'):
+                    mac = int(name[-1])
+                    column = mac * 2
+
+                    b_in = 0
+                    for opt in range(2):
+                        # A is duplicated to both multipliers, but B is shared
+                        # between B0 and B1. The signedness attribute for A is
+                        # also duplicated, but only B1 has a sign. It's not
+                        # visible here, but in nextpnr we'll probably connect
+                        # BSIGN0 to GND
+
+                        # A
+                        for i in range(18):
+                            off = dat.portmap['MultInDlt'][i][column + opt]
+                            wire_idx = dat.portmap['MultIn'][i][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'A{i}{opt}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                            # B
+                            off = dat.portmap['MultInDlt'][i + 18][column + opt]
+                            wire_idx = dat.portmap['MultIn'][i + 18][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'B{b_in + i}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+                        b_in += 18
+
+                        # ASIGN, BSIGN
+                        for sign_str, dat_off in [('ASIGN', 72), ('BSIGN', 73)]:
+                            off = dat.portmap['MultInDlt'][dat_off][column + opt]
+                            wire_idx = dat.portmap['MultIn'][dat_off][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'{sign_str}{opt}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+
+                    # C
+                    for i in range(54):
+                        off = dat.portmap['MdicInDlt'][i][mac]
+                        wire_idx = dat.portmap['MdicIn'][i][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'C{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # accload is formed by alusel wire
+                    # Here we provide the wires, we will connect them in nextpnr
+                    for i in range(7):
+                        wire, off = _alusel[mac][i]
+                        if wire_idx < 0:
+                            continue
+                        nam = f'ALUSEL{i}'
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # controls
+                    for i in range(12):
+                        off = dat.portmap['CtrlInDlt'][i][column]
+                        wire_idx = dat.portmap['CtrlIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'{["CE", "CLK", "RESET"][i // 4]}{i % 4}'
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # outputs
+                    for i in range(54):
+                        off = dat.portmap['AluOutDlt'][i][mac]
+                        wire_idx = dat.portmap['AluOut'][i][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'DOUT{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+
+                elif name.startswith('MULTADDALU18X18'):
+                    mac = int(name[-1])
+                    column = mac * 2
+
+                    for opt in range(2):
+                        # A
+                        for i in range(18):
+                            off = dat.portmap['MultInDlt'][i][column + opt]
+                            wire_idx = dat.portmap['MultIn'][i][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'A{i}{opt}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                            # B
+                            off = dat.portmap['MultInDlt'][i + 18][column + opt]
+                            wire_idx = dat.portmap['MultIn'][i + 18][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'B{i}{opt}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                        # ASIGN, BSIGN
+                        for sign_str, dat_off in [('ASIGN', 72), ('BSIGN', 73), ('ASEL', 74), ('BSEL', 75)]:
+                            off = dat.portmap['MultInDlt'][dat_off][column + opt]
+                            wire_idx = dat.portmap['MultIn'][dat_off][column + opt]
+                            if wire_idx < 0:
+                                continue
+                            wire = wirenames[wire_idx]
+                            nam = f'{sign_str}{opt}'
+                            create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+
+                    # C
+                    for i in range(54):
+                        off = dat.portmap['MdicInDlt'][i][mac]
+                        wire_idx = dat.portmap['MdicIn'][i][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'C{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_I")
+
+                    # accload is formed by alusel wires
+                    # Here we provide the wires, we will connect them in nextpnr
+                    for i in range(7):
+                        wire, off = _alusel[mac][i]
+                        if wire_idx < 0:
+                            continue
+                        nam = f'ALUSEL{i}'
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # controls
+                    for i in range(12):
+                        off = dat.portmap['CtrlInDlt'][i][column]
+                        wire_idx = dat.portmap['CtrlIn'][i][column]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'{["CE", "CLK", "RESET"][i // 4]}{i % 4}'
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, wire_type)
+
+                    # outputs
+                    for i in range(54):
+                        off = dat.portmap['AluOutDlt'][i][mac]
+                        wire_idx = dat.portmap['AluOut'][i][mac]
+                        if wire_idx < 0:
+                            continue
+                        wire = wirenames[wire_idx]
+                        nam = f'DOUT{i}'
+                        create_port_wire(dev, row, col, off, bel, name, nam, wire, "DSP_O")
+
                 elif name == 'BSRAM':
                     # dat.portmap['BsramOutDlt'] and dat.portmap['BsramOutDlt'] indicate port offset in cells
-                    wire2node = {} # some wires used for >1 port, remember node
                     for i in range(len(dat.portmap['BsramOut'])):
                         off = dat.portmap['BsramOutDlt'][i]
                         wire_idx = dat.portmap['BsramOut'][i]
@@ -1914,17 +2741,8 @@ def dat_portmap(dat, dev, device):
                             nam = f'DOA{i - 36}'
                         else:
                             nam = f'DOB{i - 36 - 18}'
-                        # for aux cells create Himbaechel nodes
-                        if off:
-                            bel.portmap[nam] = f'BSRAM{nam}{wire}'
-                            node = wire2node.get((row, col + off, wire), None)
-                            if node:
-                                dev.nodes[node][1].add((row, col, f'BSRAM{nam}{wire}'))
-                            else:
-                                dev.nodes.setdefault(f'X{col}Y{row}/BSRAM{nam}{wire}', ("BSRAM_O", {(row, col, f'BSRAM{nam}{wire}')}))[1].add((row, col + off, wire))
-                                wire2node[(row, col + off, wire)] = f'X{col}Y{row}/BSRAM{nam}{wire}'
-                        else:
-                            bel.portmap[nam] = wire
+                        create_port_wire(dev, row, col, off, bel, "BSRAM", nam, wire, "BSRAM_O")
+
                     for i in range(len(dat.portmap['BsramIn']) + 6):
                         if i < 132:
                             off = dat.portmap['BsramInDlt'][i]
@@ -1965,17 +2783,8 @@ def dat_portmap(dat, dev, device):
                             nam = f'ADB{i - 100}'
                         elif i < 132:
                             nam = f'DIB{i - 114}'
-                        # for aux cells create Himbaechel nodes
-                        if off:
-                            bel.portmap[nam] = f'BSRAM{nam}{wire}'
-                            node = wire2node.get((row, col + off, wire), None)
-                            if node:
-                                dev.nodes[node][1].add((row, col, f'BSRAM{nam}{wire}'))
-                            else:
-                                dev.nodes.setdefault(f'X{col}Y{row}/BSRAM{nam}{wire}', (wire_type, {(row, col, f'BSRAM{nam}{wire}')}))[1].add((row, col + off, wire))
-                                wire2node[(row, col + off, wire)] = f'X{col}Y{row}/BSRAM{nam}{wire}'
-                        else:
-                            bel.portmap[nam] = wire
+                        create_port_wire(dev, row, col, off, bel, "BSRAM", nam, wire, wire_type)
+
                 elif name == 'RPLLA':
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.
@@ -2121,28 +2930,6 @@ def fuse_bitmap(db, bitmap):
 
     return res
 
-def shared2flag(dev):
-    "Convert mode bits that are shared between bels to flags"
-    for idx, row in enumerate(dev.grid):
-        for jdx, td in enumerate(row):
-            for namea, bela in td.bels.items():
-                bitsa = bela.mode_bits
-                for nameb, belb in td.bels.items():
-                    bitsb = belb.mode_bits
-                    common_bits = bitsa & bitsb
-                    if bitsa != bitsb and common_bits:
-                        print(idx, jdx, namea, "and", nameb, "have common bits:", common_bits)
-                        for mode, bits in bela.modes.items():
-                            mode_cb = bits & common_bits
-                            if mode_cb:
-                                bela.flags[mode+"C"] = mode_cb
-                                bits -= mode_cb
-                        for mode, bits in belb.modes.items():
-                            mode_cb = bits & common_bits
-                            if mode_cb:
-                                belb.flags[mode+"C"] = mode_cb
-                                bits -= mode_cb
-
 def get_route_bits(db, row, col):
     """ All routing bits for the cell """
     bits = set()
@@ -2218,4 +3005,72 @@ def loc2bank(db, row, col):
             bank = db.pin_bank[name + 'B']
     return bank
 
+# assign pads with plls
+# for now use static table and store the bel name although it is always PLL without a number
+# theoretically, we can determine which PLL pad belongs to from the list of
+# functions, but for them we will have to write a special parser since the
+# format is very diverse (example: RPLL1_T_IN, RPLL_C_IN, TPLL_T_IN2). And we
+# will still need a table with the coordinates of the PLL itself.
+_pll_pads = {
+    'GW1N-1': { 'IOR5A' : (0, 17, 'CLKIN_T', 'PLL'),
+                'IOR5B' : (0, 17, 'CLKIN_C', 'PLL'),
+                'IOR4A' : (0, 17, 'FB_T', 'PLL'),
+                'IOR4B' : (0, 17, 'FB_C', 'PLL') },
+    'GW1NZ-1': { 'IOR5A' : (0, 17, 'CLKIN_T', 'PLL'),
+                 'IOR5B' : (0, 17, 'CLKIN_C', 'PLL') },
+    'GW1N-4': { 'IOL3A' : (0, 9, 'CLKIN_T', 'PLL'),
+                'IOL3B' : (0, 9, 'CLKIN_C', 'PLL'),
+                'IOL4A' : (0, 9, 'FB_T', 'PLL'),
+                'IOL4B' : (0, 9, 'FB_C', 'PLL'),
+                'IOR3A' : (0, 27, 'CLKIN_T', 'PLL'),
+                'IOR3B' : (0, 27, 'CLKIN_C', 'PLL'),
+                'IOR4A' : (0, 27, 'FB_T', 'PLL'),
+                'IOR4B' : (0, 27, 'FB_C', 'PLL'), },
+    'GW1NS-4': { 'IOR2A' : (0, 36, 'CLKIN_T', 'PLL'),
+                 'IOR2B' : (0, 36, 'CLKIN_C', 'PLL'),
+                 'IOT13A' : (0, 27, 'CLKIN_T', 'PLL'),
+                 'IOT13B' : (0, 27, 'CLKIN_C', 'PLL'), },
+    'GW1N-9': { 'IOL5A' : (9, 0, 'CLKIN_T', 'PLL'),
+                'IOL5B' : (9, 0, 'CLKIN_C', 'PLL'),
+                'IOR5A' : (9, 46, 'CLKIN_T', 'PLL'),
+                'IOR5B' : (9, 46, 'CLKIN_C', 'PLL'),
+                'IOR6A' : (9, 46, 'FB_T', 'PLL'),
+                'IOR6B' : (9, 46, 'FB_C', 'PLL'), },
+    'GW1N-9C': { 'IOL5A' : (9, 0, 'CLKIN_T', 'PLL'),
+                 'IOL5B' : (9, 0, 'CLKIN_C', 'PLL'),
+                 'IOR5A' : (9, 46, 'CLKIN_T', 'PLL'),
+                 'IOR5B' : (9, 46, 'CLKIN_C', 'PLL'),
+                 'IOR6A' : (9, 46, 'FB_T', 'PLL'),
+                 'IOR6B' : (9, 46, 'FB_C', 'PLL'), },
+    'GW1N-9C': { 'IOL5A' : (9, 0, 'CLKIN_T', 'PLL'),
+                 'IOL5B' : (9, 0, 'CLKIN_C', 'PLL'),
+                 'IOR5A' : (9, 46, 'CLKIN_T', 'PLL'),
+                 'IOR5B' : (9, 46, 'CLKIN_C', 'PLL'),
+                 'IOR6A' : (9, 46, 'FB_T', 'PLL'),
+                 'IOR6B' : (9, 46, 'FB_C', 'PLL'), },
+    'GW2A-18': { 'IOL7A'  : (9, 0, 'CLKIN_T', 'PLL'),
+                 'IOL45A' : (45, 0, 'CLKIN_T', 'PLL'),
+                 'IOL47A' : (45, 0, 'FB_T', 'PLL'),
+                 'IOL47B' : (45, 0, 'FB_C', 'PLL'),
+                 'IOR45A' : (45, 0, 'CLKIN_T', 'PLL'), },
+    'GW2A-18C': { 'IOR7A'  : (9, 55, 'CLKIN_T', 'PLL'),
+                  'IOR7B'  : (9, 55, 'CLKIN_C', 'PLL'),
+                  'IOR8A'  : (9, 55, 'FB_T', 'PLL'),
+                  'IOR8B'  : (9, 55, 'FN_C', 'PLL'),
+                  'IOL7A'  : (9, 0, 'CLKIN_T', 'PLL'),
+                  'IOL7B'  : (9, 0, 'CLKIN_C', 'PLL'),
+                  'IOL45A' : (45, 0, 'CLKIN_T', 'PLL'),
+                  'IOL45B' : (45, 0, 'CLKIN_C', 'PLL'),
+                  'IOL47A' : (45, 0, 'FB_T', 'PLL'),
+                  'IOL47B' : (45, 0, 'FB_C', 'PLL'),
+                  'IOR45A' : (45, 55, 'CLKIN_T', 'PLL'),
+                  'IOR45B' : (45, 55, 'CLKIN_C', 'PLL'),
+                  'IOR47A' : (45, 55, 'FB_T', 'PLL'),
+                  'IOR47B' : (45, 55, 'FB_C', 'PLL'), },
+}
+def pll_pads(dev, device, pad_locs):
+    if device not in _pll_pads:
+        return
+    for loc, pll_data in _pll_pads[device].items():
+        dev.pad_pll[loc] = pll_data
 

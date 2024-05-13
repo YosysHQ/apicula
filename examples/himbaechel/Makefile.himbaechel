@@ -12,7 +12,10 @@ all: \
 	bsram-pROM-tangnano20k.fs bsram-SDPB-tangnano20k.fs bsram-SP-tangnano20k.fs \
 	bsram-DPB-tangnano20k.fs bsram-pROMX9-tangnano20k.fs bsram-SDPX9B-tangnano20k.fs \
 	bsram-SPX9-tangnano20k.fs bsram-DPX9B-tangnano20k.fs \
-	femto-riscv-15-tangnano20k.fs femto-riscv-16-tangnano20k.fs femto-riscv-16-tangnano20k.fs \
+	femto-riscv-15-tangnano20k.fs femto-riscv-16-tangnano20k.fs femto-riscv-18-tangnano20k.fs \
+	dsp-mult36x36-tangnano20k.fs dsp-padd9-tangnano20k.fs dsp-padd18-tangnano20k.fs \
+	dsp-mult9x9-tangnano20k.fs dsp-alu54d-tangnano20k.fs dsp-multalu18x18-tangnano20k.fs \
+	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
 	\
 	blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
 	blinky-osc-primer20k.fs tlvds-primer20k.fs elvds-primer20k.fs oddr-tlvds-primer20k.fs \
@@ -22,6 +25,10 @@ all: \
 	bsram-pROM-primer20k.fs bsram-SDPB-primer20k.fs bsram-SP-primer20k.fs \
 	bsram-DPB-primer20k.fs bsram-pROMX9-primer20k.fs bsram-SDPX9B-primer20k.fs \
 	bsram-SPX9-primer20k.fs bsram-DPX9B-primer20k.fs \
+	femto-riscv-15-primer20k.fs femto-riscv-16-primer20k.fs femto-riscv-18-primer20k.fs \
+	dsp-mult36x36-primer20k.fs dsp-padd9-primer20k.fs dsp-padd18-primer20k.fs \
+	dsp-mult9x9-primer20k.fs dsp-alu54d-primer20k.fs dsp-multalu18x18-primer20k.fs \
+	dsp-multalu36x18-primer20k.fs dsp-multaddalu18x18-primer20k.fs \
 	\
 	blinky-tangnano.fs shift-tangnano.fs blinky-tbuf-tangnano.fs blinky-oddr-tangnano.fs \
 	blinky-osc-tangnano.fs elvds-tangnano.fs oddr-elvds-tangnano.fs pll-nanolcd-tangnano.fs \
@@ -46,7 +53,10 @@ all: \
 	ides16-tangnano4k.fs \
 	ides4-tangnano4k.fs ivideo-tangnano4k.fs ides8-tangnano4k.fs ides10-tangnano4k.fs \
 	oser10-tlvds-tangnano4k.fs \
-	femto-riscv-15-tangnano4k.fs femto-riscv-16-tangnano4k.fs femto-riscv-16-tangnano4k.fs \
+	femto-riscv-15-tangnano4k.fs femto-riscv-16-tangnano4k.fs femto-riscv-18-tangnano4k.fs \
+	dsp-mult36x36-tangnano4k.fs dsp-padd9-tangnano4k.fs dsp-padd18-tangnano4k.fs \
+	dsp-mult9x9-tangnano4k.fs dsp-alu54d-tangnano4k.fs dsp-multalu18x18-tangnano4k.fs \
+	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
 	\
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
 	blinky-osc-tangnano9k.fs tlvds-tangnano9k.fs elvds-tangnano9k.fs oddr-tlvds-tangnano9k.fs \
@@ -58,6 +68,9 @@ all: \
 	bsram-SPX9-tangnano9k.fs bsram-DPX9B-tangnano9k.fs \
 	oser10-elvds-tangnano9k.fs \
 	femto-riscv-15-tangnano9k.fs femto-riscv-16-tangnano9k.fs femto-riscv-18-tangnano9k.fs \
+	dsp-mult36x36-tangnano9k.fs dsp-padd9-tangnano9k.fs dsp-padd18-tangnano9k.fs \
+	dsp-mult9x9-tangnano9k.fs dsp-alu54d-tangnano9k.fs dsp-multalu18x18-tangnano9k.fs \
+	dsp-multalu36x18-tangnano9k.fs dsp-multaddalu18x18-tangnano9k.fs \
 	\
 	blinky-szfpga.fs shift-szfpga.fs blinky-tbuf-szfpga.fs blinky-oddr-szfpga.fs \
 	blinky-osc-szfpga.fs tlvds-szfpga.fs elvds-szfpga.fs oddr-tlvds-szfpga.fs \
@@ -68,6 +81,10 @@ all: \
 	bsram-pROM-szfpga.fs bsram-SDPB-szfpga.fs bsram-SP-szfpga.fs \
 	bsram-pROMX9-szfpga.fs bsram-SDPX9B-szfpga.fs \
 	bsram-SPX9-szfpga.fs \
+	femto-riscv-15-szfpga.fs femto-riscv-16-szfpga.fs femto-riscv-18-szfpga.fs \
+	dsp-mult36x36-szfpga.fs dsp-padd9-szfpga.fs dsp-padd18-szfpga.fs \
+	dsp-mult9x9-szfpga.fs dsp-alu54d-szfpga.fs dsp-multalu18x18-szfpga.fs \
+	dsp-multalu36x18-szfpga.fs dsp-multaddalu18x18-szfpga.fs \
 	\
 	blinky-tec0117.fs shift-tec0117.fs blinky-tbuf-tec0117.fs blinky-oddr-tec0117.fs \
 	blinky-osc-tec0117.fs tlvds-tec0117.fs elvds-tec0117.fs oddr-tlvds-tec0117.fs \
@@ -75,12 +92,18 @@ all: \
 	oser4-tec0117.fs ovideo-tec0117.fs oser8-tec0117.fs oser10-tec0117.fs \
 	ides16-tec0117.fs \
 	ides4-tec0117.fs ivideo-tec0117.fs ides8-tec0117.fs ides10-tec0117.fs \
+	dsp-mult36x36-tec0117.fs dsp-padd9-tec0117.fs dsp-padd18-tec0117.fs \
+	dsp-mult9x9-tec0117.fs dsp-alu54d-tec0117.fs dsp-multalu18x18-tec0117.fs \
+	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs \
 	\
 	blinky-runber.fs shift-runber.fs blinky-tbuf-runber.fs blinky-oddr-runber.fs \
 	blinky-osc-runber.fs tlvds-runber.fs elvds-runber.fs oddr-tlvds-runber.fs \
 	oddr-elvds-runber.fs blinky-pll-runber.fs \
 	oser4-runber.fs ovideo-runber.fs oser8-runber.fs oser10-runber.fs \
-	ides4-runber.fs ivideo-runber.fs ides8-runber.fs ides10-runber.fs 
+	ides4-runber.fs ivideo-runber.fs ides8-runber.fs ides10-runber.fs \
+	dsp-mult36x36-runber.fs dsp-padd9-runber.fs dsp-padd18-runber.fs \
+	dsp-mult9x9-runber.fs dsp-alu54d-runber.fs dsp-multalu18x18-runber.fs \
+	dsp-multalu36x18-runber.fs dsp-multaddalu18x18-runber.fs
 
 unpacked:\
 	blinky-tangnano20k-unpacked.v shift-tangnano20k-unpacked.v \
@@ -173,7 +196,8 @@ unpacked:\
 	elvds-runber-unpacked.v oddr-tlvds-runber-unpacked.v oddr-elvds-runber-unpacked.v \
 	blinky-pll-runber-unpacked.v oser4-runber-unpacked.v ovideo-runber-unpacked.v \
 	oser8-runber-unpacked.v oser10-runber-unpacked.v ides4-runber-unpacked.v \
-	ivideo-runber-unpacked.v ides8-runber-unpacked.v ides10-runber-unpacked.v 
+	ivideo-runber-unpacked.v ides8-runber-unpacked.v ides10-runber-unpacked.v
+
 clean: 
 	rm -f *.json *.fs *-unpacked.v
 	
@@ -208,7 +232,7 @@ attosoc-tangnano20k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(NEXTPNR) --json $< --write $@ --device GW2A-LV18PG256C8/I7 --vopt family=GW2A-18 --vopt cst=primer20k.cst
 
 %-primer20k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=27 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
 
 pll-nanolcd-primer20k-synth.json: pll/GW2A-18-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
@@ -267,7 +291,7 @@ bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh %-image-rom.v %-video-ram.v %.
 %-tangnano4k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=27 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
 
-blinky-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh blinky-pll-vr.v
+%-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh %-pll-vr.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -json $@"
 	
 # ============================================================
@@ -299,7 +323,7 @@ bsram-%-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh %-image-rom.v %-video-ram.v %.
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --vopt family=GW1N-9 --vopt cst=szfpga.cst
 
 %-szfpga-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
 
 blinky-pll-szfpga-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=4 -p "read_verilog $^; synth_gowin -json $@"
@@ -316,7 +340,7 @@ bsram-%-szfpga-synth.json: pll/GW1N-9-dyn.vh %-image-rom.v %-video-ram.v %.v
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --vopt family=GW1N-9 --vopt cst=tec0117.cst
 
 %-tec0117-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=12 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
 
 blinky-pll-tec0117-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"
@@ -330,7 +354,7 @@ blinky-pll-tec0117-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(NEXTPNR) --json $< --write $@ --device GW1N-UV4LQ144C6/I5 --vopt cst=runber.cst
 
 %-runber-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=12 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
 
 blinky-pll-runber-synth.json: pll/GW1N-4-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"

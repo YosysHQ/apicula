@@ -2,6 +2,7 @@
 //Part Number: GW1NR-LV9LQ144PC6/I5
 
 IO_LOC "clk" 98;
+IO_LOC "clk_i" 98;
 
 IO_LOC "rst_i" 27;	// key0
 IO_LOC "key_i" 28;
@@ -16,6 +17,11 @@ IO_LOC "led[4]" 71;
 IO_LOC "led[5]" 72;
 IO_LOC "led[6]" 124;
 IO_LOC "led[7]" 125;
+
+IO_LOC "TXD" 24;
+IO_PORT "TXD" PULL_MODE=UP;
+IO_LOC "RXD" 26;
+IO_PORT "RXD" PULL_MODE=UP;
 
 // oser
 IO_LOC "oser_out" 29;
