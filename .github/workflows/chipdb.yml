@@ -300,6 +300,7 @@ jobs:
           libeigen3-dev
         cd yosys
         git checkout ${{ matrix.yosys }}
+        git submodule update --init
         make config-gcc
         make -j$(nproc)
         sudo make install

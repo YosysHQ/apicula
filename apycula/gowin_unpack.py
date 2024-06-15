@@ -307,7 +307,7 @@ def get_bsram_main_cell(db, row, col, typ):
     if typ[-4:] == '_AUX':
         col -= 1
         if 'BSRAM_AUX' in db.grid[row][col].bels:
-            col -= 2
+            col -= 1
     return row, col
 
 # The DSP has 9 cells: the main one and a group of auxiliary ones.
@@ -372,7 +372,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             if not attrvals:
                 continue
             #print(row, col, name, idx, tiledata.ttyp, attrvals)
-            bels[f'{name}'] = {}
+            bels[f'{name}{idx}'] = {}
             continue
         if name.startswith("ALU54D"):
             continue
@@ -942,12 +942,16 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             for port, wname in portmap.items():
                 pll.portmap[port] = f"R{row}C{col}_{wname}"
         elif typ.startswith("BSRAM"):
+            #print(dbrow, dbcol, typ, bel, idx)
+            if idx.startswith("_AUX"):
+                continue
+            bel_name = "BSRAM"
             name = f"BSRAM_{idx}"
             pll = mod.primitives.setdefault(name, codegen.Primitive("BSRAM", name))
             for paramval in flags:
                 param, _, val = paramval.partition('=')
                 pll.params[param] = val
-            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+            portmap = db.grid[dbrow][dbcol].bels[bel_name].portmap
             for port, wname in portmap.items():
                 pll.portmap[port] = f"R{row}C{col}_{wname}"
         elif typ == "ALU":
