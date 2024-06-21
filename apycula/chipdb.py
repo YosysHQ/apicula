@@ -994,6 +994,112 @@ _hclk_to_fclk = {
         },
 }
 
+HCLK_PINS = namedtuple("HCLK_PINS", ["hclk_loc", "clkdiv", "clkdiv2a", "clkdiv2b"])
+
+_device_hclk_pin_dict = {
+    "GW2A-18": {
+        "TOPSIDE":{
+            0: HCLK_PINS((0,27), [("CALIB",0,27,"C0"), ("RESETN",0,27,"B0")], [("RESETN",0,27,"A4")], [("RESETN",0,27,"B4")]),
+            1: HCLK_PINS((0,28), [("CALIB",0,27,"C5"), ("RESETN",0,27,"B5")], [("RESETN",0,27,"A1")], [("RESETN",0,27,"C1")])
+        },
+        "RIGHTSIDE":{
+            0: HCLK_PINS((27,55), [("CALIB",27,55,"C0"), ("RESETN",27,55,"B0")], [("RESETN",27,55,"A4")], [("RESETN",27,55,"B4")]), 
+            1: HCLK_PINS((27,55), [("CALIB",27,55,"C5"), ("RESETN",27,55,"B5")], [("RESETN",27,55,"A1")], [("RESETN",27,55,"C1")])
+        },
+        "BOTTOMSIDE":{
+            0: HCLK_PINS((54, 27), [("CALIB",54,27,"C0"), ("RESETN",54,27,"B0")], [("RESETN",54,27,"A4")], [("RESETN",54,27,"B4")]),
+            1: HCLK_PINS((54, 28), [("CALIB",54,27,"C5"), ("RESETN",54,27,"B5")], [("RESETN",54,27,"A1")], [("RESETN",54,27,"C1")])
+        },
+        "LEFTSIDE":{
+            0: HCLK_PINS((27,0), [("CALIB",27,0,"C0"), ("RESETN",27,0,"B0") ], [("RESETN",27,0,"A4") ], [("RESETN",27,0,"B4") ]),
+            1: HCLK_PINS((27,0), [("CALIB",27,0,"C5"), ("RESETN",27,0,"B5") ], [("RESETN",27,0,"A1") ], [("RESETN",27,0,"C1") ])
+        }
+    },
+}
+
+
+def _iter_edge_coords(dev):
+    "iterate through edge tiles in clockwise order, starting from the top left corner"
+    Y = dev.rows
+    X = dev.cols
+
+    for x in range(X):
+        yield (0, x)
+    for y in range(Y):
+        yield (y, X-1)
+    for x in range(X-1, -1, -1):
+        yield (Y-1, x)
+    for y in range(Y-1,-1,-1):
+        yield (y, 0)
+
+
+def add_hclk_bels(dat, dev, device):
+    #Stub for parts that don't have HCLK bel support yet
+    if device not in ["GW2A-18", "GW2A-18C"]:
+        to_connect = ['HCLK0_SECT0_IN', 'HCLK0_SECT1_IN', 'HCLK1_SECT0_IN', 'HCLK1_SECT1_IN']
+        for x in range(dev.cols):
+            for y in range(dev.rows):
+                tile_hclk_pips = dev.hclk_pips[(y,x)]
+                for (idx, wire) in enumerate(to_connect):
+                    if wire in tile_hclk_pips:
+                        tile_hclk_pips[f"HCLK_OUT{idx}"] = {wire:set()}
+        return
+    
+    #Add HCLK bels and the pips/wires to support them
+    if device == "GW2A-18C":
+        device = "GW2A-18"
+    device_hclk_pins = _device_hclk_pin_dict[device]
+
+
+    #There is a sleight of hand going on here - there is likely only one physical CLKDIV bel per HCLK
+    #However because of how they are connected, and how I suspect that the muxes that utilize them are, 
+    #it is more convenient, for Pnr, to pretend that there are 2, one in each section.
+
+    for side, hclks in device_hclk_pins.items():
+        for idx, pins in hclks.items():
+            tile_row, tile_col = pins.hclk_loc
+            shared_clkdiv_wire = f"CLKDIV_{idx}_CLKOUT"
+
+            for section in range(2):
+                #CLKDIV2
+                clkdiv2_name = f"CLKDIV2_HCLK{idx}_SECT{section}"
+                clkdiv2 = Bel()
+                if section == 0:
+                    div2_pins = pins.clkdiv2a
+                elif section == 1:
+                    div2_pins = pins.clkdiv2b
+                else:
+                    break
+
+                for pin in [*div2_pins, ("HCLKIN",tile_row,tile_col,""), ("CLKOUT",tile_row,tile_col,"")]:
+                    port, row, col, wire = pin
+                    if not wire:
+                        wire = f"{clkdiv2_name}_{port}"
+                    create_port_wire(dev, tile_row, tile_col, col-tile_col, clkdiv2, clkdiv2_name, port, wire, "HCLK")
+                dev.grid[tile_row][tile_col].bels[clkdiv2_name] = clkdiv2
+
+                clkdiv_name =  f"CLKDIV_HCLK{idx}_SECT{section}"
+                clkdiv = Bel()
+                for pin in [*pins.clkdiv, ("HCLKIN",tile_row,tile_col,""), ("CLKOUT",tile_row,tile_col,"")]:
+                    port, row, col, wire = pin
+                    if not wire:
+                        wire = f"{clkdiv_name}_{port}"
+                    create_port_wire(dev, tile_row, tile_col, col-tile_col, clkdiv, clkdiv_name, port, wire, "HCLK")
+                    
+                dev.grid[tile_row][tile_col].bels[clkdiv_name] = clkdiv
+                dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set()}
+                sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
+                dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {f"HCLK{idx}_SECT{section}_IN":set(), clkdiv2.portmap["CLKOUT"]:set()}
+                dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
+                dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
+                dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
+
+
+            #Conenction from the output of CLKDIV to the global clock network       
+            clkdiv_out_node = f"{side[0]}HCLK{idx}_CLKDIV_CLKOUT"
+            dev.nodes.setdefault(clkdiv_out_node, ('GLOBAL_CLK', set()))[1].add((tile_row, tile_col, shared_clkdiv_wire))
+
+
 _global_wire_prefixes = {'PCLK', 'TBDHCLK', 'BBDHCLK', 'RBDHCLK', 'LBDHCLK',
                          'TLPLL', 'TRPLL', 'BLPLL', 'BRPLL'}
 def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
