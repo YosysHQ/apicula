@@ -1039,6 +1039,8 @@ def add_hclk_bels(dat, dev, device):
         to_connect = ['HCLK0_SECT0_IN', 'HCLK0_SECT1_IN', 'HCLK1_SECT0_IN', 'HCLK1_SECT1_IN']
         for x in range(dev.cols):
             for y in range(dev.rows):
+                if (y,x) not in dev.hclk_pips:
+                    continue
                 tile_hclk_pips = dev.hclk_pips[(y,x)]
                 for (idx, wire) in enumerate(to_connect):
                     if wire in tile_hclk_pips:
@@ -1062,7 +1064,6 @@ def add_hclk_bels(dat, dev, device):
 
             for section in range(2):
                 #CLKDIV2
-                clkdiv2_name = f"CLKDIV2_HCLK{idx}_SECT{section}"
                 clkdiv2 = Bel()
                 if section == 0:
                     div2_pins = pins.clkdiv2a
@@ -1071,12 +1072,12 @@ def add_hclk_bels(dat, dev, device):
                 else:
                     break
 
+                clkdiv2_name = f"CLKDIV2_HCLK{idx}_SECT{section}"
                 for pin in [*div2_pins, ("HCLKIN",tile_row,tile_col,""), ("CLKOUT",tile_row,tile_col,"")]:
                     port, row, col, wire = pin
                     if not wire:
                         wire = f"{clkdiv2_name}_{port}"
                     create_port_wire(dev, tile_row, tile_col, col-tile_col, clkdiv2, clkdiv2_name, port, wire, "HCLK")
-                dev.grid[tile_row][tile_col].bels[clkdiv2_name] = clkdiv2
 
                 clkdiv_name =  f"CLKDIV_HCLK{idx}_SECT{section}"
                 clkdiv = Bel()
@@ -1085,14 +1086,31 @@ def add_hclk_bels(dat, dev, device):
                     if not wire:
                         wire = f"{clkdiv_name}_{port}"
                     create_port_wire(dev, tile_row, tile_col, col-tile_col, clkdiv, clkdiv_name, port, wire, "HCLK")
-                    
-                dev.grid[tile_row][tile_col].bels[clkdiv_name] = clkdiv
-                dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set()}
-                sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
-                dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {f"HCLK{idx}_SECT{section}_IN":set(), clkdiv2.portmap["CLKOUT"]:set()}
-                dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
-                dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
-                dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
+
+                
+                dev.grid[tile_row][tile_col].bels[clkdiv2_name] = clkdiv2
+                dev.grid[tile_row][tile_col].bels[clkdiv_name] = clkdiv #We still create this so as not to break the PnR logic
+
+                if device in ("GW1N-9C, GW1NR-9C"):
+                    hclk_sect_in = {f"HCLK{idx}_SECT{section}_IN":set()} if section in (0,2) else f"HCLK_IN{idx*2+section}"
+                    dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = hclk_sect_in
+                    if (section in (1,3)): 
+                        sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
+                        dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {hclk_sect_in:set(), clkdiv2.portmap["CLKOUT"]:set()}
+                        dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
+                        dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {{f"HCLK{idx}_SECT{section}_IN":set()}}
+
+                    if section in (0, 2):
+                        clkdiv2_out_node = f"HCLK_9_CLKDIV2_SECT{section}_OUT"
+                        dev.nodes.setdefault(clkdiv2_out_node, ('HCLK', set()))[1].add((tile_row, tile_col, clkdiv2.portmap["CLKOUT"]))
+
+                else:                     
+                    dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set()}
+                    sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
+                    dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {f"HCLK{idx}_SECT{section}_IN":set(), clkdiv2.portmap["CLKOUT"]:set()}
+                    dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
+                    dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
+                    dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
 
 
             #Conenction from the output of CLKDIV to the global clock network       
