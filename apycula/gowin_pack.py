@@ -1957,9 +1957,14 @@ def set_osc_attrs(db, typ, params):
         add_attr_val(db, 'OSC', fin_attrs, attrids.osc_attrids[attr], val)
     return fin_attrs
 
-def match_binary(str_val):
+def bin_str_to_dec(str_val):
     bin_pattern = r'^[0,1]+'
-    return re.match(bin_pattern, str_val)
+    bin_str = re.findall(bin_pattern, str_val)
+    if bin_str:
+        dec_num = int(bin_str[0], 2)
+        return str(dec_num)
+    return None
+    
 
 
 _hclk_default_params ={"GSREN": "false", "DIV_MODE":"2"}
@@ -1980,8 +1985,9 @@ def set_hclk_attrs(db, params, num, typ, cell_name, device):
         valid_div_modes.append("8")
     
     if (params["DIV_MODE"]) not in valid_div_modes:
-        bin_match = match_binary(params["DIV_MODE"])
-        if bin_match is None or bin_match[0] not in valid_div_modes:
+        bin_match = bin_str_to_dec(params["DIV_MODE"])
+        print(bin_match)
+        if bin_match is None or bin_match not in valid_div_modes:
             raise Exception(f"Invalid DIV_MODE {params['DIV_MODE']} for CLKDIV {cell_name} on device {device}")
         params["DIV_MODE"] = str(bin_match[0])
 
