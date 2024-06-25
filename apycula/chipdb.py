@@ -119,6 +119,8 @@ class Device:
     # - disabled blocks
     # - BUF(G)
     extra_func: Dict[Tuple[int, int], Dict[str, Any]] = field(default_factory=dict)
+    # Chip features currently related to block memory like "HAS_SP32", "NEED_SP_FIX", etc
+    chip_flags: List[str] = field(default_factory=list)
 
     @property
     def rows(self):
@@ -1647,6 +1649,14 @@ def sync_extra_func(dev):
         row, col = loc
         dev.extra_func.setdefault((row, col), {})['hclk_pips'] = pips
 
+def set_chip_flags(dev, device):
+    if device not in {"GW1NS-4", "GW1N-9"}:
+        dev.chip_flags.append("HAS_SP32")
+    if device in {'GW1N-1', 'GW1N-4', 'GW1NS-2', 'GW1N-9', 'GW2A-18'}:
+        dev.chip_flags.append("NEED_SP_FIX")
+    if device in {'GW1N-9C', 'GW2A-18C'}:
+        dev.chip_flags.append("NEED_BSRAM_OUTREG_FIX")
+
 def from_fse(device, fse, dat: Datfile):
     dev = Device()
     fse_create_simplio_rows(dev, dat)
@@ -1702,6 +1712,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_logic2clk(dev, device, dat)
     disable_plls(dev, device)
     sync_extra_func(dev)
+    set_chip_flags(dev, device);
     return dev
 
 # get fuses for attr/val set using short/longval table
