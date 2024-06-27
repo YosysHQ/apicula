@@ -53,8 +53,12 @@ It seems that block selection using the `BLKSEL[2:0]` signals does not work as e
 The principle is this: instead of using the `BLKSEL[2:0]` ports, we connect them to constants, thereby making the BSRAM block statically selected, but add a LUT-based `BLKSEL[2:0]` signal decoder that manipulates the Clock Enable port. Of course, the decoder uses only dynamically changing `BLKSEL` networks - there’s no point in bothering with constant bits.
 
 Here is an example of two blocks with a simple decoder:
+
 ![LUT2 decoder](fig/sp-blksel.png)
 
+When more dynamic bits are involved in `BLKSEL[2:0]`, higher order LUTs are used.
+
+For Tangnano9k and Tangnano20k with data width of 32 or 36 bits, no additional manipulations were noticed, but for now we will add a decoder in these cases for simplicity.
 
 # TODO
   - Explore DPB, SDPB and pROM
