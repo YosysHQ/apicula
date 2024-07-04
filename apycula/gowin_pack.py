@@ -144,7 +144,12 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
 
     addr = -1
     for init_row in range(0x40):
-        init_data = parms[f'INIT_RAM_{init_row:02X}']
+        row_name = f'INIT_RAM_{init_row:02X}'
+        # skip missing init rows
+        if row_name not in parms:
+            addr += 0x100
+            continue
+        init_data = parms[row_name]
         #print(init_data)
         for ptr_bit_inc in get_bits(init_data):
             addr = ptr_bit_inc[2](addr)
