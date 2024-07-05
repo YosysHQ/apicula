@@ -127,9 +127,15 @@ hclknames.update({
 hclknames.update({
     10: 'HCLK0_SECT0_IN', 11: 'HCLK0_SECT1_IN', 12: 'HCLK1_SECT0_IN', 13: 'HCLK1_SECT1_IN'
 })
-# these work as inputs in GW1N-9c
+
+# Bypass connections from HCLK_IN to HCLK_OUT
 hclknames.update({
     16: 'HCLK_9IN0', 17: 'HCLK_9IN1', 18: 'HCLK_9IN2', 19: 'HCLK_9IN3'
+})
+
+# CLKDIV2 CLKOUT spurs on the GW1N-9C
+hclknames.update({
+    20: 'HCLK_9_CLKDIV2_SECT0_OUT', 22:'HCLK_9_CLKDIV2_SECT2_OUT'
 })
 
 

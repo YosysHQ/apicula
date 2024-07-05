@@ -1969,10 +1969,8 @@ def bin_str_to_dec(str_val):
 
 _hclk_default_params ={"GSREN": "false", "DIV_MODE":"2"}
 def set_hclk_attrs(db, params, num, typ, cell_name, device):
-    print(params)
     name_pattern = r'^_HCLK([0,1])_SECT([0,1])$'
     params = dict(params or _hclk_default_params)   
-    print(params)
     attrs = {}
     pattern_match = re.findall(name_pattern, num)
     if (not pattern_match):
@@ -1986,9 +1984,8 @@ def set_hclk_attrs(db, params, num, typ, cell_name, device):
     
     if (params["DIV_MODE"]) not in valid_div_modes:
         bin_match = bin_str_to_dec(params["DIV_MODE"])
-        print(bin_match)
         if bin_match is None or bin_match not in valid_div_modes:
-            raise Exception(f"Invalid DIV_MODE {params['DIV_MODE']} for CLKDIV {cell_name} on device {device}")
+            raise Exception(f"Invalid DIV_MODE {bin_match or params['DIV_MODE']} for CLKDIV {cell_name} on device {device}")
         params["DIV_MODE"] = str(bin_match[0])
 
       
@@ -2072,7 +2069,8 @@ def set_iologic_attrs(db, attrs, param):
             in_attrs['ISI'] = 'ENABLE'
         in_attrs['LSRIMUX_0'] = '0'
         in_attrs['CLKOMUX'] = 'ENABLE'
-        #in_attrs['LSRMUX_LSR'] = 'INV'
+        # in_attrs['LSRMUX_LSR'] = 'INV'
+
     if 'INMODE' in attrs:
         if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
             #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
