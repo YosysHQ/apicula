@@ -6,6 +6,7 @@ NEXTPNR ?= nextpnr-himbaechel
 all: \
 	blinky-tangnano20k.fs shift-tangnano20k.fs blinky-tbuf-tangnano20k.fs blinky-oddr-tangnano20k.fs \
 	blinky-osc-tangnano20k.fs tlvds-tangnano20k.fs elvds-tangnano20k.fs oddr-tlvds-tangnano20k.fs \
+	blinky-clkdiv-tangnano20k.fs dvi-example-tangnano20k.fs\
 	oddr-elvds-tangnano20k.fs pll-nanolcd-tangnano20k.fs attosoc-tangnano20k.fs \
 	oser4-tangnano20k.fs ovideo-tangnano20k.fs oser8-tangnano20k.fs oser10-tangnano20k.fs \
 	ides4-tangnano20k.fs ivideo-tangnano20k.fs ides8-tangnano20k.fs ides10-tangnano20k.fs \
@@ -59,6 +60,7 @@ all: \
 	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
 	\
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
+	blinky-clkdiv-tangnano9k.fs dvi-example-tangnano9k.fs\
 	blinky-osc-tangnano9k.fs tlvds-tangnano9k.fs elvds-tangnano9k.fs oddr-tlvds-tangnano9k.fs \
 	oddr-elvds-tangnano9k.fs pll-nanolcd-tangnano9k.fs oser16-tangnano9k.fs attosoc-tangnano9k.fs \
 	oser4-tangnano9k.fs ovideo-tangnano9k.fs oser8-tangnano9k.fs oser10-tangnano9k.fs \
@@ -218,7 +220,7 @@ clean:
 	$(NEXTPNR) --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=tangnano20k.cst
 
 %-tangnano20k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=1 -D CPU_FREQ=27 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=1 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@"
 
 pll-nanolcd-tangnano20k-synth.json: pll/GW2A-18-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@"
@@ -228,6 +230,9 @@ bsram-%-tangnano20k-synth.json: pll/GW2A-18-dyn.vh %-image-rom.v %-video-ram.v %
 
 attosoc-tangnano20k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@"
+
+dvi-example-tangnano20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channel.v
+	$(YOSYS) -D INV_BTN=1 -D IS_ELVDS=0 -p "read_verilog -sv $^; synth_gowin -json $@"
 
 # ============================================================
 # TangPrimer20k
@@ -309,7 +314,7 @@ bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh %-image-rom.v %-video-ram.v %.
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=tangnano9k.cst
 
 %-tangnano9k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=27 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@"
 
 pll-nanolcd-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
@@ -319,6 +324,9 @@ pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
 
 bsram-%-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh %-image-rom.v %-video-ram.v %.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
+
+dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channel.v
+	$(YOSYS) -D INV_BTN=0 -D IS_ELVDS=1 -p "read_verilog -sv $^; synth_gowin -json $@"
 
 # ============================================================
 # szfpga (GW1N-9)
