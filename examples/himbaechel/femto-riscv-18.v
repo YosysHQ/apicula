@@ -559,6 +559,7 @@ module top (
    
    corescore_emitter_uart #(
       .clk_freq_hz(`CPU_FREQ*1000000),
+      //.clk_freq_hz(27*1000000),
       .baud_rate(`BAUD_RATE)			    
    ) UART(
       .i_clk(clk),

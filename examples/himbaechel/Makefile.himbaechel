@@ -329,6 +329,23 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chann
 	$(YOSYS) -D INV_BTN=0 -D IS_ELVDS=1 -p "read_verilog -sv $^; synth_gowin -json $@"
 
 # ============================================================
+# szfpga miniboard (GW1N-9)
+%-miniszfpga.fs: %-miniszfpga.json
+	gowin_pack -d GW1N-9 -o $@ $<
+ 
+%-miniszfpga.json: %-miniszfpga-synth.json miniszfpga.cst
+	$(NEXTPNR) --json $< --write $@ --device GW1N-LV9QN48C6/I5 --vopt family=GW1N-9 --vopt cst=miniszfpga.cst
+
+%-miniszfpga-synth.json: %.v
+	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
+
+blinky-pll-miniszfpga-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
+	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=4 -p "read_verilog $^; synth_gowin -json $@"
+
+bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh %-image-rom.v %-video-ram.v %.v
+	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
+
+# ============================================================
 # szfpga (GW1N-9)
 %-szfpga.fs: %-szfpga.json
 	gowin_pack -d GW1N-9 -o $@ $<
