@@ -185,7 +185,7 @@ _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MU
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -2236,6 +2236,8 @@ def place(db, tilemap, bels, cst, args):
 
         if typ == "GSR":
             pass
+        elif typ == "BANDGAP":
+            pass
         elif typ.startswith('MUX2_'):
             pass
         elif typ == "BUFS":
@@ -2254,6 +2256,7 @@ def place(db, tilemap, bels, cst, args):
                 en_tiledata = db.grid[db.rows - 1][db.cols - 1]
                 en_tile = tilemap[(db.rows - 1, db.cols - 1)]
                 en_tile[23][63] = 0
+                en_tile[22][63] = 1
             # clear powersave fuses
             clear_attrs = set()
             add_attr_val(db, 'OSC', clear_attrs, attrids.osc_attrids['POWER_SAVE'], attrids.osc_attrvals['ENABLE'])
