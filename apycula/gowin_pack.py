@@ -2740,11 +2740,12 @@ def main():
         is_himbaechel = True
 
     # For tool integration it is allowed to pass a full part number
-    m = re.match("GW1N(S|Z)?[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
+    m = re.match("(GW..)(S|Z)?[A-Z]*-(LV|UV|UX)([0-9]{1,2})C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
     if m:
-        mods = m.group(1) or ""
-        luts = m.group(3)
-        device = f"GW1N{mods}-{luts}"
+        series = m.group(1)
+        mods = m.group(2) or ""
+        num = m.group(4)
+        device = f"{series}{mods}-{num}"
     with importlib.resources.path('apycula', f'{device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)
