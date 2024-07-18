@@ -1973,7 +1973,7 @@ def bin_str_to_dec(str_val):
 
 
 _hclk_default_params ={"GSREN": "false", "DIV_MODE":"2"}
-def set_hclk_attrs(db, params, num, typ, cell_name, device):
+def set_hclk_attrs(db, params, num, typ, cell_name):
     name_pattern = r'^_HCLK([0,1])_SECT([0,1])$'
     params = dict(params or _hclk_default_params)   
     attrs = {}
@@ -2471,7 +2471,7 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits:
                 cfg_tile[r][c] = 1
         elif typ in ["CLKDIV", "CLKDIV2"]:
-            hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname, args.device)
+            hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname)
             bits = get_shortval_fuses(db, tiledata.ttyp, hclk_attrs, "HCLK")
             for r, c in bits:
                 tile[r][c] = 1
