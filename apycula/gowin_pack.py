@@ -94,7 +94,7 @@ def extra_dsp_bels(cell, row, col, num, cellname):
 # Explanation of what comes from and magic numbers. The process is this: you
 # create a file with one primitive from the BSRAM family. In my case pROM. You
 # give it a completely zero initialization. You generate an image. You specify
-# one single unit bit at address 0 in the initialization. You generate an
+# one single nonzero bit at address 0 in the initialization. You generate an
 # image. You compare. You sweep away garbage like CRC.
 # Repeat 16 times.
 # The 16th bit did not show much, but it allowed us to discover the meaning of
@@ -508,6 +508,12 @@ def set_bsram_attrs(db, typ, params):
     bsram_attrs = {}
     bsram_attrs['MODE'] = 'ENABLE'
     bsram_attrs['GSR'] = 'DISABLE'
+
+    # We bring it into line with what is observed in the Gowin images - in the
+    # ROM, port A has a signal CE = VCC and inversion is turned on on this pin.
+    # We will provide VCC in nextpnr, and enable the inversion here.
+    if typ == 'ROM':
+        bsram_attrs['CEMUX_CEA'] = 'INV'
 
     for parm, val in params.items():
         if parm == 'BIT_WIDTH':
