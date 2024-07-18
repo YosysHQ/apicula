@@ -1574,6 +1574,13 @@ def fse_create_gsr(dev, device):
     dev.extra_func.setdefault((row, col), {}).update(
         {'gsr': {'wire': 'C4'}})
 
+def fse_create_bandgap(dev, device):
+    # The cell and wire are found by a test compilation where the BGEN input is
+    # connected to a button - such wires are easily traced in a binary image.
+    if device in {'GW1NZ-1'}:
+        dev.extra_func.setdefault((10, 18), {}).update(
+            {'bandgap': {'wire': 'C1'}})
+
 def fse_bram(fse, aux = False):
     bels = {}
     name = 'BSRAM'
@@ -1658,6 +1665,8 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("NEED_BSRAM_OUTREG_FIX")
     if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW2A-18', 'GW2A-18C'}:
         dev.chip_flags.append("NEED_BLKSEL_FIX")
+    if device in {'GW1NZ-1'}:
+        dev.chip_flags.append("HAS_BANDGAP")
 
 def from_fse(device, fse, dat: Datfile):
     dev = Device()
@@ -1711,6 +1720,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_io16(dev, device)
     fse_create_osc(dev, device, fse)
     fse_create_gsr(dev, device)
+    fse_create_bandgap(dev, device)
     fse_create_logic2clk(dev, device, dat)
     disable_plls(dev, device)
     sync_extra_func(dev)
