@@ -69,6 +69,8 @@ class Device:
     # a grid of tiles
     grid: List[List[Tile]] = field(default_factory=list)
     timing: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
+    # {wine_name: type_name}
+    wire_delay: Dict[str, str] = field(default_factory=dict)
     packages: Dict[str, Tuple[str, str, str]] = field(default_factory=dict)
     # {variant: {package: {pin#: (pin_name, [cfgs])}}}
     pinout: Dict[str, Dict[str, Dict[str, Tuple[str, List[str]]]]] = field(default_factory=dict)
@@ -3125,6 +3127,81 @@ def loc2bank(db, row, col):
         else:
             bank = db.pin_bank[name + 'B']
     return bank
+
+def fse_wire_delays(db):
+    for i in range(33): # A0-D7
+        db.wire_delay[wirenames[i]] = "LUT_IN"
+    for i in range(33, 40): # F0-F7
+        db.wire_delay[wirenames[i]] = "LUT_OUT"
+    for i in range(40, 48): # Q0-Q7
+        db.wire_delay[wirenames[i]] = "FF_OUT"
+    for i in range(48, 56): # OF0-OF7
+        db.wire_delay[wirenames[i]] = "OF"
+    for i in range(56, 64): # X01-X08
+        db.wire_delay[wirenames[i]] = "X0"
+    db.wire_delay[wirenames[64]] = "FX1" # N100
+    db.wire_delay[wirenames[65]] = "FX1" # SN10
+    db.wire_delay[wirenames[66]] = "FX1" # N100
+    for i in range(67, 71): # N130-E100
+        db.wire_delay[wirenames[i]] = "FX1"
+    for i in range(71, 73): # EW10-EW20
+        db.wire_delay[wirenames[i]] = "FX1"
+    for i in range(73, 76): # E130-W130
+        db.wire_delay[wirenames[i]] = "FX1"
+    for i in range(76, 108): # N200-N270
+        db.wire_delay[wirenames[i]] = "X2"
+    for i in range(76, 108): # N200-W270
+        db.wire_delay[wirenames[i]] = "X2"
+    for i in range(108, 124): # N800-W830
+        db.wire_delay[wirenames[i]] = "X8"
+    for i in range(124, 127): # CLK0-CLK2
+        db.wire_delay[wirenames[i]] = "X0CLK"
+    for i in range(127, 130): # LSR0-LSR2
+        db.wire_delay[wirenames[i]] = "X0CTL"
+    for i in range(130, 133): # CE0-CE2
+        db.wire_delay[wirenames[i]] = "X0CTL"
+    for i in range(133, 141): # SEL0-SEL7
+        db.wire_delay[wirenames[i]] = "SEL"
+    for i in range(141, 149): # N101-W131
+        db.wire_delay[wirenames[i]] = "FX1"
+    for i in range(149, 181): # N201-W271
+        db.wire_delay[wirenames[i]] = "X2"
+    for i in range(181, 213): # N202-W272
+        db.wire_delay[wirenames[i]] = "X2"
+    for i in range(213, 229): # N804-W834
+        db.wire_delay[wirenames[i]] = "X8"
+    for i in range(229, 245): # N808-W838
+        db.wire_delay[wirenames[i]] = "X8"
+    for i in range(245, 253): # E110-N120
+        db.wire_delay[wirenames[i]] = "FX1"
+    for i in range(253, 261): # E111-N121
+        db.wire_delay[wirenames[i]] = "FX1"
+    for i in range(261, 269): # LB01-LB71
+        db.wire_delay[wirenames[i]] = "LW_BRANCH"
+    for i in range(269, 277): # GB00-GB70
+        db.wire_delay[wirenames[i]] = "GCLK_BRANCH"
+    db.wire_delay[wirenames[277]] = "VCC" # VSS
+    db.wire_delay[wirenames[278]] = "VSS" # VCC
+    for i in range(279, 285): # LT00-LT13
+        db.wire_delay[wirenames[i]] = "LW_TAP"
+    db.wire_delay[wirenames[285]] = "LW_TAP_0" # LT01
+    db.wire_delay[wirenames[286]] = "LW_TAP_0" # LT04
+    db.wire_delay[wirenames[287]] = "LW_BRANCH" # LTBO0
+    db.wire_delay[wirenames[288]] = "LW_BRANCH" # LTBO1
+    db.wire_delay[wirenames[289]] = "LW_SPAN" # SS00
+    db.wire_delay[wirenames[290]] = "LW_SPAN" # SS40
+    db.wire_delay[wirenames[291]] = "GCLK_TAP" # GT00
+    db.wire_delay[wirenames[292]] = "GCLK_TAP" # GT10
+    db.wire_delay[wirenames[293]] = "GCLK_BRANCH" # GBO0
+    db.wire_delay[wirenames[294]] = "GCLK_BRANCH" # GBO1
+    for i in range(295, 303): # DI0-DI7
+        db.wire_delay[wirenames[i]] = "DI"
+    for i in range(303, 309): # CIN0-CIN5
+        db.wire_delay[wirenames[i]] = "CIN"
+    for i in range(309, 314): # COUT0-COUT5
+        db.wire_delay[wirenames[i]] = "COUT"
+    for i in range(1001, 1049): # LWSPINE
+        db.wire_delay[wirenames[i]] = "X8"
 
 # assign pads with plls
 # for now use static table and store the bel name although it is always PLL without a number
