@@ -94,7 +94,7 @@ def extra_dsp_bels(cell, row, col, num, cellname):
 # Explanation of what comes from and magic numbers. The process is this: you
 # create a file with one primitive from the BSRAM family. In my case pROM. You
 # give it a completely zero initialization. You generate an image. You specify
-# one single unit bit at address 0 in the initialization. You generate an
+# one single nonzero bit at address 0 in the initialization. You generate an
 # image. You compare. You sweep away garbage like CRC.
 # Repeat 16 times.
 # The 16th bit did not show much, but it allowed us to discover the meaning of
@@ -144,7 +144,12 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
 
     addr = -1
     for init_row in range(0x40):
-        init_data = parms[f'INIT_RAM_{init_row:02X}']
+        row_name = f'INIT_RAM_{init_row:02X}'
+        # skip missing init rows
+        if row_name not in parms:
+            addr += 0x100
+            continue
+        init_data = parms[row_name]
         #print(init_data)
         for ptr_bit_inc in get_bits(init_data):
             addr = ptr_bit_inc[2](addr)
@@ -180,7 +185,7 @@ _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MU
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -503,6 +508,12 @@ def set_bsram_attrs(db, typ, params):
     bsram_attrs = {}
     bsram_attrs['MODE'] = 'ENABLE'
     bsram_attrs['GSR'] = 'DISABLE'
+
+    # We bring it into line with what is observed in the Gowin images - in the
+    # ROM, port A has a signal CE = VCC and inversion is turned on on this pin.
+    # We will provide VCC in nextpnr, and enable the inversion here.
+    if typ == 'ROM':
+        bsram_attrs['CEMUX_CEA'] = 'INV'
 
     for parm, val in params.items():
         if parm == 'BIT_WIDTH':
@@ -2231,6 +2242,8 @@ def place(db, tilemap, bels, cst, args):
 
         if typ == "GSR":
             pass
+        elif typ == "BANDGAP":
+            pass
         elif typ.startswith('MUX2_'):
             pass
         elif typ == "BUFS":
@@ -2249,6 +2262,7 @@ def place(db, tilemap, bels, cst, args):
                 en_tiledata = db.grid[db.rows - 1][db.cols - 1]
                 en_tile = tilemap[(db.rows - 1, db.cols - 1)]
                 en_tile[23][63] = 0
+                en_tile[22][63] = 1
             # clear powersave fuses
             clear_attrs = set()
             add_attr_val(db, 'OSC', clear_attrs, attrids.osc_attrids['POWER_SAVE'], attrids.osc_attrvals['ENABLE'])
@@ -2735,11 +2749,12 @@ def main():
         is_himbaechel = True
 
     # For tool integration it is allowed to pass a full part number
-    m = re.match("GW1N(S|Z)?[A-Z]*-(LV|UV|UX)([0-9])C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
+    m = re.match("(GW..)(S|Z)?[A-Z]*-(LV|UV|UX)([0-9]{1,2})C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
     if m:
-        mods = m.group(1) or ""
-        luts = m.group(3)
-        device = f"GW1N{mods}-{luts}"
+        series = m.group(1)
+        mods = m.group(2) or ""
+        num = m.group(4)
+        device = f"{series}{mods}-{num}"
     with importlib.resources.path('apycula', f'{device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)

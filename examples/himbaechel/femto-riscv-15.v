@@ -44,7 +44,7 @@ module Memory (
 
    reg [31:0] MEM [0:255]; 
 
-   localparam slow_bit=20;
+   localparam slow_bit=22;
    
 `include "riscv_assembly.v"
    integer L0_   = 8;

@@ -542,7 +542,11 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
 
     # elvds IO uses the B bel bits
     for name in skip_bels:
-        bel_a = bels[f'{name[:-1]}A']
+        bel_a_name = f'{name[:-1]}A'
+        if bel_a_name not in bels:
+            continue
+
+        bel_a = bels[bel_a_name]
         if not bel_a.intersection({'ELVDS_IBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF', 'ELVDS_TBUF',
                                    'TLVDS_IBUF', 'TLVDS_OBUF', 'TLVDS_IOBUF', 'TLVDS_TBUF'}):
             mode = bels[name].intersection({'ELVDS_IBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF', 'ELVDS_TBUF'})
