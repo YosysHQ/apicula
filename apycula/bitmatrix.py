@@ -52,22 +52,28 @@ def packbits(bmp, axis = None):
     Returns a list of bytes.
     """
     byte_list = []
+    byte = 0
+    bit_cnt = 0
     if not axis:
         for bmp_r in bmp:
-            for col in range(shape(bmp)[1] // 8):
-                bcol = col << 3
-                byte_list.append((bmp_r[bcol] << 7) + (bmp_r[bcol + 1] << 6) + (bmp_r[bcol + 2] << 5) +
-                    (bmp_r[bcol + 3] << 4) + (bmp_r[bcol + 4] << 3) + (bmp_r[bcol + 5] << 2) +
-                    (bmp_r[bcol + 6] << 1) + bmp_r[bcol + 7])
+            for col in range(shape(bmp)[1]):
+                byte = (byte << 1) + bmp_r[col]
+                bit_cnt += 1
+                if bit_cnt == 8:
+                    byte_list.append(byte)
+                    bit_cnt = 0
+                    byte = 0
     else:
         for bmp_r in bmp:
             byte_list.append([])
             byte_list_r = byte_list[-1]
-            for col in range(shape(bmp)[1] // 8):
-                bcol = col << 3
-                byte_list_r.append((bmp_r[bcol] << 7) + (bmp_r[bcol + 1] << 6) + (bmp_r[bcol + 2] << 5) +
-                    (bmp_r[bcol + 3] << 4) + (bmp_r[bcol + 4] << 3) + (bmp_r[bcol + 5] << 2) +
-                    (bmp_r[bcol + 6] << 1) + bmp_r[bcol + 7])
+            for col in range(shape(bmp)[1]):
+                byte = (byte << 1) + bmp_r[col]
+                bit_cnt += 1
+                if bit_cnt == 8:
+                    byte_list_r.append(byte)
+                    bit_cnt = 0
+                    byte = 0
     return byte_list
 
 def xor(bmp_0, bmp_1):

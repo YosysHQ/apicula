@@ -226,6 +226,7 @@ if __name__ == "__main__":
     db = chipdb.from_fse(device, fse, dat)
     chipdb.set_banks(fse, db)
     db.timing = tm
+    chipdb.fse_wire_delays(db)
     db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
 
     corners = [
