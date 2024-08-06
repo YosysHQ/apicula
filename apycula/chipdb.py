@@ -1119,7 +1119,8 @@ def add_hclk_bels(dat, dev, device):
                     clkdiv2_in = f"HCLK{idx}_SECT{section}_IN" if section==0 else f"HCLK_IN{idx*2+section}"
                     dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {clkdiv2_in:set()}
                     sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
-                    clkdiv2_out_node = f"HCLK_9_CLKDIV2_SECT{section}_OUT"
+                    # clkdiv2_out_node = f"HCLK_9_CLKDIV2_SECT{section}_OUT"
+                    clkdiv2_out_node = f"HCLK_9_CLKDIV2_{section}_OUT"
                     if section==0:
                         dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {clkdiv2.portmap["CLKOUT"]:set()}
                         dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set(), sect_div2_mux:set()}
@@ -1132,14 +1133,15 @@ def add_hclk_bels(dat, dev, device):
 
                 else:                     
                     dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set()}
-                    sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
+                    # sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
+                    sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX2"
                     dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {f"HCLK{idx}_SECT{section}_IN":set(), clkdiv2.portmap["CLKOUT"]:set()}
                     dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
                     dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
                     
                 dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
             #Conenction from the output of CLKDIV to the global clock network       
-            clkdiv_out_node = f"{side[0]}HCLK{idx}_CLKDIV_CLKOUT"
+            clkdiv_out_node = f"{side[0]}HCLK{idx}_CLKDIV_OUT"
             dev.nodes.setdefault(clkdiv_out_node, ('GLOBAL_CLK', set()))[1].add((tile_row, tile_col, shared_clkdiv_wire))
 
 
