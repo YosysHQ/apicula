@@ -267,6 +267,8 @@ if __name__ == "__main__":
     chipdb.pll_pads(db, device, pad_locs)
 
     chipdb.dat_portmap(dat, db, device)
+    chipdb.add_hclk_bels(dat, db, device)
+
 
     # XXX GW1NR-9 has interesting IOBA pins on the bottom side
     if device == 'GW1N-9' :
