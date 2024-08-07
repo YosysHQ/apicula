@@ -1141,7 +1141,7 @@ def add_hclk_bels(dat, dev, device):
                     
                 dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
             #Conenction from the output of CLKDIV to the global clock network       
-            clkdiv_out_node = f"{side[0]}HCLK{idx}_CLKDIV_OUT"
+            clkdiv_out_node = f"{side[0]}HCLK{idx}CLKDIV"
             dev.nodes.setdefault(clkdiv_out_node, ('GLOBAL_CLK', set()))[1].add((tile_row, tile_col, shared_clkdiv_wire))
 
 

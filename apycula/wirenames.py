@@ -77,10 +77,10 @@ clknames.update({n: f"UNK{n}" for n in range(105, 121)})
 #     114: 'LHCLK0_CLKDIV_CLKOUT', 116:'LHCLK1_CLKDIV_CLKOUT',
 # })
 clknames.update({
-    106: 'THCLK0_CLKDIV_OUT', 108:'THCLK1_CLKDIV_OUT',
-    118: 'RHCLK0_CLKDIV_OUT', 120:'RHCLK1_CLKDIV_OUT',
-    110: 'BHCLK0_CLKDIV_OUT', 112:'BHCLK1_CLKDIV_OUT',
-    114: 'LHCLK0_CLKDIV_OUT', 116:'LHCLK1_CLKDIV_OUT',
+    106: 'THCLK0CLKDIV', 108:'THCLK1CLKDIV',
+    118: 'RHCLK0CLKDIV', 120:'RHCLK1CLKDIV',
+    110: 'BHCLK0CLKDIV', 112:'BHCLK1CLKDIV',
+    114: 'LHCLK0CLKDIV', 116:'LHCLK1CLKDIV',
 })
 # These are the external clock pins, one on each side
 clknames.update({
