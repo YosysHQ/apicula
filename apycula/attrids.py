@@ -884,6 +884,38 @@ cls_attrvals = {
         'SET':              16,
         'RESET':            17
     }
+
+# DCS
+# just quadrant index
+dcs_attrids = {
+        '1':                1,
+        '2':                0,
+        '3':                2,
+        '4':                3,
+        }
+# There are no combinations here since the DCS primitive has only one
+# parameter, so by specifying the value of this parameter and generating the
+# image it is easy to find the number in this table.
+dcs_attrvals = {
+        'UNKNOWN':          0,
+        'FALLING':          1,
+        'RISING':           2,
+        'CLK0':             3,
+        'CLK1':             4,
+        'CLK2':             5,
+        'CLK3':             6,
+        'CLK0_VCC':        13,
+        'CLK1_VCC':        14,
+        'CLK2_GND':        15,
+        'CLK2_VCC':        16,
+        'CLK3_VCC':        17,
+        'CLK0_GND':        18,
+        'CLK1_GND':        19,
+        'CLK3_GND':        20,
+        'GND':             21,
+        'VCC':             22,
+        }
+
 # DLL
 dll_attrids = {
         'CLKSEL':           0,
