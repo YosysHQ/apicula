@@ -12,7 +12,7 @@ from collections import namedtuple
 from contextlib import closing
 from apycula import codegen
 from apycula import chipdb
-from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses
+from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses, get_long_fuses
 from apycula import attrids
 from apycula import bslib
 from apycula import bitmatrix
@@ -185,7 +185,7 @@ _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MU
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -376,7 +376,6 @@ def add_pll_default_attrs(attrs):
         pll_inattrs[k] = v
     return pll_inattrs
 
-
 # typ - PLL type (RPLL, etc)
 def set_pll_attrs(db, typ, idx, attrs):
     pll_inattrs = add_pll_default_attrs(attrs)
@@ -501,6 +500,28 @@ def set_pll_attrs(db, typ, idx, attrs):
         if isinstance(val, str):
             val = attrids.pll_attrvals[val]
         add_attr_val(db, 'PLL', fin_attrs, attrids.pll_attrids[attr], val)
+    return fin_attrs
+
+_dcs_spine2quadrant_idx = {
+        'SPINE6'  : ('1', 'DCS6'),
+        'SPINE7'  : ('1', 'DCS7'),
+        'SPINE14' : ('2', 'DCS6'),
+        'SPINE15' : ('2', 'DCS7'),
+        'SPINE22' : ('3', 'DCS6'),
+        'SPINE23' : ('3', 'DCS7'),
+        'SPINE30' : ('4', 'DCS6'),
+        'SPINE31' : ('4', 'DCS7'),
+        }
+def set_dcs_attrs(db, spine, attrs):
+    q, _ = _dcs_spine2quadrant_idx[spine]
+    dcs_attrs = {}
+    dcs_attrs[q] = attrs['DCS_MODE']
+
+    fin_attrs = set()
+    for attr, val in dcs_attrs.items():
+        if isinstance(val, str):
+            val = attrids.dcs_attrvals[val]
+        add_attr_val(db, 'DCS', fin_attrs, attrids.dcs_attrids[attr], val)
     return fin_attrs
 
 _bsram_bit_widths = { 1: '1', 2: '2', 4: '4', 8: '9', 9: '9', 16: '16', 18: '16', 32: 'X36', 36: 'X36'}
@@ -2482,6 +2503,31 @@ def place(db, tilemap, bels, cst, args):
         elif typ in ["CLKDIV", "CLKDIV2"]:
             hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname)
             bits = get_shortval_fuses(db, tiledata.ttyp, hclk_attrs, "HCLK")
+        elif typ == 'DQCE':
+            # Himbaechel only
+            pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
+            if 'DQCE_PIP' not in attrs:
+                continue
+            pip = attrs['DQCE_PIP']
+            res = pipre.fullmatch(pip)
+            if not res:
+                raise Exception(f"Bad DQCE pip {pip} at {cellname}")
+            pip_col, pip_row, dest, src = res.groups()
+            pip_row = int(pip_row)
+            pip_col = int(pip_col)
+
+            pip_tiledata = db.grid[pip_row][pip_col]
+            pip_tile = tilemap[(pip_row, pip_col)]
+            bits = pip_tiledata.clock_pips[dest][src]
+            for r, c in bits:
+                pip_tile[r][c] = 1
+        elif typ == 'DCS':
+            if 'DCS_MODE' not in attrs:
+                continue
+            spine = db.extra_func[row - 1, col - 1]['dcs'][int(num)]['clkout']
+            dcs_attrs = set_dcs_attrs(db, spine, attrs)
+            _, idx = _dcs_spine2quadrant_idx[spine]
+            bits = get_long_fuses(db, tiledata.ttyp, dcs_attrs, idx)
             for r, c in bits:
                 tile[r][c] = 1
         else:
