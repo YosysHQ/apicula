@@ -2547,6 +2547,8 @@ def place(db, tilemap, bels, cst, args):
         elif typ in ["CLKDIV", "CLKDIV2"]:
             hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname)
             bits = get_shortval_fuses(db, tiledata.ttyp, hclk_attrs, "HCLK")
+            for r, c in bits:
+                tile[r][c] = 1
         elif typ == 'DQCE':
             # Himbaechel only
             pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
