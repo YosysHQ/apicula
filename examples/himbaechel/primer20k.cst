@@ -70,3 +70,23 @@ IO_LOC "LCD_B[1]" C12;
 IO_LOC "LCD_B[2]" B13;
 IO_LOC "LCD_B[3]" A14;
 IO_LOC "LCD_B[4]" B14;
+
+// DVI
+IO_LOC "tmds_clk_p" G16;
+IO_PORT "tmds_clk_p" PULL_MODE=NONE DRIVE=3.5;
+IO_LOC "tmds_clk_n" H15; 
+IO_PORT "tmds_clk_n" PULL_MODE=NONE DRIVE=3.5;
+IO_LOC "tmds_d_p[0]" H14;
+IO_PORT "tmds_d_p[0]" PULL_MODE=NONE DRIVE=3.5;
+IO_LOC "tmds_d_n[0]" H16;
+IO_PORT "tmds_d_n[0]" PULL_MODE=NONE DRIVE=3.5;
+IO_LOC "tmds_d_p[1]" J15;
+IO_PORT "tmds_d_p[1]" PULL_MODE=NONE DRIVE=3.5;
+IO_LOC "tmds_d_n[1]" K16;
+IO_PORT "tmds_d_n[1]" PULL_MODE=NONE DRIVE=3.5;
+IO_LOC "tmds_d_p[2]" K14;
+IO_PORT "tmds_d_p[2]" PULL_MODE=NONE DRIVE=3.5;
+IO_LOC "tmds_d_n[2]" K15;
+IO_PORT "tmds_d_n[2]" PULL_MODE=NONE DRIVE=3.5;
+
+IO_LOC "div_led" C13;
