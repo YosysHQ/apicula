@@ -1195,6 +1195,13 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                 # strange GW1N-9C input-input aliases
                 for i in {0, 2}:
                     dev.nodes.setdefault(f'X{col}Y{row}/HCLK9-{i}', ('HCLK', {(row, col, f'HCLK_IN{i}')}))[1].add((row, col, f'HCLK_9IN{i}'))
+                # GW1N-9C clock pin aliases
+                if side != 'B': # it’s still unclear on this side, but the
+                                # Tangnano9k external clock is not connected here, so we
+                                # won’t run into problems anytime soon
+                    for i in range(2):
+                        add_node(dev, f'PCLK{side}{i}', "HCLK", row, col, f'LWSPINET{side}{i + 1}');
+
 
             for i in range(4):
                 hnam = f'HCLK_OUT{i}'
