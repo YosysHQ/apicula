@@ -69,6 +69,19 @@ clknames.update({
     101: 'BRPLL0CLK0', 102: 'BRPLL0CLK1', 103: 'BRPLL0CLK2', 104: 'BRPLL0CLK3',
 })
 clknames.update({n: f"UNK{n}" for n in range(105, 121)})
+# These are CLKDIV output nodes
+# clknames.update({
+#     106: 'THCLK0_CLKDIV_CLKOUT', 108:'THCLK1_CLKDIV_CLKOUT',
+#     118: 'RHCLK0_CLKDIV_CLKOUT', 120:'RHCLK1_CLKDIV_CLKOUT',
+#     110: 'BHCLK0_CLKDIV_CLKOUT', 112:'BHCLK1_CLKDIV_CLKOUT',
+#     114: 'LHCLK0_CLKDIV_CLKOUT', 116:'LHCLK1_CLKDIV_CLKOUT',
+# })
+clknames.update({
+    106: 'THCLK0CLKDIV', 108:'THCLK1CLKDIV',
+    118: 'RHCLK0CLKDIV', 120:'RHCLK1CLKDIV',
+    110: 'BHCLK0CLKDIV', 112:'BHCLK1CLKDIV',
+    114: 'LHCLK0CLKDIV', 116:'LHCLK1CLKDIV',
+})
 # These are the external clock pins, one on each side
 clknames.update({
     121: 'PCLKT0', 122: 'PCLKT1', 123: 'PCLKB0', 124: 'PCLKB1',
@@ -116,13 +129,19 @@ hclknames.update({
     2: 'HCLK_IN0', 3: 'HCLK_IN1', 4: 'HCLK_IN2', 5: 'HCLK_IN3'
 })
 
-# outputs
+# HCLK section inputs
 hclknames.update({
-    10: 'HCLK_OUT0', 11: 'HCLK_OUT1', 12: 'HCLK_OUT2', 13: 'HCLK_OUT3'
+    10: 'HCLK0_SECT0_IN', 11: 'HCLK0_SECT1_IN', 12: 'HCLK1_SECT0_IN', 13: 'HCLK1_SECT1_IN'
 })
-# these work as inputs in GW1N-9c
+
+# Bypass connections from HCLK_IN to HCLK_OUT
 hclknames.update({
     16: 'HCLK_9IN0', 17: 'HCLK_9IN1', 18: 'HCLK_9IN2', 19: 'HCLK_9IN3'
+})
+
+# CLKDIV2 CLKOUT spurs on the GW1N-9C
+hclknames.update({
+    20: 'HCLK_9_CLKDIV2_SECT0_OUT', 22:'HCLK_9_CLKDIV2_SECT2_OUT'
 })
 
 

@@ -99,3 +99,22 @@ IO_PORT "LCD_B[2]" IO_TYPE=LVCMOS33 DRIVE=24;
 IO_PORT "LCD_B[3]" IO_TYPE=LVCMOS33 DRIVE=24;
 IO_PORT "LCD_B[4]" IO_TYPE=LVCMOS33 DRIVE=24;
 
+// DVI
+IO_LOC "tmds_clk_p" 33;
+IO_PORT "tmds_clk_p" PULL_MODE=NONE;
+IO_LOC "tmds_clk_n" 34;
+IO_PORT "tmds_clk_n" PULL_MODE=NONE;
+IO_LOC "tmds_d_p[0]" 35;
+IO_PORT "tmds_d_p[0]" PULL_MODE=NONE;
+IO_LOC "tmds_d_n[0]" 36;
+IO_PORT "tmds_d_n[0]" PULL_MODE=NONE;
+IO_LOC "tmds_d_p[1]" 37;
+IO_PORT "tmds_d_p[1]" PULL_MODE=NONE;
+IO_LOC "tmds_d_n[1]" 38;
+IO_PORT "tmds_d_n[1]" PULL_MODE=NONE;
+IO_LOC "tmds_d_p[2]" 39;
+IO_PORT "tmds_d_p[2]" PULL_MODE=NONE;
+IO_LOC "tmds_d_n[2]" 40;
+IO_PORT "tmds_d_n[2]" PULL_MODE=NONE;
+
+IO_LOC "div_led" 15;

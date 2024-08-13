@@ -185,7 +185,7 @@ _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MU
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -1989,6 +1989,53 @@ def set_osc_attrs(db, typ, params):
         add_attr_val(db, 'OSC', fin_attrs, attrids.osc_attrids[attr], val)
     return fin_attrs
 
+def bin_str_to_dec(str_val):
+    bin_pattern = r'^[0,1]+'
+    bin_str = re.findall(bin_pattern, str_val)
+    if bin_str:
+        dec_num = int(bin_str[0], 2)
+        return str(dec_num)
+    return None
+    
+
+
+_hclk_default_params ={"GSREN": "false", "DIV_MODE":"2"}
+def set_hclk_attrs(db, params, num, typ, cell_name):
+    name_pattern = r'^_HCLK([0,1])_SECT([0,1])$'
+    params = dict(params or _hclk_default_params)   
+    attrs = {}
+    pattern_match = re.findall(name_pattern, num)
+    if (not pattern_match):
+        raise Exception (f"Unknown HCLK Bel/HCLK Section: {typ}{num}")
+    hclk_idx, section_idx = pattern_match[0]
+
+    valid_div_modes = ["2", "3.5", "4", "5"]
+    if device in ["GW1N-1S","GW1N-2","GW1NR-2","GW1NS-4","GW1NS-4C","GW1NSR-4",\
+                       "GW1NSR-4C","GW1NSER-4C","GW1N-9","GW1NR-9", "GW1N-9C","GW1NR-9C","GW1N-1P5"]:
+        valid_div_modes.append("8")
+    
+    if (params["DIV_MODE"]) not in valid_div_modes:
+        bin_match = bin_str_to_dec(params["DIV_MODE"])
+        if bin_match is None or bin_match not in valid_div_modes:
+            raise Exception(f"Invalid DIV_MODE {bin_match or params['DIV_MODE']} for CLKDIV {cell_name} on device {device}")
+        params["DIV_MODE"] = str(bin_match[0])
+
+      
+    if (typ == "CLKDIV2"):
+        attrs[f"BK{section_idx}MUX{hclk_idx}_OUTSEL"] = "DIV2"
+    elif (typ == "CLKDIV"):
+        attrs[f"HCLKDIV{hclk_idx}_DIV"] = params["DIV_MODE"]         
+        if (section_idx == '1'):
+            attrs[f"HCLKDCS{hclk_idx}_SEL"] = f"HCLKBK{section_idx}{hclk_idx}"
+    
+    fin_attrs = set()
+    for attr, val in attrs.items():
+        if isinstance(val, str):
+            val = attrids.hclk_attrvals[val]
+        add_attr_val(db, 'HCLK', fin_attrs, attrids.hclk_attrids[attr], val)
+    return fin_attrs
+
+
 _iologic_default_attrs = {
         'DUMMY': {},
         'IOLOGIC': {},
@@ -2054,7 +2101,8 @@ def set_iologic_attrs(db, attrs, param):
             in_attrs['ISI'] = 'ENABLE'
         in_attrs['LSRIMUX_0'] = '0'
         in_attrs['CLKOMUX'] = 'ENABLE'
-        #in_attrs['LSRMUX_LSR'] = 'INV'
+        # in_attrs['LSRMUX_LSR'] = 'INV'
+
     if 'INMODE' in attrs:
         if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
             #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
@@ -2452,6 +2500,9 @@ def place(db, tilemap, bels, cst, args):
             cfg_tile = tilemap[(0, 37)]
             for r, c in bits:
                 cfg_tile[r][c] = 1
+        elif typ in ["CLKDIV", "CLKDIV2"]:
+            hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname)
+            bits = get_shortval_fuses(db, tiledata.ttyp, hclk_attrs, "HCLK")
         elif typ == 'DQCE':
             # Himbaechel only
             pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
