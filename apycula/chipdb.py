@@ -3346,10 +3346,10 @@ def fse_wire_delays(db):
     db.wire_delay[wirenames[288]] = "LW_BRANCH" # LTBO1
     db.wire_delay[wirenames[289]] = "LW_SPAN" # SS00
     db.wire_delay[wirenames[290]] = "LW_SPAN" # SS40
-    db.wire_delay[wirenames[291]] = "GCLK_TAP" # GT00
-    db.wire_delay[wirenames[292]] = "GCLK_TAP" # GT10
-    db.wire_delay[wirenames[293]] = "GCLK_BRANCH" # GBO0
-    db.wire_delay[wirenames[294]] = "GCLK_BRANCH" # GBO1
+    db.wire_delay[wirenames[291]] = "TAP_BRANCH_PCLK" # GT00
+    db.wire_delay[wirenames[292]] = "TAP_BRANCH_PCLK" # GT10
+    db.wire_delay[wirenames[293]] = "BRANCH_PCLK" # GBO0
+    db.wire_delay[wirenames[294]] = "BRANCH_PCLK" # GBO1
     for i in range(295, 303): # DI0-DI7
         db.wire_delay[wirenames[i]] = "DI"
     for i in range(303, 309): # CIN0-CIN5
@@ -3358,6 +3358,17 @@ def fse_wire_delays(db):
         db.wire_delay[wirenames[i]] = "COUT"
     for i in range(1001, 1049): # LWSPINE
         db.wire_delay[wirenames[i]] = "X8"
+    # clock wires
+    for i in range(261):
+        db.wire_delay[clknames[i]] = "X0" # XXX
+    for i in range(32):
+        db.wire_delay[clknames[i]] = "SPINE_TAP_PCLK"
+    for i in range(81, 105): # clock inputs (PLL outs)
+        db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
+    for i in range(121, 129): # clock inputs (pins)
+        db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
+    for i in range(129, 153): # clock inputs (logic->clock)
+        db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
 
 # assign pads with plls
 # for now use static table and store the bel name although it is always PLL without a number
