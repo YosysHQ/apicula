@@ -2542,7 +2542,7 @@ def place(db, tilemap, bels, cst, args):
             # DHCEN as such is just a control wire and does not have a fuse
             # itself, but HCLK has fuses that allow this control. Here we look
             # for the corresponding HCLK and set its fuses.
-            _, wire, side = db.extra_func[row - 1, col -1]['dhcen'][int(num)]['wire']
+            _, wire, _, side = db.extra_func[row - 1, col -1]['dhcen'][int(num)]['pip']
             hclk_attrs = find_and_set_dhcen_hclk_fuses(db, tilemap, wire, side)
         elif typ in ["CLKDIV", "CLKDIV2"]:
             hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname)

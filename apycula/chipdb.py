@@ -1307,11 +1307,11 @@ def fse_create_dhcen(dev, device, fse, dat: Datfile):
             # use db.hclk_pips in order to find HCLK_IN cells
             for hclk_loc in _hclk_to_fclk[device][side]['hclk']:
                 if idx < 4:
-                    if f'HCLK_IN{idx}' in dev.hclk_pips[hclk_loc]:
-                        hclkin = {'wire' : [f'X{hclk_loc[1]}Y{hclk_loc[0]}', f'HCLK_IN{idx}', side]}
+                    hclk_name = f'HCLK_IN{idx}'
                 else:
-                    if f'HCLK_BANK_OUT{idx - 4}' in dev.hclk_pips[hclk_loc]:
-                        hclkin = {'wire' : [f'X{hclk_loc[1]}Y{hclk_loc[0]}', f'HCLK_BANK_OUT{idx - 4}', side]}
+                    hclk_name = f'HCLK_BANK_OUT{idx - 4}'
+                if hclk_name in dev.hclk_pips[hclk_loc]:
+                    hclkin = {'pip' : [f'X{hclk_loc[1]}Y{hclk_loc[0]}', hclk_name, next(iter(dev.hclk_pips[hclk_loc][hclk_name].keys())), side]}
 
             hclkin.update({ 'ce' : wire})
             dhcen.append(hclkin)
