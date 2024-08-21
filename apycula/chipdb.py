@@ -1021,7 +1021,7 @@ _device_hclk_pin_dict = {
             1: HCLK_PINS((0,28), [("CALIB",0,27,"C5"), ("RESETN",0,27,"B5")], [("RESETN",0,27,"A1")], [("RESETN",0,27,"C1")])
         },
         "RIGHTSIDE":{
-            0: HCLK_PINS((27,55), [("CALIB",27,55,"C0"), ("RESETN",27,55,"B0")], [("RESETN",27,55,"A4")], [("RESETN",27,55,"B4")]), 
+            0: HCLK_PINS((27,55), [("CALIB",27,55,"C0"), ("RESETN",27,55,"B0")], [("RESETN",27,55,"A4")], [("RESETN",27,55,"B4")]),
             1: HCLK_PINS((27,55), [("CALIB",27,55,"C5"), ("RESETN",27,55,"B5")], [("RESETN",27,55,"A1")], [("RESETN",27,55,"C1")])
         },
         "BOTTOMSIDE":{
@@ -1039,7 +1039,7 @@ _device_hclk_pin_dict = {
             1: HCLK_PINS((0,46), [("CALIB",9,0,"A3"), ("RESETN",9,0,"B1")], [("RESETN",9,0,"B3")], [("RESETN",9,0,"B5")])
         },
         "RIGHTSIDE":{
-            0: HCLK_PINS((18,46), [("CALIB",18,46,"A2"), ("RESETN",18,46,"B0")], [("RESETN",18,46,"B2")], [("RESETN",18,46,"B4")]), 
+            0: HCLK_PINS((18,46), [("CALIB",18,46,"A2"), ("RESETN",18,46,"B0")], [("RESETN",18,46,"B2")], [("RESETN",18,46,"B4")]),
             1: HCLK_PINS((18,46), [("CALIB",18,46,"A3"), ("RESETN",18,46,"B1")], [("RESETN",18,46,"B3")], [("RESETN",18,46,"B5")])
         },
         "BOTTOMSIDE":{
@@ -1083,7 +1083,7 @@ def add_hclk_bels(dat, dev, device):
                     if wire in tile_hclk_pips:
                         tile_hclk_pips[f"HCLK_OUT{idx}"] = {wire:set()}
         return
-    
+
     #Add HCLK bels and the pips/wires to support them
     if device == "GW2A-18C":
         device = "GW2A-18"
@@ -1091,7 +1091,7 @@ def add_hclk_bels(dat, dev, device):
 
 
     #There is a sleight of hand going on here - there is likely only one physical CLKDIV bel per HCLK
-    #However because of how they are connected, and how I suspect that the muxes that utilize them are, 
+    #However because of how they are connected, and how I suspect that the muxes that utilize them are,
     #it is more convenient, for Pnr, to pretend that there are 2, one in each section.
 
     for side, hclks in device_hclk_pins.items():
@@ -1139,22 +1139,22 @@ def add_hclk_bels(dat, dev, device):
                         dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {clkdiv2.portmap["CLKOUT"]:set()}
                         dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set(), sect_div2_mux:set()}
                         dev.nodes.setdefault(clkdiv2_out_node, ('HCLK', set()))[1].add((tile_row, tile_col, sect_div2_mux))
-                    
+
                     if section==1:
                         dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {clkdiv2_in:set(),clkdiv2.portmap["CLKOUT"]:set()}
                         dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = {f"HCLK_IN{2*idx+section}":set(), sect_div2_mux:set()}
                         dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {f"HCLK{idx}_SECT{section}_IN":set()}
 
-                else:                     
+                else:
                     dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set()}
                     # sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
                     sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX2"
                     dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {f"HCLK{idx}_SECT{section}_IN":set(), clkdiv2.portmap["CLKOUT"]:set()}
                     dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
                     dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
-                    
+
                 dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
-            #Conenction from the output of CLKDIV to the global clock network       
+            #Conenction from the output of CLKDIV to the global clock network
             clkdiv_out_node = f"{side[0]}HCLK{idx}CLKDIV"
             dev.nodes.setdefault(clkdiv_out_node, ('GLOBAL_CLK', set()))[1].add((tile_row, tile_col, shared_clkdiv_wire))
 
@@ -3358,9 +3358,12 @@ def fse_wire_delays(db):
         db.wire_delay[wirenames[i]] = "COUT"
     for i in range(1001, 1049): # LWSPINE
         db.wire_delay[wirenames[i]] = "X8"
+    # possibly LW wires for large chips, for now assign dummy value
+    for i in range(1049, 1130):
+        db.wire_delay[str(i)] = "X8"
     # clock wires
     for i in range(261):
-        db.wire_delay[clknames[i]] = "X0" # XXX
+        db.wire_delay[clknames[i]] = "TAP_BRANCH_PCLK" # XXX
     for i in range(32):
         db.wire_delay[clknames[i]] = "SPINE_TAP_PCLK"
     for i in range(81, 105): # clock inputs (PLL outs)
