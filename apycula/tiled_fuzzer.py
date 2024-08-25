@@ -76,6 +76,11 @@ params = {
         "device": "GW2AR-18C",
         "partnumber": "GW2AR-LV18PG256SC8/I7",
     },
+    "GW5A-25A": {
+        "package": "MBGA121A",
+        "device": "GW5A-25A",
+        "partnumber": "GW5A-LV25MG121NES",
+    },
 }[device]
 
 # utils
@@ -216,7 +221,7 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
 
 if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
-        fse = fuse_h4x.readFse(f)
+        fse = fuse_h4x.readFse(f, device)
 
     dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{device}/{device}.dat"))
 

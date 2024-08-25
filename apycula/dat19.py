@@ -133,13 +133,14 @@ class Datfile:
 
     def read_grid(self) -> Grid:
         self._cur = 0x026060
-        grid_h = self.read_u16()
-        grid_w = self.read_u16()
-        cc_y = self.read_u16()
-        cc_x = self.read_u16()
+        grid_h = self.read_u16() # chipRows_
+        grid_w = self.read_u16() # chipCols_
+        cc_y = self.read_u16() # hiq_
+        cc_x = self.read_u16() # viq_
         rows = []
         grid_mapping = {
             (0, 0): " ",  # empty
+            (1, 0): "1",  # unknown
             (1, 1): "I",  # I/O
             (2, 1): "L",  # LVDS (GW2A* only)
             (3, 1): "R",  # routing?
@@ -151,8 +152,12 @@ class Datfile:
             (7, 0): "d",  # dsp padding
             (7, 1): "D",  # dsp
             (8, 0): "p",  # pll padding
+            (10, 0): "2", # unknown
             (8, 1): "P",  # pll
             (9, 1): "Q",  # dll
+            (10, 1): "3", # unknown
+            (11, 1): "4", # unknown
+            (12, 1): "5"  # unknown
         }
         for y in range(grid_h):
             row = []
@@ -162,8 +167,8 @@ class Datfile:
                 b = self.read_u8_at(125744 + idx)
                 c = grid_mapping[a, b]
 
-                if x == cc_x and y == cc_y:
-                    assert c == "b"
+                #if x == cc_x and y == cc_y:
+                #    assert c == "b"
 
                 row.append(c)
             rows.append(row)
@@ -252,9 +257,23 @@ class Datfile:
             "MdicIn": self.read_clkins(0x36),
             "MdicInDlt": self.read_clkins(0x36),
             "CtrlIn": self.read_mult(0xE),
-            "CtrlInDlt": self.read_mult(0xE),
+            "CtrlInDlt": self.read_mult(0xE),            
+            "dsp12x12Ins": self.read_clkins(30),
+            "dsp12x12Outs": self.read_clkins(24),
+            "dsp12x12InDlt": self.read_clkins(30),
+            "dsp12x12OutDlt": self.read_clkins(24),
+            "dsp12x12SumIns": self.read_arr16(113),
+            "dsp12x12SumOuts": self.read_arr16(112),
+            "dsp12x12SumInDlt": self.read_arr16(113),
+            "dsp12x12SumOutDlt": self.read_arr16(112),
+            "dsp27x18Ins": self.read_arr16(163),
+            "dsp27x18Outs": self.read_arr16(139),
+            "dsp27x18InDlt": self.read_arr16(163),
+            "dsp27x18OutDlt": self.read_arr16(139),
+            "dspCtrlIns": self.read_clkins(6),
+            "dspCtrlInDlt": self.read_clkins(6),
         }
-        assert self._cur == 0x58272
+        assert self._cur == 0x58c8e
         return ret
 
     def read_io(self):
