@@ -4,9 +4,16 @@ endif
 
 .SECONDARY:
 .PHONY: all clean
+
+#removed ones that nolonger exist (GW1NS-2) or fail (GW2A-18C)
 all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle \
-	 apycula/GW1NS-2.pickle apycula/GW1NS-4.pickle apycula/GW1N-9C.pickle \
-	 apycula/GW1NZ-1.pickle apycula/GW2A-18.pickle apycula/GW2A-18C.pickle
+	apycula/GW1NS-4.pickle apycula/GW1N-9C.pickle apycula/GW1NZ-1.pickle \
+	apycula/GW2A-18.pickle 
+
+#all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle \
+#	 apycula/GW1NS-2.pickle apycula/GW1NS-4.pickle apycula/GW1N-9C.pickle \
+#	 apycula/GW1NZ-1.pickle apycula/GW2A-18.pickle apycula/GW2A-18C.pickle
+
 
 %_stage1.pickle: apycula/tiled_fuzzer.py
 	python3 -m apycula.tiled_fuzzer $*
