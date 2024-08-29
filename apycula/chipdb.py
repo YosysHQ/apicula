@@ -1928,6 +1928,8 @@ def from_fse(device, fse, dat: Datfile):
     bram_aux_ttypes = get_tile_types_by_func(dev, dat, fse, 'b')
     dsp_ttypes = get_tile_types_by_func(dev, dat, fse, 'D')
     dsp_aux_ttypes = get_tile_types_by_func(dev, dat, fse, 'd')
+    pll_ttypes = get_tile_types_by_func(dev, dat, fse, 'P')
+    pll_ttypes.update(get_tile_types_by_func(dev, dat, fse, 'p'))
     for ttyp in ttypes:
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
@@ -1950,11 +1952,7 @@ def from_fse(device, fse, dat: Datfile):
             tile.bels = fse_dsp(fse)
         elif ttyp in dsp_aux_ttypes:
             tile.bels = fse_dsp(fse, True)
-        # These are the cell types in which PLLs can be located. To determine,
-        # we first take the coordinates of the cells with the letters P and p
-        # from the dat['grid'] table, and then, using these coordinates,
-        # determine the type from fse['header']['grid'][61][row][col]
-        elif ttyp in [42, 45, 74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
+        elif ttyp in pll_ttypes:
             tile.bels = fse_pll(device, fse, ttyp)
         tile.bels.update(fse_iologic(device, fse, ttyp))
         tiles[ttyp] = tile
