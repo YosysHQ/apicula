@@ -288,11 +288,10 @@ class Datfile:
         ret["DqsCLoc"] = self.read_arr16(0x16)
         ret["JtagIns"] = self.read_arr16(5)
         ret["JtagOuts"] = self.read_arr16(11)
-        ret["ClksrcIns"] = self.read_arr16(0x26)
-        ret["ClksrcOuts"] = self.read_arr16(16)
+        ret["ClksrcIns"] = self.read_arr16(0x27)
+        ret["ClksrcOuts"] = self.read_arr16(17)
         ret["UfbIns"] = self.read_outs(0x5A)
         ret["UfbOuts"] = self.read_outs(0x20)
-        self._cur += 4
         ret["McuIns"] = self.read_outs(0x109)
         ret["McuOuts"] = self.read_outs(0x174)
         ret["EMcuIns"] = self.read_outs(0x10E)
