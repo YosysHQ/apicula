@@ -96,6 +96,6 @@ ALU54D alu2(
 	defparam alu2.ALU_RESET_MODE="SYNC";
 endmodule
 
-`define FIRMWARE "riscv-dsp-firmware/alu54d.hex"
+`define FIRMWARE "riscv-firmware/alu54d.hex"
 `include "dsp-riscv.v"
 

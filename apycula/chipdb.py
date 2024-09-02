@@ -1832,6 +1832,122 @@ def fse_create_bandgap(dev, device):
         dev.extra_func.setdefault((10, 18), {}).update(
             {'bandgap': {'wire': 'C1'}})
 
+def fse_create_userflash(dev, device, dat):
+    # dat[‘UfbIns’] and dat[‘UfbOuts’] judgement to describe the waste and waste UserFlash.
+    # The outputs are exactly 32 by the number of bits and they are always
+    # present, their positions correspond to bit indices - checked by
+    # selectively connecting the outputs to LEDs.
+    # The inputs depend on the Flash type - different types have different
+    # inputs, e.g. XY or RCP addressing is used etc. During experimental
+    # generation of images with input to button connection some inputs
+    # description could not be found in the table, such inputs will be
+    # specified here rigidly.
+    # Flash types (see UG295-1.4.3E_Gowin User Flash User Guide.pdf)
+    _flash_type = {'GW1N-1':  'FLASH96K',
+                   'GW1NZ-1': 'FLASH64KZ',
+                   'GW1N-4':  'FLASH256K', 'GW1NS-4': 'FLASH256K',
+                   'GW1N-9':  'FLASH608K', 'GW1N-9C': 'FLASH608K'}
+    if device not in _flash_type:
+        return
+    flash_type = _flash_type[device]
+    ins_type = 'XY'
+    if flash_type == 'FLASH96K':
+        ins_type = 'RC'
+
+    # userflash has neither its own cell type nor fuses, so it is logical to make it extra func.
+    # use X0Y0 cell for convenience - a significant part of UserFlash pins are
+    # located there, it saves from creating unnecessary nodes
+    row, col = (0, 0)
+    dev.extra_func.setdefault((row, col), {}).update(
+        {'userflash': {'type': flash_type}})
+    extra_func = dev.extra_func[(row, col)]['userflash']
+
+
+    def make_port(r, c, wire, port, wire_type, pins):
+        if r == -1 or c == -1:
+            return
+        bel = Bel()
+        wire = wirenames[wire]
+        bel.portmap[port] = wire
+        if r - 1 != row or c - 1 != col :
+            create_port_wire(dev, row, col, r - row - 1, c - col - 1, bel, 'USERFLASH', port, wire, wire_type)
+        pins[port] = bel.portmap[port]
+
+    # outputs
+    outs = extra_func.setdefault('outs', {})
+    for i, desc in enumerate(dat.compat_dict['UfbOuts']):
+        port = f'DOUT{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'FLASH_OUT', outs)
+
+    # inputs
+    ins = extra_func.setdefault('ins', {})
+    # DIN first - we know there they are
+    for i, desc in enumerate(dat.compat_dict['UfbIns'][58:]):
+        port = f'DIN{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'FLASH_IN', ins)
+
+    if ins_type == 'RC':
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][21:27]):
+            port = f'RA{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][27:33]):
+            port = f'CA{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][33:39]):
+            port = f'PA{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][39:43]):
+            port = f'MODE{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][43:45]):
+            port = f'SEQ{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][45:50]):
+            port = ['ACLK', 'PW', 'RESET', 'PE', 'OE'][i]
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][50:52]):
+            port = f'RMODE{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][52:54]):
+            port = f'WMODE{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][54:56]):
+            port = f'RBYTESEL{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][56:58]):
+            port = f'WBYTESEL{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+    else:
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][:6]):
+            port = ['XE', 'YE', 'SE', 'PROG', 'ERASE', 'NVSTR'][i]
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][6:15]):
+            port = f'XADR{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][15:21]):
+            port = f'YADR{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+
+    # XXX INUSEN - is observed to be connected to the VSS when USERFLASH is used
+    if flash_type != 'FLASH64KZ':
+        ins['INUSEN'] = 'C0'
+
+
 def fse_bram(fse, aux = False):
     bels = {}
     name = 'BSRAM'
@@ -1970,6 +2086,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_osc(dev, device, fse)
     fse_create_gsr(dev, device)
     fse_create_bandgap(dev, device)
+    fse_create_userflash(dev, device, dat)
     fse_create_logic2clk(dev, device, dat)
     disable_plls(dev, device)
     sync_extra_func(dev)

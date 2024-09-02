@@ -82,7 +82,7 @@ print_2_bytes:
 	srli a0, a0, 8
 	call print_byte_hex
 
-	andi s0, s1, 0xff
+	andi a0, s1, 0xff
 	call print_byte_hex
 
     lw  s1, 0(sp)
