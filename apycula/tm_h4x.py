@@ -3,6 +3,10 @@ import sys
 import json
 import struct
 
+gowinhome = os.getenv("GOWINHOME")
+if not gowinhome:
+    raise Exception("GOWINHOME not set")
+
 tc = 8 # number of timing classes
 chunklen = 15552 # length of each class
 
@@ -273,7 +277,8 @@ dspoffsets = {
 }
 def parse_chunk(chunk):
     for off, parser in offsets.items():
-        yield parser.__name__[6:], parser(chunk[off:])
+        if off < len(chunk):
+            yield parser.__name__[6:], parser(chunk[off:])
 
 
 def read_tm(f, device):
@@ -305,19 +310,42 @@ def read_tm(f, device):
             "C9/I8",
             "C9/I8_LV",
         ]
+    elif device.lower().startswith("gw5a"):
+        chunk_order = [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+        ]
     else:
         raise Exception("unknown family")
 
     tmdat = {}
+    a = enumerate(iter(lambda: f.read(chunklen), b''))
     for i, chunk in enumerate(iter(lambda: f.read(chunklen), b'')):
         try:
             speed_class = chunk_order[i]
         except IndexError:
             speed_class = str(i)
         tmdat[speed_class] = {}
-        assert len(chunk) == chunklen
+        print("len(chunk):", len(chunk), "chunklen:", chunklen)
+        #assert len(chunk) == chunklen # 5A the last chunk is smaller 12922 vs. 15552
         res = parse_chunk(chunk)
         for name, tm in res:
             if tm:
                 tmdat[speed_class][name] = tm
     return tmdat
+
+
+if __name__ == "__main__":
+    device = sys.argv[1]
+
+    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
+        read_tm(f, device)

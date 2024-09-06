@@ -14,8 +14,13 @@ from apycula.wirenames import clknumbers
 
 def dff(mod, cst, row, col, clk=None):
     "make a dff with optional clock"
-    name = tiled_fuzzer.make_name("DFF", "DFF")
-    dff = codegen.Primitive("DFF", name)
+    if tiled_fuzzer.device.lower().startswith("gw5a"):
+        name = tiled_fuzzer.make_name("DFFSE", "DFFSE")
+        dff = codegen.Primitive("DFFSE", name)
+    else:
+        name = tiled_fuzzer.make_name("DFF", "DFF")
+        dff = codegen.Primitive("DFF", name)
+
     dff.portmap['CLK'] = clk if clk else name+"_CLK"
     dff.portmap['D'] = name+"_D"
     dff.portmap['Q'] = name+"_Q"
@@ -38,7 +43,7 @@ def ibuf(mod, cst, loc, clk=None):
     return iob.portmap["O"]
 
 with open(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.fse", 'rb') as f:
-    fse = fuse_h4x.readFse(f)
+    fse = fuse_h4x.readFse(f, tiled_fuzzer.device)
 
 dat = dat19.Datfile(Path(f"{tiled_fuzzer.gowinhome}/IDE/share/device/{tiled_fuzzer.device}/{tiled_fuzzer.device}.dat"))
 
@@ -359,7 +364,7 @@ def make_lw_aliases(fse, dat: dat19.Datfile, db, quads, clks):
                     db.aliases.update({(row, col, f'LB{lw + 4}1') : (row, tap_col, f'LBO1')})
 
 if __name__ == "__main__":
-    if True:
+    if False:
         quads = quadrants()
 
         srcs = {}
@@ -379,6 +384,7 @@ if __name__ == "__main__":
         print("    srcs =", srcs)
         print("    dests =", dests)
         print("    clks =", clks)
+        print("fluffy1")
 
         pa = pin_aliases(quads, srcs)
         sa = spine_aliases(quads, dests, clks)
@@ -389,14 +395,17 @@ if __name__ == "__main__":
         # print(sa)
         # print(ta)
         # print(ba)
+        print("fluffy2")
 
         db.aliases.update(pa)
         db.aliases.update(sa)
         db.aliases.update(ta)
         db.aliases.update(ba)
+        print("fluffy3")
 
         # long wires
         make_lw_aliases(fse, dat, db, quads, clks)
+        print("fluffy4")
 
     with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)

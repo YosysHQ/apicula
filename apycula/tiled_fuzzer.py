@@ -73,13 +73,13 @@ params = {
     },
     "GW2A-18C": {
         "package": "PBGA256S",
-        "device": "GW2AR-18C",
-        "partnumber": "GW2AR-LV18PG256SC8/I7",
+        "device": "GW2A-18C",
+        "partnumber": "GW2A-LV18PG256SC8/I7", #"GW2AR-LV18PG256SC8/I7", "GW2AR-LV18QN88C8/I7" 
     },
     "GW5A-25A": {
-        "package": "MBGA121A",
+        "package": "MBGA121N",
         "device": "GW5A-25A",
-        "partnumber": "GW5A-LV25MG121NES",
+        "partnumber": "GW5A-LV25MG121NC1/I0",
     },
 }[device]
 
@@ -144,7 +144,7 @@ def run_pnr(mod, constr, config):
         "bit_encrypt"           : "0",
         "bit_security"          : "1",
         "bit_incl_bsram_init"   : "0",
-        "loading_rate"          : "250/100",
+        #"loading_rate"          : "250/100",
         "spi_flash_addr"        : "0x00FFF000",
         "bit_format"            : "txt",
         "bg_programming"        : "off",
@@ -153,12 +153,13 @@ def run_pnr(mod, constr, config):
     opt = codegen.PnrOptions({
         "gen_posp"          : "1",
         "gen_io_cst"        : "1",
-        "gen_ibis"          : "1",
+        #"gen_ibis"          : "1",
         "ireg_in_iob"       : "0",
         "oreg_in_iob"       : "0",
         "ioreg_in_iob"      : "0",
         "timing_driven"     : "0",
-        "cst_warn_to_error" : "0"})
+        "cst_warn_to_error" : "0"
+        })
     #"show_all_warn" : "1",
 
     pnr = codegen.Pnr()
@@ -213,7 +214,7 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
             bel.is_diff = is_diff
             bel.is_true_lvds = is_true_lvds
             bel.is_diff_p = is_positive
-            #print(f"type:{ttyp} [{row}][{col}], IOB{bel_name[-1]}, diff:{is_diff}, true lvds:{is_true_lvds}, p:{is_positive}")
+            print(f"type:{ttyp} [{row}][{col}], IOB{bel_name[-1]}, diff:{is_diff}, true lvds:{is_true_lvds}, p:{is_positive}")
     for ttyp, bels in iob_bels.items():
         for row, col in locations[ttyp]:
             db.grid[row][col].bels.update(iob_bels[ttyp])
@@ -240,6 +241,7 @@ if __name__ == "__main__":
         (db.rows-1, db.cols-1, fse['header']['grid'][61][-1][-1]),
         (db.rows-1, 0, fse['header']['grid'][61][-1][0]),
     ]
+    print("bingo")
 
     locations = {}
     for row, row_dat in enumerate(fse['header']['grid'][61]):
@@ -259,10 +261,12 @@ if __name__ == "__main__":
         ttyp_pins = pin_locations.setdefault(ttyp, {})
         ttyp_pins.setdefault(name[:-1], set()).add(name)
 
+
     pnr_empty = run_pnr(codegen.Module(), codegen.Constraints(), {})
     db.cmd_hdr = pnr_empty.hdr
     db.cmd_ftr = pnr_empty.ftr
     db.template = pnr_empty.bitmap
+    print("bingo2")
 
     # IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
@@ -274,7 +278,7 @@ if __name__ == "__main__":
     chipdb.dat_portmap(dat, db, device)
     chipdb.add_hclk_bels(dat, db, device)
 
-
+    print("bingo3")
     # XXX GW1NR-9 has interesting IOBA pins on the bottom side
     if device == 'GW1N-9' :
         loc = locations[52][0]
@@ -284,8 +288,10 @@ if __name__ == "__main__":
     chipdb.dat_aliases(dat, db)
 
     # GSR
-    if device in {'GW2A-18', 'GW2A-18C'}:
+    if device in {'GW2A-18', 'GW2A-18C', 'GW5A-25A'}:
         db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+        print("timing: ", db.timing)
+
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
         db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     else:
@@ -293,5 +299,6 @@ if __name__ == "__main__":
 
 
     #TODO proper serialization format
+
     with open(f"{device}_stage1.pickle", 'wb') as f:
         pickle.dump(db, f)

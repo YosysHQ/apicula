@@ -417,4 +417,10 @@ if __name__ == "__main__":
         raise Exception("GOWINHOME not set")
     device = sys.argv[1]
     p = Path(f"{gowinhome}/IDE/share/device/{device}/{device}.dat")
-    df = Datfile(p)
+    dat = Datfile(p)
+
+    grid = dat.read_grid()
+    for rd in grid.rows:
+        for rc in rd:
+            print(rc, end='')
+        print('')

@@ -433,6 +433,8 @@ def fse_osc(device, fse, ttyp):
         bel = osc.setdefault(f"OSCW", Bel())
     elif device == 'GW1N-2':
         bel = osc.setdefault(f"OSCO", Bel())
+    elif device == 'GW5A-25A':
+        bel = osc.setdefault(f"OSCO", Bel())
     else:
         raise Exception(f"Oscillator not yet supported on {device}")
     bel.portmap = {}
@@ -1464,6 +1466,7 @@ _clock_data = {
         'GW1N-9C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {( 1, 0, 10, 1, 0), (19, 10, 29, 2, 3)}},
         'GW2A-18': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
         'GW2A-18C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
+        'GW5A-25A': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}}, # Fix me
         }
 def fse_create_clocks(dev, device, dat: Datfile, fse):
     center_col = dat.grid.center_x - 1
@@ -1760,6 +1763,7 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
               # XXX unsupported boards, pure theorizing
               ('OSCO', 'GW1N-2'):  ({'OSCOUT': 'Q7'}, {'OSCEN': (9, 1, 'B4')}),
               ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSCO', 'GW5A-25A'):  ({'OSCOUT': 'Q4'}, {}), # Fix me
               }
 
 # from logic to global clocks. An interesting piece of dat['CmuxIns'], it was
@@ -1963,7 +1967,7 @@ def from_fse(device, fse, dat: Datfile):
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     fse_create_clocks(dev, device, dat, fse)
     fse_create_pll_clock_aliases(dev, device)
-    fse_create_hclk_aliases(dev, device, dat)
+    #fse_create_hclk_aliases(dev, device, dat)
     fse_create_bottom_io(dev, device)
     fse_create_tile_types(dev, dat)
     fse_create_diff_types(dev, device)
@@ -2034,7 +2038,7 @@ def add_attr_val(dev, logic_table, attrs, attr, val):
             break
 
 def get_pins(device):
-    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C"}:
+    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A"}:
         raise Exception(f"unsupported device {device}")
     pkgs = pindef.all_packages(device)
     res = {}
@@ -2133,6 +2137,15 @@ def json_pinout(device):
         return (res, {
             "GW2A-18C": pins,
             "GW2AR-18C": pins_r
+        }, res_bank_pins)
+    elif device =="GW5A-25A": # Fix me
+        pkgs, pins, bank_pins = get_pins("GW5A-25A")
+        res = {}
+        res.update(pkgs)
+        res_bank_pins = {}
+        res_bank_pins.update(bank_pins)
+        return (res, {
+            "GW5A-25A": pins,
         }, res_bank_pins)
     else:
         raise Exception("unsupported device")
@@ -2308,6 +2321,7 @@ def dat_portmap(dat, dev, device):
                     # course, 2 columns per macro are not enough to describe 4
                     # pre-adds, so different lines are used for different
                     # pre-adds.
+                    odd_idx = 0
                     for i in range(len(dat.portmap['PaddIn'])):
                         off = dat.portmap['PaddInDlt'][i][column]
                         wire_idx = dat.portmap['PaddIn'][i][column]
@@ -3435,6 +3449,31 @@ _pll_pads = {
                   'IOR45B' : (45, 55, 'CLKIN_C', 'PLL'),
                   'IOR47A' : (45, 55, 'FB_T', 'PLL'),
                   'IOR47B' : (45, 55, 'FB_C', 'PLL'), },
+    'GW5A-25A': { 'IOT56B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOT58B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOT58A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT89A' : (0, 0, 'FB_T', 'PLL'),
+                  'IOT56A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT91A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT91B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOT61A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT63A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOL5B'  : (0, 0, 'FB_C', 'PLL'),
+                  'IOL5A'  : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT1A'  : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOL3B'  : (0, 0, 'FB_C', 'PLL'),
+                  'IOR31A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOR31B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOR33A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOB89A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOL14A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOL3A'  : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOR33B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOB31B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOB4B'  : (0, 0, 'FB_C', 'PLL'),
+                  'IOB33A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOB54B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOB12B' : (0, 0, 'CLKIN_C', 'PLL'), },
 }
 def pll_pads(dev, device, pad_locs):
     if device not in _pll_pads:
