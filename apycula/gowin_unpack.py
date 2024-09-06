@@ -19,7 +19,7 @@ _pinout = ""
 _packages = {
         'GW1N-1' : 'LQFP144', 'GW1NZ-1' : 'QFN48', 'GW1N-4' : 'PBGA256', 'GW1N-9C' : 'UBGA332',
         'GW1N-9' : 'PBGA256', 'GW1NS-4' : 'QFN48', 'GW1NS-2' : 'LQFP144', 'GW2A-18': 'PBGA256',
-        'GW2A-18C' : 'PBGA256S'
+        'GW2A-18C' : 'PBGA256S', 'GW5A-25A': 'MBGA121N'
 }
 
 def print_sorted_dict(start, d):
@@ -441,7 +441,12 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             continue
         if name.startswith("IOB"):
             idx = name[-1]
-            attrvals = parse_attrvals(tile, db.logicinfo['IOB'], db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids)
+
+            fuse_table = {}
+            if f'IOB{idx}' in db.longval[tiledata.ttyp]:
+                fuse_table = db.longval[tiledata.ttyp][f'IOB{idx}']
+
+            attrvals = parse_attrvals(tile, db.logicinfo['IOB'], fuse_table, attrids.iob_attrids)
             #print(row, col, attrvals)
             try: # we can ask for invalid pin here because the IOBs share some stuff
                 bank = chipdb.loc2bank(db, row, col)
