@@ -1833,7 +1833,7 @@ def fse_create_bandgap(dev, device):
             {'bandgap': {'wire': 'C1'}})
 
 def fse_create_userflash(dev, device, dat):
-    # dat[‘UfbIns’] and dat[‘UfbOuts’] judgement to describe the waste and waste UserFlash.
+    # dat[‘UfbIns’] and dat[‘UfbOuts’].
     # The outputs are exactly 32 by the number of bits and they are always
     # present, their positions correspond to bit indices - checked by
     # selectively connecting the outputs to LEDs.
