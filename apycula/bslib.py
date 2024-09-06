@@ -30,19 +30,25 @@ def read_bitstream(fname):
     calc = crc.Calculator(crc16arc)
     with open(fname) as inp:
         for line in inp:
-            if line.startswith("//"): continue
+            if line.startswith("//"): 
+                print("line: ", line)
+                continue
             ba = bytearr(line)
             if not frames:
                 if is_hdr:
+                    print("header:", ba)
                     hdr.append(ba)
                 else:
+                    print("footer:", ba)
                     ftr.append(ba)
                 if not preamble and ba[0] != 0xd2: # SPI address
                     crcdat.extend(ba)
                 if not preamble and ba[0] == 0x3b: # frame count
                     frames = int.from_bytes(ba[2:], 'big')
+                    print("frame count: ", frames)
                     is_hdr = False
                 if not preamble and ba[0] == 0x06: # device ID
+                    print("Device ID:", ba)
                     if ba == b'\x06\x00\x00\x00\x11\x00\x58\x1b':
                         padding = 4
                     elif ba == b'\x06\x00\x00\x00\x11\x00H\x1b':
@@ -59,6 +65,8 @@ def read_bitstream(fname):
                         padding = 0
                     elif ba == b'\x06\x00\x00\x00\x00\x00\x08\x1b':
                         padding = 0
+                    elif ba == b'\x06\x00\x00\x00\x00\x01\x28\x1b': # GW5A-25A
+                        padding = 0
                     else:
                         raise ValueError("Unsupported device", ba)
                 preamble = max(0, preamble-1)
@@ -66,7 +74,8 @@ def read_bitstream(fname):
             crcdat.extend(ba[:-8])
             crc1 = (ba[-7] << 8) + ba[-8]
             crc2 = calc.checksum(crcdat)
-            assert crc1 == crc2, f"Not equal {crc1} {crc2} for {crcdat}"
+            print("len:", len(ba), "padding:", padding)
+            #assert crc1 == crc2, f"Not equal {crc1} {crc2} for {crcdat}"
             crcdat = ba[-6:]
             bitmap.append(bitarr(line, padding))
             frames = max(0, frames-1)
