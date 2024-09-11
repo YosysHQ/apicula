@@ -2022,7 +2022,7 @@ def find_and_set_dhcen_hclk_fuses(db, tilemap, wire, side):
         if side == 'L':
             col = 0
         else:
-            col = db.col - 1
+            col = db.cols - 1
         for row in range(db.rows):
             set_fuse()
 
