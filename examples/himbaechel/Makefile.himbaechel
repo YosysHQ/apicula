@@ -49,7 +49,7 @@ all: \
 	bsram-pROM-tangnano1k.fs bsram-SDPB-tangnano1k.fs bsram-DPB16-tangnano1k.fs \
 	bsram-SP-tangnano1k.fs bsram-pROMX9-tangnano1k.fs bsram-SDPX9B-tangnano1k.fs \
 	bsram-SPX9-tangnano1k.fs bsram-DPX9B18-tangnano1k.fs \
-	dqce-tangnano1k.fs dcs-tangnano1k.fs \
+	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs \
 	\
 	blinky-tangnano4k.fs shift-tangnano4k.fs blinky-tbuf-tangnano4k.fs blinky-oddr-tangnano4k.fs \
 	blinky-osc-tangnano4k.fs tlvds-tangnano4k.fs elvds-tangnano4k.fs oddr-tlvds-tangnano4k.fs \
@@ -78,7 +78,7 @@ all: \
 	dsp-mult36x36-tangnano9k.fs dsp-padd9-tangnano9k.fs dsp-padd18-tangnano9k.fs \
 	dsp-mult9x9-tangnano9k.fs dsp-alu54d-tangnano9k.fs dsp-multalu18x18-tangnano9k.fs \
 	dsp-multalu36x18-tangnano9k.fs dsp-multaddalu18x18-tangnano9k.fs \
-	dqce-tangnano9k.fs dcs-tangnano9k.fs \
+	dqce-tangnano9k.fs dcs-tangnano9k.fs femto-riscv-userflash-tangnano9k.fs \
 	\
 	blinky-szfpga.fs shift-szfpga.fs blinky-tbuf-szfpga.fs blinky-oddr-szfpga.fs \
 	blinky-osc-szfpga.fs tlvds-szfpga.fs elvds-szfpga.fs oddr-tlvds-szfpga.fs \
@@ -314,6 +314,7 @@ bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh %-image-rom.v %-video-ram.v %.
 %-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh %-pll-vr.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -json $@"
 	
+
 # ============================================================
 # Tangnano9k (GW1N-9C)
 %-tangnano9k.fs: %-tangnano9k.json
@@ -323,7 +324,7 @@ bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh %-image-rom.v %-video-ram.v %.
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=tangnano9k.cst
 
 %-tangnano9k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -D HAS_FLASH608K -p "read_verilog $^; synth_gowin -json $@"
 
 pll-nanolcd-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"

@@ -146,6 +146,6 @@ defparam mult_4.SOA_REG=1'b0;
 defparam mult_4.MULT_RESET_MODE="SYNC";
 endmodule
 
-`define FIRMWARE "riscv-dsp-firmware/mult9x9.hex"
+`define FIRMWARE "riscv-firmware/mult9x9.hex"
 `include "dsp-riscv.v"
 

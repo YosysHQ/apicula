@@ -1920,6 +1920,122 @@ def fse_create_bandgap(dev, device):
         dev.extra_func.setdefault((10, 18), {}).update(
             {'bandgap': {'wire': 'C1'}})
 
+def fse_create_userflash(dev, device, dat):
+    # dat[‘UfbIns’] and dat[‘UfbOuts’].
+    # The outputs are exactly 32 by the number of bits and they are always
+    # present, their positions correspond to bit indices - checked by
+    # selectively connecting the outputs to LEDs.
+    # The inputs depend on the Flash type - different types have different
+    # inputs, e.g. XY or RCP addressing is used etc. During experimental
+    # generation of images with input to button connection some inputs
+    # description could not be found in the table, such inputs will be
+    # specified here rigidly.
+    # Flash types (see UG295-1.4.3E_Gowin User Flash User Guide.pdf)
+    _flash_type = {'GW1N-1':  'FLASH96K',
+                   'GW1NZ-1': 'FLASH64KZ',
+                   'GW1N-4':  'FLASH256K', 'GW1NS-4': 'FLASH256K',
+                   'GW1N-9':  'FLASH608K', 'GW1N-9C': 'FLASH608K'}
+    if device not in _flash_type:
+        return
+    flash_type = _flash_type[device]
+    ins_type = 'XY'
+    if flash_type == 'FLASH96K':
+        ins_type = 'RC'
+
+    # userflash has neither its own cell type nor fuses, so it is logical to make it extra func.
+    # use X0Y0 cell for convenience - a significant part of UserFlash pins are
+    # located there, it saves from creating unnecessary nodes
+    row, col = (0, 0)
+    dev.extra_func.setdefault((row, col), {}).update(
+        {'userflash': {'type': flash_type}})
+    extra_func = dev.extra_func[(row, col)]['userflash']
+
+
+    def make_port(r, c, wire, port, wire_type, pins):
+        if r == -1 or c == -1:
+            return
+        bel = Bel()
+        wire = wirenames[wire]
+        bel.portmap[port] = wire
+        if r - 1 != row or c - 1 != col :
+            create_port_wire(dev, row, col, r - row - 1, c - col - 1, bel, 'USERFLASH', port, wire, wire_type)
+        pins[port] = bel.portmap[port]
+
+    # outputs
+    outs = extra_func.setdefault('outs', {})
+    for i, desc in enumerate(dat.compat_dict['UfbOuts']):
+        port = f'DOUT{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'FLASH_OUT', outs)
+
+    # inputs
+    ins = extra_func.setdefault('ins', {})
+    # DIN first - we know there they are
+    for i, desc in enumerate(dat.compat_dict['UfbIns'][58:]):
+        port = f'DIN{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'FLASH_IN', ins)
+
+    if ins_type == 'RC':
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][21:27]):
+            port = f'RA{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][27:33]):
+            port = f'CA{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][33:39]):
+            port = f'PA{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][39:43]):
+            port = f'MODE{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][43:45]):
+            port = f'SEQ{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][45:50]):
+            port = ['ACLK', 'PW', 'RESET', 'PE', 'OE'][i]
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][50:52]):
+            port = f'RMODE{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][52:54]):
+            port = f'WMODE{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][54:56]):
+            port = f'RBYTESEL{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][56:58]):
+            port = f'WBYTESEL{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+    else:
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][:6]):
+            port = ['XE', 'YE', 'SE', 'PROG', 'ERASE', 'NVSTR'][i]
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][6:15]):
+            port = f'XADR{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+        for i, desc in enumerate(dat.compat_dict['UfbIns'][15:21]):
+            port = f'YADR{i}'
+            r, c, wire = desc
+            make_port(r, c, wire, port, 'FLASH_IN', ins)
+
+    # XXX INUSEN - is observed to be connected to the VSS when USERFLASH is used
+    if flash_type != 'FLASH64KZ':
+        ins['INUSEN'] = 'C0'
+
+
 def fse_bram(fse, aux = False):
     bels = {}
     name = 'BSRAM'
@@ -2016,6 +2132,8 @@ def from_fse(device, fse, dat: Datfile):
     bram_aux_ttypes = get_tile_types_by_func(dev, dat, fse, 'b')
     dsp_ttypes = get_tile_types_by_func(dev, dat, fse, 'D')
     dsp_aux_ttypes = get_tile_types_by_func(dev, dat, fse, 'd')
+    pll_ttypes = get_tile_types_by_func(dev, dat, fse, 'P')
+    pll_ttypes.update(get_tile_types_by_func(dev, dat, fse, 'p'))
     for ttyp in ttypes:
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
@@ -2038,11 +2156,7 @@ def from_fse(device, fse, dat: Datfile):
             tile.bels = fse_dsp(fse)
         elif ttyp in dsp_aux_ttypes:
             tile.bels = fse_dsp(fse, True)
-        # These are the cell types in which PLLs can be located. To determine,
-        # we first take the coordinates of the cells with the letters P and p
-        # from the dat['grid'] table, and then, using these coordinates,
-        # determine the type from fse['header']['grid'][61][row][col]
-        elif ttyp in [42, 45, 74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
+        elif ttyp in pll_ttypes:
             tile.bels = fse_pll(device, fse, ttyp)
         tile.bels.update(fse_iologic(device, fse, ttyp))
         tiles[ttyp] = tile
@@ -2060,6 +2174,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_osc(dev, device, fse)
     fse_create_gsr(dev, device)
     fse_create_bandgap(dev, device)
+    fse_create_userflash(dev, device, dat)
     fse_create_logic2clk(dev, device, dat)
     fse_create_dhcen(dev, device, fse, dat)
     disable_plls(dev, device)
@@ -3435,10 +3550,10 @@ def fse_wire_delays(db):
     db.wire_delay[wirenames[288]] = "LW_BRANCH" # LTBO1
     db.wire_delay[wirenames[289]] = "LW_SPAN" # SS00
     db.wire_delay[wirenames[290]] = "LW_SPAN" # SS40
-    db.wire_delay[wirenames[291]] = "GCLK_TAP" # GT00
-    db.wire_delay[wirenames[292]] = "GCLK_TAP" # GT10
-    db.wire_delay[wirenames[293]] = "GCLK_BRANCH" # GBO0
-    db.wire_delay[wirenames[294]] = "GCLK_BRANCH" # GBO1
+    db.wire_delay[wirenames[291]] = "TAP_BRANCH_PCLK" # GT00
+    db.wire_delay[wirenames[292]] = "TAP_BRANCH_PCLK" # GT10
+    db.wire_delay[wirenames[293]] = "BRANCH_PCLK" # GBO0
+    db.wire_delay[wirenames[294]] = "BRANCH_PCLK" # GBO1
     for i in range(295, 303): # DI0-DI7
         db.wire_delay[wirenames[i]] = "DI"
     for i in range(303, 309): # CIN0-CIN5
@@ -3447,6 +3562,20 @@ def fse_wire_delays(db):
         db.wire_delay[wirenames[i]] = "COUT"
     for i in range(1001, 1049): # LWSPINE
         db.wire_delay[wirenames[i]] = "X8"
+    # possibly LW wires for large chips, for now assign dummy value
+    for i in range(1049, 1130):
+        db.wire_delay[str(i)] = "X8"
+    # clock wires
+    for i in range(261):
+        db.wire_delay[clknames[i]] = "TAP_BRANCH_PCLK" # XXX
+    for i in range(32):
+        db.wire_delay[clknames[i]] = "SPINE_TAP_PCLK"
+    for i in range(81, 105): # clock inputs (PLL outs)
+        db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
+    for i in range(121, 129): # clock inputs (pins)
+        db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
+    for i in range(129, 153): # clock inputs (logic->clock)
+        db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
 
 # assign pads with plls
 # for now use static table and store the bel name although it is always PLL without a number
