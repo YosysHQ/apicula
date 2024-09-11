@@ -16,10 +16,9 @@ IO_LOC "LED_R" 10;
 IO_LOC "LED_G" 11;
 IO_LOC "LED_B" 13;
 
-IO_LOC "TXD" 32;
-IO_PORT "TXD" PULL_MODE=UP;
-IO_LOC "RXD" 31;
-IO_PORT "RXD" PULL_MODE=UP;
+// Use buildin USB-serial
+IO_LOC "TXD" 17;
+IO_LOC "RXD" 18;
 
 // fake
 IO_LOC "led[6]" 35;

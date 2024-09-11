@@ -82,7 +82,7 @@ print_2_bytes:
 	srli a0, a0, 8
 	call print_byte_hex
 
-	andi s0, s1, 0xff
+	andi a0, s1, 0xff
 	call print_byte_hex
 
     lw  s1, 0(sp)
@@ -127,33 +127,56 @@ main:
 .L0:
 	la  a0, hello_str
 	call puts
-
 .L1:
 	la  a0, m0_str
 	call puts
-	lw	a0, IO_DSP_OUT_L1(gp)
-	call print_dsp_out_h
 	lw	a0, IO_DSP_OUT_H(gp)
-	call print_dsp_out_l
+	call print_dsp_out_h
 	lw	a0, IO_DSP_OUT_L(gp)
 	call print_dsp_out_l
-	la  a0, m0_end_str
-	call puts
+	call put_eol
 
 	la  a0, m1_str
 	call puts
-	li	a0, IO_DSP_OUT_L3
-	add a0, a0, gp
-	lw a0, 0(a0)
+	lw	a0, IO_DSP_OUT_H1(gp)
 	call print_dsp_out_h
+	lw	a0, IO_DSP_OUT_L1(gp)
+	call print_dsp_out_l
+	call put_eol
+
+	la  a0, m2_str
+	call puts
 	li	a0, IO_DSP_OUT_H2
 	add a0, a0, gp
 	lw a0, 0(a0)
-	call print_dsp_out_l
+	call print_dsp_out_h
 	lw	a0, IO_DSP_OUT_L2(gp)
 	call print_dsp_out_l
-	la  a0, m1_end_str
+	call put_eol
+	
+	la  a0, m3_str
 	call puts
+	li	a0, IO_DSP_OUT_H3
+	add a0, a0, gp
+	lw a0, 0(a0)
+	call print_dsp_out_h
+	li	a0, IO_DSP_OUT_L3
+	add a0, a0, gp
+	lw a0, 0(a0)
+	call print_dsp_out_l
+	call put_eol
+
+	la  a0, m4_str
+	call puts
+	li	a0, IO_DSP_OUT_H4
+	add a0, a0, gp
+	lw a0, 0(a0)
+	call print_dsp_out_h
+	li	a0, IO_DSP_OUT_L4
+	add a0, a0, gp
+	lw a0, 0(a0)
+	call print_dsp_out_l
+	call put_eol
 
 	call wait
 	call wait
@@ -168,11 +191,11 @@ main:
 
 	j .L1
 
-hello_str:	.asciz "Apicula. MULT36X36.\n"
+hello_str:	.asciz "Apicula. MULT18X18.\n"
 iter_str:   .asciz "--- tick ---\n"
-hex_str:    .asciz "0x"
-m0_str:		.asciz "0x412345678 * 0x187654321 = 0x"
-m0_end_str: .asciz " <- must be '0x6396a300170b88d78'\n"
-m1_str:		.asciz "-0x514233241 * -0x234567 = 0x"
-m1_end_str: .asciz " settle down to '0xb321487597bd27'\n"
+m0_str:		.asciz "Mult18x18 = 0x"
+m1_str:		.asciz "Mult18x18 = 0x"
+m2_str:		.asciz "Mult18x18 = 0x"
+m3_str:		.asciz "Mult18x18 = 0x"
+m4_str:		.asciz "Mult18x18 = 0x"
 

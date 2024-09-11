@@ -49,6 +49,6 @@ module idsp(input wire clk, input wire reset,
 	defparam mu_1.MULT_RESET_MODE="SYNC";
 endmodule
 
-`define FIRMWARE "riscv-dsp-firmware/mult36x36.hex"
+`define FIRMWARE "riscv-firmware/mult36x36.hex"
 `include "dsp-riscv.v"
 

@@ -177,6 +177,6 @@ module idsp(input wire clk, input wire reset,
 	defparam multalu_4.MULTALU18X18_MODE=2;
 endmodule
 
-`define FIRMWARE "riscv-dsp-firmware/multalu18x18.hex"
+`define FIRMWARE "riscv-firmware/multalu18x18.hex"
 `include "dsp-riscv.v"
 

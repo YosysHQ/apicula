@@ -121,6 +121,6 @@ module idsp(input wire clk, input wire reset,
 	defparam padd_4.PADD_RESET_MODE="SYNC";
 	endmodule
 
-`define FIRMWARE "riscv-dsp-firmware/padd9.hex"
+`define FIRMWARE "riscv-firmware/padd9.hex"
 `include "dsp-riscv.v"
 
