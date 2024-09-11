@@ -185,7 +185,7 @@ _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MU
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -1996,13 +1996,13 @@ def bin_str_to_dec(str_val):
         dec_num = int(bin_str[0], 2)
         return str(dec_num)
     return None
-    
+
 
 
 _hclk_default_params ={"GSREN": "false", "DIV_MODE":"2"}
 def set_hclk_attrs(db, params, num, typ, cell_name):
     name_pattern = r'^_HCLK([0,1])_SECT([0,1])$'
-    params = dict(params or _hclk_default_params)   
+    params = dict(params or _hclk_default_params)
     attrs = {}
     pattern_match = re.findall(name_pattern, num)
     if (not pattern_match):
@@ -2013,21 +2013,21 @@ def set_hclk_attrs(db, params, num, typ, cell_name):
     if device in ["GW1N-1S","GW1N-2","GW1NR-2","GW1NS-4","GW1NS-4C","GW1NSR-4",\
                        "GW1NSR-4C","GW1NSER-4C","GW1N-9","GW1NR-9", "GW1N-9C","GW1NR-9C","GW1N-1P5"]:
         valid_div_modes.append("8")
-    
+
     if (params["DIV_MODE"]) not in valid_div_modes:
         bin_match = bin_str_to_dec(params["DIV_MODE"])
         if bin_match is None or bin_match not in valid_div_modes:
             raise Exception(f"Invalid DIV_MODE {bin_match or params['DIV_MODE']} for CLKDIV {cell_name} on device {device}")
         params["DIV_MODE"] = str(bin_match[0])
 
-      
+
     if (typ == "CLKDIV2"):
         attrs[f"BK{section_idx}MUX{hclk_idx}_OUTSEL"] = "DIV2"
     elif (typ == "CLKDIV"):
-        attrs[f"HCLKDIV{hclk_idx}_DIV"] = params["DIV_MODE"]         
+        attrs[f"HCLKDIV{hclk_idx}_DIV"] = params["DIV_MODE"]
         if (section_idx == '1'):
             attrs[f"HCLKDCS{hclk_idx}_SEL"] = f"HCLKBK{section_idx}{hclk_idx}"
-    
+
     fin_attrs = set()
     for attr, val in attrs.items():
         if isinstance(val, str):
@@ -2312,6 +2312,8 @@ def place(db, tilemap, bels, cst, args):
         if typ == "GSR":
             pass
         elif typ == "BANDGAP":
+            pass
+        elif typ.startswith("FLASH"):
             pass
         elif typ.startswith('MUX2_'):
             pass
