@@ -1210,7 +1210,7 @@ hclk_attrvals = {
         'DIVCIBRST2':       1,
         'DIVCIBRST3':       2,
         'DIV2':             3,
-        'DIVCIBRST0':       4, 
+        'DIVCIBRST0':       4,
         'DIVCIBRST1':       5,
         'DIVCIBRST4':       6,
         'DIVCIBRST5':       7,

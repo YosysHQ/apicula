@@ -185,7 +185,7 @@ _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MU
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|DHCEN)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -1989,6 +1989,43 @@ def set_osc_attrs(db, typ, params):
         add_attr_val(db, 'OSC', fin_attrs, attrids.osc_attrids[attr], val)
     return fin_attrs
 
+_wire2attr_val = {
+        'HCLK_IN0': ('HSB0MUX0_HSTOP', 'HCLKCIBSTOP0'),
+        'HCLK_IN1': ('HSB1MUX0_HSTOP', 'HCLKCIBSTOP2'),
+        'HCLK_IN2': ('HSB0MUX1_HSTOP', 'HCLKCIBSTOP1'),
+        'HCLK_IN3': ('HSB1MUX1_HSTOP', 'HCLKCIBSTOP3'),
+        'HCLK_BANK_OUT0': ('BRGMUX0_BRGSTOP', 'BRGCIBSTOP0'),
+        'HCLK_BANK_OUT1': ('BRGMUX1_BRGSTOP', 'BRGCIBSTOP1'),
+        }
+def find_and_set_dhcen_hclk_fuses(db, tilemap, wire, side):
+    fin_attrs = set()
+    attr, attr_val = _wire2attr_val[wire]
+    val = attrids.hclk_attrvals[attr_val]
+    add_attr_val(db, 'HCLK', fin_attrs, attrids.hclk_attrids[attr], val)
+
+    def set_fuse():
+        ttyp = db.grid[row][col].ttyp
+        if 'HCLK' in db.shortval[ttyp]:
+            bits = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK")
+            tile = tilemap[row, col]
+            for r, c in bits:
+                tile[r][c] = 1
+
+    if side in "TB":
+        if side == 'T':
+            row = 0
+        else:
+            row = db.rows - 1
+        for col in range(db.cols):
+            set_fuse()
+    else:
+        if side == 'L':
+            col = 0
+        else:
+            col = db.cols - 1
+        for row in range(db.rows):
+            set_fuse()
+
 def bin_str_to_dec(str_val):
     bin_pattern = r'^[0,1]+'
     bin_str = re.findall(bin_pattern, str_val)
@@ -2034,7 +2071,6 @@ def set_hclk_attrs(db, params, num, typ, cell_name):
             val = attrids.hclk_attrvals[val]
         add_attr_val(db, 'HCLK', fin_attrs, attrids.hclk_attrids[attr], val)
     return fin_attrs
-
 
 _iologic_default_attrs = {
         'DUMMY': {},
@@ -2502,9 +2538,19 @@ def place(db, tilemap, bels, cst, args):
             cfg_tile = tilemap[(0, 37)]
             for r, c in bits:
                 cfg_tile[r][c] = 1
+        elif typ == "DHCEN":
+            if 'DHCEN_USED' not in attrs:
+                continue
+            # DHCEN as such is just a control wire and does not have a fuse
+            # itself, but HCLK has fuses that allow this control. Here we look
+            # for the corresponding HCLK and set its fuses.
+            _, wire, _, side = db.extra_func[row - 1, col -1]['dhcen'][int(num)]['pip']
+            hclk_attrs = find_and_set_dhcen_hclk_fuses(db, tilemap, wire, side)
         elif typ in ["CLKDIV", "CLKDIV2"]:
             hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname)
             bits = get_shortval_fuses(db, tiledata.ttyp, hclk_attrs, "HCLK")
+            for r, c in bits:
+                tile[r][c] = 1
         elif typ == 'DQCE':
             # Himbaechel only
             pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
@@ -2693,6 +2739,17 @@ def secure_long_wires(db, tilemap, row, col, src, dest):
                 for row, col in bits:
                     tile[row][col] = 1
 
+# hclk interbank requires to set some non-route fuses
+def do_hclk_banks(db, row, col, src, dest):
+    res = set()
+    if dest in {'HCLK_BANK_OUT0', 'HCLK_BANK_OUT1'}:
+        fin_attrs = set()
+        add_attr_val(db, 'HCLK', fin_attrs, attrids.hclk_attrids[f'BRGMUX{dest[-1]}_BRGOUT'], attrids.hclk_attrvals['ENABLE'])
+
+        ttyp = db.grid[row][col].ttyp
+        if 'HCLK' in db.shortval[ttyp]:
+            res = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK")
+    return res
 
 def route(db, tilemap, pips):
     for row, col, src, dest in pips:
@@ -2704,6 +2761,7 @@ def route(db, tilemap, pips):
                 bits = tiledata.clock_pips[dest][src]
             elif is_himbaechel and (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1]:
                 bits = db.hclk_pips[row - 1, col - 1][dest][src]
+                bits.update(do_hclk_banks(db, row - 1, col - 1, src, dest))
             else:
                 bits = tiledata.pips[dest][src]
         except KeyError:

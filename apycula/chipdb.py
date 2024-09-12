@@ -1186,12 +1186,19 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                 row, col = hclk_loc
                 ttyp = fse['header']['grid'][61][row][col]
                 dev.hclk_pips[(row, col)] = fse_pips(fse, ttyp, table = 48, wn = hclknames)
+                for dst in dev.hclk_pips[(row, col)].keys():
+                    # from HCLK to interbank MUX
+                    if dst in {'HCLK_BANK_OUT0', 'HCLK_BANK_OUT1'}:
+                        add_node(dev, f'HCLK{"TBLR".index(side)}_BANK_OUT{dst[-1]}', "GLOBAL_CLK", row, col, dst)
                 # connect local wires like PCLKT0 etc to the global nodes
                 for srcs in dev.hclk_pips[(row, col)].values():
                     for src in srcs.keys():
                         for pfx in _global_wire_prefixes:
                             if src.startswith(pfx):
                                 add_node(dev, src, "HCLK", row, col, src)
+                        # from interbank MUX to HCLK
+                        if src in {'HCLK_BANK_IN0', 'HCLK_BANK_IN1'}:
+                            add_node(dev, f'HCLKMUX{src[-1]}', "GLOBAL_CLK", row, col, src)
                 # strange GW1N-9C input-input aliases
                 for i in {0, 2}:
                     dev.nodes.setdefault(f'X{col}Y{row}/HCLK9-{i}', ('HCLK', {(row, col, f'HCLK_IN{i}')}))[1].add((row, col, f'HCLK_9IN{i}'))
@@ -1235,6 +1242,80 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                             pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
                             if src.startswith('HCLK'):
                                 hclks[src].add((row, col, src))
+
+# DHCEN (as I imagine) is an additional control input of the HCLK input
+# multiplexer. We have four input multiplexers - HCLK_IN0, HCLK_IN1, HCLK_IN2,
+# HCLK_IN3 (GW1N-9C with its additional four multiplexers stands separately,
+# but we will deal with it later) and two interbank inputs.
+# Creating images using IDE where we use the maximum allowable number of DHCEN,
+# the CE port of which is connected to the IO ports, then we trace the route
+# from IO to the final wire, which will be the CE port of the DHCEN primitive.
+# We are not interested in the CLKIN and CLKOUT ports because we are supposed
+# to simply disable/enable one of the input multiplexers.
+# Let's summarize the experimental data in a table.
+# There are 4 multiplexers and interbank inputs on each side of the chip
+# (sides: Right Bottom Left Top).
+_dhcen_ce = {
+        'GW1N-1':
+        {'B' : [(10, 19, 'D5'), (10, 19, 'D3'), (10, 19, 'D4'), (10, 19, 'D2'), (10,  0, 'C0'), (10,  0, 'C1')]},
+        'GW1NZ-1':
+        {'R' : [( 0, 19, 'A2'), ( 0, 19, 'A4'), ( 0, 19, 'A3'), ( 0, 19, 'A5'), ( 0, 18, 'C6'), ( 0, 18, 'C7')],
+         'T' : [(10, 19, 'A2'), (10, 19, 'A4'), (10, 19, 'A3'), (10, 19, 'A5'), (10, 19, 'C6'), (10, 19, 'C7')]},
+        'GW1NS-2':
+        {'R' : [(10, 19, 'A4'), (10, 19, 'A6'), (10, 19, 'A5'), (10, 19, 'A7'), (10, 19, 'C4'), (10, 19, 'C5')],
+         'B' : [(11, 19, 'A4'), (11, 19, 'A6'), (11, 19, 'A5'), (11, 19, 'A7'), (11, 19, 'C4'), (11, 19, 'C5')],
+         'L' : [( 9,  0, 'A0'), ( 9,  0, 'A2'), ( 9,  0, 'A1'), ( 9,  0, 'A3'), ( 9,  0, 'C0'), ( 9,  0, 'C1')],
+         'T' : [( 0, 19, 'D5'), ( 0, 19, 'D3'), ( 0, 19, 'D4'), ( 0, 19, 'D2'), ( 0,  0, 'B1'), ( 0,  0, 'B0')]},
+        'GW1N-4':
+        {'R' : [(18, 37, 'C6'), (18, 37, 'D7'), (18, 37, 'C7'), (18, 37, 'D6'), ( 0, 37, 'D7'), ( 0, 37, 'D6')],
+         'B' : [(19, 37, 'A2'), (19, 37, 'A4'), (19, 37, 'A3'), (19, 37, 'A5'), (19,  0, 'B2'), (19,  0, 'B3')],
+         'L' : [(18,  0, 'C6'), (18,  0, 'D7'), (18,  0, 'C7'), (18,  0, 'D6'), (19,  0, 'A4'), ( 0,  0, 'B1')]},
+        'GW1NS-4':
+        {'R' : [(18, 37, 'C6'), (18, 37, 'D7'), (18, 37, 'C7'), (18, 37, 'D6'), ( 0, 37, 'D7'), ( 0, 37, 'D6')],
+         'B' : [(19, 37, 'A2'), (19, 37, 'A4'), (19, 37, 'A3'), (19, 37, 'A5'), (19,  0, 'B2'), (19,  0, 'B3')],
+         'T' : [( 1,  0, 'B6'), ( 1,  0, 'A0'), ( 1,  0, 'B7'), ( 1,  0, 'A1'), ( 1,  0, 'C4'), ( 1,  0, 'C3')]},
+        'GW1N-9':
+        {'R' : [(18, 46, 'C6'), (18, 46, 'D7'), (18, 46, 'C7'), (18, 46, 'D6'), (18, 46, 'B6'), (18, 46, 'B7')],
+         'B' : [(28, 46, 'A2'), (28, 46, 'A4'), (28, 46, 'A3'), (28, 46, 'A5'), (28,  0, 'B2'), (28,  0, 'B3')],
+         'L' : [(18,  0, 'C6'), (18,  0, 'D7'), (18,  0, 'C7'), (18,  0, 'D6'), (18,  0, 'B6'), (18,  0, 'B7')],
+         'T' : [( 9,  0, 'C6'), ( 9,  0, 'D7'), ( 9,  0, 'C7'), ( 9,  0, 'D6'), ( 9,  0, 'B6'), ( 9,  0, 'B7')]},
+        'GW1N-9C':
+        {'R' : [(18, 46, 'C6'), (18, 46, 'D7'), (18, 46, 'C7'), (18, 46, 'D6'), (18, 46, 'B6'), (18, 46, 'B7')],
+         'B' : [(28, 46, 'A2'), (28, 46, 'A4'), (28, 46, 'A3'), (28, 46, 'A5'), (28,  0, 'B2'), (28,  0, 'B3')],
+         'L' : [(18,  0, 'C6'), (18,  0, 'D7'), (18,  0, 'C7'), (18,  0, 'D6'), (18,  0, 'B6'), (18,  0, 'B7')],
+         'T' : [( 9,  0, 'C6'), ( 9,  0, 'D7'), ( 9,  0, 'C7'), ( 9,  0, 'D6'), ( 9,  0, 'B6'), ( 9,  0, 'B7')]},
+        'GW2A-18':
+        {'R' : [(27, 55, 'A2'), (27, 55, 'A3'), (27, 55, 'D2'), (27, 55, 'D3'), (27, 55, 'D0'), (27, 55, 'D1')],
+         'B' : [(54, 27, 'A2'), (54, 27, 'A3'), (54, 27, 'D2'), (54, 27, 'D3'), (54, 27, 'D0'), (54, 27, 'D1')],
+         'L' : [(27,  0, 'A2'), (27,  0, 'A3'), (27,  0, 'D2'), (27,  0, 'D3'), (27,  0, 'D0'), (27,  0, 'D1')],
+         'T' : [( 0, 27, 'A2'), ( 0, 27, 'A3'), ( 0, 27, 'D2'), ( 0, 27, 'D3'), (  0,27, 'D0'), ( 0, 27, 'D1')]},
+        'GW2A-18C':
+        {'R' : [(27, 55, 'A2'), (27, 55, 'A3'), (27, 55, 'D2'), (27, 55, 'D3'), (27, 55, 'D0'), (27, 55, 'D1')],
+         'B' : [(54, 27, 'A2'), (54, 27, 'A3'), (54, 27, 'D2'), (54, 27, 'D3'), (54, 27, 'D0'), (54, 27, 'D1')],
+         'L' : [(27,  0, 'A2'), (27,  0, 'A3'), (27,  0, 'D2'), (27,  0, 'D3'), (27,  0, 'D0'), (27,  0, 'D1')],
+         'T' : [( 0, 27, 'A2'), ( 0, 27, 'A3'), ( 0, 27, 'D2'), ( 0, 27, 'D3'), (  0,27, 'D0'), ( 0, 27, 'D1')]},
+        }
+def fse_create_dhcen(dev, device, fse, dat: Datfile):
+    if device not in _dhcen_ce:
+        print(f'No DHCEN for {device} for now.')
+        return
+    for side, ces in _dhcen_ce[device].items():
+        for idx, ce_wire in enumerate(ces):
+            row, col, wire = ce_wire
+            extra = dev.extra_func.setdefault((row, col), {})
+            dhcen = extra.setdefault('dhcen', [])
+            # use db.hclk_pips in order to find HCLK_IN cells
+            for hclk_loc in _hclk_to_fclk[device][side]['hclk']:
+                if idx < 4:
+                    hclk_name = f'HCLK_IN{idx}'
+                else:
+                    hclk_name = f'HCLK_BANK_OUT{idx - 4}'
+                if hclk_name in dev.hclk_pips[hclk_loc]:
+                    hclkin = {'pip' : [f'X{hclk_loc[1]}Y{hclk_loc[0]}', hclk_name, next(iter(dev.hclk_pips[hclk_loc][hclk_name].keys())), side]}
+
+            hclkin.update({ 'ce' : wire})
+            dhcen.append(hclkin)
+
 
 _pll_loc = {
  'GW1N-1':
@@ -1488,6 +1569,7 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
 
 
     spines = {f'SPINE{i}' for i in range(32)}
+    hclk_srcs = {f'HCLK{i}_BANK_OUT{j}' for i in range(4) for j in range(2)}
     dcs_inputs = {f'P{i}{j}{k}' for i in range(1, 5) for j in range(6, 8) for k in "ABCD"}
     for row, rd in enumerate(dev.grid):
         for col, rc in enumerate(rd):
@@ -1499,6 +1581,12 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
                     add_node(dev, dest, "GLOBAL_CLK", row, col, dest)
                     for src in { wire for wire in srcs.keys() if wire not in {'VCC', 'VSS'}}:
                         add_node(dev, src, "GLOBAL_CLK", row, col, src)
+                elif dest in {'HCLKMUX0', 'HCLKMUX1'}:
+                    # this interbank communication between HCLKs
+                    add_node(dev, dest, "GLOBAL_CLK", row, col, dest)
+                    for src in {wire for wire in srcs.keys() if wire in hclk_srcs}:
+                        add_node(dev, src, "GLOBAL_CLK", row, col, src)
+
     # GBx0 <- GBOx
     for spine_pair in range(4): # GB00/GB40, GB10/GB50, GB20/GB60, GB30/GB70
         tap_start = _clock_data[device]['tap_start'][0]
@@ -2088,6 +2176,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_bandgap(dev, device)
     fse_create_userflash(dev, device, dat)
     fse_create_logic2clk(dev, device, dat)
+    fse_create_dhcen(dev, device, fse, dat)
     disable_plls(dev, device)
     sync_extra_func(dev)
     set_chip_flags(dev, device);
@@ -3487,6 +3576,8 @@ def fse_wire_delays(db):
         db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
     for i in range(129, 153): # clock inputs (logic->clock)
         db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
+    for i in range(1000, 1010): # HCLK
+        db.wire_delay[clknames[i]] = "X0" # XXX
 
 # assign pads with plls
 # for now use static table and store the bel name although it is always PLL without a number
