@@ -4,6 +4,10 @@
 * The LED on the board should blink. 
 * Attention: flashing is performed with firmware as follows:
 * openFPGALoader -f -b tangnano4k --mcufw=emcu-firmware/blinky.bin emcu-blinky-tangnano4k.fs
+*
+* or
+* openFPGALoader -f -b tangnano4k --mcufw=emcu-firmware/uart.bin emcu-blinky-tangnano4k.fs
+*
 */
 
 module top (
