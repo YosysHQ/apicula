@@ -2018,22 +2018,216 @@ def fse_create_userflash(dev, device, dat):
             r, c, wire = desc
             make_port(r, c, wire, port, 'FLASH_IN', ins)
     else:
+        # GW1NS-4 has a direct connection of Flash with the built-in Cortex-M3
+        # and some wires during test compilations showed connections different
+        # from the table in the DAT file
         for i, desc in enumerate(dat.compat_dict['UfbIns'][:6]):
             port = ['XE', 'YE', 'SE', 'PROG', 'ERASE', 'NVSTR'][i]
             r, c, wire = desc
+            if device == 'GW1NS-4' and port in {'XE', 'YE', 'SE'}:
+                r, c, wire = {'XE':(15, 1, 28), 'YE': (15, 1, 0), 'SE':(14, 1, 31)}[port]
             make_port(r, c, wire, port, 'FLASH_IN', ins)
         for i, desc in enumerate(dat.compat_dict['UfbIns'][6:15]):
             port = f'XADR{i}'
             r, c, wire = desc
+            if device == 'GW1NS-4' and i < 7:
+                r, c, wire = (14, 1, 3 + 4 * i)
             make_port(r, c, wire, port, 'FLASH_IN', ins)
         for i, desc in enumerate(dat.compat_dict['UfbIns'][15:21]):
             port = f'YADR{i}'
             r, c, wire = desc
+            if device == 'GW1NS-4' and i < 6:
+                r, c, wire = (15, 1, 4 + 4 * i)
             make_port(r, c, wire, port, 'FLASH_IN', ins)
 
     # XXX INUSEN - is observed to be connected to the VSS when USERFLASH is used
     if flash_type != 'FLASH64KZ':
         ins['INUSEN'] = 'C0'
+
+def fse_create_emcu(dev, device, dat):
+    # Mentions of the NS-2 series are excluded from the latest Gowin
+    # documentation so that only one chip remains with the ARM processor
+    if device != 'GW1NS-4':
+        return
+
+    # The primitive pins are described in tables dat["EMcuIns"] and dat["EMcuOuts"]
+    # Since there is only one chip, there is no need to check for [-1, -1, -1]
+    # in the table and try to create obviously missing wires.
+    def make_port(r, c, wire, port, wire_type, pins):
+        bel = Bel()
+        wire = wirenames[wire]
+        bel.portmap[port] = wire
+        if r - 1 != row or c - 1 != col :
+            create_port_wire(dev, row, col, r - row - 1, c - col - 1, bel, 'EMCU', port, wire, wire_type)
+        pins[port] = bel.portmap[port]
+
+    # In (0, 0) is the CPU enabled/disabled flag, so place the CPU there
+    row, col = (0, 0)
+    dev.extra_func.setdefault((row, col), {}).update({'emcu': {}})
+    extra_func = dev.extra_func[(row, col)]['emcu']
+
+    # outputs
+    outs = extra_func.setdefault('outs', {})
+    single_wires = [('MTXHRESETN', 87), ('UART0TXDO', 32), ('UART1TXDO', 33),
+                    ('UART0BAUDTICK', 34), ('UART1BAUDTICK', 35), ('INTMONITOR', 36),
+                    ('SRAM0WREN0', 50), ('SRAM0WREN1', 51), ('SRAM0WREN2', 52), ('SRAM0WREN3', 53),
+                    ('SRAM0CS', 86), ('TARGFLASH0HSEL', 88), ('TARGFLASH0HTRANS0', 118), ('TARGFLASH0HTRANS1', 119),
+                    ('TARGEXP0HSEL', 127), ('TARGEXP0HTRANS0', 160), ('TARGEXP0HTRANS1', 161),
+                    ('TARGEXP0HWRITE', 162),
+                    ('TARGEXP0HSIZE0', 163), ('TARGEXP0HSIZE1', 164), ('TARGEXP0HSIZE2', 165),
+                    ('TARGEXP0HBURST0', 166), ('TARGEXP0HBURST1', 167), ('TARGEXP0HBURST2', 168),
+                    ('TARGEXP0HPROT0', 169), ('TARGEXP0HPROT1', 170),
+                    ('TARGEXP0HPROT2', 171), ('TARGEXP0HPROT3', 172),
+                    ('TARGEXP0MEMATTR0', 173), ('TARGEXP0MEMATTR1', 174),
+                    ('TARGEXP0EXREQ', 175),
+                    ('TARGEXP0HMASTER0', 176), ('TARGEXP0HMASTER1', 177),
+                    ('TARGEXP0HMASTER2', 178), ('TARGEXP0HMASTER3', 179),
+                    ('TARGEXP0HMASTLOCK', 212), ('TARGEXP0HREADYMUX', 213),
+                    ('INITEXP0HREADY', 251), ('INITEXP0HRESP', 252), ('INITEXP0EXRESP', 253),
+                    ('APBTARGEXP2PSEL', 257), ('APBTARGEXP2PENABLE', 258), ('APBTARGEXP2PWRITE', 271),
+                    ('APBTARGEXP2PSTRB0', 304), ('APBTARGEXP2PSTRB1', 305),
+                    ('APBTARGEXP2PSTRB2', 306), ('APBTARGEXP2PSTRB3', 307),
+                    ('APBTARGEXP2PPROT0', 308), ('APBTARGEXP2PPROT1', 309), ('APBTARGEXP2PPROT2', 310),
+                    ('DAPJTAGNSW', 313),
+                    ('TPIUTRACEDATA0', 314), ('TPIUTRACEDATA1', 315),
+                    ('TPIUTRACEDATA2', 316), ('TPIUTRACEDATA3', 317),
+                    ]
+    for port, idx in single_wires:
+        r, c, wire = dat.compat_dict['EMcuOuts'][idx]
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # gpio out - 16 output wires
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][0:16]):
+        port = f'IOEXPOUTPUTO{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # gpio outputenable - 16 output wires
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][16:32]):
+        port = f'IOEXPOUTPUTENO{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # ram addr- 13 output wires
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][37:50]):
+        port = f'SRAM0ADDR{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # ram data- 32 output wires
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][54:86]):
+        port = f'SRAM0WDATA{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # flash addr- 29 output wires
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][89:118]):
+        port = f'TARGFLASH0HADDR{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # 32 output wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][128:160]):
+        port = f'TARGEXP0HADDR{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # 32 output wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][180:212]):
+        port = f'TARGEXP0HWDATA{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # 32 output wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][219:251]):
+        port = f'INITEXP0HRDATA{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # 12 output wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][259:271]):
+        port = f'APBTARGEXP2PADDR{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # 32 output wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuOuts'][272:304]):
+        port = f'APBTARGEXP2PWDATA{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_OUT', outs)
+
+    # inputs
+    # funny thing - I have not been able to find ports PORESETN and SYSRESETN, they just
+    # don't connect to the button. There is a suspicion that implicit
+    # connection from GSR primitives is used, now it comes in handy.
+    ins = extra_func.setdefault('ins', {})
+    clock_wires = [('FCLK', 0), ('RTCSRCCLK', 3)]
+    for port, idx in clock_wires:
+        r, c, wire = dat.compat_dict['EMcuIns'][idx]
+        make_port(r, c, wire, port, 'TILE_CLK', ins)
+
+    single_wires = [('UART0RXDI', 20), ('UART1RXDI', 21),
+                    ('TARGFLASH0HRESP', 89), ('TARGFLASH0HREADYOUT', 91),
+                    ('TARGEXP0HRESP', 125), ('TARGEXP0HREADYOUT', 124), ('TARGEXP0EXRESP', 126),
+                    ('TARGEXP0HRUSER0', 127), ('TARGEXP0HRUSER1', 128), ('TARGEXP0HRUSER2', 129),
+                    ('INITEXP0HSEL', 130), ('INITEXP0HTRANS0', 163), ('INITEXP0HTRANS1', 164),
+                    ('INITEXP0HWRITE', 165), ('INITEXP0HSIZE0', 166), ('INITEXP0HSIZE1', 167), ('INITEXP0HSIZE2', 168),
+                    ('INITEXP0HBURST0', 169), ('INITEXP0HBURST1', 170), ('INITEXP0HBURST2', 171),
+                    ('INITEXP0HPROT0', 172), ('INITEXP0HPROT1', 173), ('INITEXP0HPROT2', 174), ('INITEXP0HPROT3', 175),
+                    ('INITEXP0MEMATTR0', 176), ('INITEXP0MEMATTR1', 177), ('INITEXP0EXREQ', 178),
+                    ('INITEXP0HMASTER0', 179), ('INITEXP0HMASTER1', 180),
+                    ('INITEXP0HMASTER2', 181), ('INITEXP0HMASTER3', 182),
+                    ('INITEXP0HMASTLOCK', 215), ('INITEXP0HAUSER', 216),
+                    ('INITEXP0HWUSER0', 217), ('INITEXP0HWUSER1', 218),
+                    ('INITEXP0HWUSER2', 219), ('INITEXP0HWUSER3', 220),
+                    ('APBTARGEXP2PREADY', 253), ('APBTARGEXP2PSLVERR', 254),
+                    ('FLASHERR', 263), ('FLASHINT', 264),
+                    ]
+    for port, idx in single_wires:
+        r, c, wire = dat.compat_dict['EMcuIns'][idx]
+        make_port(r, c, wire, port, 'EMCU_IN', ins)
+
+    # gpio inout - 16 input wires
+    for i, desc in enumerate(dat.compat_dict['EMcuIns'][4:20]):
+        port = f'IOEXPINPUTI{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_IN', ins)
+
+    # read from ram - 32 input wires
+    for i, desc in enumerate(dat.compat_dict['EMcuIns'][22:54]):
+        port = f'SRAM0RDATA{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_IN', ins)
+
+    # 32 input wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuIns'][92:124]):
+        port = f'TARGEXP0HRDATA{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_IN', ins)
+
+    # 32 input wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuIns'][131:163]):
+        port = f'INITEXP0HADDR{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_IN', ins)
+
+    # 32 input wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuIns'][183:215]):
+        port = f'INITEXP0HWDATA{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_IN', ins)
+
+    # 32 input wires, unknown purpose
+    for i, desc in enumerate(dat.compat_dict['EMcuIns'][221:253]):
+        port = f'APBTARGEXP2PRDATA{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_IN', ins)
+
+    # 5 input wires connected to GND, may be GPINT
+    for i, desc in enumerate(dat.compat_dict['EMcuIns'][265:270]):
+        port = f'GPINT{i}'
+        r, c, wire = desc
+        make_port(r, c, wire, port, 'EMCU_IN', ins)
 
 
 def fse_bram(fse, aux = False):
@@ -2175,6 +2369,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_gsr(dev, device)
     fse_create_bandgap(dev, device)
     fse_create_userflash(dev, device, dat)
+    fse_create_emcu(dev, device, dat)
     fse_create_logic2clk(dev, device, dat)
     fse_create_dhcen(dev, device, fse, dat)
     disable_plls(dev, device)
