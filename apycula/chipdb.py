@@ -74,6 +74,8 @@ class Device:
     packages: Dict[str, Tuple[str, str, str]] = field(default_factory=dict)
     # {variant: {package: {pin#: (pin_name, [cfgs])}}}
     pinout: Dict[str, Dict[str, Dict[str, Tuple[str, List[str]]]]] = field(default_factory=dict)
+    # {variant: {package: (net, row, col, AB)}}
+    sip_cst: Dict[str, Dict[str, Tuple[str, int, int, str]]] = field(default_factory=dict)
     pin_bank: Dict[str, int] = field(default_factory = dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)

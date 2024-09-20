@@ -1,4 +1,5 @@
 from itertools import chain
+import re
 
 class Module:
     def __init__(self):
@@ -26,7 +27,8 @@ class Module:
             if not first:
                 f.write(", ")
             first = False
-            f.write(port)
+            bare = re.sub(r" *\[.*\] *", "", port)
+            f.write(bare)
         f.write(");\n")
 
         for port in self.inputs:
@@ -135,7 +137,7 @@ run pnr
             """
 
         device_desc = self.partnumber
-        if self.device in ['GW1N-9', 'GW1N-4', 'GW1N-9C', 'GW2A-18', 'GW2A-18C']:
+        if self.device in ['GW1NR-9', 'GW1N-9', 'GW1N-4', 'GW1N-9C', 'GW2A-18', 'GW2A-18C']:
             device_desc = f'-name {self.device} {device_desc}'
 
         f.write(template.format(
