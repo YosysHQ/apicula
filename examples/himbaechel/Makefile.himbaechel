@@ -62,7 +62,7 @@ all: \
 	dsp-mult36x36-tangnano4k.fs dsp-padd9-tangnano4k.fs dsp-padd18-tangnano4k.fs \
 	dsp-mult9x9-tangnano4k.fs dsp-alu54d-tangnano4k.fs dsp-multalu18x18-tangnano4k.fs \
 	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
-	dqce-tangnano4k.fs dcs-tangnano4k.fs emcu-blinky-tangnano4k.fs \
+	dqce-tangnano4k.fs dcs-tangnano4k.fs emcu-blinky-tangnano4k.fs emcu-with-apb-blinky-tangnano4k.fs \
 	\
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
 	blinky-clkdiv-tangnano9k.fs dvi-example-tangnano9k.fs\
