@@ -5,7 +5,7 @@ from multiprocessing.dummy import Pool
 
 from apycula import codegen, tiled_fuzzer, gowin_unpack, chipdb
 
-def run_script(pinName : str, idx=None):
+def run_script(pinName : str, idx=None, iostd=None):
     if idx == None:
         port = pinName
         idxName = pinName
@@ -51,31 +51,75 @@ def run_script(pinName : str, idx=None):
             belname = tiled_fuzzer.rc2tbrl(db, i+1, j+1, bel[-1])
             print(db.rows, db.cols)
             print(idxName, belname)
-            return (idxName, i, j, bel[-1])
+            return (idxName, i, j, bel[-1], iostd)
     
     raise Exception(f"No IOB found for {port}")
 
 # these are all system in package variants with magic wire names connected interally
+# pin names are obtained from litex-boards
+# (pin name, bus width, iostd)
 params = {
     "GW1N-9": [{
         "package": "QFN88",
         "device": "GW1NR-9",
         "partnumber": "GW1NR-UV9QN88C6/I5",
         "pins": [
-            ["IO_sdram_dq", 16],
-            ["O_sdram_clk", 0],
-            ["O_sdram_cke", 0],
-            ["O_sdram_cs_n", 0],
-            ["O_sdram_cas_n", 0],
-            ["O_sdram_ras_n", 0],
-            ["O_sdram_wen_n", 0],
-            ["O_sdram_addr", 12],
-            ["O_sdram_dqm", 2],
-            ["O_sdram_ba", 2]
+            ("IO_sdram_dq", 16, None),
+            ("O_sdram_clk", 0, None),
+            ("O_sdram_cke", 0, None),
+            ("O_sdram_cs_n", 0, None),
+            ("O_sdram_cas_n", 0, None),
+            ("O_sdram_ras_n", 0, None),
+            ("O_sdram_wen_n", 0, None),
+            ("O_sdram_addr", 12, None),
+            ("O_sdram_dqm", 2, None),
+            ("O_sdram_ba", 2, None)
         ],
     }],
+    "GW1N-9C": [{
+        "package": "QFN88P",
+        "device": "GW1NR-9C",
+        "partnumber": "GW1NR-LV9QN88PC6/I5",
+        "pins": [
+            ("O_psram_ck", 2, None),
+            ("O_psram_ck_n", 2, None),
+            ("O_psram_cs_n", 2, None),
+            ("O_psram_reset_n", 2, None),
+            ("IO_psram_dq", 16, None),
+            ("IO_psram_rwds", 2, None),
+        ],
+    }],
+    "GW1NS-4": [{
+        "package": "QFN48",#??
+        "device": "GW1NSR-4C",
+        "partnumber": "GW1NSR-LV4CQN48PC7/I6",
+        "pins": [
+            ("O_hpram_ck", 2, None),
+            ("O_hpram_ck_n", 2, None),
+            ("O_hpram_cs_n", 2, None),
+            ("O_hpram_reset_n", 2, None),
+            ("IO_hpram_dq", 16, None),
+            ("IO_hpram_rwds", 2, None),
+        ],
+    }],
+    "GW2A-18C": [{
+        "package": "QFN88",
+        "device": "GW2AR-18C",
+        "partnumber": "GW2AR-LV18QN88C8/I7",
+        "pins": [
+            ("O_sdram_clk", 1, "LVCMOS33"),
+            ("O_sdram_cke", 1, "LVCMOS33"),
+            ("O_sdram_cs_n", 1, "LVCMOS33"),
+            ("O_sdram_cas_n", 1, "LVCMOS33"),
+            ("O_sdram_ras_n", 1, "LVCMOS33"),
+            ("O_sdram_wen_n", 1, "LVCMOS33"),
+            ("O_sdram_dqm", 4, "LVCMOS33"),
+            ("O_sdram_addr", 11, "LVCMOS33"),
+            ("O_sdram_ba", 2, "LVCMOS33"),
+            ("IO_sdram_dq", 32, "LVCMOS33"),
+        ]
+    }],
 }
-# pin name, bus width
 
 with open(f"{tiled_fuzzer.device}_stage2.pickle", 'rb') as f:
     db = pickle.load(f)
@@ -89,12 +133,12 @@ if tiled_fuzzer.device in params:
         pins = device["pins"]
 
         runs = []
-        for pinName, pinBuswidth in pins:
+        for pinName, pinBuswidth, iostd in pins:
             if (pinBuswidth == 0):
-                runs.append((pinName, None))
+                runs.append((pinName, None, iostd))
             else:
                 for pinIdx in range(0, pinBuswidth):
-                    runs.append((pinName, pinIdx))
+                    runs.append((pinName, pinIdx, iostd))
 
         print(runs)
 
