@@ -64,16 +64,16 @@ params = {
         "device": "GW1NR-9",
         "partnumber": "GW1NR-UV9QN88C6/I5",
         "pins": [
-            ("IO_sdram_dq", 16, None),
-            ("O_sdram_clk", 0, None),
-            ("O_sdram_cke", 0, None),
-            ("O_sdram_cs_n", 0, None),
-            ("O_sdram_cas_n", 0, None),
-            ("O_sdram_ras_n", 0, None),
-            ("O_sdram_wen_n", 0, None),
-            ("O_sdram_addr", 12, None),
-            ("O_sdram_dqm", 2, None),
-            ("O_sdram_ba", 2, None)
+            ("IO_sdram_dq", 16, "LVCMOS33"),
+            ("O_sdram_clk", 0, "LVCMOS33"),
+            ("O_sdram_cke", 0, "LVCMOS33"),
+            ("O_sdram_cs_n", 0, "LVCMOS33"),
+            ("O_sdram_cas_n", 0, "LVCMOS33"),
+            ("O_sdram_ras_n", 0, "LVCMOS33"),
+            ("O_sdram_wen_n", 0, "LVCMOS33"),
+            ("O_sdram_addr", 12, "LVCMOS33"),
+            ("O_sdram_dqm", 2, "LVCMOS33"),
+            ("O_sdram_ba", 2, "LVCMOS33")
         ],
     }],
     "GW1N-9C": [{
@@ -107,12 +107,12 @@ params = {
         "device": "GW2AR-18C",
         "partnumber": "GW2AR-LV18QN88C8/I7",
         "pins": [
-            ("O_sdram_clk", 1, "LVCMOS33"),
-            ("O_sdram_cke", 1, "LVCMOS33"),
-            ("O_sdram_cs_n", 1, "LVCMOS33"),
-            ("O_sdram_cas_n", 1, "LVCMOS33"),
-            ("O_sdram_ras_n", 1, "LVCMOS33"),
-            ("O_sdram_wen_n", 1, "LVCMOS33"),
+            ("O_sdram_clk", 0, "LVCMOS33"),
+            ("O_sdram_cke", 0, "LVCMOS33"),
+            ("O_sdram_cs_n", 0, "LVCMOS33"),
+            ("O_sdram_cas_n", 0, "LVCMOS33"),
+            ("O_sdram_ras_n", 0, "LVCMOS33"),
+            ("O_sdram_wen_n", 0, "LVCMOS33"),
             ("O_sdram_dqm", 4, "LVCMOS33"),
             ("O_sdram_addr", 11, "LVCMOS33"),
             ("O_sdram_ba", 2, "LVCMOS33"),
@@ -143,6 +143,16 @@ if tiled_fuzzer.device in params:
         print(runs)
 
         pinmap = pool.map(lambda params: run_script(*params), runs)
+
+        # check for duplicates
+        seen = {}
+        for pin in pinmap:
+            wire = pin[0]
+            bel = pin[1:4]
+            if bel in seen:
+                print("WARNING:", wire, "conflicts with", seen[bel], "at", bel)
+            else:
+                seen[bel] = wire
 
         db.sip_cst.setdefault(device["device"], {})[device["package"]] = pinmap
 
