@@ -63,6 +63,7 @@ all: \
 	dsp-mult9x9-tangnano4k.fs dsp-alu54d-tangnano4k.fs dsp-multalu18x18-tangnano4k.fs \
 	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
 	dqce-tangnano4k.fs dcs-tangnano4k.fs emcu-blinky-tangnano4k.fs emcu-with-apb-blinky-tangnano4k.fs \
+	emcu-with-apb-spi-tangnano4k.fs \
 	\
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
 	blinky-clkdiv-tangnano9k.fs dvi-example-tangnano9k.fs\
@@ -303,7 +304,7 @@ bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh %-image-rom.v %-video-ram.v %.
 # ============================================================
 # Tangnano4k (GW1NS-4)
 %-tangnano4k.fs: %-tangnano4k.json
-	gowin_pack -d GW1NS-4 -o $@ $^
+	gowin_pack -d GW1NS-4 --mspi_as_gpio -o $@ $^
 
 %-tangnano4k.json: %-tangnano4k-synth.json tangnano4k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --vopt cst=tangnano4k.cst
