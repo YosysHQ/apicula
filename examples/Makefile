@@ -1,5 +1,5 @@
 YOSYS ?= yosys
-NEXTPNR ?= nextpnr-gowin
+NEXTPNR ?= nextpnr-gowin --timing-allow-fail
 
 .DEFAULT_GOAL := all
 

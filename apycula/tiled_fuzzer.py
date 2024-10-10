@@ -100,6 +100,19 @@ def tbrl2rc(fse, side, num):
         col = len(fse['header']['grid'][61][0])-1
     return (row, col)
 
+def rc2tbrl(db, row, col, num):
+    edge = 'T'
+    idx = col
+    if row == db.rows:
+        edge = 'B'
+    elif col == 1:
+        edge = 'L'
+        idx = row
+    elif col == db.cols:
+        edge = 'R'
+        idx = row
+    return f"IO{edge}{idx}{num}"
+
 # Read the packer vendor log to identify problem with primitives/attributes
 # returns dictionary {(primitive name, error code) : [full error text]}
 _err_parser = re.compile(r"(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
