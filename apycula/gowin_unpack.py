@@ -1074,7 +1074,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             mod.primitives[name] = iob
             # constraints
             pos = chipdb.loc2pin_name(db, dbrow, dbcol)
-            bank = chipdb.loc2bank(db, dbrow, dbcol)
+            # XXX tangnano4k uses IOT30 not found in the package
+            #bank = chipdb.loc2bank(db, dbrow, dbcol)
             cst.ports[name] = f"{pos}{idx}"
             if kind[0:5] == 'TLVDS':
                 cst.ports[name] = f"{pos}{idx},{pos}{chr(ord(idx) + 1)}"

@@ -1,0 +1,327 @@
+/*
+ ******************************************************************************************
+ * @file        main.c
+ * @author      GowinSemiconductor
+ * @device      Gowin_EMPU(GW1NS-4C)
+ * @brief       Main program body.
+ ******************************************************************************************
+ */
+
+/* Includes ------------------------------------------------------------------*/
+#include "gw1ns4c.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "image-apicula.h"
+
+void initialize_GPIO();
+void delay_millis(uint32_t ms);
+
+// ============================ SPI =======================
+
+// First APB master address
+uint32_t const apb2_periph_base = 0x40002500;
+
+struct APB2_spi_peripheral_status {
+  volatile uint32_t status : 1;    // not memory - read the bus ;)
+};
+struct APB2_spi_peripheral_data {
+  volatile uint32_t data;    // not memory - write the bus ;)
+};
+struct APB2_spi_peripheral_control {
+  volatile uint32_t control : 1;    // not memory - write the bus ;)
+};
+
+struct APB2_spi_peripheral_status  *spi_status  = (struct APB2_spi_peripheral_status *)   apb2_periph_base;
+struct APB2_spi_peripheral_data    *spi_data    = (struct APB2_spi_peripheral_data *)    (apb2_periph_base + 4);
+struct APB2_spi_peripheral_control *spi_control = (struct APB2_spi_peripheral_control *)  apb2_periph_base;
+
+uint8_t spi_busy(void) {
+	return spi_status->status & 1;
+}
+
+void initialize_spi(uint8_t msb) {
+	spi_control->control = msb;
+}
+
+void spi_send_byte(uint8_t byte) {
+	while (spi_busy());
+	spi_data->data = byte;
+}
+
+void spi_send_array(uint8_t *buf, uint32_t len) {
+	while(len) {
+		spi_send_byte(*buf++);
+		--len;
+	}
+}
+
+// =========================== Display ==========================
+#define BLACK   0x0000
+#define WHITE   0xffff
+#define RED     0xf800
+#define GREEN   0x07e0
+#define BLUE    0x001f
+#define YELLOW  0xffe0
+
+#define DSP_WIDTH  240
+#define DSP_HEIGHT 240
+
+#define DSP_RST0 GPIO_ResetBit(GPIO0, GPIO_Pin_0)
+#define DSP_RST1 GPIO_SetBit(GPIO0, GPIO_Pin_0)
+#define DSP_DC0 GPIO_ResetBit(GPIO0, GPIO_Pin_1)
+#define DSP_DC1 GPIO_SetBit(GPIO0, GPIO_Pin_1)
+void initialize_dsp(void);
+void dsp_send_cmd(uint8_t cmd);
+void dsp_send_data(uint8_t data);
+void dsp_send_array(uint8_t *buf, uint32_t len);
+void dsp_fillcolor(uint16_t color);
+void dsp_set_address_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
+void dsp_put_point(uint16_t color);
+
+void initialize_timer();
+void initialize_UART();
+void delay_millis(uint32_t ms);
+
+int main(void) {
+  SystemInit();
+  initialize_timer();
+  initialize_UART();
+  initialize_GPIO();
+  initialize_spi(1);
+
+  UART_SendString(UART0, "Apicula Cortex-M3 APB SPI\r\n");
+
+  uint16_t *rowbuf = malloc(image_width * sizeof(uint16_t));
+
+  initialize_dsp();
+  int phase = 0;
+  while(1) {
+
+	int16_t cur_color;
+	int cur_image_idx = 0;
+	int16_t len = 0;
+
+	dsp_set_address_window(0, 0, image_width - 1, image_height - 1);
+	for (int i = 0; i < image_height; ++i) {
+	  memset(rowbuf, 0, sizeof(rowbuf));
+	  for (int j = 0; j < image_width; ++j) {
+		if (len == 0) {
+		  len = image_data[cur_image_idx++];
+		  cur_color = image_colors[0x1ff & (len >> 7)];   // color 9 bit, count 7 bit
+		  len = (len & 0x7f) + 1;
+		}
+		--len;
+		if (phase >= j) {
+			rowbuf[(phase - j) % image_width] = cur_color;
+		}
+	  }
+	  for (uint16_t k = 0; k < image_width; ++k) {
+		  dsp_put_point(rowbuf[k]);
+	  }
+	}
+	phase += 5;
+	//delay_millis(5);
+  }
+  free(rowbuf);
+}
+
+// ============================ Display =======================
+void dsp_send_cmd(uint8_t cmd) {
+	DSP_DC0;
+	spi_send_byte(cmd);
+}
+
+void dsp_send_data(uint8_t data) {
+	DSP_DC1;
+	spi_send_byte(data);
+}
+
+void dsp_send_array(uint8_t *buf, uint32_t len) {
+	DSP_DC1;
+	spi_send_array(buf, len);
+}
+
+#define DSP_ROTATION 3
+#define DSP_X_SHIFT 0
+#define DSP_Y_SHIFT 0
+
+#define DSP_MADCTRL         0x36
+#define DSP_MAD_RGB         0x00
+#define DSP_MAD_BGR         0x08
+
+#define DSP_SWRESET         0x01
+#define DSP_SLPIN           0x10
+#define DSP_SLPOUT          0x11
+#define DSP_NORON           0x13
+#define DSP_INVOFF          0x20
+#define DSP_INVON           0x21
+#define DSP_DISPOFF         0x28
+#define DSP_DISPON          0x29
+#define DSP_CASET           0x2a
+#define DSP_RASET           0x2b
+#define DSP_RAMWR           0x2c
+#define DSP_COLMOD          0x3a
+#define DSP_COLOR16BIT      0x55
+#define DSP_PORCTRL         0xb2
+#define DSP_GCTRL           0xb7
+#define DSP_VCOMS           0xbb
+#define DSP_LCMCTRL         0xc0
+#define DSP_VDVVRHEN        0xc2
+#define DSP_VRHS            0xc3
+#define DSP_VDVS            0xc4
+#define DSP_FRCTRL2         0xc6
+#define DSP_PWRCTL1         0xd0
+#define DSP_PVGAMCTRL       0xe0
+#define DSP_NVGAMCTRL       0xe1
+
+void dsp_set_address_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+	uint16_t x_start = x0 + DSP_X_SHIFT, x_end = x1 + DSP_X_SHIFT;
+	uint16_t y_start = y0 + DSP_Y_SHIFT, y_end = y1 + DSP_Y_SHIFT;
+
+    dsp_send_cmd(DSP_CASET);
+    uint8_t buf[] = {x_start >> 8, x_start & 0xff, x_end >> 8, x_end & 0xff};
+    dsp_send_array(buf, sizeof(buf));
+
+    dsp_send_cmd(DSP_RASET);
+    uint8_t buf1[] = {y_start >> 8, y_start & 0xff, y_end >> 8, y_end & 0xff};
+    dsp_send_array(buf1, sizeof(buf1));
+
+    dsp_send_cmd(DSP_RAMWR);
+}
+
+void dsp_put_point(uint16_t color) {
+	uint8_t buf[] = {color >> 8, color & 0xff};
+	dsp_send_array(buf, sizeof(buf));
+}
+
+void dsp_fillcolor(uint16_t color) {
+	dsp_set_address_window(0, 0, DSP_WIDTH - 1, DSP_HEIGHT - 1);
+	for (uint16_t i = 0; i < DSP_WIDTH; ++i) {
+		for (uint16_t j = 0; j < DSP_HEIGHT; ++j) {
+			uint8_t buf[] = {color >> 8, color & 0xff};
+			dsp_send_array(buf, sizeof(buf));
+		}
+	}
+}
+
+void initialize_dsp(void) {
+	DSP_RST0;
+	delay_millis(50);
+	DSP_RST1;
+	delay_millis(50);
+    dsp_send_cmd(DSP_SWRESET);
+    delay_millis(100);
+    dsp_send_cmd(DSP_MADCTRL);
+    dsp_send_data(DSP_MAD_BGR);
+    dsp_send_cmd(DSP_COLMOD);
+    dsp_send_data(DSP_COLOR16BIT);
+    delay_millis(10);
+    dsp_send_cmd(DSP_PORCTRL);
+    uint8_t buf[] = {0xb, 0xb, 0, 0x33, 0x33};
+    dsp_send_array(buf, sizeof(buf));
+    dsp_send_cmd(DSP_GCTRL);
+    dsp_send_data(0x35);
+    dsp_send_cmd(DSP_VCOMS);
+    dsp_send_data(0x20);
+    dsp_send_cmd(DSP_LCMCTRL);
+    dsp_send_data(0x2c);
+    dsp_send_cmd(DSP_VDVVRHEN);
+    dsp_send_data(0x01);
+    dsp_send_cmd(DSP_VRHS);
+    dsp_send_data(0x0b);
+    dsp_send_cmd(DSP_VDVS);
+    dsp_send_data(0x20);
+    dsp_send_cmd(DSP_FRCTRL2);
+    dsp_send_data(0x0f);
+    dsp_send_cmd(DSP_PWRCTL1);
+    dsp_send_data(0xa4);
+    dsp_send_data(0xa1);
+    dsp_send_cmd(DSP_PVGAMCTRL);
+    uint8_t buf1[] = {0xd0, 0x4, 0xd, 0x11, 0x13, 0x2b, 0x3f, 0x54, 0x4c, 0x18, 0xd, 0xb, 0x1f, 0x23};
+    dsp_send_array(buf1, sizeof(buf1));
+    dsp_send_cmd(DSP_NVGAMCTRL);
+    uint8_t buf2[] = {0xd0, 0x4, 0xc, 0x11, 0x13, 0x2c, 0x3f, 0x44, 0x51, 0x2f, 0x1f, 0x1f, 0x20, 0x23};
+    dsp_send_array(buf2, sizeof(buf2));
+    dsp_send_cmd(DSP_INVON);
+    dsp_send_cmd(DSP_SLPOUT);
+    dsp_send_cmd(DSP_NORON);
+    dsp_send_cmd(DSP_DISPON);
+
+    delay_millis(50);
+    dsp_fillcolor(BLACK);
+}
+
+
+
+// ============================= UART ===========================
+// Initializes UART0
+void initialize_UART() {
+  UART_InitTypeDef uartInitStruct;
+  // Enable transmission
+  uartInitStruct.UART_Mode.UARTMode_Tx = ENABLE;
+  // Disable reception
+  uartInitStruct.UART_Mode.UARTMode_Rx = DISABLE;
+  // 9600 baud rate typical of Arduinos
+  uartInitStruct.UART_BaudRate = 9600;
+  // Initialize UART0 using the struct configs
+  UART_Init(UART0, &uartInitStruct);
+}
+
+// ============================= GPIO ===========================
+void initialize_GPIO() {
+	GPIO_InitTypeDef gpioInitStruct;
+
+	// --------- output
+	//Select pin0, you can OR pins together to initialize them at the same time
+	gpioInitStruct.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
+
+	//Set selected pins as output (see GPIOMode_TypeDef in gw1ns4c_gpio.h)
+	gpioInitStruct.GPIO_Mode = GPIO_Mode_OUT;
+
+	//Disable interrupts on selected pins (see GPIOInt_TypeDef)
+	gpioInitStruct.GPIO_Int = GPIO_Int_Disable;
+
+	//Initialize the GPIO using the configured init struct
+	GPIO_Init(GPIO0, &gpioInitStruct);
+}
+
+
+void initialize_timer() {
+  TIMER_InitTypeDef timerInitStruct;
+
+  timerInitStruct.Reload = 0;
+
+  // Disable interrupt requests from timer for now
+  timerInitStruct.TIMER_Int = DISABLE;
+
+  // Disable timer enabling/clocking from external pins (GPIO)
+  timerInitStruct.TIMER_Exti = TIMER_DISABLE;
+
+  TIMER_Init(TIMER0, &timerInitStruct);
+  TIMER_StopTimer(TIMER0);
+}
+
+#define CYCLES_PER_MILLISEC (SystemCoreClock / 1000)
+void delay_millis(uint32_t ms) {
+  TIMER_StopTimer(TIMER0);
+  // Reset timer just in case it was modified elsewhere
+  TIMER_SetValue(TIMER0, 0);
+  TIMER_EnableIRQ(TIMER0);
+
+  uint32_t reloadVal = CYCLES_PER_MILLISEC * ms;
+  // Timer interrupt will trigger when it reaches the reload value
+  TIMER_SetReload(TIMER0, reloadVal);
+
+  TIMER_StartTimer(TIMER0);
+  // Block execution until timer wastes the calculated amount of cycles
+  while (TIMER_GetIRQStatus(TIMER0) != SET)
+    ;
+
+  TIMER_StopTimer(TIMER0);
+  TIMER_ClearIRQ(TIMER0);
+  TIMER_SetValue(TIMER0, 0);
+}
+

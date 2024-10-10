@@ -1,0 +1,96 @@
+/* Connect USB2COM to RXD and TXD pins */
+/* 9600 baud */
+
+  /* Includes ------------------------------------------------------------------*/
+  #include "gw1ns4c.h"
+  #include <stdio.h>
+  /*----------------------------------------------------------------------------*/
+
+  void go(void);
+
+  /* Declarations*/
+  void initializeTimer();
+  void delayMillis(uint32_t ms);
+  void initializeUART();
+  int readstr(char *ptr, int len);
+
+  char buf[100];
+  int main(void)
+  {
+  	SystemInit(); //Configures CPU for the defined system clock
+  	initializeTimer();
+  	initializeUART();
+
+  	uint32_t counter = 0;
+	printf("************* Apicula on Tangnano4k with Cortex-M3 ************\n");
+	delayMillis(1000);
+	go();
+  	while(1);
+  }
+
+  int readstr(char *ptr, int len)  {
+	int DataIdx;
+
+	for (DataIdx = 0; DataIdx < len; DataIdx++)	{
+		*ptr++ = UART_ReceiveChar(UART0);
+		if (*(ptr - 1) == '\r') {
+			--ptr;
+			--DataIdx;
+			break;
+		}
+	}
+
+	*ptr = '\0';
+	return DataIdx;
+  }
+
+  //Initializes UART0
+  void initializeUART()
+  {
+  	UART_InitTypeDef uartInitStruct;
+  	//Enable transmission
+  	uartInitStruct.UART_Mode.UARTMode_Tx = ENABLE;
+  	//Disable reception
+  	uartInitStruct.UART_Mode.UARTMode_Rx = ENABLE;
+  	//9600 baud rate typical of Arduinos
+  	uartInitStruct.UART_BaudRate = 9600;
+  	//Initialize UART0 using the struct configs
+  	UART_Init(UART0, &uartInitStruct);
+  }
+
+  void initializeTimer() {
+  	TIMER_InitTypeDef timerInitStruct;
+
+  	timerInitStruct.Reload = 0;
+
+  	//Disable interrupt requests from timer for now
+  	timerInitStruct.TIMER_Int = DISABLE;
+
+  	//Disable timer enabling/clocking from external pins (GPIO)
+  	timerInitStruct.TIMER_Exti = TIMER_DISABLE;
+
+  	TIMER_Init(TIMER0, &timerInitStruct);
+  	TIMER_StopTimer(TIMER0);
+  }
+
+  #define CYCLES_PER_MILLISEC (SystemCoreClock / 1000)
+  void delayMillis(uint32_t ms) {
+  	TIMER_StopTimer(TIMER0);
+  	TIMER_SetValue(TIMER0, 0); //Reset timer just in case it was modified elsewhere
+  	TIMER_EnableIRQ(TIMER0);
+
+  	uint32_t reloadVal = CYCLES_PER_MILLISEC * ms;
+  	//Timer interrupt will trigger when it reaches the reload value
+  	TIMER_SetReload(TIMER0, reloadVal);
+
+  	TIMER_StartTimer(TIMER0);
+  	//Block execution until timer wastes the calculated amount of cycles
+  	while (TIMER_GetIRQStatus(TIMER0) != SET);
+
+  	TIMER_StopTimer(TIMER0);
+  	TIMER_ClearIRQ(TIMER0);
+  	TIMER_SetValue(TIMER0, 0);
+  }
+
+
+

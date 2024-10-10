@@ -1,0 +1,100 @@
+/*
+ ******************************************************************************************
+ * @file        main.c
+ * @author      GowinSemiconductor
+ * @device      Gowin_EMPU(GW1NS-4C)
+ * @brief       Main program body.
+ ******************************************************************************************
+ */
+
+/* Includes ------------------------------------------------------------------*/
+#include "gw1ns4c.h"
+#include <stdint.h>
+#include <stdio.h>
+
+// First APB master address
+uint32_t const apb2_periph_base = 0x40002400;
+
+struct APB2_leds_peripheral {
+  uint32_t volatile led : 1;    // not memory - read/write the bus ;)
+};
+
+struct APB2_leds_peripheral *leds = (struct APB2_leds_peripheral *)apb2_periph_base;
+
+void initialize_timer();
+void initialize_UART();
+void delay_millis(uint32_t ms);
+
+void print_led_state(void) {
+	if (leds->led) {
+		UART_SendString(UART0, "Read led: ON\r\n");
+	} else {
+		UART_SendString(UART0, "Read led: OFF\r\n");
+	}
+}
+
+int main(void) {
+  SystemInit();
+  initialize_timer();
+  initialize_UART();
+
+  UART_SendString(UART0, "Apicula Cortex-M3 APB blinky\r\n");
+  while (1) {
+    leds->led = 0;
+    print_led_state();
+    delay_millis(100);
+    leds->led = 1;
+    print_led_state();
+    delay_millis(1000);
+  }
+}
+
+// Initializes UART0
+void initialize_UART() {
+  UART_InitTypeDef uartInitStruct;
+  // Enable transmission
+  uartInitStruct.UART_Mode.UARTMode_Tx = ENABLE;
+  // Disable reception
+  uartInitStruct.UART_Mode.UARTMode_Rx = DISABLE;
+  // 9600 baud rate typical of Arduinos
+  uartInitStruct.UART_BaudRate = 9600;
+  // Initialize UART0 using the struct configs
+  UART_Init(UART0, &uartInitStruct);
+}
+
+void initialize_timer() {
+  TIMER_InitTypeDef timerInitStruct;
+
+  timerInitStruct.Reload = 0;
+
+  // Disable interrupt requests from timer for now
+  timerInitStruct.TIMER_Int = DISABLE;
+
+  // Disable timer enabling/clocking from external pins (GPIO)
+  timerInitStruct.TIMER_Exti = TIMER_DISABLE;
+
+  TIMER_Init(TIMER0, &timerInitStruct);
+  TIMER_StopTimer(TIMER0);
+}
+
+#define CYCLES_PER_MILLISEC (SystemCoreClock / 1000)
+void delay_millis(uint32_t ms) {
+  TIMER_StopTimer(TIMER0);
+  // Reset timer just in case it was modified elsewhere
+  TIMER_SetValue(TIMER0, 0);
+  TIMER_EnableIRQ(TIMER0);
+
+  uint32_t reloadVal = CYCLES_PER_MILLISEC * ms;
+  // Timer interrupt will trigger when it reaches the reload value
+  TIMER_SetReload(TIMER0, reloadVal);
+
+  TIMER_StartTimer(TIMER0);
+  // Block execution until timer wastes the calculated amount of cycles
+  while (TIMER_GetIRQStatus(TIMER0) != SET)
+    ;
+
+  TIMER_StopTimer(TIMER0);
+  TIMER_ClearIRQ(TIMER0);
+  TIMER_SetValue(TIMER0, 0);
+}
+
