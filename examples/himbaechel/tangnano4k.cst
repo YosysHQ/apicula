@@ -1,12 +1,15 @@
 // these are the HDMI pins!
-IO_LOC "led[0]" 34;
-IO_LOC "led[1]" 35;
-IO_LOC "led[2]" 29;
+IO_LOC "led[0]" 39;
+IO_LOC "led[1]" 40;
+IO_LOC "led[2]" 41;
 IO_LOC "led[3]" 30;
 IO_LOC "led[4]" 31;
 IO_LOC "led[5]" 32;
 IO_LOC "key_i" 15;
 IO_LOC "rst_i" 14;
+
+IO_LOC "mode_led" 10;
+IO_PORT "mode_led" PULL_MODE_NONE DRIVE=8;
 
 IO_LOC "clk" 45;
 CLOCK_LOC "clk" BUFG;
@@ -22,6 +25,14 @@ IO_LOC "TXD" 44;
 IO_PORT "TXD" PULL_MODE=UP;
 IO_LOC "RXD" 46;
 IO_PORT "RXD" PULL_MODE=UP;
+
+// gpio
+IO_LOC "gpio[0]" 47;
+IO_LOC "gpio[1]" 48;
+
+// SPI
+IO_LOC "spi_OUT" 42;
+IO_LOC "spi_SCL" 43;
 
 // oser
 IO_LOC "oser_out" 35;
