@@ -21,31 +21,36 @@ def bitarr(frame, pad):
 
 def read_bitstream(fname):
     bitmap = []
+    returnBitmap = []
     hdr = []
     ftr = []
     is_hdr = True
     crcdat = bytearray()
     preamble = 3
     frames = 0
+    c = 0
+    is5ASeries = False
+        
     calc = crc.Calculator(crc16arc)
     with open(fname) as inp:
         for line in inp:
             if line.startswith("//"): 
-                print("line: ", line)
+                #print("line: ", line)
                 continue
             ba = bytearr(line)
             if not frames:
                 if is_hdr:
-                    print("header:", ba)
+                    #print("header:", ba)
                     hdr.append(ba)
                 else:
-                    print("footer:", ba)
+                    #print("footer:", ba)
                     ftr.append(ba)
                 if not preamble and ba[0] != 0xd2: # SPI address
+                    #print("spi address", ba)
                     crcdat.extend(ba)
                 if not preamble and ba[0] == 0x3b: # frame count
                     frames = int.from_bytes(ba[2:], 'big')
-                    print("frame count: ", frames)
+                    print("frame count: ", frames, ba)
                     is_hdr = False
                 if not preamble and ba[0] == 0x06: # device ID
                     print("Device ID:", ba)
@@ -67,20 +72,34 @@ def read_bitstream(fname):
                         padding = 0
                     elif ba == b'\x06\x00\x00\x00\x00\x01\x28\x1b': # GW5A-25A
                         padding = 0
+                        is5ASeries = True
                     else:
                         raise ValueError("Unsupported device", ba)
                 preamble = max(0, preamble-1)
                 continue
-            crcdat.extend(ba[:-8])
-            crc1 = (ba[-7] << 8) + ba[-8]
-            crc2 = calc.checksum(crcdat)
-            print("len:", len(ba), "padding:", padding)
-            #assert crc1 == crc2, f"Not equal {crc1} {crc2} for {crcdat}"
-            crcdat = ba[-6:]
-            bitmap.append(bitarr(line, padding))
-            frames = max(0, frames-1)
+                
+            if is5ASeries == False:
+                crcdat.extend(ba[:-8])
+                crc1 = (ba[-7] << 8) + ba[-8]
+                crc2 = calc.checksum(crcdat)
+                assert crc1 == crc2, f"Not equal {crc1} {crc2} for {crcdat}"
+                if crc1 != crc2:
+                    print("frame: ", c, ba, len(ba))
+                    print("crcdata: ", crcdat, len(crcdat))
+                    print("crc error - frame:", c, frames, " : ", crc1, " != ", crc2)
 
-    return bitmatrix.fliplr(bitmap), hdr, ftr
+                crcdat = ba[-6:]
+
+            bitmap.append(bitarr(line, padding))
+            frames = max(0, frames-1)    
+            c = c + 1
+
+        if is5ASeries == False:
+            returnBitmap = bitmatrix.fliplr(bitmap)
+        else:
+            returnBitmap = bitmatrix.transpose(bitmap) 
+
+        return returnBitmap, hdr, ftr
 
 def compressLine(line, key8Z, key4Z, key2Z):
     newline = []

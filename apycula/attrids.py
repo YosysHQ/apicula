@@ -54,7 +54,23 @@ iob_attrids = {
         'IOBUF_IODUTY':          46,
         'IOBUF_ODT_DYNTERM':     47,
         'MIPI_IBUF_DRIVE':       48,
-        'MIPI_IBUF_DRIVE_LEVEL': 49
+        'MIPI_IBUF_DRIVE_LEVEL': 49,
+
+        'IOB_UNKNOWN51':         51,
+        'IOB_UNKNOWN52':         52,
+        'IOB_UNKNOWN55':         55,
+        'IOB_UNKNOWN56':         56,
+        'IOB_UNKNOWN57':         57,
+        'IOB_UNKNOWN58':         58,
+        'IOB_UNKNOWN59':         59,
+        'IOB_UNKNOWN60':         60,
+        'IOB_UNKNOWN61':         61,
+        'IOB_UNKNOWN66':         66,
+        'IOB_UNKNOWN68':         68,
+        'IOB_UNKNOWN69':         69,
+        'IOB_UNKNOWN70':         70,
+        'IOB_UNKNOWN71':         71,
+        'IOB_UNKNOWN72':         72
         }
 
 iob_attrvals = {
@@ -861,7 +877,8 @@ cls_attrids = {
         'REG0_SD':          11,
         'REG1_SD':          12,
         'REG0_REGSET':      13,
-        'REG1_REGSET':      14
+        'REG1_REGSET':      14,
+        'NEW ATTR ID?':     15
     }
 
 cls_attrvals = {
@@ -1308,6 +1325,58 @@ iologic_attrids = {
         'INDEL_1':                 67,
         'IMON_CENTSEL_0':          68,
         'IMON_CENTSEL_1':          69,
+        'IOLOGIC_UNKNOWN74':       74,
+        'IOLOGIC_UNKNOWN77':       77,
+        'IOLOGIC_UNKNOWN78':       78,
+        'IOLOGIC_UNKNOWN79':       79,
+        'IOLOGIC_UNKNOWN82':       82,
+        'IOLOGIC_UNKNOWN83':       83,
+        'IOLOGIC_UNKNOWN84':       84,
+        'IOLOGIC_UNKNOWN85':       85,
+        'IOLOGIC_UNKNOWN86':       86,
+        'IOLOGIC_UNKNOWN87':       87,
+        'IOLOGIC_UNKNOWN88':       88,
+        'IOLOGIC_UNKNOWN89':       89,
+        'IOLOGIC_UNKNOWN90':       90,
+        'IOLOGIC_UNKNOWN91':       91,
+        'IOLOGIC_UNKNOWN92':       92,
+        'IOLOGIC_UNKNOWN93':       93,
+        'IOLOGIC_UNKNOWN95':       95,
+        'IOLOGIC_UNKNOWN97':       97,
+        'IOLOGIC_UNKNOWN98':       98,
+        'IOLOGIC_UNKNOWN99':       99,
+        'IOLOGIC_UNKNOWN100':      100,
+        'IOLOGIC_UNKNOWN101':      101,
+        'IOLOGIC_UNKNOWN102':      102,
+        'IOLOGIC_UNKNOWN103':      103,
+        'IOLOGIC_UNKNOWN104':      104,
+        'IOLOGIC_UNKNOWN105':      105,
+        'IOLOGIC_UNKNOWN106':      106,
+        'IOLOGIC_UNKNOWN107':      107,
+        'IOLOGIC_UNKNOWN108':      108,
+        'IOLOGIC_UNKNOWN109':      109,
+        'IOLOGIC_UNKNOWN110':      110,
+        'IOLOGIC_UNKNOWN111':      111,
+        'IOLOGIC_UNKNOWN112':      112,
+        'IOLOGIC_UNKNOWN113':      113,
+        'IOLOGIC_UNKNOWN114':      114,
+        'IOLOGIC_UNKNOWN115':      115,
+        'IOLOGIC_UNKNOWN116':      116,
+        'IOLOGIC_UNKNOWN118':      118,
+        'IOLOGIC_UNKNOWN119':      119,
+        'IOLOGIC_UNKNOWN120':      120,
+        'IOLOGIC_UNKNOWN121':      121,
+        'IOLOGIC_UNKNOWN122':      122,
+        'IOLOGIC_UNKNOWN123':      123,
+        'IOLOGIC_UNKNOWN124':      124,
+        'IOLOGIC_UNKNOWN125':      125,
+        'IOLOGIC_UNKNOWN126':      126,
+        'IOLOGIC_UNKNOWN127':      127,
+        'IOLOGIC_UNKNOWN128':      128,
+        'IOLOGIC_UNKNOWN129':      129,
+        'IOLOGIC_UNKNOWN130':      130,
+        'IOLOGIC_UNKNOWN135':      135,
+        'IOLOGIC_UNKNOWN136':      136        
     }
 
 iologic_attrvals = {

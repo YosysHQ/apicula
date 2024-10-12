@@ -206,11 +206,11 @@ def unpad(fuses, pad=-1):
     except ValueError:
         return fuses
 
-def fse_pips(fse, ttyp, table=2, wn=wirenames):
+def fse_pips(fse, ttyp, device, table=2, wn=wirenames):
     pips = {}
     if table in fse[ttyp]['wire']:
         for srcid, destid, *fuses in fse[ttyp]['wire'][table]:
-            fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+            fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
             if srcid < 0:
                 fuses = set()
                 srcid = -srcid
@@ -231,8 +231,8 @@ _supported_hclk_wires = {'SPINE2', 'SPINE3', 'SPINE4', 'SPINE5', 'SPINE10', 'SPI
                          }
 # Some chips at least -9C treat these wires as the same
 _xxx_hclk_wires = {'SPINE16': 'SPINE2', 'SPINE18': 'SPINE4'}
-def fse_hclk_pips(fse, ttyp, aliases):
-    pips = fse_pips(fse, ttyp, table = 48, wn = clknames)
+def fse_hclk_pips(fse, ttyp, aliases, device):
+    pips = fse_pips(fse, ttyp, device, table = 48, wn = clknames)
     res = {}
     for dest, src_fuses in pips.items():
         if dest not in _supported_hclk_wires:
@@ -244,12 +244,12 @@ def fse_hclk_pips(fse, ttyp, aliases):
                     aliases.update({src: _xxx_hclk_wires[src]})
     return res
 
-def fse_alonenode(fse, ttyp, table = 6):
+def fse_alonenode(fse, ttyp, device, table = 6):
     pips = {}
     if 'alonenode' in fse[ttyp].keys():
         if table in fse[ttyp]['alonenode']:
             for destid, *tail in fse[ttyp]['alonenode'][table]:
-                fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(tail[-2:])}
+                fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(tail[-2:])}
                 srcs = {wirenames.get(srcid, str(srcid)) for srcid in unpad(tail[:-2])}
                 dest = wirenames.get(destid, str(destid))
                 pips[dest] = (srcs, fuses)
@@ -296,12 +296,12 @@ def add_alu_mode(base_mode, modes, lut, new_alu_mode, new_mode_bits):
             alu_mode.update(lut.flags[15 - i])
 
 # also make DFFs, ALUs and shadow RAM
-def fse_luts(fse, ttyp):
+def fse_luts(fse, ttyp, device):
     data = fse[ttyp]['shortval'][5]
 
     luts = {}
     for lutn, bit, *fuses in data:
-        coord = fuse.fuse_lookup(fse, ttyp, fuses[0])
+        coord = fuse.fuse_lookup(fse, ttyp, fuses[0], device)
         bel = luts.setdefault(f"LUT{lutn}", Bel())
         bel.flags[bit] = {coord}
 
@@ -340,7 +340,7 @@ def fse_luts(fse, ttyp):
             for key0, key1, *fuses in data:
                 if key0 == 1 and key1 == 0:
                     for f in (f for f in fuses if f != -1):
-                        coord = fuse.fuse_lookup(fse, ttyp, f)
+                        coord = fuse.fuse_lookup(fse, ttyp, f, device)
                         mode.update({coord})
                     break
             lut = luts[f"LUT{alu_idx}"]
@@ -397,7 +397,7 @@ def fse_luts(fse, ttyp):
                 if key0 < 0:
                     for f in fuses:
                         if f == -1: break
-                        coord = fuse.fuse_lookup(fse, ttyp, f)
+                        coord = fuse.fuse_lookup(fse, ttyp, f, device)
                         mode.add(coord)
 
         bel = luts.setdefault(f"RAM16", Bel())
@@ -406,7 +406,7 @@ def fse_luts(fse, ttyp):
             if key0 == 2 and key1 == 0:
                 for f in fuses:
                     if f == -1: break
-                    coord = fuse.fuse_lookup(fse, ttyp, f)
+                    coord = fuse.fuse_lookup(fse, ttyp, f, device)
                     mode.add(coord)
         bel.portmap = {
             'DI': ("A5", "B5", "C5", "D5"),
@@ -510,7 +510,7 @@ _known_tables = {
             82: 'POWERSAVE',
         }
 
-def fse_fill_logic_tables(dev, fse):
+def fse_fill_logic_tables(dev, fse, device):
     # logicinfo
     for ltable in fse['header']['logicinfo'].keys():
         if ltable in _known_logic_tables.keys():
@@ -530,7 +530,7 @@ def fse_fill_logic_tables(dev, fse):
                 else:
                     table = ttyp_rec.setdefault(f"unknown_{lftable}", {})
                 for f, *fuses in fse[ttyp]['longfuse'][lftable]:
-                    table[(f, )] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+                    table[(f, )] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
         if 'shortval' in fse[ttyp].keys():
             ttyp_rec = dev.shortval.setdefault(ttyp, {})
             for stable in fse[ttyp]['shortval'].keys():
@@ -539,7 +539,7 @@ def fse_fill_logic_tables(dev, fse):
                 else:
                     table = ttyp_rec.setdefault(f"unknown_{stable}", {})
                 for f_a, f_b, *fuses in fse[ttyp]['shortval'][stable]:
-                    table[(f_a, f_b)] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+                    table[(f_a, f_b)] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
         if 'longval' in fse[ttyp].keys():
             ttyp_rec = dev.longval.setdefault(ttyp, {})
             for ltable in fse[ttyp]['longval'].keys():
@@ -548,7 +548,7 @@ def fse_fill_logic_tables(dev, fse):
                 else:
                     table = ttyp_rec.setdefault(f"unknown_{ltable}", {})
                 for f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, *fuses in fse[ttyp]['longval'][ltable]:
-                    table[(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15)] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+                    table[(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15)] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
 
 _hclk_in = {
             'TBDHCLK0': 0,  'TBDHCLK1': 1,  'TBDHCLK2': 2,  'TBDHCLK3': 3,
@@ -1187,7 +1187,7 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
             for hclk_loc in hclk_info[side]['hclk']:
                 row, col = hclk_loc
                 ttyp = fse['header']['grid'][61][row][col]
-                dev.hclk_pips[(row, col)] = fse_pips(fse, ttyp, table = 48, wn = hclknames)
+                dev.hclk_pips[(row, col)] = fse_pips(fse, ttyp, device, table = 48, wn = hclknames)
                 # connect local wires like PCLKT0 etc to the global nodes
                 for srcs in dev.hclk_pips[(row, col)].values():
                     for src in srcs.keys():
@@ -1936,14 +1936,14 @@ def from_fse(device, fse, dat: Datfile):
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
         tile = Tile(w, h, ttyp)
-        tile.pips = fse_pips(fse, ttyp, 2, wirenames)
-        tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
+        tile.pips = fse_pips(fse, ttyp, device, 2, wirenames)
+        tile.clock_pips = fse_pips(fse, ttyp, device, 38, clknames)
         # copy for Himbaechel without hclk
         tile.pure_clock_pips = copy.deepcopy(tile.clock_pips)
-        tile.clock_pips.update(fse_hclk_pips(fse, ttyp, tile.aliases))
-        tile.alonenode_6 = fse_alonenode(fse, ttyp, 6)
+        tile.clock_pips.update(fse_hclk_pips(fse, ttyp, tile.aliases, device))
+        tile.alonenode_6 = fse_alonenode(fse, ttyp, device, 6)
         if 5 in fse[ttyp]['shortval']:
-            tile.bels = fse_luts(fse, ttyp)
+            tile.bels = fse_luts(fse, ttyp, device)
         elif 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
         elif ttyp in bram_ttypes:
@@ -1963,7 +1963,7 @@ def from_fse(device, fse, dat: Datfile):
         tile.bels.update(fse_iologic(device, fse, ttyp))
         tiles[ttyp] = tile
 
-    fse_fill_logic_tables(dev, fse)
+    fse_fill_logic_tables(dev, fse, device)
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     fse_create_clocks(dev, device, dat, fse)
     fse_create_pll_clock_aliases(dev, device)

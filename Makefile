@@ -6,8 +6,7 @@ endif
 .PHONY: all clean
 
 #removed ones that nolonger exist (GW1NS-2) or fail (GW2A-18C)
-all: apycula/GW5A-25A.pickle
-all: apycula/GW2A-18C.pickle
+all: apycula/GW5A-25A.pickle apycula/GW2A-18C.pickle
 #all: apycula/GW1N-1.pickle
 
 #all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle \

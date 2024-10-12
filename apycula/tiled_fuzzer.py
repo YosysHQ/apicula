@@ -214,7 +214,7 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
             bel.is_diff = is_diff
             bel.is_true_lvds = is_true_lvds
             bel.is_diff_p = is_positive
-            print(f"type:{ttyp} [{row}][{col}], IOB{bel_name[-1]}, diff:{is_diff}, true lvds:{is_true_lvds}, p:{is_positive}")
+            #print(f"type:{ttyp} [{row}][{col}], IOB{bel_name[-1]}, diff:{is_diff}, true lvds:{is_true_lvds}, p:{is_positive}")
     for ttyp, bels in iob_bels.items():
         for row, col in locations[ttyp]:
             db.grid[row][col].bels.update(iob_bels[ttyp])
@@ -235,13 +235,12 @@ if __name__ == "__main__":
     chipdb.fse_wire_delays(db)
     db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
 
-    corners = [
-        (0, 0, fse['header']['grid'][61][0][0]),
-        (0, db.cols-1, fse['header']['grid'][61][0][-1]),
-        (db.rows-1, db.cols-1, fse['header']['grid'][61][-1][-1]),
-        (db.rows-1, 0, fse['header']['grid'][61][-1][0]),
-    ]
-    print("bingo")
+    #corners = [
+    #    (0, 0, fse['header']['grid'][61][0][0]),
+    #    (0, db.cols-1, fse['header']['grid'][61][0][-1]),
+    #    (db.rows-1, db.cols-1, fse['header']['grid'][61][-1][-1]),
+    #    (db.rows-1, 0, fse['header']['grid'][61][-1][0]),
+    #]
 
     locations = {}
     for row, row_dat in enumerate(fse['header']['grid'][61]):
@@ -266,8 +265,7 @@ if __name__ == "__main__":
     db.cmd_hdr = pnr_empty.hdr
     db.cmd_ftr = pnr_empty.ftr
     db.template = pnr_empty.bitmap
-    print("bingo2")
-
+ 
     # IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
     fse_iob(fse, db, pin_locations, diff_cap_info, locations);
@@ -278,7 +276,6 @@ if __name__ == "__main__":
     chipdb.dat_portmap(dat, db, device)
     chipdb.add_hclk_bels(dat, db, device)
 
-    print("bingo3")
     # XXX GW1NR-9 has interesting IOBA pins on the bottom side
     if device == 'GW1N-9' :
         loc = locations[52][0]
@@ -289,11 +286,11 @@ if __name__ == "__main__":
 
     # GSR
     if device in {'GW2A-18', 'GW2A-18C', 'GW5A-25A'}:
-        db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
-        print("timing: ", db.timing)
+        db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
+        #print("timing: ", db.timing)
 
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
-        db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+        db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
     else:
         raise Exception(f"No GSR for {device}")
 

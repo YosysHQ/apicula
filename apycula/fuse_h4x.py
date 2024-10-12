@@ -18,11 +18,12 @@ def readFse(f, device):
     print("check", rint(f, 4))
     tiles = {}
     ttyp = rint(f, 4)
+    #print("tile type", ttyp)
     tiles['header'] = readOneFile(f, ttyp, device)
     while True:
         ttyp = rint(f, 4)
         if ttyp == 0x9a1d85: break
-        print("tile type", ttyp)
+        #print("tile type", ttyp)
         tiles[ttyp] = readOneFile(f, ttyp, device)
     return tiles
 
@@ -33,8 +34,24 @@ def readTable(f, size1, size2, w=2):
 def readOneFile(f, tileType, device):
     tmap = {"height": rint(f, 4),
             "width": rint(f, 4)}
+    #print("height: ", tmap["height"], "width: ", tmap["width"])
     tables = rint(f, 4)
    
+    v1 = 0x1b8
+    v2 = 3
+    if (tileType < 0x400):
+        if ((0x1b7 < tileType) or (tileType < 0)):
+            print("Error: readOneFile 1")
+    else:
+        if (2 < tileType + -0x400):
+            print("Error: readOneFile 2")
+        
+        v2 = tileType + -0x400
+        tileType = v1
+  
+    v1 = tileType
+        
+            
     is5Series = False
     if device.lower().startswith("gw5a"): is5Series = True
 
@@ -45,8 +62,7 @@ def readOneFile(f, tileType, device):
         if typ == 61:
             size2 = rint(f, 4)
             typn = "grid"
-            #print("s1: ", size, "s2: ", size2, "total: ", size * size2 * 4);
-            t = readTable(f, size, size2, 4)
+            t = readTable(f, size, size2, 4)            
         elif typ == 1:
             # Check if the device is 5 series as tile type 1 needs to be read differently
             typn = "fuse"
@@ -90,17 +106,16 @@ def readOneFile(f, tileType, device):
             typn = "longval"
             t = readTable(f, size, 28, 2)
         elif typ == 0x43:
-            print("deviceType:", device)
             if device in {'GW1N-1', 'GW1N-9', 'GW1N-4', 'GW1NS-4'
                         'GW2A-18', 'GW2A-18C', 'GW5A-25A', 'GW5AS-25A'}:
                 typn = "logicinfo"
                 t = readTable(f, size, 3, 2) 
             else: # GW1N-9C GW5A-138B GW5AST-138B GW5AT-138 GW5AT-138B GW5AT-75B
                 typn = "signedlogicinfo"
-                t = readTable(f, size, 17, 2)
+                t = readTable(f, size, 6, 2)
         elif typ in {0x86, 0x87}:
             typn = "signedlogicinfo"
-            t = readTable(f, size, 17, 2)
+            t = readTable(f, size, 6, 2)
         elif typ == 0x8b:
             typn = "drpfuse"
             t = readTable(f, size, 3, 2)
@@ -112,9 +127,15 @@ def readOneFile(f, tileType, device):
 def render_tile(d, ttyp, device):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
-    print("w:", w,"h:", h)
+
+        
     is5Series = False
     if device.lower().startswith("gw5a"): is5Series = True
+
+    #if is5Series:
+    #    h = h * 2
+
+    highestnum = 0
 
     tile = bitmatrix.zeros(h, w)#+(255-ttyp)
     for start, table in [(2, 'shortval'), (2, 'wire'), (16, 'longval'),
@@ -127,9 +148,19 @@ def render_tile(d, ttyp, device):
                             if ttyp > 0x400: num = d['header']['fuse'][1][fuse][ttyp - 0x400]
                             else: num = d['header']['fuse'][1][fuse][ttyp]
 
+                            if num > highestnum:
+                                highestnum = num
                             row = num // 100
-                            if is5Series: row = num // 200
                             col = num % 100
+                            if is5Series: 
+                                row = num // 200
+                                col = num % 200
+
+                            if row > h:
+                                print("tile(r):", ttyp, "row:", row, "w:", w,"h:", h, "highest:", highestnum)
+                                
+                            if col > w:
+                                print("tile(w):", ttyp, "col:", col, "w:", w,"h:", h, "highest:", highestnum)
 
                             if table == "wire":
                                 if i[0] > 0:
@@ -143,6 +174,8 @@ def render_tile(d, ttyp, device):
                             else:
                                 tile[row][col] = styp
 
+    #print("tile:", ttyp, "w:", w,"h:", h, "highest:", highestnum)
+
     return tile
 
 
@@ -150,6 +183,13 @@ def render_bitmap(d, device):
     tiles = d['header']['grid'][61]
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
+
+    is5Series = False
+    if device.lower().startswith("gw5a"): is5Series = True
+
+    if is5Series:
+        height = height * 2
+
     bitmap = bitmatrix.zeros(height, width)
     y = 0
     for row in tiles:
@@ -176,7 +216,7 @@ def render_bitmap(d, device):
 def display(fname, data):
     from PIL import Image
     import numpy as np
-    data = np.array(data, dtype = np.uint8)
+    data = np.array(data, dtype = np.uint16)
     im = Image.frombytes(
             mode='P',
             size=data.shape[::-1],
@@ -187,11 +227,27 @@ def display(fname, data):
         im.save(fname)
     return im
 
-def fuse_lookup(d, ttyp, fuse):
+def fuse_lookup(d, ttyp, fuse, device):
+    is5Series = False
+    if device.lower().startswith("gw5a"): is5Series = True
+
+    w = d[ttyp]['width']
+    h = d[ttyp]['height']
+
     if fuse >= 0:
         num = d['header']['fuse'][1][fuse][ttyp]
         row = num // 100
         col = num % 100
+        if is5Series: 
+            row = num // 200
+            col = num % 200
+
+        if row > h:
+            print("row too big", ttyp, row, h, col, w, num, h * w)
+        if col > w:
+            print("col too big", col, w)
+
+
         return row, col
 
 def tile_bitmap(d, bitmap, empty=False):
@@ -238,7 +294,7 @@ def fuse_bitmap(d, bitmap):
 
     return res
 
-def parse_tile(d, ttyp, tile):
+def parse_tile(d, ttyp, tile, device):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
     res = {}
@@ -249,7 +305,7 @@ def parse_tile(d, ttyp, tile):
                 items = {}
                 for row in tablerows:
                     pos = row[0] > 0
-                    coords = {(fuse_lookup(d, ttyp, f), pos) for f in row[start:] if f > 0}
+                    coords = {(fuse_lookup(d, ttyp, f, device), pos) for f in row[start:] if f > 0}
                     idx = tuple(abs(attr) for attr in row[:start])
                     items.setdefault(idx, {}).update(coords)
 
@@ -263,7 +319,7 @@ def parse_tile(d, ttyp, tile):
 
     return res
 
-def parse_tile_exact(d, ttyp, tile, fuse_loc=True):
+def parse_tile_exact(d, ttyp, tile, device, fuse_loc=True):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
     res = {}
@@ -276,7 +332,7 @@ def parse_tile_exact(d, ttyp, tile, fuse_loc=True):
                 for row in tablerows:
                     if row[0] > 0:
                         row_fuses  = [fuse for fuse in row[start:] if fuse >= 0]
-                        locs = [fuse_lookup(d,ttyp, fuse) for fuse in row_fuses]
+                        locs = [fuse_lookup(d,ttyp, fuse, device) for fuse in row_fuses]
                         test = [tile[loc[0]][loc[1]] == 1 for loc in locs]
                         if all(test):
                             full_row = row[:start]
@@ -288,7 +344,7 @@ def parse_tile_exact(d, ttyp, tile, fuse_loc=True):
                     exact_cover = exact_table_cover(active_rows, start, table)
                     if fuse_loc:
                         for cover_row in exact_cover:
-                            cover_row[start:] = [fuse_lookup(d, ttyp, fuse) for fuse in cover_row[start:]]
+                            cover_row[start:] = [fuse_lookup(d, ttyp, fuse, device) for fuse in cover_row[start:]]
 
                     res.setdefault(table, {})[subtyp] = exact_cover
     return res
@@ -324,7 +380,10 @@ def exact_table_cover(t_rows, start, table=None):
     else:
         return []
 
-def scan_fuses(d, ttyp, tile):
+def scan_fuses(d, ttyp, tile, device):
+    is5Series = False
+    if device.lower().startswith("gw5a"): is5Series = True
+
     w = d[ttyp]['width']
     h = d[ttyp]['height']
     fuses = []
@@ -335,6 +394,11 @@ def scan_fuses(d, ttyp, tile):
             num = fuse[ttyp]
             frow = num // 100
             fcol = num % 100
+            #if is5Series: 
+            #    frow = num // w
+            #    fcol = num % w
+            #    print("GO FLUFFY") 
+
             if frow == row and fcol == col and fnum > 100:
                 fuses.append(fnum)
     return set(fuses)
@@ -374,4 +438,3 @@ if __name__ == "__main__":
     display("fuse.png", bm)
     t = render_tile(d, 50, device)
     display("tile.png", t)
-
