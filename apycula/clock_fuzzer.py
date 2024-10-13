@@ -384,7 +384,6 @@ if __name__ == "__main__":
         print("    srcs =", srcs)
         print("    dests =", dests)
         print("    clks =", clks)
-        print("fluffy1")
 
         pa = pin_aliases(quads, srcs)
         sa = spine_aliases(quads, dests, clks)
@@ -395,17 +394,14 @@ if __name__ == "__main__":
         # print(sa)
         # print(ta)
         # print(ba)
-        print("fluffy2")
 
         db.aliases.update(pa)
         db.aliases.update(sa)
         db.aliases.update(ta)
         db.aliases.update(ba)
-        print("fluffy3")
 
         # long wires
         make_lw_aliases(fse, dat, db, quads, clks)
-        print("fluffy4")
 
     with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)

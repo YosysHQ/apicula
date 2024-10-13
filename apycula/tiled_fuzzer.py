@@ -235,12 +235,12 @@ if __name__ == "__main__":
     chipdb.fse_wire_delays(db)
     db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
 
-    #corners = [
-    #    (0, 0, fse['header']['grid'][61][0][0]),
-    #    (0, db.cols-1, fse['header']['grid'][61][0][-1]),
-    #    (db.rows-1, db.cols-1, fse['header']['grid'][61][-1][-1]),
-    #    (db.rows-1, 0, fse['header']['grid'][61][-1][0]),
-    #]
+    corners = [
+        (0, 0, fse['header']['grid'][61][0][0]),
+        (0, db.cols-1, fse['header']['grid'][61][0][-1]),
+        (db.rows-1, db.cols-1, fse['header']['grid'][61][-1][-1]),
+        (db.rows-1, 0, fse['header']['grid'][61][-1][0]),
+    ]
 
     locations = {}
     for row, row_dat in enumerate(fse['header']['grid'][61]):
