@@ -258,6 +258,8 @@ def fse_alonenode(fse, ttyp, device, table = 6):
 # make PLL bels
 def fse_pll(device, fse, ttyp):
     bels = {}
+    #print("requested fse_pll types:", ttyp)
+
     if device in {'GW1N-1', 'GW1NZ-1'}:
         if ttyp == 88:
             bel = bels.setdefault('RPLLA', Bel())
@@ -283,6 +285,9 @@ def fse_pll(device, fse, ttyp):
         if ttyp in {42, 45}:
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp in {74, 75, 76, 77, 78, 79}:
+            bel = bels.setdefault('RPLLB', Bel())
+    elif device in {'GW5A-25A'}:
+        if ttyp in {74, 75, 76, 77, 78, 79}:
             bel = bels.setdefault('RPLLB', Bel())
     return bels
 
@@ -1924,6 +1929,7 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_BANDGAP")
 
 def from_fse(device, fse, dat: Datfile):
+    print("here!!")
     dev = Device()
     fse_create_simplio_rows(dev, dat)
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
@@ -1935,6 +1941,7 @@ def from_fse(device, fse, dat: Datfile):
     for ttyp in ttypes:
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
+        print ("ttyp: ", ttyp, "w:", w, "h:", h)
         tile = Tile(w, h, ttyp)
         tile.pips = fse_pips(fse, ttyp, device, 2, wirenames)
         tile.clock_pips = fse_pips(fse, ttyp, device, 38, clknames)
@@ -1960,6 +1967,14 @@ def from_fse(device, fse, dat: Datfile):
         # determine the type from fse['header']['grid'][61][row][col]
         elif ttyp in [42, 45, 74, 75, 76, 77, 78, 79, 86, 87, 88, 89]:
             tile.bels = fse_pll(device, fse, ttyp)
+        #else:
+        #    print("unknown ttyp: ", ttyp)
+        # HERE
+        #for row, rd in enumerate(dat.grid.rows):
+        #    for col, type_char in enumerate(rd):
+        #        if type_char in ["P", "p"]:
+        #            print (type_char, " places: ", col, row) 
+
         tile.bels.update(fse_iologic(device, fse, ttyp))
         tiles[ttyp] = tile
 
@@ -3078,7 +3093,7 @@ def dat_portmap(dat, dev, device):
                             nam = f'DIB{i - 114}'
                         create_port_wire(dev, row, col, 0, off, bel, "BSRAM", nam, wire, wire_type)
 
-                elif name == 'RPLLA':
+                elif name in ['RPLLA', 'RPPLB']:
                     # The PllInDlt table seems to indicate in which cell the
                     # inputs are actually located.
                     offx = 1
@@ -3370,6 +3385,10 @@ def fse_wire_delays(db):
         db.wire_delay[wirenames[i]] = "CIN"
     for i in range(309, 314): # COUT0-COUT5
         db.wire_delay[wirenames[i]] = "COUT"
+    for i in range(545, 553): # 5A needs these
+        db.wire_delay[wirenames[i]] = "X8"
+    for i in range(556, 564): # 5A needs these
+        db.wire_delay[wirenames[i]] = "X8"
     for i in range(1001, 1049): # LWSPINE
         db.wire_delay[wirenames[i]] = "X8"
     # possibly LW wires for large chips, for now assign dummy value
