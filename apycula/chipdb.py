@@ -2288,6 +2288,7 @@ def dat_portmap(dat, dev, device):
                 elif name.startswith('PADD9'):
                     mac = int(name[-2])
                     idx = int(name[-1])
+                    print("DSP_I: row:", row, "col:", col, "name:", name, "mac:", mac, "idx:", idx)
                     column = mac * 2 + (idx // 2)
 
                     for i in range(12):
@@ -2346,6 +2347,7 @@ def dat_portmap(dat, dev, device):
                         # input wire sequence: A0-8, B0-8,
                         # unknown -1
                         # ASEL
+                        #print("DSP_I: row:", row, "col:", col, "name:", name, "wire_idx:", wire_idx, "wire:", wire)
                         odd_idx = 9 * (idx & 1)
                         if i in range(odd_idx , 9 + odd_idx):
                             nam = f'A{i - odd_idx}'
