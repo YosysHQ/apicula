@@ -95,14 +95,22 @@ class Datfile:
         arr = [self.read_i16() for _ in range(num)]
         return arr
 
-    def read_arr16_at(self, num:int, base:int, offset:int):
+    def read_arr16_at(self, num:int, base:int, scale:int, offset:int):
         ret = []
     
         for n in range(num):
             self._cur = (n + base) * 2 + offset
             ret.append(self.read_i16())
         return ret 
+
+    def read_arr32_at(self, num:int, base:int, scale:int, offset:int):
+        ret = []
     
+        for n in range(num):
+            self._cur = (n + base) * 4 + offset
+            ret.append(self.read_i32())
+        return ret 
+
         
     def read_arr32(self, num: int) -> list[int]:
         arr = [self.read_i32() for _ in range(num)]
@@ -229,17 +237,16 @@ class Datfile:
             ret.append((a, b))
         return ret
 
-    def read_scaledGrid16(rows, cols, rowScaling, colScaling, baseOffset):
-        self._cur = baseAddress
-        rows = []
+    def read_scaledGrid16(self, numRows, numCols, rowScaling, colScaling, baseOffset):
+        ret = []
 
-        for row in range(rows):
-            row = []
-            for col in range(cols):
+        for row in range(numRows):
+            rowArr = []
+            for col in range(numCols):
                 self._cur = (row * rowScaling) + (col * colScaling * 2) + baseOffset
-                row.append(self.read_u16())
-            rows.append(row)
-        return rows
+                rowArr.append(self.read_u16())
+            ret.append(rowArr)
+        return ret
 
     def read_5Astuff(self) -> dict:
         RSTable5ATOffset = 0x7b4a8
@@ -318,8 +325,8 @@ class Datfile:
         for n in range(5):
             ret["QuadIOName1_{n}"]  = self.read_scaledGrid16(15, 0xf, 0x4b, 5, RSTable5ATOffset + 0x2483c + n)
             ret["QuafIOName2_{n}"]  = self.read_scaledGrid16(15, 0xf, 0xf, 5, RSTable5ATOffset + 0x24977 + n)            
-        ret["QuadBank1"]            = self.self.read_arr16_at(15, RSTable5ATOffset + 0x123f0, 8)
-        ret["QuadBank2"]            = self.self.read_arr16_at(15, RSTable5ATOffset + 0x12408, 2)
+        ret["QuadBank1"]            = self.read_arr16_at(15, RSTable5ATOffset + 0x123f0, 8)
+        ret["QuadBank2"]            = self.read_arr16_at(15, RSTable5ATOffset + 0x12408, 2)
         
         ret["AdcIO"]                = self.read_scaledGrid16(4, 0xf, 0xf, 1, RSTable5ATOffset + 0x25708)
         for n in range(5):
@@ -546,20 +553,31 @@ class Datfile:
         RSTable5ATOffset = 0x7b4a8
         ret = {
             "Dqs": {},
+            "Cfg": {},
         }
-        ret["Dqs"]["TA"]: self.read_arr16_at(200, RSTable5ATOffset + 0x9a10, 4)
-        ret["Dqs"]["TB"]: self.read_arr16_at(200, RSTable5ATOffset + 0x9cc8, 0xc)
-        ret["Dqs"]["BA"]: self.read_arr16_at(200, RSTable5ATOffset + 0x9ad8, 4)
-        ret["Dqs"]["BB"]: self.read_arr16_at(200, RSTable5ATOffset + 0x9d90, 0xc)
-        ret["Dqs"]["LA"]: self.read_arr16_at(0x96, RSTable5ATOffset + 0x9ba0, 4)
-        ret["Dqs"]["LB"]: self.read_arr16_at(0x96, RSTable5ATOffset + 0x9e58, 0xc)
-        ret["Dqs"]["RA"]: self.read_arr16_at(0x96, RSTable5ATOffset + 0x9c38, 0)
-        ret["Dqs"]["RA"]: self.read_arr16_at(0x96, RSTable5ATOffset + 0x9ef0, 8)
+        ret["Dqs"]["TA"]        = self.read_arr16_at(200, RSTable5ATOffset + 0x9a10, 4)
+        ret["Dqs"]["TB"]        = self.read_arr16_at(200, RSTable5ATOffset + 0x9cc8, 0xc)
+        ret["Dqs"]["BA"]        = self.read_arr16_at(200, RSTable5ATOffset + 0x9ad8, 4)
+        ret["Dqs"]["BB"]        = self.read_arr16_at(200, RSTable5ATOffset + 0x9d90, 0xc)
+        ret["Dqs"]["LA"]        = self.read_arr16_at(0x96, RSTable5ATOffset + 0x9ba0, 4)
+        ret["Dqs"]["LB"]        = self.read_arr16_at(0x96, RSTable5ATOffset + 0x9e58, 0xc)
+        ret["Dqs"]["RA"]        = self.read_arr16_at(0x96, RSTable5ATOffset + 0x9c38, 0)
+        ret["Dqs"]["RA"]        = self.read_arr16_at(0x96, RSTable5ATOffset + 0x9ef0, 8)
 
-        ret["Dqs"]["LeftIO"]: self.read_arr16_at(0x16, RSTable5ATOffset + 0x9f88, 4)
-        ret["Dqs"]["RightIO"]: self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fa0, 0)
-        ret["Dqs"]["TopIO"]: self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fb0, 0xc)
-        ret["Dqs"]["BottomIO"]: self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fc8, 8)
+        ret["Dqs"]["LeftIO"]    = self.read_arr16_at(0x16, RSTable5ATOffset + 0x9f88, 4)
+        ret["Dqs"]["RightIO"]   = self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fa0, 0)
+        ret["Dqs"]["TopIO"]     = self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fb0, 0xc)
+        ret["Dqs"]["BottomIO"]  = self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fc8, 8)
+
+        ret["Cfg"]["TA"]        = self.read_arr32_at(200, RSTable5ATOffset, 0)
+        ret["Cfg"]["BA"]        = self.read_arr32_at(200, RSTable5ATOffset + 200, 0)
+        ret["Cfg"]["LA"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 400, 0)
+        ret["Cfg"]["RA"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 224, 8)
+        ret["Cfg"]["TB"]        = self.read_arr32_at(200, RSTable5ATOffset + 700, 0)
+        ret["Cfg"]["BB"]        = self.read_arr32_at(200, RSTable5ATOffset + 900, 0)
+        ret["Cfg"]["LB"]        = self.read_arr32_at(0x96, RSTable5ATOffset, 0x44c)
+        ret["Cfg"]["RB"]        = self.read_arr32_at(0x96, RSTable5ATOffset, 0x4e0, 8)
+
         return ret
             
     def read_something(self):
