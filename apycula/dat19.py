@@ -162,7 +162,7 @@ class Datfile:
         grid_w = self.read_u16() # chipCols_
         cc_y = self.read_u16() # hiq_
         cc_x = self.read_u16() # viq_
-
+        # 26068
         rows = []
         grid_mapping = {
             (0, 0): " ",  # empty
@@ -245,155 +245,172 @@ class Datfile:
         RSTable5ATOffset = 0x7b4a8
         ret = { }
             
+        #ret["UNKNOWN"] = 0x1d
+        #ret["UNKNOWN"] = 0x1d
+        #ret["UNKNOWN"] = 0x16
+        #ret["UNKNOWN"] = 0x16
+        #ret["UNKNOWN"] = 0xe
+        
         self._cur = RSTable5ATOffset + 0x240b0
-        ret["TopHiq"]: self.read_u16() 
-        ret["TopViq"]: self.read_u16() 
-        ret["BotHiq"]: self.read_u16() 
-        ret["BotViq"]: self.read_u16() 
+        ret["TopHiq"] = self.read_u16()
+        ret["TopViq"] = self.read_u16() 
+        ret["BotHiq"] = self.read_u16() 
+        ret["BotViq"] = self.read_u16() 
 
-        ret["PllIn"]: self.read_arr16_at(0xcb, RSTable5ATOffset + 0xaf0, 0)
-        ret["PllOut"]: self.read_arr16_at(0xcb, RSTable5ATOffset + 0xbe8, 0)
-        ret["PllInDlt"]: self.read_arr16_at(0xbc8, RSTable5ATOffset + 0xaf0, 0)
-        ret["PllOutDlt"]: self.read_arr16_at(0xcb, RSTable5ATOffset + 0xcc0, 0)
+        ret["PllIn"]                = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xaf0, 0)
+        ret["PllOut"]               = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xbe8, 0)
+        ret["PllInDlt"]             = self.read_arr16_at(0xbc8, RSTable5ATOffset + 0xaf0, 0)
+        ret["PllOutDlt"]            = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xcc0, 0)
             
-        ret["5ATIOLogicAIn"]: self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1880, 0)
-        ret["5ATIOLogicBIn"]: self.read_arr16_at(0x3e, RSTable5ATOffset + 0x18b8, 0xc)
-        ret["5ATIOLogicAOut"]: self.read_arr16_at(0x27, RSTable5ATOffset + 0x18f8, 8)
-        ret["5ATIOLogicBOut"]: self.read_arr16_at(0x27, RSTable5ATOffset + 0x1920, 6)
-        ret["5ATIODelayAOut"]: self.read_arr16_at(0x27, RSTable5ATOffset + 0x19c0, 0xc)
-        ret["5ATIODelayBOut"]: self.read_arr16_at(0x27, RSTable5ATOffset + 0x19e8, 10)
-        ret["5ATIODelayAIn"]: self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1948, 0x4)
-        ret["5ATIODelayBIn"]: self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1988, 0)
+        ret["5ATIOLogicAIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1880, 0)
+        ret["5ATIOLogicBIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x18b8, 0xc)
+        ret["5ATIOLogicAOut"]       = self.read_arr16_at(0x27, RSTable5ATOffset + 0x18f8, 8)
+        ret["5ATIOLogicBOut"]       = self.read_arr16_at(0x27, RSTable5ATOffset + 0x1920, 6)
+        ret["5ATIODelayAOut"]       = self.read_arr16_at(0x27, RSTable5ATOffset + 0x19c0, 0xc)
+        ret["5ATIODelayBOut"]       = self.read_arr16_at(0x27, RSTable5ATOffset + 0x19e8, 10)
+        ret["5ATIODelayAIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1948, 0x4)
+        ret["5ATIODelayBIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1988, 0)
 
-        ret["MipiIns1"]: read_scaledGrid16(0xc3, 3, 3, RSTable5ATOffset + 0x22d0, 0xe)
-        ret["MipiIns2"]: read_scaledGrid16(0xc3, 3, 3, RSTable5ATOffset + 0x2680, 0xe)
-        ret["MipiOuts1"]: read_scaledGrid16(0x76, 3, 3, RSTable5ATOffset + 0x2520, 0)
-        ret["MipiOuts2"]: read_scaledGrid16(0x76, 3, 3, RSTable5ATOffset + 0x28c8, 6)
+        #ret["UNKNOWN"]             = self.read_scaledGrid16(0x20, 0x1d, 0x1d, RSTable5ATOffset + 0x3428, 0)
+        #ret["UNKNOWN"]             = self.read_scaledGrid16(0xc, 0x16, 0x16, RSTable5ATOffset + 0x3b68, 0)
+        #ret["UNKNOWN"]             = self.read_scaledGrid16(0xc, 0x16, 0x16, RSTable5ATOffset + 0x1e98, 8)
+        #ret["UNKNOWN"]             = self.read_scaledGrid16(0x20, 0x16, 0x16, RSTable5ATOffset + 0x1fa0, 8)
+        #ret["UNKNOWN"]             = self.read_scaledGrid16(0x8, 0xe, 0xe, RSTable5ATOffset + 0x2260, 8)
+
+        ret["MipiIns1"]             = self.read_scaledGrid16(0xc3, 3, 3, RSTable5ATOffset + 0x22d0, 0xe)
+        ret["MipiIns2"]             = self.read_scaledGrid16(0xc3, 3, 3, RSTable5ATOffset + 0x2680, 0xe)
+        ret["MipiOuts1"]            = self.read_scaledGrid16(0x76, 3, 3, RSTable5ATOffset + 0x2520, 0)
+        ret["MipiOuts2"]            = self.read_scaledGrid16(0x76, 3, 3, RSTable5ATOffset + 0x28c8, 6)
     
-        ret["MipiDPhyIns"]: read_scaledGrid16(0xbb, 3, 3, RSTable5ATOffset + 0x91c0, 10)
-        ret["MipiDPhyOuts"]: read_scaledGrid16(0x6a, 3, 3, RSTable5ATOffset + 0x93f0, 0xc)
+        ret["MipiDPhyIns"]          = self.read_scaledGrid16(0xbb, 3, 3, RSTable5ATOffset + 0x91c0, 10)
+        ret["MipiDPhyOuts"]         = self.read_scaledGrid16(0x6a, 3, 3, RSTable5ATOffset + 0x93f0, 0xc)
 
-        ret["Gtrl12QuadDBIns1"]: read_scaledGrid16(0x351, 3, 3, RSTable5ATOffset + 0x2a28, 10)
-        ret["Gtrl12QuadDBIns2"]: read_scaledGrid16(0x351, 3, 3, RSTable5ATOffset + 0x3420, 0)
-        ret["Gtrl12QuadDBOuts1"]: read_scaledGrid16(0x29c, 3, 3, RSTable5ATOffset + 0x6180, 0xc)
-        ret["Gtrl12QuadDBOuts2"]: read_scaledGrid16(0x29c, 3, 3, RSTable5ATOffset + 0x6958, 4)
+        ret["Gtrl12QuadDBIns1"]     = self.read_scaledGrid16(0x351, 3, 3, RSTable5ATOffset + 0x2a28, 10)
+        ret["Gtrl12QuadDBIns2"]     = self.read_scaledGrid16(0x351, 3, 3, RSTable5ATOffset + 0x3420, 0)
+        ret["Gtrl12QuadDBOuts1"]    = self.read_scaledGrid16(0x29c, 3, 3, RSTable5ATOffset + 0x6180, 0xc)
+        ret["Gtrl12QuadDBOuts2"]    = self.read_scaledGrid16(0x29c, 3, 3, RSTable5ATOffset + 0x6958, 4)
 
-        ret["Gtrl12PmacDBIns"]: read_scaledGrid16(0xb68, 3, 3, RSTable5ATOffset + 0x3e10, 6)
-        ret["Gtrl12PmacDBOuts"]: read_scaledGrid16(0xb68, 3, 3, RSTable5ATOffset + 0x7128, 0xc)
+        ret["Gtrl12PmacDBIns"]      = self.read_scaledGrid16(0xb68, 3, 3, RSTable5ATOffset + 0x3e10, 6)
+        ret["Gtrl12PmacDBOuts"]     = self.read_scaledGrid16(0xb68, 3, 3, RSTable5ATOffset + 0x7128, 0xc)
 
-        ret["Gtrl12UparDBIns"]: read_scaledGrid16(0x69, 3, 3, RSTable5ATOffset + 0x6048, 6)
-        ret["Gtrl12UparDBOuts"]: read_scaledGrid16(0x69, 3, 3, RSTable5ATOffset + 0x8620, 10)
+        ret["Gtrl12UparDBIns"]      = self.read_scaledGrid16(0x69, 3, 3, RSTable5ATOffset + 0x6048, 6)
+        ret["Gtrl12UparDBOuts"]     = self.read_scaledGrid16(0x69, 3, 3, RSTable5ATOffset + 0x8620, 10)
 
-        ret["Ae350SocIns"]: read_scaledGrid16(0x1b1, 3, 3, RSTable5ATOffset + 0x86a0, 6)
-        ret["Ae350SocOuts"]: read_scaledGrid16(0x206, 3, 3, RSTable5ATOffset + 0x8bb0, 10)
+        ret["Ae350SocIns"]          = self.read_scaledGrid16(0x1b1, 3, 3, RSTable5ATOffset + 0x86a0, 6)
+        ret["Ae350SocOuts"]         = self.read_scaledGrid16(0x206, 3, 3, RSTable5ATOffset + 0x8bb0, 10)
 
 
-        ret["CMuxTopInNodes"]: read_scaledGrid16(0xbd, 0x54, 0x54, RSTable5ATOffset + 0x13fc4, 0)
-        ret["CMuxBotInNodes"]: read_scaledGrid16(0xbd, 0x54, 0x54, RSTable5ATOffset + 0x1bbcc, 0)
-        ret["CMuxTopIns"]: read_scaledGrid16(0xbd, 0x3, 0x3, RSTable5ATOffset + 0x11be8, 4)
-        ret["CMuxBotIns"]: read_scaledGrid16(0xbd, 0x3, 0x3, RSTable5ATOffset + 0x11e20, 2)
+        ret["CMuxTopInNodes"]       = self.read_scaledGrid16(0xbd, 0x54, 0x54, RSTable5ATOffset + 0x13fc4, 0)
+        ret["CMuxBotInNodes"]       = self.read_scaledGrid16(0xbd, 0x54, 0x54, RSTable5ATOffset + 0x1bbcc, 0)
+        ret["CMuxTopIns"]           = self.read_scaledGrid16(0xbd, 0x3, 0x3, RSTable5ATOffset + 0x11be8, 4)
+        ret["CMuxBotIns"]           = self.read_scaledGrid16(0xbd, 0x3, 0x3, RSTable5ATOffset + 0x11e20, 2)
 
-        ret["MipiIO1"]: read_scaledGrid16(10, 0xf, 0xf, RSTable5ATOffset + 0x240e0, 0)
-        ret["MipiIO2"]: read_scaledGrid16(10, 0xf, 0xf, RSTable5ATOffset + 0x24176, 0)
+        ret["MipiIO1"]              = self.read_scaledGrid16(10, 0xf, 0xf, RSTable5ATOffset + 0x240e0, 0)
+        ret["MipiIO2"]              = self.read_scaledGrid16(10, 0xf, 0xf, RSTable5ATOffset + 0x24176, 0)
         for n in range(5):
-            ret["MipiIOName1_{n}"]: read_scaledGrid16(10, 0xf, 0x4b, 5, RSTable5ATOffset + 0x2420c + n)
-            ret["MipiIOName2_{n}"]: read_scaledGrid16(10, 0xf, 0x4b, 5, RSTable5ATOffset + 0x244fa + n)            
-        ret["MipiBank1"]: self.read_arr16_at(10, RSTable5ATOffset + 0x240e0, 0)
-        ret["MipiBank2"]: self.read_arr16_at(10, RSTable5ATOffset + 0x24176, 0)
+            ret["MipiIOName1_{n}"]  = self.read_scaledGrid16(10, 0xf, 0x4b, 5, RSTable5ATOffset + 0x2420c + n)
+            ret["MipiIOName2_{n}"]  = self.read_scaledGrid16(10, 0xf, 0x4b, 5, RSTable5ATOffset + 0x244fa + n)            
+        ret["MipiBank1"]            = self.read_arr16_at(10, RSTable5ATOffset + 0x240e0, 0)
+        ret["MipiBank2"]            = self.read_arr16_at(10, RSTable5ATOffset + 0x24176, 0)
 
-        ret["QuadIO1"]: read_scaledGrid16(15, 0xf, 0xf, RSTable5ATOffset + 0x2483c, 0)
-        ret["QuafIO2"]: read_scaledGrid16(15, 0xf, 0xf, RSTable5ATOffset + 0x24977, 0)
+        ret["QuadIO1"]              = self.read_scaledGrid16(15, 0xf, 0xf, RSTable5ATOffset + 0x2483c, 0)
+        ret["QuafIO2"]              = self.read_scaledGrid16(15, 0xf, 0xf, RSTable5ATOffset + 0x24977, 0)
         for n in range(5):
-            ret["QuadIOName1_{n}"]: read_scaledGrid16(15, 0xf, 0x4b, 5, RSTable5ATOffset + 0x2483c + n)
-            ret["QuafIOName2_{n}"]: read_scaledGrid16(15, 0xf, 0xf, 5, RSTable5ATOffset + 0x24977 + n)            
-        ret["QuadBank1"]: self.read_arr16_at(15, RSTable5ATOffset + 0x123f0, 8)
-        ret["QuadBank2"]: self.read_arr16_at(15, RSTable5ATOffset + 0x12408, 2)
+            ret["QuadIOName1_{n}"]  = self.read_scaledGrid16(15, 0xf, 0x4b, 5, RSTable5ATOffset + 0x2483c + n)
+            ret["QuafIOName2_{n}"]  = self.read_scaledGrid16(15, 0xf, 0xf, 5, RSTable5ATOffset + 0x24977 + n)            
+        ret["QuadBank1"]            = self.self.read_arr16_at(15, RSTable5ATOffset + 0x123f0, 8)
+        ret["QuadBank2"]            = self.self.read_arr16_at(15, RSTable5ATOffset + 0x12408, 2)
         
-        ret["AdcIO"]: read_scaledGrid16(4, 0xf, 0xf, 1, RSTable5ATOffset + 0x25708)
+        ret["AdcIO"]                = self.read_scaledGrid16(4, 0xf, 0xf, 1, RSTable5ATOffset + 0x25708)
         for n in range(5):
-            ret["QuaAdcIOName_{n}"]: read_scaledGrid16(4, 0xf, 0x4b, 5, RSTable5ATOffset + 0x25744 + n)
-        ret["AdcBank"]: self.read_arr16_at(4, RSTable5ATOffset + 0x12b80, 0)
-            
-        ret["Multalu27x18In"]: self.read_arr16_at(0xca, RSTable5ATOffset + 0x9778, 8)
-        ret["Multalu27x18InDlt"]: self.read_arr16_at(0xca, RSTable5ATOffset + 0x99c0, 2)
-        ret["Multalu27x18Out"]: self.read_arr16_at(0x7b, RSTable5ATOffset + 0x9840, 0xc)
-        ret["Multalu27x18OutDlt"]: self.read_arr16_at(0x7b, RSTable5ATOffset + 0x9988, 6)
-        ret["MultCtrlIn"]: self.read_arr16_at(0x6, RSTable5ATOffset + 0x9a00, 0xc)
-        ret["MultCtrlOut"]: self.read_arr16_at(0x6, RSTable5ATOffset + 0x9a08, 8)
+            ret["QuaAdcIOName_{n}"] = self.read_scaledGrid16(4, 0xf, 0x4b, 5, RSTable5ATOffset + 0x25744 + n)
+        ret["AdcBank"]              = self.read_arr16_at(4, RSTable5ATOffset + 0x12b80, 0)
 
-        ret["DqsRLoc"]: self.read_arr16_at(0x2, RSTable5ATOffset + 0x12c38, 0)
-        ret["DqsCLoc"]: self.read_arr16_at(0x2, RSTable5ATOffset + 0x12c38, 4)
+        ret["Multalu12x12In"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9530, 8)
+        ret["Multalu12x12Out"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9560, 8)
+        ret["Multalu12x12InDlt"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9590, 8)
+        ret["Multalu12x12OutDlt"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x95c0, 8)
 
-        ret["MDdrDllIns1"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12c38, 8)
-        ret["MDdrDllIns2"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12cb0, 2)
-        ret["MDdrDllIns3"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d20, 0xc)
-        ret["MDdrDllIns4"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d98, 6)
-        ret["MDdrDllIns5"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12e10, 0)
-        ret["MDdrDllIns6"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12e30, 0xe)
-        ret["MDdrDllIns7"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12e58, 0xc)
+        ret["Multalu27x18In"]       = self.read_arr16_at(0xca, RSTable5ATOffset + 0x9778, 8)
+        ret["Multalu27x18InDlt"]    = self.read_arr16_at(0xca, RSTable5ATOffset + 0x99c0, 2)
+        ret["Multalu27x18Out"]      = self.read_arr16_at(0x7b, RSTable5ATOffset + 0x9840, 0xc)
+        ret["Multalu27x18OutDlt"]   = self.read_arr16_at(0x7b, RSTable5ATOffset + 0x9988, 6)
+        ret["MultCtrlIn"]           = self.read_arr16_at(0x6, RSTable5ATOffset + 0x9a00, 0xc)
+        ret["MultCtrlOut"]          = self.read_arr16_at(0x6, RSTable5ATOffset + 0x9a08, 8)
 
-        ret["S0DdrDllIns1"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12c60, 6)
-        ret["S0DdrDllIns2"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12cd8, 0)
-        ret["S0DdrDllIns3"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d48, 10)
-        ret["S0DdrDllIns4"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12dc0, 4)
+        ret["DqsRLoc"]              = self.read_arr16_at(0x2, RSTable5ATOffset + 0x12c38, 0)
+        ret["DqsCLoc"]              = self.read_arr16_at(0x2, RSTable5ATOffset + 0x12c38, 4)
 
-        ret["S1DdrDllIns1"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12c88, 4)
-        ret["S1DdrDllIns2"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12cf8, 0xe)
-        ret["S1DdrDllIns3"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d70, 8)
-        ret["S1DdrDllIns4"]: read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12de8, 2)
+        ret["MDdrDllIns1"]          = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12c38, 8)
+        ret["MDdrDllIns2"]          = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12cb0, 2)
+        ret["MDdrDllIns3"]          = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d20, 0xc)
+        ret["MDdrDllIns4"]          = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d98, 6)
+        ret["MDdrDllIns5"]          = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12e10, 0)
+        ret["MDdrDllIns6"]          = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12e30, 0xe)
+        ret["MDdrDllIns7"]          = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12e58, 0xc)
+
+        ret["S0DdrDllIns1"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12c60, 6)
+        ret["S0DdrDllIns2"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12cd8, 0)
+        ret["S0DdrDllIns3"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d48, 10)
+        ret["S0DdrDllIns4"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12dc0, 4)
+
+        ret["S1DdrDllIns1"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12c88, 4)
+        ret["S1DdrDllIns2"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12cf8, 0xe)
+        ret["S1DdrDllIns3"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d70, 8)
+        ret["S1DdrDllIns4"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12de8, 2)
  
-        ret["MDdrDllOuts1"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12c48, 0)
-        ret["MDdrDllOuts2"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12cb8, 10)
-        ret["MDdrDllOuts3"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d30, 4)
-        ret["MDdrDllOuts4"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12da0, 0xe)
-        ret["MDdrDllOuts5"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e18, 8)
-        ret["MDdrDllOuts6"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e40, 6)
-        ret["MDdrDllOuts7"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e68, 4)
+        ret["MDdrDllOuts1"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12c48, 0)
+        ret["MDdrDllOuts2"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12cb8, 10)
+        ret["MDdrDllOuts3"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d30, 4)
+        ret["MDdrDllOuts4"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12da0, 0xe)
+        ret["MDdrDllOuts5"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e18, 8)
+        ret["MDdrDllOuts6"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e40, 6)
+        ret["MDdrDllOuts7"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e68, 4)
             
-        ret["S0DdrDllOuts1"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12c68, 0xe)
-        ret["S0DdrDllOuts2"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12ce0, 8)
-        ret["S0DdrDllOuts3"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d58, 2)
-        ret["S0DdrDllOuts4"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12dc8, 0xc)
+        ret["S0DdrDllOuts1"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12c68, 0xe)
+        ret["S0DdrDllOuts2"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12ce0, 8)
+        ret["S0DdrDllOuts3"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d58, 2)
+        ret["S0DdrDllOuts4"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12dc8, 0xc)
 
-        ret["S1DdrDllOuts1"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12c90, 0xc)
-        ret["S1DdrDllOuts2"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d08, 6)
-        ret["S1DdrDllOuts3"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d80, 0)
-        ret["S1DdrDllOuts4"]: read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12df0, 10)
+        ret["S1DdrDllOuts1"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12c90, 0xc)
+        ret["S1DdrDllOuts2"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d08, 6)
+        ret["S1DdrDllOuts3"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d80, 0)
+        ret["S1DdrDllOuts4"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12df0, 10)
 
-        ret["CmseraIns"]: read_scaledGrid16(0x20, 3, 3, RSTable5ATOffset + 0x12e80, 10)
-        ret["CmseraOuts"]: read_scaledGrid16(0x60, 3, 3, RSTable5ATOffset + 0x12ee0, 10)
+        ret["CmseraIns"]            = self.read_scaledGrid16(0x20, 3, 3, RSTable5ATOffset + 0x12e80, 10)
+        ret["CmseraOuts"]           = self.read_scaledGrid16(0x60, 3, 3, RSTable5ATOffset + 0x12ee0, 10)
 
-        ret["AdcLRCIns"]: read_scaledGrid16(0x28, 3, 3, RSTable5ATOffset + 0x13000, 10)
-        ret["AdcLRCOuts"]: read_scaledGrid16(0x12, 3, 3, RSTable5ATOffset + 0x13078, 10)
-        ret["AdcLRCCfgvsenctl1"]: read_scaledGrid16(3, 3, 3, RSTable5ATOffset + 0x78000, 6)
-        ret["AdcLRCCfgvsenctl2"]: read_scaledGrid16(0x24, 3, 3, RSTable5ATOffset + 0x130b8, 8)
-        ret["AdcULCOuts"]: read_scaledGrid16(0x12, 3, 3, RSTable5ATOffset + 0x13128, 0)
-        ret["AdcULCCfgvsenctl"]: read_scaledGrid16(3, 3, 3, RSTable5ATOffset + 0x13158, 0xc)
-        ret["Adc25kIns"]: read_scaledGrid16(0x17, 3, 3, RSTable5ATOffset + 0x13160, 0xe)
-        ret["Adc25kOuts"]: read_scaledGrid16(0x1b, 3, 3, RSTable5ATOffset + 0x131a8, 8)
+        ret["AdcLRCIns"]            = self.read_scaledGrid16(0x28, 3, 3, RSTable5ATOffset + 0x13000, 10)
+        ret["AdcLRCOuts"]           = self.read_scaledGrid16(0x12, 3, 3, RSTable5ATOffset + 0x13078, 10)
+        ret["AdcLRCCfgvsenctl1"]    = self.read_scaledGrid16(3, 3, 3, RSTable5ATOffset + 0x78000, 6)
+        ret["AdcLRCCfgvsenctl2"]    = self.read_scaledGrid16(0x24, 3, 3, RSTable5ATOffset + 0x130b8, 8)
+        ret["AdcULCOuts"]           = self.read_scaledGrid16(0x12, 3, 3, RSTable5ATOffset + 0x13128, 0)
+        ret["AdcULCCfgvsenctl"]     = self.read_scaledGrid16(3, 3, 3, RSTable5ATOffset + 0x13158, 0xc)
+        ret["Adc25kIns"]            = self.read_scaledGrid16(0x17, 3, 3, RSTable5ATOffset + 0x13160, 0xe)
+        ret["Adc25kOuts"]           = self.read_scaledGrid16(0x1b, 3, 3, RSTable5ATOffset + 0x131a8, 8)
         
-        ret["CibFabricNode"]: read_scaledGrid16(6, 3, 3, RSTable5ATOffset + 0x131f8, 10)
-        ret["SharedIOLogicIOBloc"]: read_scaledGrid16(0x9c, 2, 2, RSTable5ATOffset + 0x13208, 0xe)
+        ret["CibFabricNode"]        = self.read_scaledGrid16(6, 3, 3, RSTable5ATOffset + 0x131f8, 10)
+        ret["SharedIOLogicIOBloc"]  = self.read_scaledGrid16(0x9c, 2, 2, RSTable5ATOffset + 0x13208, 0xe)
 
-        ret["TopAMBGA121N"]: self.read_arr16_at(200, RSTable5ATOffset + 0x2668e, 0)
-        ret["TopBMBGA121N"]: self.read_arr16_at(200, RSTable5ATOffset + 0x2694a, 0)
-        ret["BottomAMBGA121N"]: self.read_arr16_at(200, RSTable5ATOffset + 0x26756, 0)
-        ret["BottomBMBGA121N"]: self.read_arr16_at(200, RSTable5ATOffset + 0x26a12, 0)
-        ret["TopAMBGA121NName"]: read_scaledGrid16(200, 9, 9, RSTable5ATOffset + 0x26c06, 0)
-        ret["BottomAMBGA121NName"]: read_scaledGrid16(200, 9, 9, RSTable5ATOffset + 0x2730e, 0)
-        ret["TopBMBGA121NName"]: read_scaledGrid16(200, 9, 9, RSTable5ATOffset + 0x284a2, 0)
-        ret["BottomBMBGA121NName"]: read_scaledGrid16(200, 9, 9, RSTable5ATOffset + 0x28baa, 0)
+        ret["TopAMBGA121N"]         = self.read_arr16_at(200, RSTable5ATOffset + 0x2668e, 0)
+        ret["TopBMBGA121N"]         = self.read_arr16_at(200, RSTable5ATOffset + 0x2694a, 0)
+        ret["BottomAMBGA121N"]      = self.read_arr16_at(200, RSTable5ATOffset + 0x26756, 0)
+        ret["BottomBMBGA121N"]      = self.read_arr16_at(200, RSTable5ATOffset + 0x26a12, 0)
+        ret["TopAMBGA121NName"]     = self.read_scaledGrid16(200, 9, 9, RSTable5ATOffset + 0x26c06, 0)
+        ret["BottomAMBGA121NName"]  = self.read_scaledGrid16(200, 9, 9, RSTable5ATOffset + 0x2730e, 0)
+        ret["TopBMBGA121NName"]     = self.read_scaledGrid16(200, 9, 9, RSTable5ATOffset + 0x284a2, 0)
+        ret["BottomBMBGA121NName"]  = self.read_scaledGrid16(200, 9, 9, RSTable5ATOffset + 0x28baa, 0)
 
-        ret["LeftAMBGA121N"]: self.read_arr16_at(0x96, RSTable5ATOffset + 0x2681e, 0)
-        ret["LeftBMBGA121N"]: self.read_arr16_at(0x96, RSTable5ATOffset + 0x26ada, 0)
-        ret["RightAMBGA121N"]: self.read_arr16_at(0x96, RSTable5ATOffset + 0x268b4, 0)
-        ret["RightBMBGA121N"]: self.read_arr16_at(0x96, RSTable5ATOffset + 0x26b70, 0)
-        ret["LeftAMBGA121NName"]: read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x27a16, 0)
-        ret["RightAMBGA121NName"]: read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x27f5c, 0)
-        ret["LeftBMBGA121NName"]: read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x292b2, 0)
-        ret["RightBMBGA121NName"]: read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x297f8, 0)
+        ret["LeftAMBGA121N"]        = self.read_arr16_at(0x96, RSTable5ATOffset + 0x2681e, 0)
+        ret["LeftBMBGA121N"]        = self.read_arr16_at(0x96, RSTable5ATOffset + 0x26ada, 0)
+        ret["RightAMBGA121N"]       = self.read_arr16_at(0x96, RSTable5ATOffset + 0x268b4, 0)
+        ret["RightBMBGA121N"]       = self.read_arr16_at(0x96, RSTable5ATOffset + 0x26b70, 0)
+        ret["LeftAMBGA121NName"]    = self.read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x27a16, 0)
+        ret["RightAMBGA121NName"]   = self.read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x27f5c, 0)
+        ret["LeftBMBGA121NName"]    =  self.read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x292b2, 0)
+        ret["RightBMBGA121NName"]   = self.read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x297f8, 0)
 
-        ret["SpineColumn"]: self.read_arr16_at(8, RSTable5ATOffset + 0x14e98, 0xe)
+        ret["SpineColumn"]          = self.read_arr16_at(8, RSTable5ATOffset + 0x14e98, 0xe)
     
         return ret
             
@@ -526,6 +543,7 @@ class Datfile:
         return ret
 
     def read_something5A(self):
+        RSTable5ATOffset = 0x7b4a8
         ret = {
             "Dqs": {},
         }
