@@ -251,7 +251,8 @@ class Datfile:
     def read_5Astuff(self) -> dict:
         RSTable5ATOffset = 0x7b4a8
         ret = { }
-            
+        
+        #These are set (not read from file), but can't find reference
         #ret["UNKNOWN"] = 0x1d
         #ret["UNKNOWN"] = 0x1d
         #ret["UNKNOWN"] = 0x16
@@ -278,6 +279,8 @@ class Datfile:
         ret["5ATIODelayAIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1948, 0x4)
         ret["5ATIODelayBIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1988, 0)
 
+        # The following address offsets are also mentioned
+        # All 5 are mentioned in FanIns, but only the 3rd and 4th are mentioned in FanOuts 
         #ret["UNKNOWN"]             = self.read_scaledGrid16(0x20, 0x1d, 0x1d, RSTable5ATOffset + 0x3428, 0)
         #ret["UNKNOWN"]             = self.read_scaledGrid16(0xc, 0x16, 0x16, RSTable5ATOffset + 0x3b68, 0)
         #ret["UNKNOWN"]             = self.read_scaledGrid16(0xc, 0x16, 0x16, RSTable5ATOffset + 0x1e98, 8)
@@ -333,10 +336,21 @@ class Datfile:
             ret["QuaAdcIOName_{n}"] = self.read_scaledGrid16(4, 0xf, 0x4b, 5, RSTable5ATOffset + 0x25744 + n)
         ret["AdcBank"]              = self.read_arr16_at(4, RSTable5ATOffset + 0x12b80, 0)
 
-        ret["Multalu12x12In"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9530, 8)
-        ret["Multalu12x12Out"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9560, 8)
-        ret["Multalu12x12InDlt"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9590, 8)
-        ret["Multalu12x12OutDlt"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x95c0, 8)
+        ret["Mult12x12In"]          = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9530, 8)
+        ret["Mult12x12Out"]         = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9560, 8)
+        ret["Mult12x12InDlt"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9590, 8)
+        ret["Mult12x12OutDlt"]      = self.read_arr16_at(0x18, RSTable5ATOffset + 0x95c0, 8)
+
+        #The following are defined right next to Mult12x12 so are probably realted, but not referenced
+        #ret["UNKNOWN"]              = self.read_arr16_at(0x18, RSTable5ATOffset + 0x12a6a, 0)
+        #ret["UNKNOWN"]              = self.read_arr16_at(0x18, RSTable5ATOffset + 0x12b2a, 0)
+        #ret["UNKNOWN"]              = self.read_arr16_at(0x18, RSTable5ATOffset + 0x12aca 0)
+        #ret["UNKNOWN"]              = self.read_arr16_at(0x18, RSTable5ATOffset + 0x12b8a, 0)
+
+        ret["MultAddAlu12x12In"]    = self.read_arr16_at(100, RSTable5ATOffset + 0x95f0, 8)
+        ret["MultAddAlu12x12Out"]   = self.read_arr16_at(0x60, RSTable5ATOffset + 0x9658, 8)
+        ret["MultAddAlu12x12InDlt"] = self.read_arr16_at(100, RSTable5ATOffset + 0x96b8, 8)
+        ret["MultAddAlu12x12OutDlt"]= self.read_arr16_at(0x60, RSTable5ATOffset + 0x9718, 8)
 
         ret["Multalu27x18In"]       = self.read_arr16_at(0xca, RSTable5ATOffset + 0x9778, 8)
         ret["Multalu27x18InDlt"]    = self.read_arr16_at(0xca, RSTable5ATOffset + 0x99c0, 2)
@@ -419,6 +433,7 @@ class Datfile:
 
         ret["SpineColumn"]          = self.read_arr16_at(8, RSTable5ATOffset + 0x14e98, 0xe)
     
+
         return ret
             
     def read_portmap(self) -> dict:
