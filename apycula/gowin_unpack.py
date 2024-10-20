@@ -312,7 +312,7 @@ def get_bsram_main_cell(db, row, col, typ):
 
 # The DSP has 9 cells: the main one and a group of auxiliary ones.
 def get_dsp_main_cell(db, row, col, typ):
-    if type[-6:-2] == '_AUX':
+    if typ[-6:-2] == '_AUX':
         col = 1 + (col - 1) // 9
     return row, col
 
