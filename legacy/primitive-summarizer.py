@@ -1,4 +1,3 @@
-import argparse
 import pypdf
 import re
 from pathlib import Path
@@ -8,6 +7,99 @@ import os
 import json
 import glob
 from collections import defaultdict
+from pypdf import PdfReader
+
+def get_outline_tree(reader: PdfReader) -> List[Dict]:
+    """
+    Extract the complete outline/bookmark structure from a PDF.
+    
+    Args:
+        reader (PdfReader): PyPDF Reader object
+        
+    Returns:
+        list: List of dictionaries containing outline information
+    """
+    outlines = reader.outline
+    
+    if not outlines:
+        return []
+
+    def extract_destinations(outline_item):
+        """Recursively extract all destinations from an outline item"""
+        if isinstance(outline_item, list):
+            return [item for i in outline_item for item in extract_destinations(i)]
+            
+        if not hasattr(outline_item, '__getitem__'):
+            return []
+            
+        try:
+            title = outline_item.get('/Title', 'Untitled')
+            page_num = reader.get_destination_page_number(outline_item)
+            
+            result = [{
+                'title': title,
+                'page': page_num
+            }]
+            
+            # Check for children (/First and /Next form a linked list of children)
+            if '/First' in outline_item:
+                result.extend(extract_destinations(outline_item['/First']))
+            
+            # Check for siblings
+            if '/Next' in outline_item:
+                result.extend(extract_destinations(outline_item['/Next']))
+                
+            return result
+            
+        except Exception as e:
+            print(f"Error processing outline item: {e}")
+            return []
+
+    return extract_destinations(outlines)
+
+def find_sections_in_outline(outline: List[Dict], pattern: str, flags: int = re.IGNORECASE) -> List[Dict]:
+    """
+    Search for sections in the outline that match the regex pattern.
+    
+    Args:
+        outline (list): Outline structure from get_outline_tree
+        pattern (str): Regular expression pattern to search for
+        flags (int): Regular expression flags (default: case insensitive)
+        
+    Returns:
+        list: Matching sections with their details
+    """
+    matches = []
+    
+    try:
+        regex = re.compile(pattern, flags)
+        
+        for item in outline:
+            title = item.get('title', '')
+            if regex.search(title):
+                matches.append(item)
+    
+    except re.error as e:
+        print(f"Invalid regular expression: {e}")
+        return []
+        
+    return matches
+
+def print_outline(outline: List[Dict]) -> None:
+    """
+    Print the outline structure.
+    
+    Args:
+        outline (list): Outline structure from get_outline_tree
+    """
+    if not outline:
+        return
+        
+    for item in outline:
+        title = item.get('title', 'Untitled')
+        page = item.get('page', 0)
+        print(f"- {title} (Page {page + 1})")
+
 
 def analyze_primitives(json_pattern):
     primitive_counts = defaultdict(int)
@@ -23,203 +115,156 @@ def analyze_primitives(json_pattern):
     # Sort by count descending
     return dict(sorted(primitive_counts.items(), key=lambda x: x[1], reverse=True))
 
-class CodeScanner:
-    def __init__(self, primitive_name: str):
-        self.primitive_name = primitive_name
-        self.module_pattern = rf"module\s+{primitive_name}\s*\([^;]*;\s*(.*?)\s*endmodule"
-        self.usage_pattern = rf"\b{primitive_name}\s+[a-zA-Z0-9_]+\s*\("
-    
-    def scan_file(self, file_path: Path, scan_for_usage: bool = False) -> str:
-        if not file_path.exists():
-            return ""
-        
-        with open(file_path) as f:
-            content = f.read()
-        
-        if scan_for_usage:
-            return content if re.search(self.usage_pattern, content) else ""
-        else:
-            match = re.search(self.module_pattern, content, re.DOTALL)
-            return match.group(0) if match else ""
-    
-    def scan_directory(self, directory: Path, scan_for_usage: bool = False) -> Dict[Path, str]:
-        results = {}
-        for file_path in directory.rglob("*.v"):
-            if content := self.scan_file(file_path, scan_for_usage):
-                results[os.path.basename(file_path)] = content
-        return results
 
-class DocScanner:
-    def __init__(self, primitive_name: str, min_matches: int = 3):
-        self.primitive_name = primitive_name.lower()
-        self.min_matches = min_matches
-    
-    def _count_whole_word_matches(self, text: str) -> int:
-        pattern = rf'\b{self.primitive_name}\b'
-        return len(re.findall(pattern, text.lower()))
-    
-    def scan_pdf(self, pdf_path: Path) -> List[str]:
-        if not pdf_path.exists():
-            return []
-        
-        reader = pypdf.PdfReader(pdf_path)
-        relevant_pages = []
-        
-        for page in reader.pages:
-            text = page.extract_text()
-            if self._count_whole_word_matches(text) >= self.min_matches:
-                relevant_pages.append(text)
-        
-        return relevant_pages
-    
-    def scan_directory(self, directory: Path) -> Dict[Path, List[str]]:
-        results = {}
-        for pdf_path in directory.rglob("*.pdf"):
-            if pages := self.scan_pdf(pdf_path):
-                results[os.path.basename(pdf_path)] = pages
-        return results
-
-def generate_summary(code_sections: Dict[Path, str], 
-                    doc_sections: Dict[Path, List[str]], 
-                    example_sections: Dict[Path, str],
-                    supported: bool,
-                    primitive_name: str) -> str:
+def generate_summary(pdfs, primitive_name: str) -> str:
     """Generate markdown summary using Ollama."""
-    code_context = "\n\n".join(f"From {path}:\n{code}" 
-                              for path, code in code_sections.items())
-    
+
+    doc_sections = []
+    for reader in pdfs:
+        outline = get_outline_tree(reader)
+        matches = find_sections_in_outline(outline, rf"^[0-9\.]+ +{primitive_name}$")
+        if matches:
+            pages = [reader.pages[match['page']].extract_text() for match in matches]
+            doc_sections.append(pages)
+
     doc_context = "\n\n".join(
-        f"From {path}:\n" + "\n".join(pages)
-        for path, pages in doc_sections.items()
+        "\n".join(pages)
+        for pages in doc_sections
     )
     
-    example_context = "\n\n".join(f"Example from {path}:\n{code}"
-                                 for path, code in example_sections.items())
-
-    sections = []
-    if code_context:
-        sections.append(("Implementation:", code_context))
+    description = ""
     if doc_context:
-        sections.append(("Documentation:", doc_context))
-    if example_context:
-        sections.append(("Usage Examples:", example_context))
+        prompt = f"""
+{doc_context}
 
-    list_sections = []
-    if doc_context:
-        list_sections.append("- Brief description")
+Summarizing the functionality of the Gowin {primitive_name} primitive.
+Stick to the provided facts and do not make assumptions.
+Write only the requested paragraph and nothing else.
+"""
+        print(prompt)
+        response = ollama.generate(
+            model='llama3.1:8b',
+            prompt=prompt,
+        )
+        description = escape_markdown(response["response"])
+        print(description)
+    return description
+
+
+def escape_markdown(text):
+    return text.replace('_', '\\_')
+
+def format_bits(bits):
+    if isinstance(bits, list):
+        if len(bits) == 1:
+            return "1"
+        else:
+            return str(len(bits))
+    return "1"
+
+def get_default_param_value(value):
+    if isinstance(value, str) and all(c in '01' for c in value):
+        decimal_value = int(value, 2)
+        return f"{decimal_value} (0b{value})"
+    return value
+
+def generate_module_doc(module_name, module_data, supported, pdfs):
+    module_doc = []
     
+    module_doc.append(generate_summary(pdfs, module_name))
+    
+    module_doc.append("\n")
     if supported:
-        list_sections.append("- Apicula support (this device is supported)")
+        module_doc.append("This device is supported in Apicula.")
     else:
-        list_sections.append("- Apicula support (this device is not yet supported)")
+        module_doc.append("This device is not yet supported in Apicula")
 
-    list_sections.extend([
-        "- Port list with descriptions",
-        "- Parameters",
-    ])
-
-    if example_context:
-        list_sections.append("- Usage example")
-
-    context = "\n\n".join(f"{title}\n{content}" for title, content in sections)
-
+    # Ports table
+    if module_data.get('ports'):
+        module_doc.append("## Ports\n")
+        module_doc.append("| Port | Size | Direction |")
+        module_doc.append("|------|------|-----------|")
+        
+        for port_name, port_data in sorted(module_data['ports'].items()):
+            size = format_bits(port_data['bits'])
+            direction = port_data['direction']
+            module_doc.append(f"| {escape_markdown(port_name)} | {size} | {direction} |")
+        module_doc.append("\n")
     
-    prompt = f"""You are an expert in FPGA architecture and Verilog HDL. Generate detailed technical documentation about Gowin primitives in Apicula.
-
-Create a markdown summary about {primitive_name} support in Apicula based on this information:
-
-{context}
-
-Include the following sections:
-{"\n".join(list_sections)}
-- Sources
-
-Do not assume the meaning of things.
-Stick to the facts.
-Do not mention what information was or wasn't provided.
-Do not say "provided".
-
-Format in markdown with appropriate headers."""
-
-    print(prompt)
-    response = ollama.generate(
-        model='qwen2.5-coder:14b',
-        prompt=prompt,
-        options={"temperature":0.1}
-    )
+    # Parameters table
+    if module_data.get('parameter_default_values'):
+        module_doc.append("## Parameters\n")
+        module_doc.append("| Parameter | Default Value |")
+        module_doc.append("|-----------|---------------|")
+        
+        for param_name, param_value in sorted(module_data['parameter_default_values'].items()):
+            default_value = get_default_param_value(param_value)
+            module_doc.append(f"| {escape_markdown(param_name)} | {default_value} |")
+        module_doc.append("\n")
     
-    return response['response']
+    # Verilog instantiation template
+    module_doc.append("## Verilog Instantiation")
+    module_doc.append("```verilog")
+    
+    # Generate instantiation
+    instance = []
+    
+    # Add parameters if they exist
+    if module_data.get('parameter_default_values'):
+        instance.append(f"{module_name} #(")
+        param_list = []
+        for param_name in sorted(module_data['parameter_default_values'].keys()):
+            param_list.append(f"    .{param_name}({param_name})")
+        instance.append(",\n".join(param_list))
+        instance.append(f") {module_name.lower()}_inst (")
+    else:
+        instance.append(f"{module_name} {module_name.lower()}_inst (")
+    
+    # Add ports
+    if module_data.get('ports'):
+        port_list = []
+        for port_name in sorted(module_data['ports'].keys()):
+            port_list.append(f"    .{port_name}({port_name})")
+        instance.append(",\n".join(port_list))
+    
+    instance.append(");")
+    module_doc.append("\n".join(instance))
+    module_doc.append("```\n")
+    
+    return "\n".join(module_doc)
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Generate FPGA primitive documentation")
-    parser.add_argument("primitive_name", help="Name of primitive to document")
-    parser.add_argument("--code", "-c", type=Path, nargs='+', required=True,
-                       help="Paths to Verilog source files or directories")
-    parser.add_argument("--docs", "-d", type=Path, nargs='+', required=True,
-                       help="Paths to PDF documentation files or directories")
-    parser.add_argument("--examples", "-e", type=Path, nargs='+',
-                       help="Paths to example Verilog files or directories")
-    parser.add_argument("--output", "-o", type=Path, help="Output markdown file")
-    parser.add_argument("--min-matches", type=int, default=3,
-                       help="Minimum whole-word matches for PDF page inclusion")
-    return parser.parse_args()
+def process_json_file(json_data, stats, pdfs, output_dir):
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Process each module
+    for module_name, module_data in sorted(json_data['modules'].items()):
+        # Generate documentation for this module
+        supported = module_name in stats
+        doc = generate_module_doc(module_name, module_data, supported, pdfs)
+        
+        # Write to file
+        filename = os.path.join(output_dir, f"{module_name}.md")
+        with open(filename, 'w') as f:
+            f.write(doc)
 
 def main():
-    args = parse_args()
+    # Create docs directory
+    output_dir = "../apicula.wiki"
     
-    try:
-        # Scan for code
-        code_scanner = CodeScanner(args.primitive_name)
-        code_sections = {}
-        
-        for path in args.code:
-            if path.is_dir():
-                code_sections.update(code_scanner.scan_directory(path))
-            else:
-                if content := code_scanner.scan_file(path):
-                    code_sections[os.path.basename(path)] = content
-        
-        if not code_sections:
-            raise ValueError(f"Primitive {args.primitive_name} not found in provided code paths")
-        
-        # Scan for documentation
-        doc_scanner = DocScanner(args.primitive_name, args.min_matches)
-        doc_sections = {}
-        
-        for path in args.docs:
-            if path.is_dir():
-                doc_sections.update(doc_scanner.scan_directory(path))
-            else:
-                if pages := doc_scanner.scan_pdf(path):
-                    doc_sections[os.path.basename(path)] = pages
-        
-        if not doc_sections:
-            print("Warning: No documentation found in provided PDF paths")
-            
-        # Scan for examples
-        example_sections = {}
-        if args.examples:
-            for path in args.examples:
-                if path.is_dir():
-                    example_sections.update(code_scanner.scan_directory(path, scan_for_usage=True))
-                else:
-                    if content := code_scanner.scan_file(path, scan_for_usage=True):
-                        example_sections[path] = content
-        
-        stats = analyze_primitives('examples/himbaechel/*-synth.json')
-        supported = args.primitive_name in stats
-        # Generate summary
-        summary = generate_summary(code_sections, doc_sections, example_sections, supported, args.primitive_name)
-        
-        if args.output:
-            args.output.write_text(summary)
-            print(f"Summary written to {args.output}")
-        else:
-            print(summary)
-            
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        exit(1)
+    # Read and process the JSON file
+    with open('prims.json', 'r') as f:
+        data = json.load(f)
+    
+    stats = analyze_primitives('examples/himbaechel/*-synth.json')
+
+    pdfs = []
+    for pdf_path in Path("~/Documents/gowin/").expanduser().glob("*.pdf"):
+        pdfs.append(pypdf.PdfReader(pdf_path))
+    
+    # Generate documentation
+    process_json_file(data, stats, pdfs, output_dir)
+    print(f"Documentation generated in {output_dir}/")
 
 if __name__ == "__main__":
     main()
