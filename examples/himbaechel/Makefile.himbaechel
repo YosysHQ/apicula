@@ -14,7 +14,7 @@ all: \
 	bsram-DPB-tangnano20k.fs bsram-pROMX9-tangnano20k.fs bsram-SDPX9B-tangnano20k.fs \
 	bsram-SPX9-tangnano20k.fs bsram-DPX9B-tangnano20k.fs \
 	femto-riscv-15-tangnano20k.fs femto-riscv-16-tangnano20k.fs femto-riscv-18-tangnano20k.fs \
-	dsp-mult36x36-tangnano20k.fs dsp-padd9-tangnano20k.fs dsp-padd18-tangnano20k.fs \
+	dsp-mult18x18-tangnano20k.fs dsp-mult36x36-tangnano20k.fs dsp-padd9-tangnano20k.fs dsp-padd18-tangnano20k.fs \
 	dsp-mult9x9-tangnano20k.fs dsp-alu54d-tangnano20k.fs dsp-multalu18x18-tangnano20k.fs \
 	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
 	dqce-tangnano20k.fs  dcs-tangnano20k.fs \
@@ -29,7 +29,7 @@ all: \
 	bsram-DPB-primer20k.fs bsram-pROMX9-primer20k.fs bsram-SDPX9B-primer20k.fs \
 	bsram-SPX9-primer20k.fs bsram-DPX9B-primer20k.fs \
 	femto-riscv-15-primer20k.fs femto-riscv-16-primer20k.fs femto-riscv-18-primer20k.fs \
-	dsp-mult36x36-primer20k.fs dsp-padd9-primer20k.fs dsp-padd18-primer20k.fs \
+	dsp-mult18x18-primer20k.fs dsp-mult36x36-primer20k.fs dsp-padd9-primer20k.fs dsp-padd18-primer20k.fs \
 	dsp-mult9x9-primer20k.fs dsp-alu54d-primer20k.fs dsp-multalu18x18-primer20k.fs \
 	dsp-multalu36x18-primer20k.fs dsp-multaddalu18x18-primer20k.fs \
 	dqce-primer20k.fs  dcs-primer20k.fs \
@@ -49,7 +49,7 @@ all: \
 	bsram-pROM-tangnano1k.fs bsram-SDPB-tangnano1k.fs bsram-DPB16-tangnano1k.fs \
 	bsram-SP-tangnano1k.fs bsram-pROMX9-tangnano1k.fs bsram-SDPX9B-tangnano1k.fs \
 	bsram-SPX9-tangnano1k.fs bsram-DPX9B18-tangnano1k.fs \
-	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs \
+	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs bandgap-tangnano1k.fs \
 	\
 	blinky-tangnano4k.fs shift-tangnano4k.fs blinky-tbuf-tangnano4k.fs blinky-oddr-tangnano4k.fs \
 	blinky-osc-tangnano4k.fs tlvds-tangnano4k.fs elvds-tangnano4k.fs oddr-tlvds-tangnano4k.fs \
@@ -76,7 +76,7 @@ all: \
 	bsram-SPX9-tangnano9k.fs bsram-DPX9B-tangnano9k.fs \
 	oser10-elvds-tangnano9k.fs \
 	femto-riscv-15-tangnano9k.fs femto-riscv-16-tangnano9k.fs femto-riscv-18-tangnano9k.fs \
-	dsp-mult36x36-tangnano9k.fs dsp-padd9-tangnano9k.fs dsp-padd18-tangnano9k.fs \
+	dsp-mult18x18-tangnano9k.fs dsp-mult36x36-tangnano9k.fs dsp-padd9-tangnano9k.fs dsp-padd18-tangnano9k.fs \
 	dsp-mult9x9-tangnano9k.fs dsp-alu54d-tangnano9k.fs dsp-multalu18x18-tangnano9k.fs \
 	dsp-multalu36x18-tangnano9k.fs dsp-multaddalu18x18-tangnano9k.fs \
 	dqce-tangnano9k.fs dcs-tangnano9k.fs femto-riscv-userflash-tangnano9k.fs \
@@ -91,7 +91,7 @@ all: \
 	bsram-pROMX9-szfpga.fs bsram-SDPX9B-szfpga.fs \
 	bsram-SPX9-szfpga.fs \
 	femto-riscv-15-szfpga.fs femto-riscv-16-szfpga.fs femto-riscv-18-szfpga.fs \
-	dsp-mult36x36-szfpga.fs dsp-padd9-szfpga.fs dsp-padd18-szfpga.fs \
+	dsp-mult18x18-szfpga.fs dsp-mult36x36-szfpga.fs dsp-padd9-szfpga.fs dsp-padd18-szfpga.fs \
 	dsp-mult9x9-szfpga.fs dsp-alu54d-szfpga.fs dsp-multalu18x18-szfpga.fs \
 	dsp-multalu36x18-szfpga.fs dsp-multaddalu18x18-szfpga.fs \
 	\
@@ -101,7 +101,7 @@ all: \
 	oser4-tec0117.fs ovideo-tec0117.fs oser8-tec0117.fs oser10-tec0117.fs \
 	ides16-tec0117.fs \
 	ides4-tec0117.fs ivideo-tec0117.fs ides8-tec0117.fs ides10-tec0117.fs \
-	dsp-mult36x36-tec0117.fs dsp-padd9-tec0117.fs dsp-padd18-tec0117.fs \
+	dsp-mult18x18-tec0117.fs dsp-mult36x36-tec0117.fs dsp-padd9-tec0117.fs dsp-padd18-tec0117.fs \
 	dsp-mult9x9-tec0117.fs dsp-alu54d-tec0117.fs dsp-multalu18x18-tec0117.fs \
 	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs \
 	\
