@@ -59,7 +59,7 @@ all: \
 	ides4-tangnano4k.fs ivideo-tangnano4k.fs ides8-tangnano4k.fs ides10-tangnano4k.fs \
 	oser10-tlvds-tangnano4k.fs \
 	femto-riscv-15-tangnano4k.fs femto-riscv-16-tangnano4k.fs femto-riscv-18-tangnano4k.fs \
-	dsp-mult36x36-tangnano4k.fs dsp-padd9-tangnano4k.fs dsp-padd18-tangnano4k.fs \
+	dsp-mult18x18-tangnano4k.fs dsp-mult36x36-tangnano4k.fs dsp-padd9-tangnano4k.fs dsp-padd18-tangnano4k.fs \
 	dsp-mult9x9-tangnano4k.fs dsp-alu54d-tangnano4k.fs dsp-multalu18x18-tangnano4k.fs \
 	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
 	dqce-tangnano4k.fs dcs-tangnano4k.fs emcu-blinky-tangnano4k.fs emcu-with-apb-blinky-tangnano4k.fs \
