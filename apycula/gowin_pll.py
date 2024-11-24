@@ -3,9 +3,9 @@
 # limits from: http://cdn.gowinsemi.com.cn/DS117E.pdf, http://cdn.gowinsemi.com.cn/DS861E.pdf
 #
 
-import sys
-import re
 import argparse
+import re
+import sys
 
 
 def main():
@@ -16,7 +16,9 @@ def main():
     parser.add_argument(
         "-o", "--output-freq-mhz", help="PLL Output Frequency", type=float, default=108
     )
-    parser.add_argument("-d", "--device", help="Device", type=str, default="GW1NR-9 C6/I5")
+    parser.add_argument(
+        "-d", "--device", help="Device", type=str, default="GW1NR-9 C6/I5"
+    )
     parser.add_argument(
         "-f",
         "--filename",
@@ -294,8 +296,8 @@ def main():
         {limits['pll_name']} #(
             .FCLKIN("{args.input_freq_mhz}"),
             .IDIV_SEL({setup['IDIV_SEL']}), // -> PFD = {setup['PFD']} MHz (range: {limits['pfd_min']}-{limits['pfd_max']} MHz)
-            .FBDIV_SEL({setup['FBDIV_SEL']}), // -> CLKOUT = {setup['CLKOUT']} MHz (range: {limits['vco_min']}-{limits['clkout_max']} MHz)
-            .ODIV_SEL({setup['ODIV_SEL']}) // -> VCO = {setup['VCO']} MHz (range: {limits['clkout_max']}-{limits['vco_max']} MHz)
+            .FBDIV_SEL({setup['FBDIV_SEL']}), // -> CLKOUT = {setup['CLKOUT']} MHz (range: {limits['clkout_min']}-{limits['clkout_max']} MHz)
+            .ODIV_SEL({setup['ODIV_SEL']}) // -> VCO = {setup['VCO']} MHz (range: {limits['vco_min']}-{limits['vco_max']} MHz)
         ) pll (.CLKOUTP(), .CLKOUTD(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0), {extra_options}
             .CLKIN(clock_in), // {args.input_freq_mhz} MHz
             .CLKOUT(clock_out), // {setup['CLKOUT']} MHz
