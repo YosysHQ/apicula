@@ -271,8 +271,8 @@ _permitted_freqs = {
         "GW1N-9":  (400, 500, 3.125,  1000, 400),
         "GW1N-9C": (400, 600, 3.125,  1200, 400),
         "GW1NS-2": (400, 500, 3.125,  1200, 400),
-        "GW2A-18": (400, 600, 3.125,  1200, 400), # XXX check it
-        "GW2A-18C": (400, 600, 3.125,  1200, 400), # XXX check it
+        "GW2A-18": (500, 625, 3.90625, 1250, 500),
+        "GW2A-18C": (500, 625, 3.90625, 1250, 500),
         }
 # input params are calculated as described in GOWIN doc (UG286-1.7E_Gowin Clock User Guide)
 # fref = fclkin / idiv
