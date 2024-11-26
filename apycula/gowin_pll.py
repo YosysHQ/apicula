@@ -1,7 +1,9 @@
 # pll tool to find best match for the target frequency
 # calculations based on: https://github.com/juj/gowin_fpga_code_generators/blob/main/pll_calculator.html
-# limits from: http://cdn.gowinsemi.com.cn/DS117E.pdf, http://cdn.gowinsemi.com.cn/DS861E.pdf
-#
+# limits from:
+# - http://cdn.gowinsemi.com.cn/DS117E.pdf,
+# - http://cdn.gowinsemi.com.cn/DS861E.pdf,
+# - https://cdn.gowinsemi.com.cn/DS226E.pdf
 
 import sys
 import re
@@ -218,11 +220,11 @@ def main():
             "comment": "untested",
             "pll_name": "rPLL",
             "pfd_min": 3,
-            "pfd_max": 400,
-            "vco_min": 400,
-            "vco_max": 1000,
-            "clkout_min": 3.125,
-            "clkout_max": 500,
+            "pfd_max": 500,
+            "vco_min": 500,
+            "vco_max": 1250,
+            "clkout_min": 3.90625,
+            "clkout_max": 625,
         },
     }
 
