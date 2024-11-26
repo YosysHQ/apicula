@@ -15,6 +15,15 @@ module top(input wire clk,
 	defparam id.Q0_INIT=1'b0;
 	defparam id.Q1_INIT=1'b0;
 
+	IEM iem0(
+		.D(data_i),
+		.CLK(fclk_i),
+		.MCLK(clk),
+		.LAG(q_o[5]),
+		.LEAD(q_o[6]),
+		.RESET(!rst_i)
+	);
+
 	// dummy DFF
 	assign q_o[4] = dummy_r;
 	reg dummy_r;
