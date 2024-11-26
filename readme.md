@@ -2,11 +2,9 @@
 
 <img src="apicula.svg" width="250" />
 
-Documentation and open source tools for the Gowin FPGA bitstream format.
+Open source tools and [Documentation](https://github.com/YosysHQ/apicula/wiki) for the Gowin FPGA bitstream format.
 
 Project Apicula uses a combination of fuzzing and parsing of the vendor data files to provide Python tools for generating bitstreams.
-
-This project is supported by our generous sponsors. Have a look at our [contributors](https://github.com/YosysHQ/apicula/graphs/contributors) and sponsor them with via the various platforms linked on our [github](https://github.com/YosysHQ/apicula).
 
 ## Getting Started
 
