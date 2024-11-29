@@ -52,7 +52,7 @@ IO_PORT "fclk_o" IO_TYPE=LVCMOS33;
 // ides
 IO_LOC "fclk_i" 18;
 IO_PORT "fclk_i" IO_TYPE=LVCMOS33;
-IO_LOC "data_i" 86;
+IO_LOC "data_i" 71;
 IO_PORT "data_i" IO_TYPE=LVCMOS33;
 IO_LOC "q_o[0]" 20;
 IO_PORT "q_o[0]" IO_TYPE=LVCMOS33;
