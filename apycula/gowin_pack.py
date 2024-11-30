@@ -2076,6 +2076,8 @@ _iologic_default_attrs = {
         'DUMMY': {},
         'IOLOGIC': {},
         'IOLOGIC_DUMMY': {},
+        'IOLOGICI_EMPTY': {'GSREN': 'false', 'LSREN': 'true'},
+        'IOLOGICO_EMPTY': {'GSREN': 'false', 'LSREN': 'true'},
         'ODDR': { 'TXCLK_POL': '0'},
         'ODDRC': { 'TXCLK_POL': '0'},
         'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
@@ -2111,36 +2113,59 @@ def iologic_mod_attrs(attrs):
     attrs.pop('Q0_INIT', None)
     attrs.pop('Q1_INIT', None)
 
+def make_iodelay_attrs(in_attrs, param):
+    if 'IODELAY' not in param:
+        return
+    if param['IODELAY'] == 'IN':
+        in_attrs['INDEL'] = 'ENABLE'
+    else:
+        in_attrs['OUTDEL'] = 'ENABLE'
+    in_attrs['CLKOMUX'] = 'ENABLE'
+    in_attrs['IMARG'] = 'ENABLE'
+    in_attrs['INDEL_0'] = 'ENABLE'
+    in_attrs['INDEL_1'] = 'ENABLE'
+    if 'C_STATIC_DLY' not in in_attrs:
+        return
+    for i in range(1, 8):
+        if in_attrs['C_STATIC_DLY'][-i] == '1':
+            in_attrs[f'DELAY_DEL{i - 1}'] = '1'
+    in_attrs.pop('C_STATIC_DLY', None);
+
 def set_iologic_attrs(db, attrs, param):
     in_attrs = _iologic_default_attrs[param['IOLOGIC_TYPE']].copy()
     in_attrs.update(attrs)
     iologic_mod_attrs(in_attrs)
     fin_attrs = set()
     if 'OUTMODE' in attrs:
-        if attrs['OUTMODE'] != 'ODDRX1':
-            in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
-        if attrs['OUTMODE'] != 'ODDRX1' or param['IOLOGIC_TYPE'] == 'ODDRC':
-            in_attrs['LSROMUX_0'] = '1'
+        if param['IOLOGIC_TYPE'] == 'IOLOGICO_EMPTY':
+            in_attrs.pop('OUTMODE', None);
         else:
-            in_attrs['LSROMUX_0'] = '0'
-        in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
-        if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
-            in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1'
-        elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
-            in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0'
-        if attrs['OUTMODE'] == 'ODDRX8' or attrs['OUTMODE'] == 'DDRENABLE16':
-            in_attrs['LSROMUX_0'] = '0'
-        if attrs['OUTMODE'] == 'DDRENABLE16':
-            in_attrs['OUTMODE'] = 'DDRENABLE'
-            in_attrs['ISI'] = 'ENABLE'
-        if attrs['OUTMODE'] == 'DDRENABLE':
-            in_attrs['ISI'] = 'ENABLE'
-        in_attrs['LSRIMUX_0'] = '0'
-        in_attrs['CLKOMUX'] = 'ENABLE'
-        # in_attrs['LSRMUX_LSR'] = 'INV'
+            if attrs['OUTMODE'] != 'ODDRX1':
+                in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+            if attrs['OUTMODE'] != 'ODDRX1' or param['IOLOGIC_TYPE'] == 'ODDRC':
+                in_attrs['LSROMUX_0'] = '1'
+            else:
+                in_attrs['LSROMUX_0'] = '0'
+            in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
+            if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
+                in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1'
+            elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
+                in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0'
+            if attrs['OUTMODE'] == 'ODDRX8' or attrs['OUTMODE'] == 'DDRENABLE16':
+                in_attrs['LSROMUX_0'] = '0'
+            if attrs['OUTMODE'] == 'DDRENABLE16':
+                in_attrs['OUTMODE'] = 'DDRENABLE'
+                in_attrs['ISI'] = 'ENABLE'
+            if attrs['OUTMODE'] == 'DDRENABLE':
+                in_attrs['ISI'] = 'ENABLE'
+            in_attrs['LSRIMUX_0'] = '0'
+            in_attrs['CLKOMUX'] = 'ENABLE'
+            # in_attrs['LSRMUX_LSR'] = 'INV'
 
     if 'INMODE' in attrs:
-        if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
+        if param['IOLOGIC_TYPE'] == 'IOLOGICI_EMPTY':
+            in_attrs.pop('INMODE', None);
+        elif param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
             #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
             in_attrs['CLKOMUX_1'] = '1'
             in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
@@ -2158,6 +2183,8 @@ def set_iologic_attrs(db, attrs, param):
                 in_attrs['ISI'] = 'ENABLE'
             in_attrs['LSROMUX_0'] = '0'
             in_attrs['CLKIMUX'] = 'ENABLE'
+    make_iodelay_attrs(in_attrs, param);
+    #print(in_attrs)
 
     for k, val in in_attrs.items():
         if k not in attrids.iologic_attrids:
@@ -2324,13 +2351,14 @@ def place(db, tilemap, bels, cst, args):
             typ = 'IOB'
 
         if is_himbaechel and typ in {'IOLOGIC', 'IOLOGICI', 'IOLOGICO', 'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4',
-                                     'OSER8', 'OSER10', 'OVIDEO', 'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}:
+                                     'OSER8', 'OSER10', 'OVIDEO', 'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO',
+                                     'IOLOGICI_EMPTY', 'IOLOGICO_EMPTY'}:
             if num[-1] in {'I', 'O'}:
                 num = num[:-1]
             if typ == 'IOLOGIC_DUMMY':
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
             attrs['IOLOGIC_TYPE'] = typ
-            if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC'}:
+            if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC', 'IOLOGICI_EMPTY', 'IOLOGICO_EMPTY'}:
                 # We clearly distinguish between the HCLK wires and clock
                 # spines at the nextpnr level by name, but in the fuse tables
                 # they have the same number, this is possible because the clock

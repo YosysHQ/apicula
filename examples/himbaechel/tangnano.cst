@@ -16,6 +16,10 @@ IO_LOC "LED_R" 16;
 IO_LOC "LED_G" 17;
 IO_LOC "LED_B" 18;
 
+IO_LOC "led[3]" 42;
+IO_LOC "led[4]" 43;
+IO_LOC "led[5]" 44;
+
 // ides
 IO_LOC "fclk_i" 45;
 IO_LOC "data_i" 41;
