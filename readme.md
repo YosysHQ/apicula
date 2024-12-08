@@ -16,13 +16,13 @@ Currently supported boards are
  * Sipeed Tang Nano 1K: GW1NZ-LV1QN48C6/I5
  * Sipeed Tang Nano 4K: GW1NSR-LV4CQN48PC7/I6
  * Sipeed Tang Nano 9K: GW1NR-LV9QN88PC6/I5 [^1]
- * Sipeed Tang Nano 20K: GW2AR-LV18QN88C8/I7
- * Sipeed Tang Primer 20K: GW2A-LV18PG256C8/I7
+ * Sipeed Tang Nano 20K: GW2AR-LV18QN88C8/I7 [^1]
+ * Sipeed Tang Primer 20K: GW2A-LV18PG256C8/I7 [^1]
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
  * @Disasm honeycomb: GW1NS-UX2CQN48C5/I4
  * szfpga: GW1NR-LV9LQ144PC6/I5
 
-[^1]: `C` devices require passing the `--family` flag as well as `--device` to Nextpnr, and stating the family in place of device when passing `-d` to `gowin_pack` because the C isn't part of the device ID but only present in the date code. Check `examples/Makefile` for the correct command.
+[^1]: `C` devices require passing the `--family` flag as well as `--device` to Nextpnr, and stating the family in place of device when passing `-d` to `gowin_pack` because the C isn't part of the device ID but only present in the date code. Check `examples/himbaechel/Makefile` for the correct command.
 
 Install the tools with pip.
 
