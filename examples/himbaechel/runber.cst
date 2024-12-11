@@ -26,6 +26,9 @@ IO_LOC "LED_R" 25;
 IO_LOC "LED_G" 26;
 IO_LOC "LED_B" 23;
 
+IO_LOC "LCD_SYNC" 29;
+IO_LOC "LCD_CLK" 44;
+
 // oser
 IO_LOC "oser_out" 25;
 IO_LOC "io16"     25;
@@ -34,7 +37,7 @@ IO_LOC "fclk_o"   29;
 
 // ides
 IO_LOC "fclk_i" 54;
-IO_LOC "data_i" 25;
+IO_LOC "data_i" 30;
 IO_LOC "q_o[0]" 38;
 IO_LOC "q_o[1]" 39;
 IO_LOC "q_o[2]" 40;

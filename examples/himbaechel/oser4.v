@@ -10,6 +10,18 @@ module top(input wire clk,
 	output wire pclk_o,
     output wire fclk_o);
 
+	wire aux_wire;
+	IODELAY delay0(
+		.DI(aux_wire),
+		.DO(oser_out),
+		.SDTAP(1'b0),
+		.SETN(1'b1),
+		.VALUE(1'b0),
+		.DF()
+	);
+
+	defparam delay0.C_STATIC_DLY=100;
+
 	wire rst = rst_i ^ `INV_BTN;
 	OSER4 os(
 		.D0(1'b0),
@@ -21,7 +33,7 @@ module top(input wire clk,
 		.FCLK(fclk_w),
 		.PCLK(pclk_w),
 		.RESET(1'b0),
-		.Q0(oser_out),
+		.Q0(aux_wire),
 		.Q1()
 	);
 	defparam os.GSREN = "false";

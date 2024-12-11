@@ -396,6 +396,9 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
             attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids)
             if not attrvals:
                 continue
+            # additional IOLOGIC components
+            # XXX delays and FFs in IO
+            # main component
             if 'OUTMODE' in attrvals.keys():
                 # XXX skip oddr
                 if attrvals['OUTMODE'] in {attrids.iologic_attrvals['MODDRX1'], attrids.iologic_attrvals['ODDRX1']}:
