@@ -2076,6 +2076,7 @@ _iologic_default_attrs = {
         'DUMMY': {},
         'IOLOGIC': {},
         'IOLOGIC_DUMMY': {},
+        'IOLOGICI_EMPTY': {'GSREN': 'false', 'LSREN': 'true'},
         'ODDR': { 'TXCLK_POL': '0'},
         'ODDRC': { 'TXCLK_POL': '0'},
         'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
@@ -2140,7 +2141,9 @@ def set_iologic_attrs(db, attrs, param):
         # in_attrs['LSRMUX_LSR'] = 'INV'
 
     if 'INMODE' in attrs:
-        if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
+        if param['IOLOGIC_TYPE'] == 'IOLOGICI_EMPTY':
+            in_attrs.pop('INMODE', None);
+        elif param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
             #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
             in_attrs['CLKOMUX_1'] = '1'
             in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
@@ -2324,13 +2327,14 @@ def place(db, tilemap, bels, cst, args):
             typ = 'IOB'
 
         if is_himbaechel and typ in {'IOLOGIC', 'IOLOGICI', 'IOLOGICO', 'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4',
-                                     'OSER8', 'OSER10', 'OVIDEO', 'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}:
+                                     'OSER8', 'OSER10', 'OVIDEO', 'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO',
+                                     'IOLOGICI_EMPTY'}:
             if num[-1] in {'I', 'O'}:
                 num = num[:-1]
             if typ == 'IOLOGIC_DUMMY':
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
             attrs['IOLOGIC_TYPE'] = typ
-            if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC'}:
+            if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC', 'IOLOGICI_EMPTY'}:
                 # We clearly distinguish between the HCLK wires and clock
                 # spines at the nextpnr level by name, but in the fuse tables
                 # they have the same number, this is possible because the clock
