@@ -1,11 +1,13 @@
 # pll tool to find best match for the target frequency
 # calculations based on: https://github.com/juj/gowin_fpga_code_generators/blob/main/pll_calculator.html
-# limits from: http://cdn.gowinsemi.com.cn/DS117E.pdf, http://cdn.gowinsemi.com.cn/DS861E.pdf
-#
+# limits from:
+# - http://cdn.gowinsemi.com.cn/DS117E.pdf,
+# - http://cdn.gowinsemi.com.cn/DS861E.pdf,
+# - https://cdn.gowinsemi.com.cn/DS226E.pdf
 
-import sys
-import re
 import argparse
+import re
+import sys
 
 
 def main():
@@ -16,7 +18,9 @@ def main():
     parser.add_argument(
         "-o", "--output-freq-mhz", help="PLL Output Frequency", type=float, default=108
     )
-    parser.add_argument("-d", "--device", help="Device", type=str, default="GW1NR-9 C6/I5")
+    parser.add_argument(
+        "-d", "--device", help="Device", type=str, default="GW1NR-9 C6/I5"
+    )
     parser.add_argument(
         "-f",
         "--filename",
@@ -218,11 +222,11 @@ def main():
             "comment": "untested",
             "pll_name": "rPLL",
             "pfd_min": 3,
-            "pfd_max": 400,
-            "vco_min": 400,
-            "vco_max": 1000,
-            "clkout_min": 3.125,
-            "clkout_max": 500,
+            "pfd_max": 500,
+            "vco_min": 500,
+            "vco_max": 1250,
+            "clkout_min": 3.90625,
+            "clkout_max": 625,
         },
     }
 
@@ -273,38 +277,37 @@ def main():
             extra_options = ".VREN(1'b1),"
 
         pll_v = f"""/**
-     * PLL configuration
-     *
-     * This Verilog module was generated automatically
-     * using the gowin-pll tool.
-     * Use at your own risk.
-     *
-     * Target-Device:                {device_name}
-     * Given input frequency:        {args.input_freq_mhz:0.3f} MHz
-     * Requested output frequency:   {args.output_freq_mhz:0.3f} MHz
-     * Achieved output frequency:    {setup['CLKOUT']:0.3f} MHz
-     */
+ * PLL configuration
+ *
+ * This Verilog module was generated automatically
+ * using the gowin-pll tool.
+ * Use at your own risk.
+ *
+ * Target-Device:                {device_name}
+ * Given input frequency:        {args.input_freq_mhz:0.3f} MHz
+ * Requested output frequency:   {args.output_freq_mhz:0.3f} MHz
+ * Achieved output frequency:    {setup['CLKOUT']:0.3f} MHz
+ */
 
-    module {args.module_name}(
-            input  clock_in,
-            output clock_out,
-            output locked
-        );
+module {args.module_name}(
+        input  clock_in,
+        output clock_out,
+        output locked
+    );
 
-        {limits['pll_name']} #(
-            .FCLKIN("{args.input_freq_mhz}"),
-            .IDIV_SEL({setup['IDIV_SEL']}), // -> PFD = {setup['PFD']} MHz (range: {limits['pfd_min']}-{limits['pfd_max']} MHz)
-            .FBDIV_SEL({setup['FBDIV_SEL']}), // -> CLKOUT = {setup['CLKOUT']} MHz (range: {limits['vco_min']}-{limits['clkout_max']} MHz)
-            .ODIV_SEL({setup['ODIV_SEL']}) // -> VCO = {setup['VCO']} MHz (range: {limits['clkout_max']}-{limits['vco_max']} MHz)
-        ) pll (.CLKOUTP(), .CLKOUTD(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0), {extra_options}
-            .CLKIN(clock_in), // {args.input_freq_mhz} MHz
-            .CLKOUT(clock_out), // {setup['CLKOUT']} MHz
-            .LOCK(locked)
-        );
+    {limits['pll_name']} #(
+        .FCLKIN("{args.input_freq_mhz}"),
+        .IDIV_SEL({setup['IDIV_SEL']}), // -> PFD = {setup['PFD']} MHz (range: {limits['pfd_min']}-{limits['pfd_max']} MHz)
+        .FBDIV_SEL({setup['FBDIV_SEL']}), // -> CLKOUT = {setup['CLKOUT']} MHz (range: {limits['clkout_min']}-{limits['clkout_max']} MHz)
+        .ODIV_SEL({setup['ODIV_SEL']}) // -> VCO = {setup['VCO']} MHz (range: {limits['vco_min']}-{limits['vco_max']} MHz)
+    ) pll (.CLKOUTP(), .CLKOUTD(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0), {extra_options}
+        .CLKIN(clock_in), // {args.input_freq_mhz} MHz
+        .CLKOUT(clock_out), // {setup['CLKOUT']} MHz
+        .LOCK(locked)
+    );
 
-    endmodule
-
-    """
+endmodule
+"""
         if args.filename:
             open(args.filename, "w").write(pll_v)
         else:
