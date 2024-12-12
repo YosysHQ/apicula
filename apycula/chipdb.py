@@ -2632,6 +2632,9 @@ def dat_portmap(dat, dev, device):
                         elif nam == 'FCLK':
                             # dummy Input, we'll make a special pips for it
                             bel.portmap[nam] = "FCLK"
+                    # these inputs for IEM window selection
+                    bel.portmap['WINSIZE0'] = {'A':"C6", 'B':"C7"}[buf]
+                    bel.portmap['WINSIZE1'] = {'A':"D6", 'B':"D7"}[buf]
                     for idx, nam in _iologic_outputs:
                         w_idx = dat.portmap[f'Iologic{buf}Out'][idx]
                         if w_idx >= 0:
