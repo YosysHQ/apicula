@@ -21,6 +21,15 @@ module top(input wire clk,
 	defparam ides.GSREN="false";
 	defparam ides.LSREN="true";
 
+	IEM iem0(
+        .D(data_i),
+        .CLK(pclk_o),
+        .MCLK(clk),
+        .LAG(q_o[5]),
+        .LEAD(q_o[6]),
+        .RESET(!rst)
+    );		
+
     reg pclk_r;
     always @(posedge fclk_i) begin
         pclk_r <= !pclk_r;
