@@ -1,28 +1,32 @@
+import itertools
 import re
-from typing import Final, TypeAlias
+import string
+from typing import Iterable, TypeAlias
 from collections import defaultdict, deque
 from apycula.fuse_h4x import *
-from apycula.wirenames import wirenames
+from apycula.chipdb import Device
+from apycula.gowin_unpack import parse_tile_, tbrl2rc
+import random
+# from apycula.tiled_fuzzer import rc2tbrl
 
-from apycula.gowin_unpack import parse_tile_
-
-Loc: TypeAlias = tuple[int, int]
-
-# trace a signal to all it's sinks (or source)
-
-def get_exact_wires(fse, ttyp, tile, negatives=False):
-    # if not (fse.get(tile), None):
-    #     return list
-    tile_exact = parse_tile_exact(fse, ttyp, tile, negatives=negatives)
-    wire_table:dict = tile_exact.get('wire', None)
-    if wire_table:
-        wire_table = wire_table.get(2, None)
-        wire_table = [(wirenames[abs(wire[0])], wirenames[wire[1]]) for wire in wire_table]
-        return wire_table
-    return list()
+#Node Type
+Node: TypeAlias = tuple[int, int, str]
 
 
-def parse_intertile_wire(wire):
+def rc2tbrl(db, row, col, num):
+    edge = 'T'
+    idx = col
+    if row == db.rows:
+        edge = 'B'
+    elif col == 1:
+        edge = 'L'
+        idx = row
+    elif col == db.cols:
+        edge = 'R'
+        idx = row
+    return f"IO{edge}{idx}{num}"
+
+def parse_intertile_wire(wire:str):
     # {direction}{length}{number}{segment}
     intertile_regex = r'([NSEW])(\d)(\d)(\d)'
     if m := re.match(intertile_regex, wire):
@@ -30,7 +34,7 @@ def parse_intertile_wire(wire):
     else:
         return None
 
-def is_intertile_node(wire):
+def is_intertile_node(wire:str):
     if not wire:
         return False
     if (wire[:2] in ("SN", "EW")):
@@ -38,7 +42,10 @@ def is_intertile_node(wire):
     intertile_regex = r'([NSEW])(\d)(\d)(\d)'
     return bool(re.match(intertile_regex, wire))
 
-def uturn(db, row: int, col: int, wire: str):
+# Mostly copied from gowin_arch_gen in nextpnr :). Logic for handling cases
+# Where a wire would appear to go out of bounds
+def uturn(db:Device, node:Node):
+    row, col, wire = node
     uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
     m = re.match(r"([NESW])([128]\d)(\d)", wire)
     if m:
@@ -49,7 +56,7 @@ def uturn(db, row: int, col: int, wire: str):
             row = -1 - row
             direction = uturnlut[direction]
         if col < 0:
-            x = -1 - col
+            col = -1 - col
             direction = uturnlut[direction]
         if row > db.rows - 1:
             row = 2 * db.rows - 1 - row
@@ -58,9 +65,21 @@ def uturn(db, row: int, col: int, wire: str):
             col = 2 * db.cols - 1 - col
             direction = uturnlut[direction]
         wire = f'{direction}{num}{segment}'
-    return (row, col), wire
+    return row, col, wire
 
-def source_intertile_wire(db, loc, node):
+def source_intertile_wire(db:Device, node:Node):
+    """
+    Returns the source of an intertile wire or 'None' if the wire supplied is invalid or no source is found
+    Args:
+        db (Device):
+        loc (tuple (x:int, y:int)): coordinates of the tile the node of interest is from
+        node: An intertile wire 
+    Returns:
+        source_node (Node): The source Node of an intertile wire
+    """
+
+    row, col, wire = node
+    loc = (row, col)
     inter_aliases = {
         'E110': 'EW10',
         'W110': 'EW10',
@@ -71,229 +90,408 @@ def source_intertile_wire(db, loc, node):
         'S120': 'SN20',
         'N120': 'SN20'
     }
-    direction, length, number, segment = parse_intertile_wire(node)
+    direction, length, number, segment = parse_intertile_wire(wire)
     uturnlut = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
-    if not is_intertile_node(node):
+    if not is_intertile_node(wire):
         return None
-    reverse_dir = uturnlut[node[0]]
-    reverse_wire = reverse_dir + node[1:]
+    reverse_dir = uturnlut[wire[0]]
     vecs = { 'N': (-1,0), 'S': (1,0), 'W': (0,-1), 'E': (0,1) }[reverse_dir]
     
-    trow = loc[0] + vecs[0] * int(segment)
-    tcol = loc[1] + vecs[1] * int(segment)
+    trow = row + vecs[0] * int(segment)
+    tcol = col + vecs[1] * int(segment)
 
-    source_tile, rev_wire = uturn(db, trow, tcol, f'{reverse_dir}{length}{number}{segment}')
+    srow, scol, rev_wire = uturn(db, (trow, tcol, f'{reverse_dir}{length}{number}{segment}'))
     true_wire = f'{uturnlut[rev_wire[0]]}{length}{number}0'
     if true_wire in inter_aliases:
-        return source_tile, inter_aliases[true_wire]
-    return source_tile, true_wire
+        return srow, scol, inter_aliases[true_wire]
+    return srow, scol, true_wire
 
-def next_intertile_wires(db, loc, node):
-    if not is_intertile_node(node):
+_tbrlre = re.compile(r"IO([TBRL])(\d+)(\w)")
+def __normalize_pin(db, pin):
+    if isinstance(pin, str) and _tbrlre.match(pin):
+        row,col,pin_idx = tbrl2rc(db, pin)
+        wire = db.grid[row][col].bels["IOB"+pin_idx].portmap["I"]
+        return row,col,wire
+    else:
+        return pin
+
+
+def next_intertile_wires(db:Device, node:Node):
+    
+    """
+    Returns the intertile wires that have `node` as their source
+    Args:
+        db (Device):
+        node (Node): A node with an intertile wire
+
+    Returns:
+        inter_wires(list[Node]): list of nodes that have `node` as their source
+    """
+
+    row, col, wire = node
+    if not is_intertile_node(wire):
         return []
-    if node[-1] != '0':
+    if wire[-1] != '0':
         return []
     inter_wires = []
-    if node[:2]=="SN":
-        inter_wires = [uturn(db, loc[0]+disp, loc[1], f'{dir}1{node[2]}1')
+    if wire[:2]=="SN":
+        inter_wires = [uturn(db, (row+disp, col, f'{dir}1{wire[2]}1'))
                         for (disp, dir) in [(-1,"N"), (1, "S")]]
-    elif node[:2]=="EW":
-        inter_wires = [uturn(db, loc[0], loc[1]+disp, f'{dir}1{node[2]}1')
+        
+    elif wire[:2]=="EW":
+        inter_wires = [uturn(db, (row, col+disp, f'{dir}1{wire[2]}1'))
                         for (disp, dir) in [(1,"E"), (-1, "W")]]
-    elif (this_wire:=parse_intertile_wire(node)):
+        
+    elif (this_wire:=parse_intertile_wire(wire)):
         direction, length, number, segment = this_wire
-        vecs = { 'N': (-1,0), 'S': (1,0), 'W': (0,-1), 'E': (0,1) }[direction]
+        disp_r, disp_c = { 'N': (-1,0), 'S': (1,0), 'W': (0,-1), 'E': (0,1) }[direction]
         next_hops = {1: [1], 2:[1,2], 8:[4,8]}[int(length)]
-        inter_wires = [uturn(db, loc[0]+vecs[0]*hop, loc[1]+vecs[1]*hop, f'{direction}{length}{number}{hop}') 
+        inter_wires = [uturn(db, (row+disp_r*hop, col+disp_c*hop, f'{direction}{length}{number}{hop}')) 
                     for hop in next_hops]
     return inter_wires
 
 
-def path_trace(path_dict:dict, path_aliases,  ignore_intertile=True):
-    children = set(path_dict.keys())
-    parents = set(path_dict.values())
-    terminals = children.difference(parents)
-    print(terminals)
 
-    trace_dict = defaultdict(list)
+def get_input_path_dict(tile_dict:dict[Node, Node], db:Device, source:Node|str, through_bel=('lut', 'ff')):
+    """
+    Returns dictionary of connections that emanate from a `node`.
+    Args:
+        tile_dict (dict): Dictionary of tiles (output of tile_bitmap) .
+        db (Device): Device object representing the FPGA or chip.
+        source(Node|str): Node to start trace from. The TBRL format may be used to specify IO Nodes 
+        through_bel (tuple, optional): BEL types to trace through. Defaults to ('lut', 'ff'), the only ones implemented for now.
 
-    for terminal in terminals:
-        if ignore_intertile and is_intertile_node(terminal[-1]):
-            continue 
-        path = [terminal]
-        node = terminal
-        # Just greedy, depth first, guaranteed to exist
-        while (this_parent:=path_dict[node]) != node:
-            # print(this_parent)
-            # print(path)
-            path.append(this_parent)
-            node = this_parent
-        # yield terminal, path[::-1]
-        trace_dict[terminal] = path[::-1]
-    return trace_dict
+    Returns:
+        dict: A dictionary of dest<-src connections where the keys are destinations.
+              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel), 
+              the input wires are separated by a "#". dest and src are always strings
+    """
 
-
-def input_trace(bm, db, fse, source, through_lut=False, through_ff=False, negatives=False):
     LUT_IN_REGEX = r'[A-D][0-7]'
-    bm:Final = bm
-    path_aliases = {} #Maintain a record of when wires reconverge
+    FF_IN_REGEX = r'F[0-7]'
 
-    parent = {source: source} #this is what we'll return
-    next_tile = deque([source[0]]) #next tile to parse
+    source = __normalize_pin(db, source)
+
+    path_dict = {}
+    row, col, snode = source
+    sloc = (row,col)
+    next_tile = deque([sloc]) #next tile to parse
     tile_wires = defaultdict(list)
-    tile_wires[source[0]].append(source[1]) #wires in this tile we are interested in
+    tile_wires[sloc].append(snode) #wires in this tile we are interested in
     seen = set()
+    
+    
     while next_tile:
-        this_tile = next_tile.pop()
-        # print(this_tile)
-        # print(this_tile, parent)
-        srow, scol = this_tile
-        sttyp = db.grid[srow][scol].ttyp
-        if (srow, scol) not in bm:
+        tile_loc = next_tile.pop()
+        srow, scol = tile_loc
+        tile_bels = db.grid[srow][scol].bels
+
+        if tile_loc not in tile_dict or not tile_wires[tile_loc]:
             continue
-        # all_tile_wires = get_exact_wires(fse, sttyp, bm[(srow, scol, sttyp)], negatives=negatives)
-        _, all_tile_wires, _ = parse_tile_(db, srow, scol, bm[(srow,scol)])
+
+        _, all_tile_wires, _ = parse_tile_(db, srow, scol, tile_dict[(srow,scol)])
         wire_dict = defaultdict(list)
-        # for src_wire, dest_wire in all_tile_wires: 
-        #     wire_dict[src_wire].append(dest_wire)
         for dest_wire, src_wire in all_tile_wires.items(): 
             wire_dict[src_wire].append(dest_wire)
-        wire_deque = deque(tile_wires[this_tile]) #copy wires of interest
-        tile_wires[this_tile].clear() # reset the list of wires we are interested in
+        
+        # Trace the input of an IOB to its output
+        for iob in ("IOBA", "IOBB"):
+            if iob in tile_bels:
+                portmap = tile_bels[iob].portmap
+                input_node, output_node = portmap["I"], portmap["O"]
+                wire_dict[input_node].append(output_node)
+
+        wire_deque = deque(tile_wires[tile_loc]) #copy wires of interest
+        tile_wires[tile_loc].clear() # reset the list of wires we are interested in       
+
         while wire_deque:
             curr_wire = wire_deque.pop()
-            full_wire_id = (this_tile, curr_wire)
-            if through_lut and (re.match(LUT_IN_REGEX, curr_wire)):
-                # print (f"Flip Flop found at location {(srow, scol, curr_wire)}")
-                # A LUT can have multiple inputs, A Flip-flop can induce feedback
-                lut_output = f'F{dest_wire[-1]}'
+            full_node_id = (*tile_loc, curr_wire)
+
+            # General Commment: It's possible to have loops e.g LUT -> FF -> LUT
+            if full_node_id in seen:
+                continue
+            seen.add(full_node_id)
+
+            #Trace through LUTs by adding the lut_output to the deque of wires we'll trace through
+            if 'lut' in through_bel and re.match(LUT_IN_REGEX, curr_wire) and f"LUT{curr_wire[-1]}" in tile_bels:
+                lut_output = f'F{curr_wire[-1]}'
+                lut_output_id = (*tile_loc, lut_output)
+                prior_input_id =  path_dict.get(lut_output_id)
+                if prior_input_id:
+                    lut_input_id = (*tile_loc, prior_input_id[2] + "#" + curr_wire)
+                else:
+                    lut_input_id = (*tile_loc, curr_wire)
+                    wire_deque.append(lut_output)
+                path_dict[lut_output_id] = lut_input_id
+
+            #Trace through LUTs by adding the lut_output to the deque of wires we'll trace through
+            if 'ff' in through_bel and re.match(FF_IN_REGEX, curr_wire) and f"DFF{curr_wire[-1]}" in tile_bels:
                 ff_output = f'Q{dest_wire[-1]}'
-                if (this_tile, lut_output) in parent:
-                    path_aliases[(this_tile, curr_wire)] = parent[(this_tile, lut_output)]
-                if lut_output in wire_dict and (this_tile, lut_output) not in parent:
-                    wire_dict[curr_wire].append(lut_output)
-                if through_ff and ff_output in wire_dict and (this_tile, ff_output) not in parent: 
-                    #Assume this is always how this plays out. There's no indication otherwise
-                    # parent[ff_output] = (this_tile, lut_output)
-                    wire_dict[lut_output].append(ff_output)  
+                path_dict[(*tile_loc, ff_output)] = full_node_id
+                wire_deque.append(ff_output)
+            
+            #Trace through intertile wires. No support for other aliases yet
+            for itrow, itcol, inter_wire in next_intertile_wires(db,full_node_id):
+                loc = (itrow, itcol)
+                next_tile.append(loc)
+                tile_wires[loc].append(inter_wire)
+                path_dict[(*loc,inter_wire)] = full_node_id
 
-            for loc, inter_wire in next_intertile_wires(db,this_tile,curr_wire):
-                # print(loc, inter_wire)
-                _ttyp = db.grid[loc[0]][loc[1]].ttyp
-                if loc in bm: 
-                    if ((loc, inter_wire)) not in seen:
-                        seen.add((loc, inter_wire))
-                        next_tile.append(loc)
-                        tile_wires[loc].append(inter_wire)
-                        parent[(loc,inter_wire)] = full_wire_id
+            # Regular search stuff 
             for dest_wire in wire_dict[curr_wire]:
-                if (wire_id:=(this_tile, dest_wire)) not in parent:   
-                    wire_deque.append(dest_wire)
-                    parent[wire_id] = (this_tile, curr_wire)
-    return parent, path_aliases
+                wire_id = (*tile_loc, dest_wire)
+                wire_deque.appendleft(dest_wire)
+                path_dict[wire_id] = full_node_id
+                
+    return path_dict
 
 
-def output_trace(bm, db, fse, source, through_lut=False, through_ff=False):
-    #parse_tile_exact enforces that every wire can have only one input, which
-    #should make this much faster.
-    #We should only ever have to branch at the inputs to a LUT!
-    #We also need to be able to trace the source of intertile wires.
-    #I reason that to do that we can just call next_intertile_wire
 
-    #This function has to be recursive
+def get_output_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel=('lut', 'ff')) -> dict:
+    """
+    Returns dictionary of connections that lead to a `node`.
+    Args:
+        tile_dict (dict): Dictionary of tiles (output of tile_bitmap) .
+        db (Device): Device object representing the FPGA or chip.
+        source (Node|str): Node to start trace from. A bit of a misnomer since we are tracing from destination to source nodes
+        through_bel (tuple, optional): BEL types to trace through. Defaults to ('lut', 'ff'), the only ones implemented for now.
 
+    Returns:
+        path_dict: A dictionary of dest<-src connections where the keys are destinations.
+              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel), 
+              the input wires are separated by a "#". dest and src are always strings
+    """
+
+    source = __normalize_pin(db, source)
     #parent of source is destination
-    TAG = "##TAG##"
-    parent = {((-1, -1), TAG): source}
-    source_loc, source_node = source
-    trow, tcol = source_loc
-    curr_ttyp = db.grid[trow][tcol].ttyp
+    path_dict = {source: source}
+    srow, scol, source_node = source
+    sloc = (srow, scol)
+    source_tiles = deque([sloc])
+    tile_wires = defaultdict(list)
+    tile_wires[sloc].append(source_node)
 
-    source_tiles = deque([source[0]])
-    tile_wires = defaultdict(deque)
-    tile_wires[(trow,tcol)].append(source_node)
-    LUT_OUT_REGEX = r'F([0-3])'
-    FF_OUT_REGEX = r'Q([0-3])'
+    LUT_OUT_REGEX = r'F([0-7])'
+    FF_OUT_REGEX = r'Q([0-7])'
     
-    seen_dests = defaultdict(int)
     seen = set()
 
     while source_tiles:
-        this_tile = source_tiles.pop()
-        # print(this_tile)
-        # print(this_tile)
-        if not tile_wires[this_tile]:
-            continue
-        wire_deque = deque(tile_wires[this_tile])
-        tile_wires[this_tile].clear()
-        srow, scol = this_tile
-        sttyp = db.grid[srow][scol].ttyp
-        if (srow, scol) not in bm:
-            print('loc', srow, scol, sttyp)
+        tile_loc = source_tiles.pop()
+        if tile_loc not in tile_dict or not tile_wires[tile_loc]:
             continue
 
-        # all_tile_wires = get_exact_wires(fse, sttyp, bm[(srow, scol, sttyp)], negatives=negatives)
-        _, all_tile_wires, _ = parse_tile_(db, srow, scol, bm[(srow,scol)])
-        # all_tile_wires = get_exact_wires(fse, sttyp, bm[(srow,scol,sttyp)])
-        # print(this_tile, "\n", all_tile_wires)
-        # print(all_tile_wires)
-        wire_dict = {}
-        for dest_wire, src_wire in all_tile_wires.items():
-            if (alias_id:=seen_dests[(this_tile, dest_wire)]):
-                alias_dest_wire = dest_wire + "#" + str(alias_id)
-            else:
-                alias_dest_wire = dest_wire
-            seen_dests[(this_tile, dest_wire)] += 1
-            wire_dict[alias_dest_wire]= src_wire
-            if dest_wire in wire_deque:
-                wire_deque.append(alias_dest_wire)
-        # print(wire_dict)
-        
+        wire_deque = deque(tile_wires[tile_loc])
+        tile_wires[tile_loc].clear()
+        _, wire_dict, _ = parse_tile_(db, *tile_loc, tile_dict[tile_loc], default=True)
+
+        # Trace the output of an IOB to its input
+        tile_bels = db.grid[tile_loc[0]][tile_loc[1]].bels
+        for iob in ("IOBA", "IOBB"):
+            if iob in tile_bels:
+                portmap = tile_bels[iob].portmap
+                input_node, output_node = portmap["I"], portmap["O"]
+                wire_dict[output_node] = input_node
 
         while wire_deque:
             curr_wire = wire_deque.pop()
-            # print (this_tile,curr_wire)
-            aliased_wire = curr_wire.split("#")[0]
-            # print(curr_wire, aliased_wire)
-            if (srow, scol) == (26,26):
-                # print(sorted(list(wire_dict.keys())))
-                pass
-                # print(curr_wire)
-            # print(srow, scol, curr_wire)
-            # print(curr_wire)
-            # while (next_wire:=wire_dict.get(curr_wire)) or is_intertile_node(next_wire):
+            full_curr_id = (*tile_loc, curr_wire)
+            if full_curr_id in seen: 
+                continue
+            seen.add(full_curr_id)
             next_wire = wire_dict.get(curr_wire)
-            if (next_wire):   
+        
+            if next_wire:   
                 wire_deque.append(next_wire)
-                parent[(this_tile, curr_wire)] = (this_tile, next_wire)
-                # print(curr_wire)
-            elif through_lut and (re.match(LUT_OUT_REGEX, curr_wire)):
-                # print("here")
-                LUT_INS =  ('A','B','C','D')
-                # print("heree")
-                # for lut_in in LUT_INS:
-                #     wire_deque.appendleft(lut_in + curr_wire[-1]
-                wire_deque.extend([F'{i}{curr_wire[-1]}' for i in ('A','B','C','D')])
+                path_dict[full_curr_id] = (*tile_loc, next_wire)
 
-            elif through_ff and (re.match(FF_OUT_REGEX, curr_wire)):
-                print(f"FF found at {(srow, scol, curr_wire)}")
-                wire_deque.append(f'F{curr_wire[-1]}')
-            elif (is_intertile_node(aliased_wire)):
-                _sloc, _snode = source_intertile_wire(db, (srow, scol), aliased_wire)
-                if (_sloc) != (srow, scol):
-                    # print(srow, scol, curr_wire, _sloc, _snode)
-                    parent[(this_tile, curr_wire)   ] = (_sloc, _snode)
-                # print(_sloc, _snode)
-                    if ((_sloc, _snode)) not in seen:
-                        source_tiles.append(_sloc)
-                        tile_wires[_sloc].append(_snode)
-                        seen.add((_sloc, _snode))
-            # curr_wire = next_wire
+            # Trace LUTs and FFs to their possible inputs.
+            if 'lut' in through_bel and re.match(LUT_OUT_REGEX, curr_wire) and f"LUT{curr_wire[-1]}" in tile_bels:
+                lut_sources = [F'{id}{curr_wire[-1]}' for id in ('A','B','C','D')]
+                lut_sources = [x for x in lut_sources if x in wire_dict]
+                if lut_sources:
+                    #Assumption that there is never a '#' in a wirename, which holds so far.
+                    path_dict[full_curr_id] = (*tile_loc, "#".join(lut_sources))
+                    wire_deque.extend(lut_sources)
 
-                
-    return parent
+            if 'ff' in through_bel and re.match(FF_OUT_REGEX, curr_wire) and f"DFF{curr_wire[-1]}" in tile_bels:
+                if (ff_source := f'F{curr_wire[-1]}') in wire_dict:
+                    wire_deque.append(ff_source)
+                    path_dict[full_curr_id] = (*tile_loc, ff_source)
 
-    #     all_tile_wires = get_exact_wires(fse, sttyp, bm[(srow, scol, sttyp)])
-    # wire_dict = defaultdict(list)
-    # for src_wire, dest_wire in all_tile_wires: 
-    #     wire_dict[src_wire].append(dest_wire)
+            #Trace an intertile wire to its source in a potentially different tile
+            if is_intertile_node(curr_wire):
+                it_row, it_col, it_wire = source_intertile_wire(db, full_curr_id)
+                it_node = (it_row, it_col, it_wire)
+                path_dict[full_curr_id] = it_node
+                if (it_node) not in seen:
+                    source_tiles.append((it_row,it_col))
+                    tile_wires[(it_row, it_col)].append(it_wire)
+         
+    return path_dict
+
+def get_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel=('lut', 'ff')) -> dict:
+    """
+    Returns dictionary of connections that lead to a `node` or emanate from it
+    Args:
+        tile_dict (dict): Dictionary of tiles (output of tile_bitmap) .
+        db (Device): Device object representing the FPGA or chip.
+        source (Node|str): Node to start trace from. A bit of a misnomer since we are tracing from destination to source nodes
+        through_bel (tuple, optional): BEL types to trace through. Defaults to ('lut', 'ff'), the only ones implemented for now.
+
+    Returns:
+        path_dict: A dictionary of dest<-src connections where the keys are destinations.
+              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel), 
+              the input wires are separated by a "#". dest and src are always strings
+    """
+    input_path_dict = get_input_path_dict(tile_dict, db, source, through_bel)
+    output_path_dict = get_output_path_dict(tile_dict, db, source, through_bel)
+    path_dict = {**input_path_dict, **output_path_dict}
+    return path_dict
+
+
+def io_node_to_tbrl(db, node:Node):
+    row, col, wire = node
+    for bel_type, bel in db.grid[row][col].bels.items():
+        if bel_type.startswith("IOB") and wire in bel.portmap.values():
+            tbrl_name = rc2tbrl(db, row, col, bel_type[-1])
+            return tbrl_name
+
+def get_io_nodes(db:Device):
+    rows, cols = db.rows, db.cols
+    nodes = []
+    for row in range(rows):
+        for col in (0, cols-1):
+            bels = db.grid[row][col].bels
+            for bel_type, bel in bels.items():
+                if bel_type.startswith("IOB"):
+                    bel_input = bel.portmap["I"]
+                    nodes.append ((row, col, bel_input))
+    
+    for col in range(cols):
+        for row in (0, rows-1):
+            bels = db.grid[row][col].bels
+            for bel_type, bel in bels.items():
+                if bel_type.startswith("IOB"):
+                    bel_input = bel.portmap["I"]
+                    nodes.append ((row, col, bel_input))
+    
+    return nodes
+
+# Connected by default in tiles (src -> list[destinations]). No longer in tiledata from V1.9.9
+default_pips = {
+    "F0": ["D2", "D3", "D4", "D5", "D6", "D7"],
+    "F1": ["B2", "B3", "B4", "B5", "B6", "B7"],
+    "F2": ["D0", "D1"],
+    "F3": ["B0", "B1"],
+    "F4": ["C0", "C1", "C2", "C3", "C6", "C7"],
+    "F5": ["A0", "A1", "A2", "A3", "A6", "A7"],
+    "F6": ["C4", "C5"],
+    "F7": ["A4", "A5"],
+    "Q0": ["X01", "X05", "E100", "W100", "W130", "E130", "N100", "S100", "S130", "N130", "E200", "W200", "N200", "S200", "E800", "W800", "N800",  "S800"],
+    "Q1": ["X02", "X06", "E210", "W210", "N210", "S210", "E810", "W810", "N810", "S810"],
+    "Q2": ["E220", "W220", "N220", "S220"],
+    "Q3": ["E230", "W230", "N230", "S230"],
+    "Q4": ["E240", "W240", "N240", "S240", "E820", "W820", "N820", "S820"],
+    "Q5": ["E250", "W250", "N250", "S250", "E830", "W830", "N830", "S830"],
+    "Q6": ["X03", "X07", "E260", "W260", "N260", "S260"],
+    "Q7": ["X04", "X08", "E270", "W270", "N270", "S270"]
+}
+
+
+# ratio of wires that are connected by default. I was getting multiple routes between the same
+# source and destination at some point and the routes with more non-default wires seemed more
+# plausible.
+def assess_path(path:list[Node]):
+    """
+    Calculate the ratio of wires connected by default in a given path.
+
+    Args:
+        path (list[Node]): A list of nodes representing a route.
+
+    Returns:
+        float: The ratio of default-connected wires to total wires in the path.
+    """
+    qual = 0 
+
+    if len(path) < 2:
+        return qual
+    
+    for i in range(len(path)-1):
+        (srow, scol, snode), (drow, dcol, dnode) =  path[i], path[i+1]
+        if srow==drow and scol==dcol and dnode in default_pips.get(snode, {}):
+            qual += 1
+    
+    return (len(path) - qual)/len(path)
+
+def enumerate_paths(path_dict:dict, sources:set[Node|str], dests:set[Node|str])->Iterable[Node]:
+    """
+    Generate all paths between given sources and destinations.
+
+    Args:
+        path_dict (dict[dst, src]): A dictionary mapping destination nodes to their sources.
+        sources (set[Node | str]): A set of starting nodes.
+        dests (set[Node | str]): A set of destination nodes.
+
+    Returns:
+        Iterable[Node]: An iterator yielding paths as sequences of nodes from src to destination.
+    """
+
+    sources = set(sources)
+    dests = list(set(dests))
+    dests.sort()
+
+    def __path_finder (prior_path):
+        curr_node = prior_path[-1]
+        path = list(prior_path)
+        while ((next_node:=path_dict.get(curr_node)) not in path) and next_node:
+            curr_node = next_node
+
+            row, col, wire = curr_node
+            if curr_node in sources or wire in ['VSS', 'VCC']:
+                path.append(curr_node)
+                yield list(path[::-1])
+            
+            #Assumption that there is never a '#' in a wirename, which holds so far...
+            elif "#" in wire:
+                alts = wire.split("#")
+                for alt in alts:
+                    node = (row, col, alt)
+                    alt_path = [*path, node]
+                    if node in sources and node not in path:
+                        yield list(alt_path[::-1])
+                    yield from __path_finder(alt_path)
+
+            else:
+                path.append(curr_node)
+
+    for dst in dests:
+        # print ('dst', dst)
+        # print('dst', dst)
+        yield from __path_finder([dst])
+
+
+# Accumulate paths from `enumerate_paths` and optionally rank them
+def get_paths(path_dict:dict, sources:set[Node|str], dests:set[Node|str], sort:bool=False):
+    """
+    Accumulate paths between sources and destinations (generated by `enumerate_paths`), with optional ranking.
+
+    Args:
+        path_dict (dict[dst, src]): A dictionary mapping destination nodes to their sources.
+        sources (set[Node | str]): A set of starting nodes.
+        dests (set[Node | str]): A set of destination nodes.
+        sort (bool): Whether to sort the paths based on a ranking criteria (default is False).
+
+    Returns:
+        list: A list of paths between the sources and destinations, optionally sorted.
+    """
+    paths = []
+    for path in enumerate_paths(path_dict, sources, dests):
+        paths.append(path)
+    
+    if sort:
+        paths.sort(key = lambda x: (x[0], x[-1], assess_path(x)))
+
+    return paths
+
