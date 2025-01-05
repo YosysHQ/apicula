@@ -37,9 +37,9 @@ def find_pins(db, pnr:codegen.Pnr, trace_args):
             pin_node = possible_pins[0]  #pin : [row, col, wire]
             tbrl_pin = tracing.io_node_to_tbrl(db, pin_node)
             pinout[sdram_idxName] = (*pin_node[:2], tbrl_pin[-1])
-    all_paths = {k:v for k, v in enumerate(all_paths)}             
-    print(all_paths)
-    # tracing.visualize_grid(all_paths, db.rows, db.cols)
+    # all_paths = {k:v for k, v in enumerate(all_paths)}             
+    # # print(all_paths)
+    # tracing.visualize_grid(all_paths, db.rows, db.cols, save_name="sdram_pinout.jpeg")
 
     return pinout
 
@@ -91,7 +91,7 @@ def run_script(db, pins, device, package, partnumber):
                 iob = codegen.Primitive("TBUF", sdram_io_mod_name)
                 iob.portmap["O"] = sdram_idxName
                 iob.portmap["I"] = fuzz_input_wire
-                iob.portmap["OEN"] = "1"
+                iob.portmap["OEN"] = "1'b1"
                 pnr.netlist.primitives[sdram_io_mod_name] = iob
 
             elif sdram_pin_name.startswith("O"):
@@ -121,6 +121,8 @@ def run_script(db, pins, device, package, partnumber):
         iter_pinout = [(k,*v,iostd) for k, v in iter_pinout.items()]
         pinout.extend(iter_pinout)
     
+    # draw_map = {k:[(r,c)] for k, r, c, _, _ in pinout }             
+    # tracing.visualize_grid(draw_map, db.rows, db.cols, save_name="sdram_pinout.jpeg")
     return pinout
 
 
@@ -130,7 +132,7 @@ params = {
         "device": "GW1NSR-4C",
         "partnumber": "GW1NSR-LV4CQN48PC7/I6",
         "pins": [
-            ("O_hpram_ck", 1, None),
+            ("O_hpram_ck", 2, None),
             ("O_hpram_ck_n", 2, None),
             ("O_hpram_cs_n", 2, None),
             ("O_hpram_reset_n", 2, None),
