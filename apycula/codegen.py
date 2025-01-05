@@ -255,7 +255,7 @@ run pnr
             with open(tmpdir+"/run.tcl", "w") as f:
                 self.write(f, cst=cst, netlist=netlist)
 
-            subprocess.run(["faketime", "-f", "-200d", self.gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
+            subprocess.run([self.gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
             try:
                 return PnrResult(
                         *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
