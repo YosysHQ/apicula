@@ -193,7 +193,7 @@ params = {
 }
 
 if __name__ == "__main__": 
-    with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
+    with open(f"{tiled_fuzzer.device}_stage2.pickle", 'rb') as f:
         db = pickle.load(f)
 
     if tiled_fuzzer.device in params:
