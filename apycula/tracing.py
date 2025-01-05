@@ -3,7 +3,6 @@ import re
 import string
 from typing import Iterable, TypeAlias
 from collections import defaultdict, deque
-from apycula.fuse_h4x import *
 from apycula.chipdb import Device
 from apycula.gowin_unpack import parse_tile_, tbrl2rc
 import random
@@ -427,7 +426,8 @@ def assess_path(path:list[Node]):
 
 def enumerate_paths(path_dict:dict, sources:set[Node|str], dests:set[Node|str])->Iterable[Node]:
     """
-    Generate all paths between given sources and destinations.
+    Generate all paths between given sources and destinations. Enumerating might be a better option
+    than getting the list in one go for large designs.
 
     Args:
         path_dict (dict[dst, src]): A dictionary mapping destination nodes to their sources.
@@ -495,3 +495,166 @@ def get_paths(path_dict:dict, sources:set[Node|str], dests:set[Node|str], sort:b
 
     return paths
 
+def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name='', checkbox=False):
+    """
+    Visualize a grid with marked tiles and annotations. The source tile for a path is marked with '^',
+    while its destination tile is marked with '$'
+
+    Parameters:
+        plot (dict): A dictionary where keys represent group labels and values are lists of `Node` objects.
+                     Each group of nodes will be marked with a distinct ASCII character. 
+                     Note: Avoid using `[all]` as a key in the plot dictionary.
+        rows (int, optional): The number of rows in the grid. If not provided, it will be inferred from the data.
+        cols (int, optional): The number of columns in the grid. If not provided, it will be inferred from the data.
+        show (bool, optional): If `True`, the plot will be displayed. Defaults to `False`.
+        save_name (str, optional): The filename to save the plot. If not provided, the plot will not be saved.
+        checkbox (bool, optional): If `True`, adds interactive checkboxes to toggle the visibility of plot groups.
+    Returns:
+        None
+    """
+    try:
+        import matplotlib
+        import matplotlib.pyplot as plt
+    except:
+        raise ModuleNotFoundError ("Kindly install `matplotlib` to call this function")
+    
+    if checkbox:
+        # matplotlib.use('Qt5Agg')
+        from matplotlib.widgets import CheckButtons
+
+    grid = [[0] * cols for _ in range(rows+1)]
+    fig, ax = plt.subplots(figsize=(16,14))
+
+    cmap = plt.get_cmap('tab10', 1)
+    plt.imshow(grid, cmap=cmap, origin='upper', extent=[0, cols, 0, rows])
+    plt.tick_params(labeltop=True, labelright=True, labelsize=10)
+    plt.grid(which='both', color='black', linestyle='-', linewidth=1)
+    
+    x_ticks = list(range(0, cols+1))
+    plt.xticks(x_ticks, rotation=90, fontsize=8, fontweight='light', fontfamily='monospace')
+
+    yticks = list(range(rows, -1, -1 ))
+    ylabels = [str(x) for x in yticks[::-1]]
+    plt.yticks(yticks, ylabels, fontsize=8, fontweight='light', fontfamily='monospace')
+
+    # ax = plt.gca()
+    ax.set_aspect(0.8, adjustable='box')
+    # ax.set_adjustable()
+
+    plt.subplots_adjust(left=0.1, right=0.6, wspace=0.05)
+    plot_chars = []
+    plot_chars.extend(list(string.ascii_uppercase))
+    # colors = ["white", "yellow", "red", "black", "gold", "cyan", "orange"]
+    colors = ["white", "black", "red", "gold"]
+    legend_opts = list(itertools.product(plot_chars, colors))
+    random.Random(12).shuffle(legend_opts)
+
+    if isinstance(plot, list):
+        plot = {0: plot}
+
+
+    plot = {str(k):v for k, v in plot.items()} #Cast to Strings for consistency
+
+    legend_dict = {}
+    l_idx = 0
+    for k, path in plot.items():
+        legend = legend_opts[l_idx%len(legend_opts)]
+        legend_dict[str(k)] = [*legend, f"({legend[0]}) {path[0]} -> {path[-1]} //{k}"] #plot_character, plot_color, plot_label
+        l_idx += 1
+ 
+    legend_entries = [
+        plt.Line2D([0], [0], color=color, markerfacecolor=color, marker='o', linestyle='', 
+                   markeredgecolor='black', markersize=10, label=path_label)
+        for k, (plot_char, color, path_label) in legend_dict.items()
+    ]
+    
+    text_dict = defaultdict(list)
+    for k, path in plot.items():
+        base_plot_char, color, label = legend_dict[str(k)]
+
+        locs = [(node[0], node[1]) for node in path]
+        start_loc, end_loc = locs[0], locs[-1]
+
+        for loc in locs:
+            plot_char = base_plot_char
+            if len(path) == 1:
+                plot_char = plot_char + "!" #Single tile marker
+            elif loc == start_loc:
+                plot_char = plot_char + "^" #Start tile marker
+            elif loc == end_loc:
+                plot_char = plot_char + "$" #Final tile marker
+            
+            i, j = loc
+            this_text = ax.text(j + 0.5, rows - i - 0.5, plot_char, ha='center', va='center', color=color, 
+                                fontweight='bold', fontsize=8, visible=True)
+            text_dict[k].append((loc, this_text)) # We store the texts so we can easily toggle visibility later on
+
+    ALL_TAG = "[ALL]"
+    _showing = set(plot.keys())
+    showing = set(_showing) #We'll use this to manage state
+
+    def check_callback(to_toggle=''):
+        # print('click registered', "to_toggle", to_toggle)
+        check.eventson = False
+        if to_toggle is None:
+            return
+ 
+        if to_toggle != ALL_TAG:
+            _, key = to_toggle.split("//")
+            text_objs = text_dict[key]
+            visibility = key in showing
+            for loc, text in text_objs:
+                text.set_visible(not visibility)
+            if visibility:
+                showing.remove(key)
+            else:
+                showing.add(key)
+
+        else:
+            key = ALL_TAG
+            visibility = len(showing) == len(_showing)
+            for text_list in text_dict.values():
+                for text_loc, text_obj in text_list:
+                    text_obj.set_visible(not visibility) #Toggle visibiility of characters
+            
+            if visibility:
+                check.clear() #Clear all checkboxes
+                showing.clear()
+            else:
+                for i in range(len(_showing)):
+                    check.set_active(i, True) #Activate all checkboxes
+                showing.update(_showing)
+        
+        # Keep the state of the 'ALL' checkbox consistent
+        if len(showing) < len(_showing):
+            check.set_active(0, False)
+        elif len(showing) == len(_showing):
+            check.set_active(0, True)
+
+        check.eventson = True
+        plt.draw()
+
+    # Labels for checkboxes
+    check_labels = [ALL_TAG]
+    check_labels.extend([v[2] for k, v in legend_dict.items()])
+
+    if show and checkbox:
+        rax = plt.axes([0.6, 0.1, 0.4, 0.8])  # Position [left, bottom, width, height]
+        rax.autoscale()
+        rax.set_frame_on(False)
+        check = CheckButtons(rax, check_labels, [True] * len(check_labels))
+        check.on_clicked(check_callback)
+    elif not (show or checkbox): 
+        plt.legend(
+            handles=legend_entries,
+            loc='center left',  # Legend location
+            bbox_to_anchor=(1.05, 0.5),  # Position outside the grid
+            fontsize=10
+        )
+
+    if save_name:
+        plt.savefig(save_name+".jpeg", dpi=300, bbox_inches='tight')
+
+    if show:
+        plt.axes(ax)
+        plt.show()
