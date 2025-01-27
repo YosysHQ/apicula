@@ -61,20 +61,20 @@ all: \
 	oser4-tangnano4k.fs ovideo-tangnano4k.fs oser8-tangnano4k.fs oser10-tangnano4k.fs \
 	iddr-tangnano4k.fs iddrc-tangnano4k.fs ides16-tangnano4k.fs \
 	ides4-tangnano4k.fs ivideo-tangnano4k.fs ides8-tangnano4k.fs ides10-tangnano4k.fs \
-	oser10-tlvds-tangnano4k.fs iodelay-tangnano4k.fs \
+	oser10-tlvds-tangnano4k.fs iodelay-tangnano4k.fs mipi-out-tangnano4k.fs \
 	femto-riscv-15-tangnano4k.fs femto-riscv-16-tangnano4k.fs femto-riscv-18-tangnano4k.fs \
 	dsp-mult18x18-tangnano4k.fs dsp-mult36x36-tangnano4k.fs dsp-padd9-tangnano4k.fs dsp-padd18-tangnano4k.fs \
 	dsp-mult9x9-tangnano4k.fs dsp-alu54d-tangnano4k.fs dsp-multalu18x18-tangnano4k.fs \
 	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
 	dqce-tangnano4k.fs dcs-tangnano4k.fs emcu-blinky-tangnano4k.fs emcu-with-apb-blinky-tangnano4k.fs \
-	emcu-with-apb-spi-tangnano4k.fs \
+	emcu-with-apb-spi-tangnano4k.fs i3c-tangnano4k.fs mipi-out-tangnano4k.fs \
 	\
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
 	blinky-clkdiv-tangnano9k.fs dvi-example-tangnano9k.fs\
 	blinky-osc-tangnano9k.fs tlvds-tangnano9k.fs elvds-tangnano9k.fs oddr-tlvds-tangnano9k.fs \
 	oddr-elvds-tangnano9k.fs pll-nanolcd-tangnano9k.fs oser16-tangnano9k.fs attosoc-tangnano9k.fs \
 	oser4-tangnano9k.fs ovideo-tangnano9k.fs oser8-tangnano9k.fs oser10-tangnano9k.fs \
-	iddr-tangnano9k.fs iddrc-tangnano9k.fs iodelay-tangnano9k.fs \
+	iddr-tangnano9k.fs iddrc-tangnano9k.fs iodelay-tangnano9k.fs mipi-out-tangnano4k.fs \
 	ides4-tangnano9k.fs ivideo-tangnano9k.fs ides8-tangnano9k.fs ides10-tangnano9k.fs \
 	bsram-pROM-tangnano9k.fs bsram-SDPB-tangnano9k.fs bsram-SP-tangnano9k.fs \
 	bsram-DPB-tangnano9k.fs bsram-pROMX9-tangnano9k.fs bsram-SDPX9B-tangnano9k.fs \
@@ -85,6 +85,7 @@ all: \
 	dsp-mult9x9-tangnano9k.fs dsp-alu54d-tangnano9k.fs dsp-multalu18x18-tangnano9k.fs \
 	dsp-multalu36x18-tangnano9k.fs dsp-multaddalu18x18-tangnano9k.fs \
 	dqce-tangnano9k.fs dcs-tangnano9k.fs femto-riscv-userflash-tangnano9k.fs \
+	i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs \
 	\
 	blinky-szfpga.fs shift-szfpga.fs blinky-tbuf-szfpga.fs blinky-oddr-szfpga.fs \
 	blinky-osc-szfpga.fs tlvds-szfpga.fs elvds-szfpga.fs oddr-tlvds-szfpga.fs \

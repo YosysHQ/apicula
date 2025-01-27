@@ -35,7 +35,7 @@ iob_attrids = {
         'TRI_MUX':               27,
         'TRIMUX_PADDT':          28,
         'IOBUF_PADDI':           29,
-        'USED':                  30, # *
+        'USED':                  30,
         'IOBUF_OVERDRIVE':       31,
         'IOBUF_UNDERDRIVE':      32,
         'IOBUF_LVDS25_VCCIO':    33,
@@ -45,7 +45,7 @@ iob_attrids = {
         'LPRX_A2':               37,
         'MIPI':                  38,
         'LVDS_SEL':              39,
-        'VLDS_ON':               40,
+        'LVDS_ON':               40,
         'IOBUF_MIPI_LP':         41,
         'IOBUF_ODT_RESISTOR':    42,
         'IOBUF_CIB_CONTROL':     43,

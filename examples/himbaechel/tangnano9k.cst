@@ -69,6 +69,14 @@ IO_LOC "LCD_XL"   39;
 IO_LOC "tlvds_p" 25;
 IO_LOC "tlvds_n" 26;
 
+IO_LOC "mipi_out[0]" 25;
+IO_LOC "mipi_out[1]" 26;
+
+IO_LOC "mipi_in[0]" 80;
+IO_LOC "mipi_in[1]" 79;
+
+IO_LOC "i3c" 25;
+
 IO_LOC "elvds_p" 75;
 IO_LOC "elvds_n" 74;
 

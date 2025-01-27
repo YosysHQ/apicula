@@ -81,6 +81,10 @@ def extra_pll_bels(cell, row, col, num, cellname):
             yield ('RPLLB', int(row), int(col) + offx * off, num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}', cell)
 
+def extra_mipi_bels(cell, row, col, num, cellname):
+    yield ('MIPI_IBUF_AUX', int(row), int(col) + 1, num,
+        cell['parameters'], cell['attributes'], sanitize_name(cellname) + 'AUX', cell)
+
 def extra_bsram_bels(cell, row, col, num, cellname):
     for off in [1, 2]:
         yield ('BSRAM_AUX', int(row), int(col) + off, num,
@@ -185,7 +189,7 @@ _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MU
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -220,6 +224,8 @@ def get_bels(data):
             yield from extra_bsram_bels(cell, row, col, num, cellname)
         if cell_type in _dsp_cell_types:
             yield from extra_dsp_bels(cell, row, col, num, cellname)
+        if cell_type == 'MIPI_IBUF':
+            yield from extra_mipi_bels(cell, row, col, num, cellname)
         yield (cell_type, int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
@@ -2239,16 +2245,16 @@ _default_iostd = {
         'ELVDS_IOBUF': 'LVCMOS33D',
         }
 _vcc_ios = {'LVCMOS12': '1.2', 'LVCMOS15': '1.5', 'LVCMOS18': '1.8', 'LVCMOS25': '2.5',
-        'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3'}
+        'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3', 'MIPI': '1.2'}
 _init_io_attrs = {
         'IBUF': {'PADDI': 'PADDI', 'HYSTERESIS': 'NONE', 'PULLMODE': 'UP', 'SLEWRATE': 'SLOW',
                  'DRIVE': '0', 'CLAMP': 'OFF', 'OPENDRAIN': 'OFF', 'DIFFRESISTOR': 'OFF',
                  'VREF': 'OFF', 'LVDS_OUT': 'OFF'},
         'OBUF': {'ODMUX_1': '1', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
-                 'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
+                 'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF',
                  'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA', 'TO': 'INV', 'OPENDRAIN': 'OFF'},
         'TBUF': {'ODMUX_1': 'UNKNOWN', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
-                 'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
+                 'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF',
                  'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
                  'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'OPENDRAIN': 'OFF'},
         'IOBUF': {'ODMUX_1': 'UNKNOWN', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
@@ -2325,6 +2331,12 @@ def place_slice(db, tiledata, tile, parms, num):
         mode = str(parms['FF_TYPE']).strip('E')
         place_dff(db, tiledata, tile, parms, num, mode)
 
+_mipi_aux_attrs = {
+        'A': {('IO_TYPE', 'LVDS25'), ('LPRX_A2', 'ENABLE'), ('ODMUX', 'TRIMUX'), ('OPENDRAIN', 'OFF'),
+              ('DIFFRESISTOR', 'OFF'), ('VCCIO', '2.5')},
+        'B': {('IO_TYPE', 'LVDS25'), ('VCCIO', '2.5')},
+}
+
 _sides = "AB"
 def place(db, tilemap, bels, cst, args):
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
@@ -2383,6 +2395,19 @@ def place(db, tilemap, bels, cst, args):
             pass
         elif typ.startswith('MUX2_'):
             pass
+        elif typ.startswith("MIPI_OBUF"):
+            pass
+        elif typ.startswith("MIPI_IBUF_AUX"):
+            for iob_idx in ['A', 'B']:
+                iob_attrs = set()
+                for k, val in _mipi_aux_attrs[iob_idx]:
+                    add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
+                bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
+                for row_, col_ in bits:
+                    tile[row_][col_] = 1
+            pass
+        elif typ.startswith("MIPI_IBUF"):
+            pass
         elif typ == "BUFS":
             # fuses must be reset in order to activate so remove them
             bits2zero = set()
@@ -2433,6 +2458,8 @@ def place(db, tilemap, bels, cst, args):
             bel_name = f"IO{edge}{idx}{num}"
             cst.ports[cellname] = bel_name
             iob = tiledata.bels[f'IOB{num}']
+            if 'MIPI_IBUF' in parms and num == 'B':
+                continue
             if 'DIFF' in parms:
                 # skip negative pin for lvds
                 if parms['DIFF'] == 'N':
@@ -2491,6 +2518,11 @@ def place(db, tilemap, bels, cst, args):
                 else:
                     io_desc.attrs[flag_name_val[0][1:]] = flag_name_val[1]
             io_desc.attrs['IO_TYPE'] = iostd
+            if 'DIFF' in parms and 'MIPI_OBUF' in parms:
+                io_desc.attrs['MIPI'] = 'ENABLE'
+            if 'I3C_IOBUF' in parms:
+                io_desc.attrs['I3C_IOBUF'] = 'ENABLE'
+
             if pinless_io:
                 return
         elif typ.startswith("RAM16SDP") or typ == "RAMW":
@@ -2626,7 +2658,7 @@ def place(db, tilemap, bels, cst, args):
                 iob.attrs['IO_TYPE'] = get_iostd_alias(iob.attrs['IO_TYPE'])
                 if iob.attrs.get('SINGLERESISTOR', 'OFF') != 'OFF':
                     iob.attrs['DDR_DYNTERM'] = 'ON'
-            if iob.flags['mode'] in {'OBUF', 'IOBUF', 'TLVDS_IOBUF', 'ELVDS_IOBUF'}:
+            if iob.flags['mode'] in {'OBUF', 'IOBUF', 'TLVDS_OBUF', 'TLVDS_IOBUF', 'TLVDS_TBUF', 'TLVDS_TBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF'}:
                 if not vccio:
                     iostd = iob.attrs['IO_TYPE']
                     vccio = _vcc_ios[iostd]
@@ -2674,12 +2706,12 @@ def place(db, tilemap, bels, cst, args):
                 k = refine_io_attrs(k)
                 in_iob_attrs[k] = val
             in_iob_attrs['VCCIO'] = in_bank_attrs['VCCIO']
-            #print(in_iob_attrs)
+            #print(name, in_iob_attrs)
 
             # lvds
             if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
                 in_iob_attrs.update({'LVDS_OUT': 'ON', 'ODMUX_1': 'UNKNOWN', 'ODMUX': 'TRIMUX',
-                    'SLEWRATE': 'FAST', 'DRIVE': '0', 'PERSISTENT': 'OFF'})
+                    'SLEWRATE': 'FAST', 'PERSISTENT': 'OFF'})
             elif iob.flags['mode'] in {'ELVDS_OBUF', 'ELVDS_TBUF', 'ELVDS_IOBUF'}:
                 in_iob_attrs.update({'ODMUX_1': 'UNKNOWN', 'ODMUX': 'TRIMUX',
                     'PERSISTENT': 'OFF'})
@@ -2687,6 +2719,21 @@ def place(db, tilemap, bels, cst, args):
             if iob.flags['mode'] in {'TLVDS_IBUF', 'ELVDS_IBUF'}:
                 in_iob_attrs['ODMUX_1'] = 'UNKNOWN'
                 in_iob_attrs.pop('VCCIO', None)
+            if 'IO_TYPE' in in_iob_attrs and in_iob_attrs['IO_TYPE'] == 'MIPI':
+                in_iob_attrs['LPRX_A1'] = 'ENABLE'
+                in_iob_attrs.pop('SLEWRATE', None)
+                in_iob_attrs.pop('VCCIO', None)
+                in_iob_attrs['PULLMODE'] = 'NONE'
+                in_iob_attrs['LVDS_ON'] = 'ENABLE'
+                in_iob_attrs['IOBUF_MIPI_LP'] = 'ENABLE'
+            if 'I3C_IOBUF' in in_iob_attrs:
+                in_iob_attrs.pop('I3C_IOBUF', None)
+                in_iob_attrs['PULLMODE'] = 'NONE'
+                in_iob_attrs['OPENDRAIN'] = 'OFF'
+                in_iob_attrs['OD'] = 'ENABLE'
+                in_iob_attrs['DIFFRESISTOR'] = 'NA'
+                in_iob_attrs['SINGLERESISTOR'] = 'NA'
+                in_iob_attrs['DRIVE'] = '16'
 
             # XXX may be here do GW9 pins also
             if device == 'GW1N-1':
@@ -2696,6 +2743,13 @@ def place(db, tilemap, bels, cst, args):
                 if mode[1:].startswith('LVDS') and in_iob_attrs['DRIVE'] != '0':
                     in_iob_attrs['DRIVE'] = 'UNKNOWN'
             in_iob_b_attrs = {}
+            if 'IO_TYPE' in in_iob_attrs and in_iob_attrs['IO_TYPE'] == 'MIPI':
+                in_iob_attrs['IO_TYPE'] = 'LVDS25'
+                in_iob_b_attrs['IO_TYPE'] = 'LVDS25'
+                in_iob_b_attrs['PULLMODE'] = 'NONE'
+                in_iob_b_attrs['OPENDRAIN'] = 'OFF'
+                in_iob_b_attrs['IOBUF_MIPI_LP'] = 'ENABLE'
+                in_iob_b_attrs['PERSISTENT'] = 'OFF'
             if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
                 in_iob_b_attrs = in_iob_attrs.copy()
             elif iob.flags['mode'] in {'TLVDS_IBUF', 'ELVDS_IBUF'}:
@@ -2712,24 +2766,28 @@ def place(db, tilemap, bels, cst, args):
                 in_iob_b_attrs = in_iob_attrs.copy()
 
             for iob_idx, atr in [(idx, in_iob_attrs), ('B', in_iob_b_attrs)]:
-                #print(name, iob.pos, atr)
                 iob_attrs = set()
                 for k, val in atr.items():
                     if k not in attrids.iob_attrids:
                         print(f'XXX IO: add {k} key handle')
-                    elif k == 'OPENDRAIN' and val == 'OFF' and 'LVDS' not in iob.flags['mode'] and 'IBUF' not in iob.flags['mode']:
-                        continue
+                    #elif k == 'OPENDRAIN' and val == 'OFF' and 'LVDS' not in iob.flags['mode'] and 'IBUF' not in iob.flags['mode']:
+                        #continue
                     else:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
                         if k in {'VCCIO'}:
                             continue
                         if k == 'LVDS_OUT' and val not in {'ENABLE', 'ON'}:
                             continue
+                        if k == 'IO_TYPE' and k in in_bank_attrs and in_bank_attrs[k].startswith('LVDS'):
+                            continue
                         in_bank_attrs[k] = val
+                #print(row, col, atr)
                 bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
                 tile = tilemap[(row, col)]
                 for row_, col_ in bits:
                     tile[row_][col_] = 1
+                if idx == 'B':
+                    break
 
         # bank bits
         brow, bcol = db.bank_tiles[bank]
@@ -2737,11 +2795,11 @@ def place(db, tilemap, bels, cst, args):
 
         bank_attrs = set()
         for k, val in in_bank_attrs.items():
-            #print(k, val)
             if k not in attrids.iob_attrids:
                 print(f'XXX BANK: add {k} key handle')
             else:
-                add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
+                if k in {'VCCIO', 'IO_TYPE'}:
+                    add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
         bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, 'BANK', int(bank))
         btile = tilemap[(brow, bcol)]
         for row, col in bits:

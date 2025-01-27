@@ -125,6 +125,7 @@ class Device:
     # - ref to hclk_pips
     # - disabled blocks
     # - BUF(G)
+    # - MIPI
     extra_func: Dict[Tuple[int, int], Dict[str, Any]] = field(default_factory=dict)
     # Chip features currently related to block memory like "HAS_SP32", "NEED_SP_FIX", etc
     chip_flags: List[str] = field(default_factory=list)
@@ -1806,6 +1807,65 @@ def fse_create_diff_types(dev, device):
     elif device not in {'GW2A-18', 'GW2A-18C', 'GW1N-4'}:
         dev.diff_io_types.remove('TLVDS_IOBUF')
 
+def fse_create_mipi(dev, device, dat: Datfile):
+    # The MIPI OBUF is a slightly modified differential TBUF, such units are
+    # located on the bottom or right side of the chip depending on the series.
+    # We use the extra_func mechanism because these blocks do not depend on the
+    # cell type, but only on the coordinates.
+    # The same applies to MIPI_IBUF but here two neighbouring cells are used
+    # per primitive.
+    df = dev.extra_func
+    wire_type = 'X0'
+    if device in {'GW1N-9', 'GW1N-9C'}:
+        for i in chain(range(1, 18, 2), range(20, 34, 2), range(38, 46, 2)):
+            df.setdefault((dev.rows - 1, i), {})['mipi_obuf'] = {}
+        for i in range(1, 44, 2):
+            node_name = f'X{i}Y0/MIPIOL'
+            add_node(dev, node_name, wire_type, 0, i, 'MIPIOL')
+            add_node(dev, node_name, wire_type, 0, i + 1, wirenames[dat.portmap['IobufAOut']])
+            df.setdefault((0, i), {})['mipi_ibuf'] = {'HSREN': wirenames[dat.portmap['IologicBIn'][40]]}
+            # These two signals are noticed when MIPI input buffers are used. The
+            # purpose is unclear, but will be repeated.
+            node_name = f'X0Y0/MIPIEN0'
+            add_node(dev, node_name, wire_type, 0, i, 'MIPIEN0')
+            add_node(dev, node_name, wire_type, 0, 0, 'A4')
+            node_name = f'X0Y0/MIPIEN1'
+            add_node(dev, node_name, wire_type, 0, i, 'MIPIEN1')
+            add_node(dev, node_name, wire_type, 0, 0, 'A5')
+    elif device in {'GW1NS-4'}:
+        for i in {1, 3, 5, 7, 10, 11, 14, 16}:
+            df.setdefault((i, dev.cols - 1), {})['mipi_obuf'] = {}
+        for i in chain(range(1, 9, 2), range(10, 17, 2), range(19, 26, 2), range(28, 35, 2)):
+            node_name = f'X{i}Y0/MIPIOL'
+            add_node(dev, node_name, wire_type, 0, i, 'MIPIOL')
+            add_node(dev, node_name, wire_type, 0, i + 1, wirenames[dat.portmap['IobufAOut']])
+            df.setdefault((0, i), {})['mipi_ibuf'] = {'HSREN': wirenames[dat.portmap['IologicBIn'][40]]}
+            # These two signals are noticed when MIPI input buffers are used. The
+            # purpose is unclear, but will be repeated.
+            node_name = f'X37Y0/MIPIEN0'
+            add_node(dev, node_name, wire_type, 0, i, 'MIPIEN0')
+            add_node(dev, node_name, wire_type, 0, 0, 'D2')
+            node_name = f'X37Y0/MIPIEN1'
+            add_node(dev, node_name, wire_type, 0, i, 'MIPIEN1')
+            add_node(dev, node_name, wire_type, 0, 0, 'D3')
+
+def fse_create_i3c(dev, device, dat: Datfile):
+    # The I3C_IOBUF is a slightly modified IOBUF, such units are
+    # located on the bottom or right side of the chip depending on the series.
+    # We use the extra_func mechanism because these blocks do not depend on the
+    # cell type, but only on the coordinates.
+    df = dev.extra_func
+    wire_type = ''
+    if device in {'GW1N-9', 'GW1N-9C'}:
+        for i in range(1, dev.cols - 1):
+            df.setdefault((0, i), {})['i3c_capable'] = {}
+            df.setdefault((dev.rows - 1, i), {})['i3c_capable'] = {}
+    elif device in {'GW1NS-4'}:
+        for i in range(1, dev.cols - 1):
+            df.setdefault((0, i), {})['i3c_capable'] = {}
+        for i in range(1, dev.rows - 1):
+            df.setdefault((i, dev.cols - 1), {})['i3c_capable'] = {}
+
 def fse_create_io16(dev, device):
     # 16-bit serialization/deserialization primitives occupy two consecutive
     # cells. For the top and bottom sides of the chip, this means that the
@@ -2366,6 +2426,8 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_tile_types(dev, dat)
     fse_create_diff_types(dev, device)
     fse_create_hclk_nodes(dev, device, fse, dat)
+    fse_create_mipi(dev, device, dat)
+    fse_create_i3c(dev, device, dat)
     fse_create_io16(dev, device)
     fse_create_osc(dev, device, fse)
     fse_create_gsr(dev, device)
