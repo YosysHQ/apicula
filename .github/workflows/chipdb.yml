@@ -308,10 +308,10 @@ jobs:
         git checkout ${{ matrix.nextpnr }}
         mkdir -p build
         cd build
-        cmake .. -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
+        cmake .. -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
         make -j$(nproc)
         sudo make install
-        cd ../examples
+        cd ../../examples
         make -j$(nproc) all
         cd himbaechel
         make -j$(nproc) -f Makefile.himbaechel all 
