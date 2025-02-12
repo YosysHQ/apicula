@@ -300,16 +300,19 @@ jobs:
           libeigen3-dev
         cd yosys
         git checkout ${{ matrix.yosys }}
-        git submodule update --init
+        git submodule update --init --recursive
         make config-gcc
         make -j$(nproc)
         sudo make install
         cd ../nextpnr
         git checkout ${{ matrix.nextpnr }}
-        cmake . -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
+        git submodule update --init --recursive
+        mkdir -p build
+        cd build
+        cmake .. -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
         make -j$(nproc)
         sudo make install
-        cd ../examples
+        cd ../../examples
         make -j$(nproc) all
         cd himbaechel
         make -j$(nproc) -f Makefile.himbaechel all 
