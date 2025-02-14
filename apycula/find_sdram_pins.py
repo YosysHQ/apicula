@@ -52,7 +52,7 @@ def run_script(pinName : str, idx=None, iostd=None):
             print(db.rows, db.cols)
             print(idxName, belname)
             return (idxName, i, j, bel[-1], iostd)
-    
+
     raise Exception(f"No IOB found for {port}")
 
 # these are all system in package variants with magic wire names connected interally
@@ -121,7 +121,7 @@ params = {
     }],
 }
 
-with open(f"{tiled_fuzzer.device}_stage2.pickle", 'rb') as f:
+with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
     db = pickle.load(f)
 
 pool = Pool()
@@ -156,5 +156,5 @@ if tiled_fuzzer.device in params:
 
         db.sip_cst.setdefault(device["device"], {})[device["package"]] = pinmap
 
-with open(f"{tiled_fuzzer.device}_stage3.pickle", 'wb') as f:
+with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
     pickle.dump(db, f)
