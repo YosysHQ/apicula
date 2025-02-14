@@ -313,7 +313,7 @@ jobs:
         make -j$(nproc)
         sudo make install
         cd ../../examples
-        make -j$(nproc) all
+        make -j1 all
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
