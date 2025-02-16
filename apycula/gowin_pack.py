@@ -65,7 +65,7 @@ def sanitize_name(name):
         retname = name[:-4]
     if _verilog_name.fullmatch(retname):
         return retname
-    return f"\{retname} "
+    return f"\\{retname} "
 
 def extra_pll_bels(cell, row, col, num, cellname):
     # rPLL can occupy several cells, add them depending on the chip
