@@ -6,7 +6,7 @@ Gowin FPGAs have a LUT4 architecture common to many smaller FPGA architectures. 
 
 Each Configurable logic unit consists of 8 LUT4s grouped in 4 slices, of which 3 have data flip-flops. Each slice shares certain resources such as clock inputs and reset lines.
 
-Each LUT4 has 4 inputs and one output that is directly connected to the data flip-flop input. The LUT output can be used independently, but the flip-flop is always used through the LUT. Each pair of flip flops has data in and out, clock, clock enable, and set/reset. Each pair of flip-flops can be configured for rising edge or falling edge sensitivity, and asynchronous or synchronous set or clear.
+Each LUT4 has 4 inputs and one output that is directly connected to the data flip-flop input. The LUT output can be used independently, as well as flipflop input D (although we do not generate such images at the moment, but we can unpack them correctly - in this case the SELx wire is the flipflop input). Each pair of flip flops has data in and out, clock, clock enable, and set/reset. Each pair of flip-flops can be configured for rising edge or falling edge sensitivity, and asynchronous or synchronous set or clear.
 
 These tiles are connected with various multiplexers to adjacent tiles as well as global clock lines. Each tile has 8 tile-local wires, 4 one-hop wires of which 2 are shared between north/south and east/west, 8 two-hop wires with one-hop taps, and 4 eight-hop wires with four-hop taps. An overview of all wires can be seen below.
 
