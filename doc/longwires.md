@@ -102,14 +102,16 @@ For long wire #2:
 One more thing quadrants are not squares (horrible): their borders are uneven because the belonging of a cell to one or another quadrant is determined not by its coordinates, but by the coordinates of the tap that serves it.
 For example column 9 is central for GW1N-1 so from the table above cells in column 10 belong to the left quadrant for the long wire #1 as column 10 is served by tap in column 8, but the same cell belongs to the right quadrant for the long wire #2 as it is served by tap in column 11.
 
-What the `A6`, `A7`, `B6`, `B7`, `F6`, `F7` inputs are is still unclear.
+`A6`, `A7`, `B6` and `B7` wires are segment entry points, i.e. there are Pips of type `LT02 <- A6` etc.
+
+What the `F6`, `F7` inputs are is still unclear.
 It is interesting that it is possible to connect the same spine to `LT02` and `LT13`.
 
 # C
 Here the vertical taps `LT01` and `LT04` are connected to the horizontal branches `LBO0` and `LBO1`.
 As usual the column determines which long wire the branch is connected to, to some extent --- we remember that not only the buses are connected to the taps, but also half a dozen other unknown sources.
 
-And one more thing: the taps are not named `LT02` and `LT13`, which suggests that there is some other mechanism here.
+And one more thing: the taps are not named `LT02` and `LT13` since they are the actual vertical wire, which can be connected at both ends, there are intermediate wires that indicate the upper or lower end of the wire: для примера `LT02` indicates the upper or lower end of the segment (depending on the coordinates of the wire) and connection `LT01 <- LT02` means that the corresponding end is used as source.
 
 # D
 For type 12:
