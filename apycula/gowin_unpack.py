@@ -395,7 +395,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("IOLOGIC"):
             idx = name[-1]
             attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids)
-            print(attrvals)
+            #print(attrvals)
             if not attrvals:
                 continue
             # additional IOLOGIC components
@@ -447,7 +447,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("IOB"):
             idx = name[-1]
             attrvals = parse_attrvals(tile, db.logicinfo['IOB'], db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids)
-            print(row, col, attrvals)
+            #print(row, col, attrvals)
             try: # we can ask for invalid pin here because the IOBs share some stuff
                 bank = chipdb.loc2bank(db, row, col)
             except KeyError:
