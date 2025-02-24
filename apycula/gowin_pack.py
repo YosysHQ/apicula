@@ -264,6 +264,35 @@ def get_pips(data):
             elif pip and "DUMMY" not in pip:
                 print("Invalid pip:", pip)
 
+# Because of the default connection, the segment may end up being enabled at
+# both ends. Nextpnr detects and lists the wires that need to be isolated, here
+# we parse this information and disconnect using the "alonenode" table.
+def isolate_segments(pnr, db, tilemap):
+    wire_re = re.compile(r"X(\d+)Y(\d+)/([\w]+)")
+    for net in pnr['modules']['top']['netnames'].values():
+        if 'SEG_WIRES_TO_ISOLATE' not in net['attributes']:
+            continue
+        val = net['attributes']['SEG_WIRES_TO_ISOLATE']
+        wires = val.split(';')
+        for wire_ex in wires:
+            if not wire_ex:
+                continue
+            res = wire_re.fullmatch(wire_ex)
+            if res:
+                s_col, s_row, wire = res.groups()
+                row = int(s_row)
+                col = int(s_col)
+                tiledata = db.grid[row][col]
+                tile = tilemap[(row, col)]
+                if wire not in tiledata.alonenode_6:
+                    raise Exception(f"Wire {wire} is not in alonenode fuse table")
+                bits = tiledata.alonenode_6[wire][1]
+                print(wire_ex, bits)
+                for row, col in bits:
+                    tile[row][col] = 1
+            else:
+                raise Exception(f"Invalid isolated wire:{wire_ex}")
+
 def infovaluemap(infovalue, start=2):
     return {tuple(iv[:start]):iv[start:] for iv in infovalue}
 
@@ -3018,6 +3047,7 @@ def main():
     cst = codegen.Constraints()
     pips = get_pips(pnr)
     route(db, tilemap, pips)
+    isolate_segments(pnr, db, tilemap)
     bels = get_bels(pnr)
     # routing can add pass-through LUTs
     place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args)
