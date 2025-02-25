@@ -70,11 +70,20 @@ generate
     end
 endgenerate
 
+reg old_bit;
 always @(posedge clk) begin
     sup_count <= sup_count + 1'b1;
-    curr_hclk_idx <= curr_hclk_idx + sup_count[29];
-    if (curr_hclk_idx == `NUM_HCLK-1)
-        curr_hclk_idx <= 0;
+
+    curr_hclk_idx <= curr_hclk_idx;
+	old_bit <= old_bit;
+	if (old_bit != sup_count[29]) begin
+		old_bit <= sup_count[29];
+		if (curr_hclk_idx + 1 == `NUM_HCLK) begin
+			curr_hclk_idx <= 0;
+		end else begin
+			curr_hclk_idx <= curr_hclk_idx + 1;
+		end
+	end
 end
 
 assign curr_hclk = hclk_counts[curr_hclk_idx];
