@@ -9,7 +9,7 @@ IO_LOC "key_i" 15;
 IO_LOC "rst_i" 14;
 
 IO_LOC "mode_led" 10;
-IO_PORT "mode_led" PULL_MODE_NONE DRIVE=8;
+IO_PORT "mode_led" PULL_MODE=NONE DRIVE=8;
 
 IO_LOC "clk" 45;
 CLOCK_LOC "clk" BUFG;
