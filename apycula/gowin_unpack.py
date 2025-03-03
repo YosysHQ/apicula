@@ -333,6 +333,11 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
     skip_bels = set()
     #print((row, col))
     tiledata = db.grid[row][col]
+    #if 'HCLK' in db.shortval[tiledata.ttyp].keys():
+    #    attrvals =parse_attrvals(tile, db.logicinfo['HCLK'], db.shortval[tiledata.ttyp]['HCLK'], attrids.hclk_attrids)
+    #    if attrvals:
+    #        print(row, col, attrvals)
+
     clock_pips = {}
     bels = {}
     for name, bel in tiledata.bels.items():

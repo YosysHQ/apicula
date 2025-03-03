@@ -74,3 +74,24 @@ IO_LOC "mipi_in[1]" 44;
 
 IO_LOC "elvds_p" 39;
 IO_LOC "elvds_n" 40;
+
+
+//DVI
+IO_LOC "tmds_d_p[0]" 30;
+IO_PORT "tmds_d_p[0]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_n[0]" 29;
+IO_PORT "tmds_d_n[0]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p[1]" 32;
+IO_PORT "tmds_d_p[1]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_n[1]" 31;
+IO_PORT "tmds_d_n[1]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p[2]" 35;
+IO_PORT "tmds_d_p[2]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_n[2]" 34;
+IO_PORT "tmds_d_n[2]" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_clk_p" 28;
+IO_PORT "tmds_clk_p" PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_clk_n" 27;
+IO_PORT "tmds_clk_n" PULL_MODE=NONE DRIVE=8;
+
+IO_LOC "div_led" 10;
