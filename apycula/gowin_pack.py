@@ -81,6 +81,17 @@ def extra_pll_bels(cell, row, col, num, cellname):
             yield ('RPLLB', int(row), int(col) + offx * off, num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname) + f'B{off}', cell)
 
+def extra_clkdiv_bels(cell, row, col, num, cellname):
+    if device in {'GW1NS-4'}:
+        if int(col) == 18:
+            bel_type = f'{cell["type"]}_AUX'
+            yield (bel_type, int(row), int(col) + 3, num,
+                cell['parameters'], cell['attributes'], sanitize_name(cellname) + 'AUX', cell)
+        if int(col) == 17:
+            bel_type = f'{cell["type"]}_AUX'
+            yield (bel_type, int(row), int(col) + 1, num,
+                cell['parameters'], cell['attributes'], sanitize_name(cellname) + 'AUX', cell)
+
 def extra_mipi_bels(cell, row, col, num, cellname):
     yield ('MIPI_IBUF_AUX', int(row), int(col) + 1, num,
         cell['parameters'], cell['attributes'], sanitize_name(cellname) + 'AUX', cell)
@@ -184,6 +195,7 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
             x0 += 1
         y += 1
 
+_clkdiv_cell_types = {'CLKDIV', 'CLKDIV2'}
 _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9'}
 def get_bels(data):
@@ -220,6 +232,8 @@ def get_bels(data):
         if cell_type == 'rPLL':
             cell_type = 'RPLLA'
             yield from extra_pll_bels(cell, row, col, num, cellname)
+        if cell_type in _clkdiv_cell_types:
+            yield from extra_clkdiv_bels(cell, row, col, num, cellname)
         if cell_type in _bsram_cell_types:
             yield from extra_bsram_bels(cell, row, col, num, cellname)
         if cell_type in _dsp_cell_types:
@@ -2063,10 +2077,9 @@ def set_hclk_attrs(db, params, num, typ, cell_name):
             raise Exception(f"Invalid DIV_MODE {bin_match or params['DIV_MODE']} for CLKDIV {cell_name} on device {device}")
         params["DIV_MODE"] = str(bin_match[0])
 
-
-    if (typ == "CLKDIV2"):
+    if typ.startswith("CLKDIV2"):
         attrs[f"BK{section_idx}MUX{hclk_idx}_OUTSEL"] = "DIV2"
-    elif (typ == "CLKDIV"):
+    elif typ.startswith("CLKDIV"):
         attrs[f"HCLKDIV{hclk_idx}_DIV"] = params["DIV_MODE"]
         if (section_idx == '1'):
             attrs[f"HCLKDCS{hclk_idx}_SEL"] = f"HCLKBK{section_idx}{hclk_idx}"
@@ -2608,7 +2621,7 @@ def place(db, tilemap, bels, cst, args):
             # for the corresponding HCLK and set its fuses.
             _, wire, _, side = db.extra_func[row - 1, col -1]['dhcen'][int(num)]['pip']
             hclk_attrs = find_and_set_dhcen_hclk_fuses(db, tilemap, wire, side)
-        elif typ in ["CLKDIV", "CLKDIV2"]:
+        elif typ.startswith("CLKDIV"):
             hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname)
             bits = get_shortval_fuses(db, tiledata.ttyp, hclk_attrs, "HCLK")
             for r, c in bits:
