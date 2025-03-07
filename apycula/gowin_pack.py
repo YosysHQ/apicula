@@ -2860,7 +2860,7 @@ def route(db, tilemap, pips):
         try:
             if dest in tiledata.clock_pips:
                 bits = tiledata.clock_pips[dest][src]
-            elif is_himbaechel and (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1]:
+            elif is_himbaechel and (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1] and src in db.hclk_pips[row - 1, col - 1][dest]:
                 bits = db.hclk_pips[row - 1, col - 1][dest][src]
                 bits.update(do_hclk_banks(db, row - 1, col - 1, src, dest))
             else:
