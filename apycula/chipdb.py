@@ -473,6 +473,7 @@ _known_logic_tables = {
             15: 'PLL',
             39: 'BSRAM_INIT',
             49: 'HCLK',
+            52: 'DLLDLY',
             59: 'CFG',
             62: 'OSC',
             63: 'USB',
@@ -1407,6 +1408,64 @@ def fse_create_dhcen(dev, device, fse, dat: Datfile):
             hclkin.update({ 'ce' : wire})
             dhcen.append(hclkin)
 
+# DLLDLY
+# from Gowin doc "DLLDLY is the clock delay module that adjusts the input clock according to the DLLSTEP"
+# In practice the following peculiarities were discovered: the input for the
+# clock cannot be arbitrary things, but only specialised pins of the chip and
+# the delay line is cut in between the pin and the clock MUX.
+#  { bel_loc : ([('io_loc', 'io_output_wire', (row, col, flag_wirea))], [(fuse_row, fuse_col)])
+
+_dlldly = {
+        'GW1N-1': {
+            (10, 19) : {
+                'fuse_bels': {(10, 0), (10, 19)},
+                'ios' : [('X9Y10', 'IOBA', (10, 0, 'F1')), ('X10Y10', 'IOBA', (10, 0, 'F0'))],
+                },
+            },
+        'GW1NZ-1': {
+            ( 0, 19) : {
+                'fuse_bels': {(0, 5)},
+                'ios' : [('X9Y0', 'IOBA', (0, 19, 'F1')), ('X10Y0', 'IOBA', (0, 19, 'F0'))],
+            },
+            (10, 19) : {
+                'fuse_bels' : {(5, 19)},
+                'ios'  : [('X19Y4', 'IOBA', (5, 19, 'F0')), ('X19Y6', 'IOBA', (5, 19, 'F2'))],
+            },
+        }
+ }
+
+def fse_create_dlldly(dev, device):
+    if device in _dlldly:
+        for bel, fuse_ios in _dlldly[device].items():
+            row, col = bel
+            fuse_bels = fuse_ios['fuse_bels']
+            ios = fuse_ios['ios']
+            extra = dev.extra_func.setdefault((row, col), {})
+            dlldly = extra.setdefault(f'dlldly', {})
+            for idx in range(2):
+                dlldly[idx] = {'io_loc': ios[idx][0], 'io_bel': ios[idx][1]}
+                # FLAG output
+                nodename = f'X{col}Y{row}/DLLDLY_FLAG{idx}'
+                nodename = add_node(dev, nodename, "", row, col, f'DLLDLY_FLAG{idx}')
+                add_node(dev, nodename, "", ios[idx][2][0], ios[idx][2][1], ios[idx][2][2])
+                add_node(dev, f'{ios[idx][0]}/DLLDLY_IN', "TILE_CLK", row, col, f'DLLDLY_CLKIN{idx}')
+                add_node(dev, f'{ios[idx][0]}/DLLDLY_OUT', "DLLDLY_O", row, col, f'DLLDLY_CLKOUT{idx}')
+
+                # STEP wires
+                wires = dlldly[idx].setdefault('in_wires', {})
+                prefix = ["CB", "DC"][idx]
+                for wire_idx in range(8):
+                    wires[f'DLLSTEP{wire_idx}'] = f"{prefix[wire_idx // 4]}{(wire_idx + 4) % 8}"
+                wires['DIR']   = ["A1", "B4"][idx]
+                wires['LOADN'] = ["A0", "B7"][idx]
+                wires['MOVE']  = ["B6", "B5"][idx]
+                wires['CLKIN'] = f'DLLDLY_CLKIN{idx}'
+
+                wires = dlldly[idx].setdefault('out_wires', {})
+                wires['FLAG'] = f'DLLDLY_FLAG{idx}'
+                wires['CLKOUT'] = f'DLLDLY_CLKOUT{idx}'
+            dlldly_bels = extra.setdefault(f'dlldly_fusebels', set())
+            dlldly_bels.update(fuse_bels)
 
 _pll_loc = {
  'GW1N-1':
@@ -1654,6 +1713,19 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
                     add_node(dev, f'{clknames[clk_idx]}-9C', "GLOBAL_CLK", row, dev.cols - 1, 'LWT6')
                 else:
                     add_node(dev, f'{clknames[clk_idx]}-9C', "GLOBAL_CLK", row, 0, 'LWT6')
+            elif (device == 'GW1NZ-1' and (row == 0 or col == dev.cols - 1)) or (device == 'GW1N-1' and row == dev.rows - 1):
+                # Do not connect the IO output to the clock node because DLLDLY
+                # may be located at these positions, which, if used, will be
+                # the source for the clock. However, if DLLDLY is not used
+                # (mostly), we need to have a way to connect them - for this we
+                # add two PIPs - one to connect the IO output to the clock and
+                # one to connect the IO output to the DLLDLY input.
+                # Both are non-fuseable, but allow the router to work.
+                add_node(dev, clknames[clk_idx], "GLOBAL_CLK", row, col, 'PCLK_DUMMY')
+                dev.grid[row][col].pips['PCLK_DUMMY'] = {wirenames[wire_idx]: set(), 'DLLDLY_OUT': set()}
+                add_node(dev, f'X{col}Y{row}/DLLDLY_OUT', "DLLDLY_O", row, col, 'DLLDLY_OUT')
+                add_node(dev, f'X{col}Y{row}/DLLDLY_IN', "TILE_CLK", row, col, 'DLLDLY_IN')
+                dev.grid[row][col].pips['DLLDLY_IN'] = {wirenames[wire_idx]: set()}
             else:
                 add_node(dev, clknames[clk_idx], "GLOBAL_CLK", row, col, wirenames[wire_idx])
                 add_buf_bel(dev, row, col, wirenames[wire_idx])
@@ -2524,6 +2596,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_emcu(dev, device, dat)
     fse_create_logic2clk(dev, device, dat)
     fse_create_dhcen(dev, device, fse, dat)
+    fse_create_dlldly(dev, device)
     disable_plls(dev, device)
     sync_extra_func(dev)
     set_chip_flags(dev, device);
@@ -3928,6 +4001,8 @@ def fse_wire_delays(db):
         db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
     for i in range(1000, 1010): # HCLK
         db.wire_delay[clknames[i]] = "X0" # XXX
+    for wire in {'DLLDLY_OUT', 'DLLDLY_CLKOUT', 'DLLDLY_CLKOUT0', 'DLLDLY_CLKOUT1'}:
+        db.wire_delay[wire] = "X0" # XXX
 
 # assign pads with plls
 # for now use static table and store the bel name although it is always PLL without a number
