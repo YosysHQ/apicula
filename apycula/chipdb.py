@@ -1240,8 +1240,11 @@ def add_hclk_bels(dat, dev, device):
                     dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set()}
                     sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX2"
                     dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {f"HCLK{idx}_SECT{section}_IN":set(), clkdiv2.portmap["CLKOUT"]:set()}
-                    dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
-                    dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
+                    dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = {sect_div2_mux:set()}
+                    if device in {"GW2A-18", "GW2A-18C"}:
+                        dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
+                    else:
+                        dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set()}
 
                 dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
             #Conenction from the output of CLKDIV to the global clock network
@@ -1314,25 +1317,49 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
             if side in 'TB':
                 row = {'T': 0, 'B': dev.rows - 1}[side]
                 for col in range(edge[0], edge[1]):
-                    if 'IOLOGICA' not in dev.grid[row][col].bels:
-                        continue
-                    pips = dev.hclk_pips.setdefault((row, col), {})
-                    for dst in 'AB':
-                        for src in srcs:
-                            pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
-                            if src.startswith('HCLK'):
-                                hclks[src].add((row, col, src))
+                    if 'IOLOGICA' in dev.grid[row][col].bels:
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in 'AB':
+                            for src in srcs:
+                                pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
+                    pll = None
+                    if 'RPLLA' in dev.grid[row][col].bels:
+                        pll = 'RPLLA'
+                    elif 'PLLVR' in dev.grid[row][col].bels:
+                        pll = 'PLLVR'
+                    if pll:
+                        portmap = dev.grid[row][col].bels[pll].portmap
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
+                            for src in srcs:
+                                pips.setdefault(dst, {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
             else:
                 col = {'L': 0, 'R': dev.cols - 1}[side]
                 for row in range(edge[0], edge[1]):
-                    if 'IOLOGICA' not in dev.grid[row][col].bels:
-                        continue
-                    pips = dev.hclk_pips.setdefault((row, col), {})
-                    for dst in 'AB':
-                        for src in srcs:
-                            pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
-                            if src.startswith('HCLK'):
-                                hclks[src].add((row, col, src))
+                    if 'IOLOGICA' in dev.grid[row][col].bels:
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in 'AB':
+                            for src in srcs:
+                                pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
+                    pll = None
+                    if 'RPLLA' in dev.grid[row][col].bels:
+                        pll = 'RPLLA'
+                    elif 'PLLVR' in dev.grid[row][col].bels:
+                        pll = 'PLLVR'
+                    if pll:
+                        portmap = dev.grid[row][col].bels[pll].portmap
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
+                            for src in srcs:
+                                pips.setdefault(dst, {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
 
 # DHCEN (as I imagine) is an additional control input of the HCLK input
 # multiplexer. We have four input multiplexers - HCLK_IN0, HCLK_IN1, HCLK_IN2,
@@ -2466,6 +2493,9 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("NEED_BLKSEL_FIX")
     if device in {'GW1NZ-1'}:
         dev.chip_flags.append("HAS_BANDGAP")
+    dev.chip_flags.append("HAS_PLL_HCLK")
+    if device in {'GW2A-18', 'GW2A-18C'}:
+        dev.chip_flags.append("HAS_CLKDIV_HCLK")
 
 def from_fse(device, fse, dat: Datfile):
     dev = Device()
@@ -3672,6 +3702,11 @@ def dat_portmap(dat, dev, device):
                         dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
                         # Himbaechel node
                         dev.nodes.setdefault(f'X{col}Y{row}/rPLL{nam}{wire}', ("PLL_I", {(row, col, f'rPLL{nam}{wire}')}))[1].add((row, col + off, wire))
+                    # HCLK pips
+                    hclk_pip_dsts = {'PLL_CLKIN', 'PLL_CLKFB'}
+                    for dst in hclk_pip_dsts:
+                        if (row, col) in dev.hclk_pips and dst in dev.hclk_pips[row, col]:
+                            dev.hclk_pips[row, col][bel.portmap[dst[4:]]] = dev.hclk_pips[row, col].pop(dst)
                 elif name == 'PLLVR':
                     pll_idx = 0
                     if col != 27:
