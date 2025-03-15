@@ -201,7 +201,7 @@ _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MU
 def get_bels(data):
     later = []
     if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY)(\w*)")
     else:
         belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
 
@@ -2009,6 +2009,34 @@ def set_osc_attrs(db, typ, params):
         add_attr_val(db, 'OSC', fin_attrs, attrids.osc_attrids[attr], val)
     return fin_attrs
 
+def set_dlldly_attrs(db, typ, params, cell):
+    dlldly_attrs = dict()
+    dlldly_attrs['DLL_INSEL'] = params.get('DLL_INSEL', "1")
+    dlldly_attrs['DLY_SIGN'] = params.get('DLY_SIGN', "0")
+    dlldly_attrs['DLY_ADJ'] = params.get('DLY_ADJ', "00000000000000000000000000000000")
+
+    if dlldly_attrs['DLL_INSEL'] != '1':
+        raise Exception(f"DLL_INSEL parameter values other than 1 are not supported")
+    dlldly_attrs.pop('DLL_INSEL')
+    dlldly_attrs['ENABLED'] = 'ENABLE'
+    dlldly_attrs['MODE'] = 'NORMAL'
+
+    if dlldly_attrs['DLY_SIGN'] == '1':
+        dlldly_attrs['SIGN'] = 'NEG'
+    dlldly_attrs.pop('DLY_SIGN')
+
+    for i, ch in enumerate(dlldly_attrs['DLY_ADJ'][-1::-1]):
+        if ch == '1':
+            dlldly_attrs[f'ADJ{i}'] = '1'
+    dlldly_attrs.pop('DLY_ADJ')
+
+    fin_attrs = set()
+    for attr, val in dlldly_attrs.items():
+        if isinstance(val, str):
+            val = attrids.dlldly_attrvals[val]
+        add_attr_val(db, 'DLLDLY', fin_attrs, attrids.dlldly_attrids[attr], val)
+    return fin_attrs
+
 _wire2attr_val = {
         'HCLK_IN0': ('HSB0MUX0_HSTOP', 'HCLKCIBSTOP0'),
         'HCLK_IN1': ('HSB1MUX0_HSTOP', 'HCLKCIBSTOP2'),
@@ -2613,7 +2641,15 @@ def place(db, tilemap, bels, cst, args):
             cfg_tile = tilemap[(0, 37)]
             for r, c in bits:
                 cfg_tile[r][c] = 1
-        elif typ == "DHCEN":
+        elif typ == 'DLLDLY':
+            dlldly_attrs = set_dlldly_attrs(db, typ, parms, cell)
+            for dlldly_row, dlldly_col in db.extra_func[row - 1, col -1]['dlldly_fusebels']:
+                dlldly_tiledata = db.grid[dlldly_row][dlldly_col]
+                dlldly_tile = tilemap[(dlldly_row, dlldly_col)]
+                bits = get_long_fuses(db, dlldly_tiledata.ttyp, dlldly_attrs, f'DLLDEL{num}')
+                for r, c in bits:
+                    dlldly_tile[r][c] = 1
+        elif typ == 'DHCEN':
             if 'DHCEN_USED' not in attrs:
                 continue
             # DHCEN as such is just a control wire and does not have a fuse
