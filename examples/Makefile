@@ -38,6 +38,7 @@ all: \
 	\
 	blinky-tangnano.fs shift-tangnano.fs blinky-tbuf-tangnano.fs blinky-oddr-tangnano.fs \
 	blinky-osc-tangnano.fs elvds-tangnano.fs oddr-elvds-tangnano.fs pll-nanolcd-tangnano.fs \
+	blinky-clkdiv-tangnano.fs blinky-clkdiv-dhcen-tangnano.fs \
 	oser4-tangnano.fs ovideo-tangnano.fs oser8-tangnano.fs oser10-tangnano.fs \
 	iddr-tangnano.fs iddrc-tangnano.fs iodelay-tangnano.fs \
 	ides4-tangnano.fs ivideo-tangnano.fs ides8-tangnano.fs ides10-tangnano.fs \
@@ -47,6 +48,7 @@ all: \
 	\
 	blinky-tangnano1k.fs shift-tangnano1k.fs blinky-tbuf-tangnano1k.fs blinky-oddr-tangnano1k.fs \
 	blinky-osc-tangnano1k.fs elvds-tangnano1k.fs oddr-elvds-tangnano1k.fs pll-nanolcd-tangnano1k.fs \
+	blinky-clkdiv-tangnano1k.fs blinky-clkdiv-dhcen-tangnano1k.fs \
 	oser4-tangnano1k.fs ovideo-tangnano1k.fs oser8-tangnano1k.fs oser10-tangnano1k.fs \
 	iddr-tangnano1k.fs iddrc-tangnano1k.fs iodelay-tangnano1k.fs \
 	ides4-tangnano1k.fs ivideo-tangnano1k.fs ides8-tangnano1k.fs ides10-tangnano1k.fs \
@@ -57,6 +59,7 @@ all: \
 	\
 	blinky-tangnano4k.fs shift-tangnano4k.fs blinky-tbuf-tangnano4k.fs blinky-oddr-tangnano4k.fs \
 	blinky-osc-tangnano4k.fs tlvds-tangnano4k.fs elvds-tangnano4k.fs oddr-tlvds-tangnano4k.fs \
+	blinky-clkdiv-tangnano4k.fs blinky-clkdiv-dhcen-tangnano4k.fs \
 	oddr-elvds-tangnano4k.fs blinky-pll-tangnano4k.fs oser16-tangnano4k.fs \
 	oser4-tangnano4k.fs ovideo-tangnano4k.fs oser8-tangnano4k.fs oser10-tangnano4k.fs \
 	iddr-tangnano4k.fs iddrc-tangnano4k.fs ides16-tangnano4k.fs \
@@ -89,6 +92,7 @@ all: \
 	\
 	blinky-szfpga.fs shift-szfpga.fs blinky-tbuf-szfpga.fs blinky-oddr-szfpga.fs \
 	blinky-osc-szfpga.fs tlvds-szfpga.fs elvds-szfpga.fs oddr-tlvds-szfpga.fs \
+	blinky-clkdiv-szfpga.fs blinky-clkdiv-dhcen-szfpga.fs \
 	oddr-elvds-szfpga.fs blinky-pll-szfpga.fs oser16-szfpga.fs attosoc-szfpga.fs \
 	oser4-szfpga.fs ovideo-szfpga.fs oser8-szfpga.fs oser10-szfpga.fs \
 	iddr-szfpga.fs iddrc-szfpga.fs ides16-szfpga.fs iodelay-szfpga.fs \
@@ -103,6 +107,7 @@ all: \
 	\
 	blinky-tec0117.fs shift-tec0117.fs blinky-tbuf-tec0117.fs blinky-oddr-tec0117.fs \
 	blinky-osc-tec0117.fs tlvds-tec0117.fs elvds-tec0117.fs oddr-tlvds-tec0117.fs \
+	blinky-clkdiv-tec0117.fs blinky-clkdiv-dhcen-tec0117.fs \
 	oddr-elvds-tec0117.fs blinky-pll-tec0117.fs oser16-tec0117.fs attosoc-tec0117.fs \
 	oser4-tec0117.fs ovideo-tec0117.fs oser8-tec0117.fs oser10-tec0117.fs \
 	iddr-tec0117.fs iddrc-tec0117.fs ides16-tec0117.fs iodelay-tec0117.fs \
@@ -113,6 +118,7 @@ all: \
 	\
 	blinky-runber.fs shift-runber.fs blinky-tbuf-runber.fs blinky-oddr-runber.fs \
 	blinky-osc-runber.fs tlvds-runber.fs elvds-runber.fs oddr-tlvds-runber.fs \
+	blinky-clkdiv-runber.fs \
 	oddr-elvds-runber.fs blinky-pll-runber.fs \
 	oser4-runber.fs ovideo-runber.fs oser8-runber.fs oser10-runber.fs \
 	iddr-runber.fs iddrc-runber.fs iodelay-runber.fs \
@@ -280,7 +286,7 @@ dvi-example-primer20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channe
 	$(NEXTPNR) --json $< --write $@ --device GW1N-LV1QN48C6/I5 --vopt cst=tangnano.cst
 
 %-tangnano-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCH -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCH -D INV_BTN=0 -D NUM_HCLK=2 -p "read_verilog $^; synth_gowin -json $@"
 
 pll-nanolcd-tangnano-synth.json: pll/GW1N-1-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -noalu -json $@"
@@ -297,7 +303,7 @@ bsram-%-tangnano-synth.json: pll/GW1N-1-dyn.vh %-image-rom.v %-video-ram.v %.v
 	$(NEXTPNR) --json $< --write $@ --device GW1NZ-LV1QN48C6/I5 --vopt cst=tangnano1k.cst
 
 %-tangnano1k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCZ -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D NUM_HCLK=4 -p "read_verilog $^; synth_gowin -json $@"
 
 pll-nanolcd-tangnano1k.fs: pll-nanolcd-tangnano1k.json
 	gowin_pack -d GW1NZ-1 --sspi_as_gpio --mspi_as_gpio -o $@ $^
@@ -317,7 +323,7 @@ bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh %-image-rom.v %-video-ram.v %.
 	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --vopt cst=tangnano4k.cst
 
 %-tangnano4k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=27 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=2 -p "read_verilog $^; synth_gowin -json $@"
 
 %-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh %-pll-vr.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -json $@"
@@ -355,7 +361,7 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chann
 	$(NEXTPNR) --json $< --write $@ --device GW1N-LV9QN48C6/I5 --vopt family=GW1N-9 --vopt cst=miniszfpga.cst
 
 %-miniszfpga-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@"
 
 blinky-pll-miniszfpga-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=4 -p "read_verilog $^; synth_gowin -json $@"
@@ -372,7 +378,7 @@ bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh %-image-rom.v %-video-ram.v %.v
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --vopt family=GW1N-9 --vopt cst=szfpga.cst
 
 %-szfpga-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@"
 
 blinky-pll-szfpga-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=4 -p "read_verilog $^; synth_gowin -json $@"
@@ -389,7 +395,7 @@ bsram-%-szfpga-synth.json: pll/GW1N-9-dyn.vh %-image-rom.v %-video-ram.v %.v
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --vopt family=GW1N-9 --vopt cst=tec0117.cst
 
 %-tec0117-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=12 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=12 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@"
 
 blinky-pll-tec0117-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"
@@ -403,7 +409,7 @@ blinky-pll-tec0117-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(NEXTPNR) --json $< --write $@ --device GW1N-UV4LQ144C6/I5 --vopt cst=runber.cst
 
 %-runber-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=12 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@"
+	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=12 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@"
 
 blinky-pll-runber-synth.json: pll/GW1N-4-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"

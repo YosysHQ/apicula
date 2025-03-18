@@ -181,16 +181,26 @@ class Device:
 # If suddenly a command is given to assign an already used wire to another
 # node, then all the contents of this node are combined with the existing one,
 # and the node itself is destroyed.
+# To prevent further attempts to add wires to the destroyed node, we return the
+# name of the node to which the connection was made
 wire2node = {}
 def add_node(dev, node_name, wire_type, row, col, wire):
     if (row, col, wire) not in wire2node:
         wire2node[row, col, wire] = node_name
         dev.nodes.setdefault(node_name, (wire_type, set()))[1].add((row, col, wire))
+        return node_name
     else:
-        if node_name != wire2node[row, col, wire] and node_name in dev.nodes:
-            #print(f'{node_name} -> {wire2node[row, col, wire]} share ({row}, {col}, {wire})')
-            dev.nodes[wire2node[row, col, wire]][1].update(dev.nodes[node_name][1])
-            del dev.nodes[node_name]
+        old_node_name = wire2node[row, col, wire]
+        if node_name != old_node_name:
+            if node_name in dev.nodes:
+                #print(f'#0 {node_name} -> {wire2node[row, col, wire]} share ({row}, {col}, {wire})')
+                dev.nodes[old_node_name][1].update(dev.nodes[node_name][1])
+                del dev.nodes[node_name]
+            else:
+                #print(f'#1 {node_name} -> {wire2node[row, col, wire]} share ({row}, {col}, {wire})')
+                dev.nodes[old_node_name][1].add((row, col, wire))
+        return old_node_name
+    return node_name
 
 # create bels for entry potints to the global clock nets
 def add_buf_bel(dev, row, col, wire, buf_type = 'BUFG'):
@@ -1040,6 +1050,24 @@ _device_hclk_pin_dict = {
             1: HCLK_PINS((27,0), [("CALIB",27,0,"C5"), ("RESETN",27,0,"B5") ], [("RESETN",27,0,"A1") ], [("RESETN",27,0,"C1")])
         }
     },
+    "GW1N-9": {
+        "TOPSIDE":{
+            0: HCLK_PINS((0,0), [("CALIB",9,0,"A2"), ("RESETN",9,0,"B0")], [("RESETN",9,0,"B2")], [("RESETN",9,0,"B4")]),
+            1: HCLK_PINS((0,46), [("CALIB",9,0,"A3"), ("RESETN",9,0,"B1")], [("RESETN",9,0,"B3")], [("RESETN",9,0,"B5")])
+        },
+        "RIGHTSIDE":{
+            0: HCLK_PINS((18,46), [("CALIB",18,46,"A2"), ("RESETN",18,46,"B0")], [("RESETN",18,46,"B2")], [("RESETN",18,46,"B4")]),
+            1: HCLK_PINS((18,46), [("CALIB",18,46,"A3"), ("RESETN",18,46,"B1")], [("RESETN",18,46,"B3")], [("RESETN",18,46,"B5")])
+        },
+        "BOTTOMSIDE":{
+            0: HCLK_PINS((28,0), [("CALIB",28,0,"D0"), ("RESETN",28,0,"D2")], [("RESETN",28,0,"D4")], [("RESETN",28,0,"C0")]),
+            1: HCLK_PINS((28,46), [("CALIB",28,0,"D1"), ("RESETN",28,0,"D3")], [("RESETN",28,0,"D5")], [("RESETN",28,0,"C1")])
+        },
+        "LEFTSIDE":{
+            0: HCLK_PINS((18,0), [("CALIB",18,0,"A2"), ("RESETN",18,0,"B0") ], [("RESETN",18,0,"B2") ], [("RESETN",18,0,"B4") ]),
+            1: HCLK_PINS((18,0), [("CALIB",18,0,"A3"), ("RESETN",18,0,"B1") ], [("RESETN",18,0,"B3") ], [("RESETN",18,0,"B5") ])
+        }
+    },
     "GW1N-9C": {
         "TOPSIDE":{
             0: HCLK_PINS((0,0), [("CALIB",9,0,"A2"), ("RESETN",9,0,"B0")], [("RESETN",9,0,"B2")], [("RESETN",9,0,"B4")]),
@@ -1057,7 +1085,51 @@ _device_hclk_pin_dict = {
             0: HCLK_PINS((18,0), [("CALIB",18,0,"A2"), ("RESETN",18,0,"B0") ], [("RESETN",18,0,"B2") ], [("RESETN",18,0,"B4") ]),
             1: HCLK_PINS((18,0), [("CALIB",18,0,"A3"), ("RESETN",18,0,"B1") ], [("RESETN",18,0,"B3") ], [("RESETN",18,0,"B5") ])
         }
-    }
+    },
+    "GW1N-1": {
+        "BOTTOMSIDE":{
+            0: HCLK_PINS((10, 0), [("CALIB", 10, 0, "D2"), ("RESETN", 10, 0, "D0")], [("RESETN", 10, 0, "D4")], [("RESETN", 10, 0, "D6")]),
+            1: HCLK_PINS((10, 19), [("CALIB", 10, 0, "D3"), ("RESETN", 10, 0, "D1")], [("RESETN", 10, 0, "D5")], [("RESETN", 10, 0, "D7")])
+        },
+    },
+    "GW1NZ-1": {
+        "TOPSIDE":{
+            0: HCLK_PINS((0, 5), [("CALIB", 0, 19, "D3"), ("RESETN", 0, 19, "D1")], [("RESETN", 0, 18, "C2")], [("RESETN", 0, 18, "C4")]),
+            1: HCLK_PINS((0, 5), [("CALIB", 0, 19, "D2"), ("RESETN", 0, 19, "D0")], [("RESETN", 0, 18, "C3")], [("RESETN", 0, 18, "C5")])
+        },
+        "RIGHTSIDE":{
+            0: HCLK_PINS((5, 19), [("CALIB", 10, 19, "D3"), ("RESETN", 10, 19, "D1")], [("RESETN", 10, 18, "C2")], [("RESETN", 10, 18, "C4")]),
+            1: HCLK_PINS((5, 19), [("CALIB", 10, 19, "D2"), ("RESETN", 10, 19, "D1")], [("RESETN", 10, 18, "C3")], [("RESETN", 10, 18, "C5")])
+        },
+    },
+    "GW1NS-4": {
+        "TOPSIDE":{
+            0: HCLK_PINS((0, 18), [("CALIB", 1, 0, "C0"), ("RESETN", 0, 0, "C5")], [("RESETN", 0, 0, "B1")], [("RESETN", 1, 0, "C6")]),
+            1: HCLK_PINS((0, 18), [("CALIB", 1, 0, "D7"), ("RESETN", 0, 0, "B0")], [("RESETN", 1, 0, "C7")], [("RESETN", 1, 0, "C5")])
+        },
+        "RIGHTSIDE":{
+            0: HCLK_PINS((9, 37), [("CALIB", 0, 37, "D7"), ("RESETN", 0, 37, "D5")], [("RESETN", 0, 37, "C3")], [("RESETN", 0, 37, "C1")]),
+            1: HCLK_PINS((9, 37), [("CALIB", 0, 37, "D6"), ("RESETN", 0, 37, "D6")], [("RESETN", 0, 37, "C2")], [("RESETN", 0, 37, "C0")])
+        },
+        "BOTTOMSIDE":{
+            0: HCLK_PINS((19, 16), [("CALIB", 19, 0, "D0"), ("RESETN", 19, 0, "D2")], [("RESETN", 19, 0, "D4")], [("RESETN", 19, 0, "C0")]),
+            1: HCLK_PINS((19, 17), [("CALIB", 19, 0, "D1"), ("RESETN", 19, 0, "D3")], [("RESETN", 19, 0, "D5")], [("RESETN", 19, 0, "C1")])
+        },
+    },
+    "GW1N-4": {
+        "LEFTSIDE":{
+            0: HCLK_PINS((9, 0), [("CALIB", 19, 0,"B4"), ("RESETN", 19, 0, "B6") ], [("RESETN", 19, 0, "A0")], [("RESETN", 19, 0, "A2")]),
+            1: HCLK_PINS((9 ,0), [("CALIB", 19, 0,"B5"), ("RESETN", 19, 0, "B7") ], [("RESETN", 19, 0, "A1")], [("RESETN", 19, 0, "A3")])
+        },
+        "RIGHTSIDE":{
+            0: HCLK_PINS((9, 37), [("CALIB", 0, 37, "B7"), ("RESETN", 0, 37, "B5")], [("RESETN", 0, 37, "C3")], [("RESETN", 0, 37, "C1")]),
+            1: HCLK_PINS((9, 37), [("CALIB", 0, 37, "B6"), ("RESETN", 0, 37, "B6")], [("RESETN", 0, 37, "C2")], [("RESETN", 0, 37, "C0")])
+        },
+        "BOTTOMSIDE":{
+            0: HCLK_PINS((19, 0),  [("CALIB", 19, 0, "D0"), ("RESETN", 19, 0, "D2")], [("RESETN", 19, 0, "D4")], [("RESETN", 19, 0, "C0")]),
+            1: HCLK_PINS((19, 37), [("CALIB", 19, 0, "D1"), ("RESETN", 19, 0, "D3")], [("RESETN", 19, 0, "D5")], [("RESETN", 19, 0, "C1")])
+        },
+    },
 }
 
 
@@ -1079,7 +1151,7 @@ def _iter_edge_coords(dev):
 
 def add_hclk_bels(dat, dev, device):
     #Stub for parts that don't have HCLK bel support yet
-    if device not in ("GW2A-18", "GW2A-18C", "GW1N-9C"):
+    if device not in ("GW2A-18", "GW2A-18C", "GW1N-9", "GW1N-9C", "GW1N-1", "GW1NZ-1", "GW1NS-4", "GW1N-4"):
         to_connect = ['HCLK0_SECT0_IN', 'HCLK0_SECT1_IN', 'HCLK1_SECT0_IN', 'HCLK1_SECT1_IN']
         for x in range(dev.cols):
             for y in range(dev.rows):
@@ -1096,6 +1168,22 @@ def add_hclk_bels(dat, dev, device):
         device = "GW2A-18"
     device_hclk_pins = _device_hclk_pin_dict[device]
 
+    if device == 'GW1NS-4':
+        node_name = 'X16Y19/HCLK0_SECT0_IN'
+        node_name = add_node(dev, node_name, 'HCLK', 19, 16, 'HCLK0_SECT0_IN')
+        node_name = add_node(dev, node_name, 'HCLK', 19, 17, 'HCLK0_SECT0_IN')
+        node_name = 'X17Y19/HCLK1_SECT0_IN'
+        node_name = add_node(dev, node_name, 'HCLK', 19, 17, 'HCLK1_SECT0_IN')
+        node_name = add_node(dev, node_name, 'HCLK', 19, 20, 'HCLK1_SECT0_IN')
+        node_name = 'X17Y19/HCLK1_SECT1_IN'
+        node_name = add_node(dev, node_name, 'HCLK', 19, 17, 'HCLK1_SECT1_IN')
+        node_name = add_node(dev, node_name, 'HCLK', 19, 20, 'HCLK1_SECT1_IN')
+        node_name = 'X17Y19/HCLK_IN2'
+        node_name = add_node(dev, node_name, 'HCLK', 19, 17, 'HCLK_IN2')
+        node_name = add_node(dev, node_name, 'HCLK', 19, 20, 'HCLK_IN2')
+        node_name = 'X17Y19/HCLK_IN3'
+        node_name = add_node(dev, node_name, 'HCLK', 19, 17, 'HCLK_IN3')
+        add_node(dev, node_name, 'HCLK', 19, 20, 'HCLK_IN3')
 
     #There is a sleight of hand going on here - there is likely only one physical CLKDIV bel per HCLK
     #However because of how they are connected, and how I suspect that the muxes that utilize them are,
@@ -1136,7 +1224,7 @@ def add_hclk_bels(dat, dev, device):
                 dev.grid[tile_row][tile_col].bels[clkdiv2_name] = clkdiv2
                 dev.grid[tile_row][tile_col].bels[clkdiv_name] = clkdiv #We still create this so as not to break the PnR logic
 
-                if device in ("GW1N-9C, GW1NR-9C"):
+                if device == "GW1N-9C":
                     clkdiv2_in = f"HCLK{idx}_SECT{section}_IN" if section==0 else f"HCLK_IN{idx*2+section}"
                     dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {clkdiv2_in:set()}
                     sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
@@ -1154,11 +1242,13 @@ def add_hclk_bels(dat, dev, device):
 
                 else:
                     dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set()}
-                    # sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX_DIV2"
                     sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX2"
                     dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {f"HCLK{idx}_SECT{section}_IN":set(), clkdiv2.portmap["CLKOUT"]:set()}
-                    dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
-                    dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
+                    dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = {sect_div2_mux:set()}
+                    if device in {"GW2A-18", "GW2A-18C"}:
+                        dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
+                    else:
+                        dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set()}
 
                 dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
             #Conenction from the output of CLKDIV to the global clock network
@@ -1208,7 +1298,8 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                             add_node(dev, f'HCLKMUX{src[-1]}', "GLOBAL_CLK", row, col, src)
                 # strange GW1N-9C input-input aliases
                 for i in {0, 2}:
-                    dev.nodes.setdefault(f'X{col}Y{row}/HCLK9-{i}', ('HCLK', {(row, col, f'HCLK_IN{i}')}))[1].add((row, col, f'HCLK_9IN{i}'))
+                    add_node(dev, f'X{col}Y{row}/HCLK9-{i}', 'HCLK', row, col, f'HCLK_IN{i}')
+                    add_node(dev, f'X{col}Y{row}/HCLK9-{i}', 'HCLK', row, col, f'HCLK_9IN{i}')
                 # GW1N-9C clock pin aliases
                 if side != 'B': # it’s still unclear on this side, but the
                                 # Tangnano9k external clock is not connected here, so we
@@ -1230,25 +1321,49 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
             if side in 'TB':
                 row = {'T': 0, 'B': dev.rows - 1}[side]
                 for col in range(edge[0], edge[1]):
-                    if 'IOLOGICA' not in dev.grid[row][col].bels:
-                        continue
-                    pips = dev.hclk_pips.setdefault((row, col), {})
-                    for dst in 'AB':
-                        for src in srcs:
-                            pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
-                            if src.startswith('HCLK'):
-                                hclks[src].add((row, col, src))
+                    if 'IOLOGICA' in dev.grid[row][col].bels:
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in 'AB':
+                            for src in srcs:
+                                pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
+                    pll = None
+                    if 'RPLLA' in dev.grid[row][col].bels:
+                        pll = 'RPLLA'
+                    elif 'PLLVR' in dev.grid[row][col].bels:
+                        pll = 'PLLVR'
+                    if pll:
+                        portmap = dev.grid[row][col].bels[pll].portmap
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
+                            for src in srcs:
+                                pips.setdefault(dst, {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
             else:
                 col = {'L': 0, 'R': dev.cols - 1}[side]
                 for row in range(edge[0], edge[1]):
-                    if 'IOLOGICA' not in dev.grid[row][col].bels:
-                        continue
-                    pips = dev.hclk_pips.setdefault((row, col), {})
-                    for dst in 'AB':
-                        for src in srcs:
-                            pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
-                            if src.startswith('HCLK'):
-                                hclks[src].add((row, col, src))
+                    if 'IOLOGICA' in dev.grid[row][col].bels:
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in 'AB':
+                            for src in srcs:
+                                pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
+                    pll = None
+                    if 'RPLLA' in dev.grid[row][col].bels:
+                        pll = 'RPLLA'
+                    elif 'PLLVR' in dev.grid[row][col].bels:
+                        pll = 'PLLVR'
+                    if pll:
+                        portmap = dev.grid[row][col].bels[pll].portmap
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
+                            for src in srcs:
+                                pips.setdefault(dst, {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
 
 # DHCEN (as I imagine) is an additional control input of the HCLK input
 # multiplexer. We have four input multiplexers - HCLK_IN0, HCLK_IN1, HCLK_IN2,
@@ -2545,6 +2660,9 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("NEED_BLKSEL_FIX")
     if device in {'GW1NZ-1'}:
         dev.chip_flags.append("HAS_BANDGAP")
+    dev.chip_flags.append("HAS_PLL_HCLK")
+    if device in {'GW2A-18', 'GW2A-18C'}:
+        dev.chip_flags.append("HAS_CLKDIV_HCLK")
 
 def from_fse(device, fse, dat: Datfile):
     dev = Device()
@@ -3752,6 +3870,11 @@ def dat_portmap(dat, dev, device):
                         dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
                         # Himbaechel node
                         dev.nodes.setdefault(f'X{col}Y{row}/rPLL{nam}{wire}', ("PLL_I", {(row, col, f'rPLL{nam}{wire}')}))[1].add((row, col + off, wire))
+                    # HCLK pips
+                    hclk_pip_dsts = {'PLL_CLKIN', 'PLL_CLKFB'}
+                    for dst in hclk_pip_dsts:
+                        if (row, col) in dev.hclk_pips and dst in dev.hclk_pips[row, col]:
+                            dev.hclk_pips[row, col][bel.portmap[dst[4:]]] = dev.hclk_pips[row, col].pop(dst)
                 elif name == 'PLLVR':
                     pll_idx = 0
                     if col != 27:

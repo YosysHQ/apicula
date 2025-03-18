@@ -9,8 +9,8 @@ CLOCK_LOC "clk" BUFG;
 IO_LOC "rst_i" 28;	// key0
 IO_LOC "key_i" 28;
 
-IO_LOC "led[0]" 38;
-IO_LOC "led[1]" 39;
+IO_LOC "led[0]" 9;
+IO_LOC "led[1]" 11;
 IO_LOC "led[2]" 40;
 IO_LOC "led[3]" 41;
 

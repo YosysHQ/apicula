@@ -333,6 +333,11 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
     skip_bels = set()
     #print((row, col))
     tiledata = db.grid[row][col]
+    #if 'HCLK' in db.shortval[tiledata.ttyp].keys():
+    #    attrvals =parse_attrvals(tile, db.logicinfo['HCLK'], db.shortval[tiledata.ttyp]['HCLK'], attrids.hclk_attrids)
+    #    if attrvals:
+    #        print(row, col, attrvals)
+
     clock_pips = {}
     bels = {}
     for name, bel in tiledata.bels.items():
@@ -436,13 +441,15 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         if name.startswith("DFF"):
             idx = int(name[3])
             attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids)
-            #print(row, col, attrvals)
+            #print('parse', row, col, attrvals)
             # skip ALU and unsupported modes
             if attrvals.get('MODE') == attrids.cls_attrvals['SSRAM']:
                 continue
             dff_type = get_dff_type(idx, attrvals)
             if dff_type:
                 bels[f'{name}'] = {dff_type}
+            if f'REG{idx % 2}_SD' in attrvals:
+                bels[f'{name}'].update({'SD'})
             continue
         if name.startswith("IOB"):
             idx = name[-1]
@@ -1046,6 +1053,10 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             mod.primitives[name] = osc
         elif typ == "DFF":
             #print(flags)
+            sd = False
+            if 'SD' in flags:
+                sd = True
+                flags.remove('SD')
             kind, = flags # DFF only have one flag
             if kind == "RAM": continue
             idx = int(idx)
@@ -1053,7 +1064,10 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             name = f"R{row}C{col}_{typ}E_{idx}"
             dff = codegen.Primitive(kind+"E", name)
             dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx//2}"
-            dff.portmap['D'] = f"R{row}C{col}_F{idx}"
+            if sd:
+                dff.portmap['D'] = f"R{row}C{col}_SEL{idx}"
+            else:
+                dff.portmap['D'] = f"R{row}C{col}_F{idx}"
             dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
             dff.portmap['CE'] = f"R{row}C{col}_CE{idx//2}"
             if port:
