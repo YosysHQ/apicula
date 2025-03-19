@@ -2027,8 +2027,16 @@ def create_segments(dev, device):
             if (b_row, s_col, seg['bottom_gate_wire'][1]) in dev_desc['reserved_wires']:
                 seg['bottom_gate_wire'][1] = None
 
+            # remove isolated segments (these are in the DSP area of -9, -9C, -18, -18C)
+            if (not seg['top_gate_wire'][0] and not seg['top_gate_wire'][1]
+                and not seg['bottom_gate_wire'][0] and not seg['bottom_gate_wire'][1]):
+                del dev.segments[(top_gate_row, s_col, seg_idx)]
+
             # new segment i + 1
             seg_idx += 4
+            # XXX 6 and 7 need static DCS, disable for now
+            if seg_idx in [6, 7]:
+                continue
             seg_1 = dev.segments.setdefault((top_gate_row, s_col, seg_idx), {})
             # controlled area
             seg_1['min_x'] = seg['min_x']
@@ -2062,9 +2070,6 @@ def create_segments(dev, device):
                 seg_1['bottom_gate_wire'][1] = None
 
             # remove isolated segments (these are in the DSP area of -9, -9C, -18, -18C)
-            if (not seg['top_gate_wire'][0] and not seg['top_gate_wire'][1]
-                and not seg['bottom_gate_wire'][0] and not seg['bottom_gate_wire'][1]):
-                del dev.segments[(top_gate_row, s_col, seg_idx - 4)]
             if (not seg_1['top_gate_wire'][0] and not seg_1['top_gate_wire'][1]
                 and not seg_1['bottom_gate_wire'][0] and not seg_1['bottom_gate_wire'][1]):
                 del dev.segments[(top_gate_row, s_col, seg_idx)]
