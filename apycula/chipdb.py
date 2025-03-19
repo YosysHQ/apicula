@@ -1876,6 +1876,12 @@ _segment_data = {
                                         (0, 9, 'B6'), (0, 10, 'B6'), (0, 9, 'B7'), (0, 10, 'B7'),
                                         (0, 27, 'A6'), (0, 28, 'A6'), (0, 27, 'A7'), (0, 28, 'A7'),
                                         (0, 27, 'B6'), (0, 28, 'B6'), (0, 27, 'B7'), (0, 28, 'B7')}},
+        'GW1NS-4': { 'tap_start':  [2, 1, 0, 3], 'rows': [(0, 19)],
+                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                     'reserved_wires': {(0, 27, 'A6'), (0, 36, 'A6'), (0, 27, 'A7'), (0, 36, 'A7'),
+                                        (0, 27, 'B6'), (0, 36, 'B6'), (0, 27, 'B7'), (0, 36, 'B7')}},
         'GW1N-9':  { 'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 28)],
                      'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10')],
                      'bottom_wires': [('LT20', 'LT30'), ('LT02', 'LT13')],
@@ -1901,15 +1907,6 @@ _segment_data = {
                      'bottom_gate_wires': [[(None, 'B7'), (None, 'B7'), ('A6', 'A7')], [None, None, ('B6', 'B7')]],
                      'reserved_wires': {}},
         }
-"""
-XXX conflict with UserFlash
-        'GW1NS-4': { 'tap_start':  [2, 1, 0, 3], 'rows': [(0, 19)],
-                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
-                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
-                     'reserved_wires': {(0, 27, 'A6'), (0, 36, 'A6'), (0, 27, 'A7'), (0, 36, 'A7'),
-                                        (0, 27, 'B6'), (0, 36, 'B6'), (0, 27, 'B7'), (0, 36, 'B7')}},
-"""
 def create_segments(dev, device):
     if device not in _segment_data:
         return

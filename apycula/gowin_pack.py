@@ -301,7 +301,7 @@ def isolate_segments(pnr, db, tilemap):
                 if wire not in tiledata.alonenode_6:
                     raise Exception(f"Wire {wire} is not in alonenode fuse table")
                 bits = tiledata.alonenode_6[wire][1]
-                print(wire_ex, bits)
+                #print(wire_ex, bits)
                 for row, col in bits:
                     tile[row][col] = 1
             else:
