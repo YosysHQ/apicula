@@ -8,7 +8,7 @@ module top (
 wire clk_w;
 
 rPLL pll(
-	    .CLKOUT(clk_w),  // 9MHz
+	    .CLKOUT(clk_w),
 		.CLKIN(clk),
 		.CLKFB(GND),
 		.RESET(GND),
@@ -40,7 +40,7 @@ rPLL pll(
 	defparam pll.DYN_FBDIV_SEL="false";
 	defparam pll.DYN_IDIV_SEL="false";
 	defparam pll.DYN_ODIV_SEL="false";
-	defparam pll.DYN_SDIV_SEL=1;      // 9MHz --- pixel clock
+	defparam pll.DYN_SDIV_SEL=2;
 	defparam pll.PSDA_SEL="0000";
 
 wire key = key_i ^ `INV_BTN;

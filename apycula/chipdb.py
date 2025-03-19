@@ -129,6 +129,10 @@ class Device:
     extra_func: Dict[Tuple[int, int], Dict[str, Any]] = field(default_factory=dict)
     # Chip features currently related to block memory like "HAS_SP32", "NEED_SP_FIX", etc
     chip_flags: List[str] = field(default_factory=list)
+    # Segmented clock columns description
+    # { (y, x, idx) : {min_x, min_y, max_x, max_y, top_row, bottom_row, top_wire, bottom_wire,
+    # top_gate_wire[name, ], bottom_gate_wire[name,]}}
+    segments: Dict[Tuple[int, int, int], Dict[str, Any]] = field(default_factory=dict)
 
     @property
     def rows(self):
@@ -1241,8 +1245,11 @@ def add_hclk_bels(dat, dev, device):
                     dev.hclk_pips[tile_row,tile_col][clkdiv2.portmap["HCLKIN"]] = {f"HCLK{idx}_SECT{section}_IN":set()}
                     sect_div2_mux = f"HCLK{idx}_SECT{section}_MUX2"
                     dev.hclk_pips[tile_row,tile_col][sect_div2_mux] = {f"HCLK{idx}_SECT{section}_IN":set(), clkdiv2.portmap["CLKOUT"]:set()}
-                    dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = ({sect_div2_mux:set()})
-                    dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
+                    dev.hclk_pips[tile_row,tile_col][clkdiv.portmap["HCLKIN"]] = {sect_div2_mux:set()}
+                    if device in {"GW2A-18", "GW2A-18C"}:
+                        dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set(), clkdiv.portmap["CLKOUT"]:set()}
+                    else:
+                        dev.hclk_pips[tile_row,tile_col][f"HCLK_OUT{idx*2+section}"] = {sect_div2_mux: set()}
 
                 dev.hclk_pips[tile_row,tile_col].setdefault(shared_clkdiv_wire, {}).update({clkdiv.portmap["CLKOUT"]:set()})
             #Conenction from the output of CLKDIV to the global clock network
@@ -1315,25 +1322,49 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
             if side in 'TB':
                 row = {'T': 0, 'B': dev.rows - 1}[side]
                 for col in range(edge[0], edge[1]):
-                    if 'IOLOGICA' not in dev.grid[row][col].bels:
-                        continue
-                    pips = dev.hclk_pips.setdefault((row, col), {})
-                    for dst in 'AB':
-                        for src in srcs:
-                            pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
-                            if src.startswith('HCLK'):
-                                hclks[src].add((row, col, src))
+                    if 'IOLOGICA' in dev.grid[row][col].bels:
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in 'AB':
+                            for src in srcs:
+                                pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
+                    pll = None
+                    if 'RPLLA' in dev.grid[row][col].bels:
+                        pll = 'RPLLA'
+                    elif 'PLLVR' in dev.grid[row][col].bels:
+                        pll = 'PLLVR'
+                    if pll:
+                        portmap = dev.grid[row][col].bels[pll].portmap
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
+                            for src in srcs:
+                                pips.setdefault(dst, {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
             else:
                 col = {'L': 0, 'R': dev.cols - 1}[side]
                 for row in range(edge[0], edge[1]):
-                    if 'IOLOGICA' not in dev.grid[row][col].bels:
-                        continue
-                    pips = dev.hclk_pips.setdefault((row, col), {})
-                    for dst in 'AB':
-                        for src in srcs:
-                            pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
-                            if src.startswith('HCLK'):
-                                hclks[src].add((row, col, src))
+                    if 'IOLOGICA' in dev.grid[row][col].bels:
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in 'AB':
+                            for src in srcs:
+                                pips.setdefault(f'FCLK{dst}', {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
+                    pll = None
+                    if 'RPLLA' in dev.grid[row][col].bels:
+                        pll = 'RPLLA'
+                    elif 'PLLVR' in dev.grid[row][col].bels:
+                        pll = 'PLLVR'
+                    if pll:
+                        portmap = dev.grid[row][col].bels[pll].portmap
+                        pips = dev.hclk_pips.setdefault((row, col), {})
+                        for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
+                            for src in srcs:
+                                pips.setdefault(dst, {}).update({src: set()})
+                                if src.startswith('HCLK'):
+                                    hclks[src].add((row, col, src))
 
 # DHCEN (as I imagine) is an additional control input of the HCLK input
 # multiplexer. We have four input multiplexers - HCLK_IN0, HCLK_IN1, HCLK_IN2,
@@ -1876,6 +1907,169 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
             else:
                 dcs[f'selforce'] = 'D3'
                 dcs['clksel'] = ['D2', 'A3', 'B3', 'C3']
+
+# Segmented wires are those that run along each column of the chip and have
+# taps in each row about 4 cells wide. The height of the segment wires varies
+# from chip to chip: from full chip height for GW1N-1 to two strips in GW1N-9
+# and three strips in GW2A-18.
+# The MUXes for the sources on these wires can switch between signals from
+# "spines" (long horizontal wires up to half a chip in length) or from input
+# points from the logic.
+# These MUXes are placed on both ends of the segmented wire, which is very
+# flexible but at the same time requires some care not to signal both ends of
+# the wire.
+# The coverage areas between segment wires i and i + 4 are the same, only the
+# MUXes differ, so we create a pair of segments at once.
+
+# tap_start = describes where in the 4-cell area the main wire column with index is located
+# rows = top and bottom rows of segments
+# top_wires = [(MUX wire for i segment, MUX wire for i + 4 segment), next_row]
+# bottom_wires = [(MUX wire for i segment, MUX wire for i + 4 segment), next_row]
+# top_gate_wires = [(MUX wire for i segment, MUX wire for i + 4 segment), next_row][2]
+# bottom_gate_wires = [(MUX wire for i segment, MUX wire for i + 4 segment), next_row][2]
+_segment_data = {
+        'GW1N-1':  { 'tap_start':  [1, 0, 3, 2], 'rows': [(0, 10)],
+                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                     'reserved_wires': {(0, 17, 'A6'), (0, 18, 'A6'), (0, 17, 'A7'), (0, 18, 'A7'),
+                                        (0, 17, 'B6'), (0, 18, 'B6'), (0, 17, 'B7'), (0, 18, 'B7')}},
+        'GW1NZ-1': { 'tap_start':  [1, 0, 3, 2], 'rows': [(0, 10)],
+                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                     'reserved_wires': {(0, 17, 'A6'), (0, 18, 'A6'), (0, 17, 'A7'), (0, 18, 'A7'),
+                                        (0, 17, 'B6'), (0, 18, 'B6'), (0, 17, 'B7'), (0, 18, 'B7')}},
+        'GW1N-4':  { 'tap_start':  [2, 1, 0, 3], 'rows': [(0, 19)],
+                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                     'reserved_wires': {(0, 9, 'A6'), (0, 10, 'A6'), (0, 9, 'A7'), (0, 10, 'A7'),
+                                        (0, 9, 'B6'), (0, 10, 'B6'), (0, 9, 'B7'), (0, 10, 'B7'),
+                                        (0, 27, 'A6'), (0, 28, 'A6'), (0, 27, 'A7'), (0, 28, 'A7'),
+                                        (0, 27, 'B6'), (0, 28, 'B6'), (0, 27, 'B7'), (0, 28, 'B7')}},
+        'GW1NS-4': { 'tap_start':  [2, 1, 0, 3], 'rows': [(0, 19)],
+                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                     'reserved_wires': {(0, 27, 'A6'), (0, 36, 'A6'), (0, 27, 'A7'), (0, 36, 'A7'),
+                                        (0, 27, 'B6'), (0, 36, 'B6'), (0, 27, 'B7'), (0, 36, 'B7')}},
+        'GW1N-9':  { 'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 28)],
+                     'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10')],
+                     'bottom_wires': [('LT20', 'LT30'), ('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7'), (None, None)], [('B6', 'B7'), None]],
+                     'bottom_gate_wires': [[(None, 'B7'), (None, 'A7')], [None, None]],
+                     'reserved_wires': {}},
+        'GW1N-9C': { 'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 28)],
+                     'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10')],
+                     'bottom_wires': [('LT20', 'LT30'), ('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7'), (None, None)], [('B6', 'B7'), None]],
+                     'bottom_gate_wires': [[(None, 'B7'), ('A6', 'A7')], [None, None]],
+                     'reserved_wires': {}},
+        'GW2A-18': { 'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 36), (37, 54)],
+                     'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10')],
+                     'bottom_wires': [('LT20', 'LT30'), ('LT20', 'LT30'), ('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7'), (None, None), (None, None)], [('B6', 'B7'), None, None]],
+                     'bottom_gate_wires': [[(None, 'B7'), (None, 'B7'), ('A6', 'A7')], [None, None, ('B6', 'B7')]],
+                     'reserved_wires': {}},
+        'GW2A-18C': { 'tap_start': [3, 2, 1, 0], 'rows': [(0, 18), (19, 36), (37, 54)],
+                     'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10')],
+                     'bottom_wires': [('LT20', 'LT30'), ('LT20', 'LT30'), ('LT02', 'LT13')],
+                     'top_gate_wires':    [[('A6', 'A7'), (None, None), (None, None)], [('B6', 'B7'), None, None]],
+                     'bottom_gate_wires': [[(None, 'B7'), (None, 'B7'), ('A6', 'A7')], [None, None, ('B6', 'B7')]],
+                     'reserved_wires': {}},
+        }
+def create_segments(dev, device):
+    if device not in _segment_data:
+        return
+
+    dev_desc = _segment_data[device]
+    top_gate_row = dev_desc['rows'][0][0]
+    for row_idx, tb_row in enumerate(dev_desc['rows']):
+        t_row, b_row = tb_row
+        for s_col in range(dev.cols):
+            # new segment i
+            seg_idx = dev_desc['tap_start'][s_col % 4]
+            seg = dev.segments.setdefault((top_gate_row, s_col, seg_idx), {})
+            # controlled area
+            seg['min_x'] = max(0, s_col - 1)
+            seg['min_y'] = t_row
+            seg['max_x'] = min(dev.cols - 1, s_col + 2)
+            if dev.cols - 1 - seg['max_x'] == 1:
+                # The main wire of the segment is repeated every 4 cells, if
+                # there is no space on the right side for the next wire, the
+                # service area is extended to the very edge
+                seg['max_x'] = dev.cols - 1
+            seg['max_y'] = b_row
+            # MUX's positions and wires
+            seg['top_row'] = top_gate_row
+            seg['bottom_row'] = b_row
+            seg['top_wire'] = dev_desc['top_wires'][row_idx][0]
+            seg['bottom_wire'] = dev_desc['bottom_wires'][row_idx][0]
+            # gate wires
+            seg['top_gate_wire'] = [dev_desc['top_gate_wires'][0][row_idx][0]]
+            second_gate = dev_desc['top_gate_wires'][1][row_idx]
+            seg['top_gate_wire'].append(second_gate)
+            if second_gate:
+                seg['top_gate_wire'][1] = second_gate[0]
+            seg['bottom_gate_wire'] = [dev_desc['bottom_gate_wires'][0][row_idx][0]]
+            second_gate = dev_desc['bottom_gate_wires'][1][row_idx]
+            seg['bottom_gate_wire'].append(second_gate)
+            if second_gate:
+                seg['bottom_gate_wire'][1] = second_gate[0]
+            # check reserved
+            if (top_gate_row, s_col, seg['top_gate_wire'][0]) in dev_desc['reserved_wires']:
+                seg['top_gate_wire'][0] = None
+            if (top_gate_row, s_col, seg['top_gate_wire'][1]) in dev_desc['reserved_wires']:
+                seg['top_gate_wire'][1] = None
+            if (b_row, s_col, seg['bottom_gate_wire'][0]) in dev_desc['reserved_wires']:
+                seg['bottom_gate_wire'][0] = None
+            if (b_row, s_col, seg['bottom_gate_wire'][1]) in dev_desc['reserved_wires']:
+                seg['bottom_gate_wire'][1] = None
+
+            # new segment i + 1
+            seg_idx += 4
+            seg_1 = dev.segments.setdefault((top_gate_row, s_col, seg_idx), {})
+            # controlled area
+            seg_1['min_x'] = seg['min_x']
+            seg_1['min_y'] = seg['min_y']
+            seg_1['max_x'] = seg['max_x']
+            seg_1['max_y'] = seg['max_y']
+            # MUX's positions and wires
+            seg_1['top_row']     = seg['top_row']
+            seg_1['bottom_row']  = seg['bottom_row']
+            seg_1['top_wire']    = dev_desc['top_wires'][row_idx][1]
+            seg_1['bottom_wire'] = dev_desc['bottom_wires'][row_idx][1]
+            # gate wires
+            seg_1['top_gate_wire'] = [dev_desc['top_gate_wires'][0][row_idx][1]]
+            second_gate = dev_desc['top_gate_wires'][1][row_idx]
+            seg_1['top_gate_wire'].append(second_gate)
+            if second_gate:
+                seg_1['top_gate_wire'][1] = second_gate[1]
+            seg_1['bottom_gate_wire'] = [dev_desc['bottom_gate_wires'][0][row_idx][1]]
+            second_gate = dev_desc['bottom_gate_wires'][1][row_idx]
+            seg_1['bottom_gate_wire'].append(second_gate)
+            if second_gate:
+                seg_1['bottom_gate_wire'][1] = second_gate[1]
+            # check reserved
+            if (top_gate_row, s_col, seg_1['top_gate_wire'][0]) in dev_desc['reserved_wires']:
+                seg_1['top_gate_wire'][0] = None
+            if (top_gate_row, s_col, seg_1['top_gate_wire'][1]) in dev_desc['reserved_wires']:
+                seg_1['top_gate_wire'][1] = None
+            if (b_row, s_col, seg_1['bottom_gate_wire'][0]) in dev_desc['reserved_wires']:
+                seg_1['bottom_gate_wire'][0] = None
+            if (b_row, s_col, seg_1['bottom_gate_wire'][1]) in dev_desc['reserved_wires']:
+                seg_1['bottom_gate_wire'][1] = None
+
+            # remove isolated segments (these are in the DSP area of -9, -9C, -18, -18C)
+            if (not seg['top_gate_wire'][0] and not seg['top_gate_wire'][1]
+                and not seg['bottom_gate_wire'][0] and not seg['bottom_gate_wire'][1]):
+                del dev.segments[(top_gate_row, s_col, seg_idx - 4)]
+            if (not seg_1['top_gate_wire'][0] and not seg_1['top_gate_wire'][1]
+                and not seg_1['bottom_gate_wire'][0] and not seg_1['bottom_gate_wire'][1]):
+                del dev.segments[(top_gate_row, s_col, seg_idx)]
+
+        top_gate_row = b_row
 
 # These features of IO on the underside of the chip were revealed during
 # operation. The first (normal) mode was found in a report by @LoneTech on
@@ -2538,6 +2732,9 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("NEED_BLKSEL_FIX")
     if device in {'GW1NZ-1'}:
         dev.chip_flags.append("HAS_BANDGAP")
+    dev.chip_flags.append("HAS_PLL_HCLK")
+    if device in {'GW2A-18', 'GW2A-18C'}:
+        dev.chip_flags.append("HAS_CLKDIV_HCLK")
 
 def from_fse(device, fse, dat: Datfile):
     dev = Device()
@@ -2597,9 +2794,10 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_logic2clk(dev, device, dat)
     fse_create_dhcen(dev, device, fse, dat)
     fse_create_dlldly(dev, device)
+    create_segments(dev, device)
     disable_plls(dev, device)
     sync_extra_func(dev)
-    set_chip_flags(dev, device);
+    set_chip_flags(dev, device)
     return dev
 
 # get fuses for attr/val set using short/longval table
@@ -3745,6 +3943,11 @@ def dat_portmap(dat, dev, device):
                         dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
                         # Himbaechel node
                         dev.nodes.setdefault(f'X{col}Y{row}/rPLL{nam}{wire}', ("PLL_I", {(row, col, f'rPLL{nam}{wire}')}))[1].add((row, col + off, wire))
+                    # HCLK pips
+                    hclk_pip_dsts = {'PLL_CLKIN', 'PLL_CLKFB'}
+                    for dst in hclk_pip_dsts:
+                        if (row, col) in dev.hclk_pips and dst in dev.hclk_pips[row, col]:
+                            dev.hclk_pips[row, col][bel.portmap[dst[4:]]] = dev.hclk_pips[row, col].pop(dst)
                 elif name == 'PLLVR':
                     pll_idx = 0
                     if col != 27:
