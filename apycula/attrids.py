@@ -916,6 +916,30 @@ dcs_attrvals = {
         'VCC':             22,
         }
 
+# DLLDLY
+dlldly_attrids = {
+        'ENABLED':          0,
+        'LOADN':            2,
+        'SIGN':             3,
+        'MODE':             4,
+        'ADJ0':             5,
+        'ADJ1':             6,
+        'ADJ2':             7,
+        'ADJ3':             8,
+        'ADJ4':             9,
+        'ADJ5':            10,
+        'ADJ6':            11,
+        'ADJ7':            12,
+    }
+
+dlldly_attrvals = {
+        'UNKNOWN':          0,
+        'ENABLE':           1,
+        'NORMAL':           3,
+        '1':                4,
+        'NEG':              5,
+        }
+
 # DLL
 dll_attrids = {
         'CLKSEL':           0,

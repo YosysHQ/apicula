@@ -338,6 +338,16 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
     #    if attrvals:
     #        print(row, col, attrvals)
 
+    #if tiledata.ttyp in db.longfuses:
+    #    if 'DLLDEL0' in db.longfuses[tiledata.ttyp].keys():
+    #        attrvals =parse_attrvals(tile, db.logicinfo['DLLDLY'], db.longfuses[tiledata.ttyp]['DLLDEL0'], attrids.dlldly_attrids)
+    #        if attrvals:
+    #            print(row, col, attrvals)
+    #    if 'DLLDEL1' in db.longfuses[tiledata.ttyp].keys():
+    #        attrvals =parse_attrvals(tile, db.logicinfo['DLLDLY'], db.longfuses[tiledata.ttyp]['DLLDEL1'], attrids.dlldly_attrids)
+    #        if attrvals:
+    #            print(row, col, attrvals)
+
     clock_pips = {}
     bels = {}
     for name, bel in tiledata.bels.items():
