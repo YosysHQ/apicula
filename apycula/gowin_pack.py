@@ -20,7 +20,6 @@ from apycula.wirenames import wirenames, wirenumbers
 
 device = ""
 pnr = None
-is_himbaechel = False
 has_bsram_init = False
 bsram_init_map = None
 
@@ -200,27 +199,22 @@ _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9'}
 def get_bels(data):
     later = []
-    if is_himbaechel:
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY)(\w*)")
-    else:
-        belre = re.compile(r"R(\d+)C(\d+)_(?:GSR|SLICE|IOB|MUX2_LUT5|MUX2_LUT6|MUX2_LUT7|MUX2_LUT8|ODDR|OSC[ZFHWO]?|BUFS|RAMW|rPLL|PLLVR|IOLOGIC)(\w*)")
+    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY)(\w*)")
 
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
             continue
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
-        if is_himbaechel and bel[-4:] in {'/GND', '/VCC'}:
+        if bel[-4:] in {'/GND', '/VCC'}:
             continue
 
         bels = belre.match(bel)
         if not bels:
             raise Exception(f"Unknown bel:{bel}")
-        row, col, num = bels.groups()
-        if is_himbaechel:
-            col_ = col
-            col = str(int(row) + 1)
-            row = str(int(col_) + 1)
+        col, row, num = bels.groups()
+        col = str(int(col) + 1)
+        row = str(int(row) + 1)
 
         # The differential buffer is pushed to the end of the queue for processing
         # because it does not have an independent iostd, but adjusts to the normal pins
@@ -250,10 +244,7 @@ def get_bels(data):
 
 _pip_bels = []
 def get_pips(data):
-    if is_himbaechel:
-        pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
-    else:
-        pipre = re.compile(r"R(\d+)C(\d+)_([^_]+)_([^_]+)")
+    pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
     for net in data['modules']['top']['netnames'].values():
         routing = net['attributes']['ROUTING']
         pips = routing.split(';')[1::3]
@@ -261,20 +252,17 @@ def get_pips(data):
             res = pipre.fullmatch(pip) # ignore alias
             if res:
                 row, col, src, dest = res.groups()
-                if is_himbaechel:
-                    # XD - input of the DFF
-                    if src.startswith('XD'):
-                        if dest.startswith('F'):
-                            continue
-                        # pass-though LUT
-                        num = dest[1]
-                        init = {'A': '1010101010101010', 'B': '1100110011001100',
-                                'C': '1111000011110000', 'D': '1111111100000000'}[dest[0]]
-                        _pip_bels.append(("LUT4", int(col) + 1, int(row) + 1, num, {"INIT": init}, {}, f'$PACKER_PASS_LUT_{len(_pip_bels)}', None))
+                # XD - input of the DFF
+                if src.startswith('XD'):
+                    if dest.startswith('F'):
                         continue
-                    yield int(col) + 1, int(row) + 1, dest, src
-                else:
-                    yield int(row), int(col), src, dest
+                    # pass-though LUT
+                    num = dest[1]
+                    init = {'A': '1010101010101010', 'B': '1100110011001100',
+                            'C': '1111000011110000', 'D': '1111111100000000'}[dest[0]]
+                    _pip_bels.append(("LUT4", int(col) + 1, int(row) + 1, num, {"INIT": init}, {}, f'$PACKER_PASS_LUT_{len(_pip_bels)}', None))
+                    continue
+                yield int(col) + 1, int(row) + 1, dest, src
             elif pip and "DUMMY" not in pip:
                 print("Invalid pip:", pip)
 
@@ -2389,18 +2377,6 @@ def place_dff(db, tiledata, tile, parms, num, mode):
         for brow, bcol in dffbits:
             tile[brow][bcol] = 1
 
-def place_slice(db, tiledata, tile, parms, num):
-    lutmap = tiledata.bels[f'LUT{num}'].flags
-
-    if 'ALU_MODE' in parms:
-        place_alu(db, tiledata, tile, parms, num)
-    else:
-        place_lut(db, tiledata, tile, parms, num)
-
-    if int(num) < 6 and int(parms['FF_USED'], 2):
-        mode = str(parms['FF_TYPE']).strip('E')
-        place_dff(db, tiledata, tile, parms, num, mode)
-
 _mipi_aux_attrs = {
         'A': {('IO_TYPE', 'LVDS25'), ('LPRX_A2', 'ENABLE'), ('ODMUX', 'TRIMUX'), ('OPENDRAIN', 'OFF'),
               ('DIFFRESISTOR', 'OFF'), ('VCCIO', '2.5')},
@@ -2432,9 +2408,9 @@ def place(db, tilemap, bels, cst, args):
                 parms['ENABLE_USED'] = "0"
             typ = 'IOB'
 
-        if is_himbaechel and typ in {'IOLOGIC', 'IOLOGICI', 'IOLOGICO', 'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4',
-                                     'OSER8', 'OSER10', 'OVIDEO', 'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO',
-                                     'IOLOGICI_EMPTY', 'IOLOGICO_EMPTY'}:
+        if typ in {'IOLOGIC', 'IOLOGICI', 'IOLOGICO', 'IOLOGIC_DUMMY', 'ODDR', 'ODDRC', 'OSER4',
+                   'OSER8', 'OSER10', 'OVIDEO', 'IDDR', 'IDDRC', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO',
+                   'IOLOGICI_EMPTY', 'IOLOGICO_EMPTY'}:
             if num[-1] in {'I', 'O'}:
                 num = num[:-1]
             if typ == 'IOLOGIC_DUMMY':
@@ -2506,8 +2482,6 @@ def place(db, tilemap, bels, cst, args):
             bits = get_shortval_fuses(db, tiledata.ttyp, osc_attrs, 'OSC')
             for r, c in bits:
                 tile[r][c] = 1
-        elif typ == "SLICE":
-            place_slice(db, tiledata, tile, parms, num)
         elif typ.startswith("DFF"):
             mode = typ.strip('E')
             place_dff(db, tiledata, tile, parms, num, mode)
@@ -2925,7 +2899,7 @@ def route(db, tilemap, pips):
         try:
             if dest in tiledata.clock_pips:
                 bits = tiledata.clock_pips[dest][src]
-            elif is_himbaechel and (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1] and src in db.hclk_pips[row - 1, col - 1][dest]:
+            elif (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1] and src in db.hclk_pips[row - 1, col - 1][dest]:
                 bits = db.hclk_pips[row - 1, col - 1][dest][src]
                 bits.update(do_hclk_banks(db, row - 1, col - 1, src, dest))
             else:
@@ -3052,8 +3026,6 @@ def main():
     parser.add_argument('-o', '--output', default='pack.fs')
     parser.add_argument('-c', '--compress', action='store_true')
     parser.add_argument('-s', '--cst', default = None)
-    # XXX remove - nextpnr-himbaechel doesn't allow it
-    parser.add_argument('--allow_pinless_io', action = 'store_true')
     parser.add_argument('--jtag_as_gpio', action = 'store_true')
     parser.add_argument('--sspi_as_gpio', action = 'store_true')
     parser.add_argument('--mspi_as_gpio', action = 'store_true')
@@ -3070,9 +3042,8 @@ def main():
         pnr = json.load(f)
 
     # check for new P&R
-    if pnr['modules']['top']['settings'].get('packer.arch', '') == 'himbaechel/gowin':
-        global is_himbaechel
-        is_himbaechel = True
+    if pnr['modules']['top']['settings'].get('packer.arch', '') != 'himbaechel/gowin':
+        raise Exception("Only files made with nextpnr-himbaechel are supported.")
 
     # For tool integration it is allowed to pass a full part number
     m = re.match("(GW..)(S|Z)?[A-Z]*-(LV|UV|UX)([0-9]{1,2})C?([A-Z]{2}[0-9]+P?)(C[0-9]/I[0-9])", device)
@@ -3085,9 +3056,7 @@ def main():
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)
 
-    const_nets = {'GND': '$PACKER_GND_NET', 'VCC': '$PACKER_GND_NET'}
-    if is_himbaechel:
-        const_nets = {'GND': '$PACKER_GND', 'VCC': '$PACKER_GND'}
+    const_nets = {'GND': '$PACKER_GND', 'VCC': '$PACKER_GND'}
 
     _gnd_net = pnr['modules']['top']['netnames'].get(const_nets['GND'], {'bits': []})['bits']
     _vcc_net = pnr['modules']['top']['netnames'].get(const_nets['VCC'], {'bits': []})['bits']
