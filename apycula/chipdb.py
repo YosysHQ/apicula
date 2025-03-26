@@ -51,10 +51,9 @@ class Tile:
     ttyp: int
     # a mapping from dest, source wire to bit coordinates
     pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
+    # XXX pure_clock_pips not used in apicula anymore but leave it untouched
+    # for now as nextpnr is still counting on this field
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
-    # XXX Since Himbaechel uses a system of nodes instead of aliases for clock
-    # wires, at first we would like to avoid mixing in a bunch of PIPs of
-    # different nature.
     pure_clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     # fuses to disable the long wire columns. This is the table 'alonenode[6]' in the vendor file
     # {dst: ({src}, {bits})}
@@ -1548,7 +1547,7 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
     dcs_inputs = {f'P{i}{j}{k}' for i in range(1, 5) for j in range(6, 8) for k in "ABCD"}
     for row, rd in enumerate(dev.grid):
         for col, rc in enumerate(rd):
-            for dest, srcs in rc.pure_clock_pips.items():
+            for dest, srcs in rc.clock_pips.items():
                 for src in srcs.keys():
                     if src in spines and not dest.startswith('GT'):
                         add_node(dev, src, "GLOBAL_CLK", row, col, src)
@@ -2539,7 +2538,7 @@ def from_fse(device, fse, dat: Datfile):
         tile = Tile(w, h, ttyp)
         tile.pips = fse_pips(fse, ttyp, 2, wirenames)
         tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
-        # copy for Himbaechel without hclk
+        # XXX remove after nextpnr update
         tile.pure_clock_pips = copy.deepcopy(tile.clock_pips)
         tile.alonenode_6 = fse_alonenode(fse, ttyp, 6)
         if 5 in fse[ttyp]['shortval']:

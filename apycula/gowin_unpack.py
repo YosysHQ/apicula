@@ -865,13 +865,6 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
     # db is 0-based, floorplanner is 1-based
     row = dbrow+1
     col = dbcol+1
-    aliases = db.grid[dbrow][dbcol].aliases
-    for dest, src in chain(pips.items(), aliases.items(), clock_pips.items()):
-        srcg = chipdb.wire2global(row, col, db, src)
-        destg = chipdb.wire2global(row, col, db, dest)
-        mod.wires.update({srcg, destg})
-        mod.assigns.append((destg, srcg))
-
     belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC|BSRAM|DSP)(\w*)")
     bels_items = move_iologic(bels)
 
@@ -1253,12 +1246,6 @@ def main():
         bm[(45, 0)] = bm_pll[(45, 0)]
         bm[(45, 55)] = bm_pll[(45, 55)]
 
-    for (drow, dcol, dname), (srow, scol, sname) in db.aliases.items():
-        src = f"R{srow+1}C{scol+1}_{sname}"
-        dest = f"R{drow+1}C{dcol+1}_{dname}"
-        mod.wires.update({src, dest})
-        mod.assigns.append((dest, src))
-
     # banks first: need to know iostandards
     for pos in db.corners.keys():
         row, col = pos
@@ -1275,12 +1262,6 @@ def main():
         # skip banks & dual pisn
         if (row, col) in db.corners:
             continue
-        #for bitrow in t:
-        #    print(*bitrow, sep='')
-        #if idx == (5, 0):
-        #    from fuse_h4x import *
-        #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
-        #    breakpoint()
         bels, pips, clock_pips = parse_tile_(db, row, col, t, noiostd = False)
         #print("bels:", idx, bels)
         #print(pips)
