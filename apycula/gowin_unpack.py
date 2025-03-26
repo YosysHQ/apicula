@@ -321,7 +321,7 @@ def get_dsp_main_cell(db, row, col, typ):
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowin_unpack io standard is determined first and it is known.
 # (bels, pips, clock_pips)
-def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True):
+def parse_tile_(db, row, col, tile, default=True, noiostd = True):
     if not _bank_fuse_tables:
         # create bank fuse table
         for ttyp in db.longval.keys():
@@ -570,7 +570,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
         for src, bits in srcs.items():
             # only report connection aliased to by a spine
             # HCLKs are also switched here, so for now we are also considering SPINExx type wires
-            if bits == used_bits and (noalias or (row, col, src) in db.aliases or (src.startswith('SPINE') and dest.startswith('SPINE'))):
+            if bits == used_bits and (src.startswith('SPINE') and dest.startswith('SPINE')):
                 clock_pips[dest] = src
 
     # elvds IO uses the B bel bits
