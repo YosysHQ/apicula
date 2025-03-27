@@ -568,9 +568,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                      for row, col in pip_bits
                      if tile[row][col] == 1}
         for src, bits in srcs.items():
-            # only report connection aliased to by a spine
-            # HCLKs are also switched here, so for now we are also considering SPINExx type wires
-            if bits == used_bits and (src.startswith('SPINE') and dest.startswith('SPINE')):
+            if bits == used_bits:
                 clock_pips[dest] = src
 
     # elvds IO uses the B bel bits
@@ -865,6 +863,13 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
     # db is 0-based, floorplanner is 1-based
     row = dbrow+1
     col = dbcol+1
+
+    for dest, src in chain(pips.items(), clock_pips.items()):
+        srcg = chipdb.wire2global(row, col, db, src)
+        destg = chipdb.wire2global(row, col, db, dest)
+        mod.wires.update({srcg, destg})
+        mod.assigns.append((destg, srcg))
+
     belre = re.compile(r"(IOB|LUT|DFF|BANK|CFG|ALU|RAM16|ODDR|OSC[ZFHWO]?|BUFS|RPLL[AB]|PLLVR|IOLOGIC|BSRAM|DSP)(\w*)")
     bels_items = move_iologic(bels)
 
@@ -1233,6 +1238,26 @@ def main():
     bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
     cst = codegen.Constraints()
+
+    # make wire aliases from Himbaechel nodes
+    def by_name_len(el):
+        return len(el[2])
+
+    for node_desc in db.nodes.values():
+        root_wire = None
+        for row, col, wire in sorted(node_desc[1], key = by_name_len):
+            wire_name = f'R{row + 1}C{col + 1}_{wire}'
+            if not root_wire:
+                root_wire = wire_name
+                continue
+            mod.wire_aliases[wire_name] = root_wire
+    for row in range(db.rows):
+        for col in range(db.cols):
+            for i in [1, 2]:
+                mod.wire_aliases[chipdb.wire2global(row + 0, col + 1, db, f'N1{i}1')] = f'R{row + 1}C{col + 1}_SN{i}0'
+                mod.wire_aliases[chipdb.wire2global(row + 2, col + 1, db, f'S1{i}1')] = f'R{row + 1}C{col + 1}_SN{i}0'
+                mod.wire_aliases[chipdb.wire2global(row + 1, col + 0, db, f'W1{i}1')] = f'R{row + 1}C{col + 1}_EW{i}0'
+                mod.wire_aliases[chipdb.wire2global(row + 1, col + 2, db, f'E1{i}1')] = f'R{row + 1}C{col + 1}_EW{i}0'
 
     # XXX this PLLs have empty main cell
     if _device in {'GW1N-9C', 'GW1N-9'}:

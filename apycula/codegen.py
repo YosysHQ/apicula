@@ -7,6 +7,7 @@ class Module:
         self.outputs = set()
         self.inouts = set()
         self.wires = set()
+        self.wire_aliases = dict()
         self.assigns = []
         self.primitives = {}
 
@@ -16,6 +17,7 @@ class Module:
         m.outputs = self.outputs | other.outputs
         m.inouts = self.inouts | other.inouts
         m.wires = self.wires | other.wires
+        m.wire_aliases = self.wire_aliases | other.wire_aliases
         m.assigns = self.assigns + other.assigns
         m.primitives = {**self.primitives, **other.primitives}
         return m
@@ -39,12 +41,21 @@ class Module:
             f.write("inout {};\n".format(port))
 
         for wire in self.wires:
-            f.write("wire {};\n".format(wire))
+            if wire in self.wire_aliases:
+                f.write("`define {} {}\n".format(wire, self.wire_aliases[wire]))
+            else:
+                f.write("wire {};\n".format(wire))
 
         # unique assignments or not
         #for dest, src in self.assigns:
         for dest, src in dict(self.assigns).items():
-            f.write("assign {} = {};\n".format(dest, src))
+            dest_px = ''
+            src_px = ''
+            if dest in self.wire_aliases:
+                dest_px = '`'
+            if src in self.wire_aliases:
+                src_px = '`'
+            f.write("assign {}{} = {}{};\n".format(dest_px, dest, src_px, src))
 
         for module in self.primitives.values():
             module.write(f)
