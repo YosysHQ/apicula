@@ -321,7 +321,7 @@ def get_dsp_main_cell(db, row, col, typ):
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowin_unpack io standard is determined first and it is known.
 # (bels, pips, clock_pips)
-def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True):
+def parse_tile_(db, row, col, tile, default=True, noiostd = True):
     if not _bank_fuse_tables:
         # create bank fuse table
         for ttyp in db.longval.keys():
@@ -568,9 +568,7 @@ def parse_tile_(db, row, col, tile, default=True, noalias=False, noiostd = True)
                      for row, col in pip_bits
                      if tile[row][col] == 1}
         for src, bits in srcs.items():
-            # only report connection aliased to by a spine
-            # HCLKs are also switched here, so for now we are also considering SPINExx type wires
-            if bits == used_bits and (noalias or (row, col, src) in db.aliases or (src.startswith('SPINE') and dest.startswith('SPINE'))):
+            if bits == used_bits:
                 clock_pips[dest] = src
 
     # elvds IO uses the B bel bits
@@ -865,8 +863,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
     # db is 0-based, floorplanner is 1-based
     row = dbrow+1
     col = dbcol+1
-    aliases = db.grid[dbrow][dbcol].aliases
-    for dest, src in chain(pips.items(), aliases.items(), clock_pips.items()):
+
+    for dest, src in chain(pips.items(), clock_pips.items()):
         srcg = chipdb.wire2global(row, col, db, src)
         destg = chipdb.wire2global(row, col, db, dest)
         mod.wires.update({srcg, destg})
@@ -1241,6 +1239,26 @@ def main():
     mod = codegen.Module()
     cst = codegen.Constraints()
 
+    # make wire aliases from Himbaechel nodes
+    def by_name_len(el):
+        return len(el[2])
+
+    for node_desc in db.nodes.values():
+        root_wire = None
+        for row, col, wire in sorted(node_desc[1], key = by_name_len):
+            wire_name = f'R{row + 1}C{col + 1}_{wire}'
+            if not root_wire:
+                root_wire = wire_name
+                continue
+            mod.wire_aliases[wire_name] = root_wire
+    for row in range(db.rows):
+        for col in range(db.cols):
+            for i in [1, 2]:
+                mod.wire_aliases[chipdb.wire2global(row + 0, col + 1, db, f'N1{i}1')] = f'R{row + 1}C{col + 1}_SN{i}0'
+                mod.wire_aliases[chipdb.wire2global(row + 2, col + 1, db, f'S1{i}1')] = f'R{row + 1}C{col + 1}_SN{i}0'
+                mod.wire_aliases[chipdb.wire2global(row + 1, col + 0, db, f'W1{i}1')] = f'R{row + 1}C{col + 1}_EW{i}0'
+                mod.wire_aliases[chipdb.wire2global(row + 1, col + 2, db, f'E1{i}1')] = f'R{row + 1}C{col + 1}_EW{i}0'
+
     # XXX this PLLs have empty main cell
     if _device in {'GW1N-9C', 'GW1N-9'}:
         bm_pll = chipdb.tile_bitmap(db, bitmap, empty = True)
@@ -1252,12 +1270,6 @@ def main():
         bm[(9, 55)] = bm_pll[(9, 55)]
         bm[(45, 0)] = bm_pll[(45, 0)]
         bm[(45, 55)] = bm_pll[(45, 55)]
-
-    for (drow, dcol, dname), (srow, scol, sname) in db.aliases.items():
-        src = f"R{srow+1}C{scol+1}_{sname}"
-        dest = f"R{drow+1}C{dcol+1}_{dname}"
-        mod.wires.update({src, dest})
-        mod.assigns.append((dest, src))
 
     # banks first: need to know iostandards
     for pos in db.corners.keys():
@@ -1275,12 +1287,6 @@ def main():
         # skip banks & dual pisn
         if (row, col) in db.corners:
             continue
-        #for bitrow in t:
-        #    print(*bitrow, sep='')
-        #if idx == (5, 0):
-        #    from fuse_h4x import *
-        #    fse = readFse(open("/home/pepijn/bin/gowin/IDE/share/device/GW1N-1/GW1N-1.fse", 'rb'))
-        #    breakpoint()
         bels, pips, clock_pips = parse_tile_(db, row, col, t, noiostd = False)
         #print("bels:", idx, bels)
         #print(pips)

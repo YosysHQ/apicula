@@ -51,16 +51,13 @@ class Tile:
     ttyp: int
     # a mapping from dest, source wire to bit coordinates
     pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
+    # XXX pure_clock_pips not used in apicula anymore but leave it untouched
+    # for now as nextpnr is still counting on this field
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
-    # XXX Since Himbaechel uses a system of nodes instead of aliases for clock
-    # wires, at first we would like to avoid mixing in a bunch of PIPs of
-    # different nature.
     pure_clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     # fuses to disable the long wire columns. This is the table 'alonenode[6]' in the vendor file
     # {dst: ({src}, {bits})}
     alonenode_6: Dict[str, Tuple[Set[str], Set[Coord]]] = field(default_factory=dict)
-    # always-connected dest, src aliases
-    aliases: Dict[str, str] = field(default_factory=dict)
     # a mapping from bel type to bel
     bels: Dict[str, Bel] = field(default_factory=dict)
 
@@ -92,8 +89,6 @@ class Device:
     # fuses for 16 of the "features"
     # {ttype: {table_name: {(feature_0, feature_1, ..., feature_15): {bits}}}
     longval: Dict[int, Dict[str, Dict[Tuple[int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int], Set[Coord]]]] = field(default_factory=dict)
-    # always-connected dest, src aliases
-    aliases: Dict[Tuple[int, int, str], Tuple[int, int, str]] = field(default_factory=dict)
 
     # for Himbaechel arch
     # nodes - always connected wires {node_name: (wire_type, {(row, col, wire_name)})}
@@ -246,21 +241,6 @@ _supported_hclk_wires = {'SPINE2', 'SPINE3', 'SPINE4', 'SPINE5', 'SPINE10', 'SPI
                          'LBDHCLK2', 'LBDHCLK3', 'RBDHCLK0', 'RBDHCLK1', 'RBDHCLK2',
                          'RBDHCLK3',
                          }
-# Some chips at least -9C treat these wires as the same
-_xxx_hclk_wires = {'SPINE16': 'SPINE2', 'SPINE18': 'SPINE4'}
-def fse_hclk_pips(fse, ttyp, aliases):
-    pips = fse_pips(fse, ttyp, table = 48, wn = clknames)
-    res = {}
-    for dest, src_fuses in pips.items():
-        if dest not in _supported_hclk_wires:
-            continue
-        for src, fuses in src_fuses.items():
-            if src in _supported_hclk_wires:
-                res.setdefault(dest, {})[src] = fuses
-                if src in _xxx_hclk_wires.keys():
-                    aliases.update({src: _xxx_hclk_wires[src]})
-    return res
-
 def fse_alonenode(fse, ttyp, table = 6):
     pips = {}
     if 'alonenode' in fse[ttyp].keys():
@@ -571,205 +551,6 @@ _hclk_in = {
             'BBDHCLK0': 4,  'BBDHCLK1': 5,  'BBDHCLK2': 6,  'BBDHCLK3': 7,
             'LBDHCLK0': 8,  'LBDHCLK1': 9,  'LBDHCLK2': 10, 'LBDHCLK3': 11,
             'RBDHCLK0': 12, 'RBDHCLK1': 13, 'RBDHCLK2': 14, 'RBDHCLK3': 15}
-def fse_create_hclk_aliases(db, device, dat: Datfile):
-    for row in range(db.rows):
-        for col in range(db.cols):
-            for src_fuses in db.grid[row][col].clock_pips.values():
-                for src in src_fuses.keys():
-                    if src in _hclk_in.keys():
-                        source = dat.cmux_ins[90 + _hclk_in[src]]
-                        db.aliases[(row, col, src)] = (source[0] - 1, source[1] - 1, wirenames[source[2]])
-    # hclk->fclk
-    # top
-    row = 0
-    if device == 'GW1N-1':
-        for col in range(1, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-    elif device in {'GW1NZ-1'}:
-        for col in range(1, 10):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (0, 5, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (0, 5, 'SPINE12')
-        for col in range(10, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (0, 5, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (0, 5, 'SPINE13')
-    elif device in {'GW1N-4'}:
-        for col in range(1, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-    elif device in {'GW1NS-4'}:
-        for col in range(1, 11):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 18, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, 18, 'SPINE12')
-        for col in range(11, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 18, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, 18, 'SPINE13')
-    elif device in {'GW1N-9'}:
-        for col in range(1, 28):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE12')
-        for col in range(28, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
-    elif device in {'GW1N-9C'}:
-        for col in range(1, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (0, db.cols - 1, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (0, db.cols - 1, 'SPINE13')
-
-    # right
-    col = db.cols - 1
-    if device == 'GW1N-1':
-        for row in range(1, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-    elif device in {'GW1NZ-1'}:
-        for row in range(1, 5):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (5, col, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (5, col, 'SPINE12')
-        for row in range(6, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (5, col, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (5, col, 'SPINE13')
-    elif device in {'GW1N-4'}:
-        for row in range(1, db.rows - 1):
-            if row not in {8, 9, 10, 11}:
-                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-        for row in range(1, 9):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE12')
-        for row in range(10, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE13')
-    elif device in {'GW1NS-4'}:
-        for row in range(1, 9):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (9, col, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE12')
-        for row in range(9, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (9, col, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE13')
-    elif device in {'GW1N-9'}:
-        for row in range(1, 19):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE12')
-        for row in range(19, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE13')
-    elif device in {'GW1N-9C'}:
-        for row in range(1, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE13')
-
-    # left
-    col = 0
-    if device == 'GW1N-1':
-        for row in range(1, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-    elif device in {'GW1N-4'}:
-        for row in range(1, db.rows - 1):
-            if row not in {8, 9, 10, 11}:
-                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-        for row in range(1, 9):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE12')
-        for row in range(10, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (9, col, 'SPINE13')
-    elif device in {'GW1N-9'}:
-        for row in range(1, 19):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE12')
-        for row in range(19, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (18, col, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (18, col, 'SPINE13')
-    elif device in {'GW1N-9C'}:
-        for row in range(1, db.rows - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (18, 0, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (18, 0, 'SPINE13')
-
-    # bottom
-    row = db.rows - 1
-    if device == 'GW1N-1':
-        for col in range(1, 10):
-            if col not in {8, 9}:
-                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols -1, 'SPINE12')
-        for col in range(10, db.cols - 1):
-            if col not in {10, 11}:
-                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
-    elif device in {'GW1N-4'}:
-        for col in range(1, 19):
-            if col not in {17, 18}:
-                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols -1, 'SPINE12')
-        for col in range(19, db.cols - 1):
-            if col not in {19, 20}:
-                db.grid[row][col].clock_pips['FCLK'] = {'CLK2': {}}
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
-    elif device in {'GW1NS-4'}:
-        db.aliases[(row, 17, 'SPINE2')] = (row, 16, 'SPINE2')
-        for col in range(1, 16):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 17, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, 20, 'SPINE12')
-        for col in range(21, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 17, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, 20, 'SPINE13')
-    elif device in {'GW1N-9'}:
-        for col in range(1, 28):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE10')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE12')
-        for col in range(28, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
-    elif device in {'GW1N-9C'}:
-        for col in range(1, db.cols - 1):
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK0': {}}
-            db.aliases[(row, col, 'HCLK0')] = (row, 0, 'SPINE11')
-            db.grid[row][col].clock_pips['FCLK'] = {'HCLK1': {}}
-            db.aliases[(row, col, 'HCLK1')] = (row, db.cols - 1, 'SPINE13')
-
 # HCLK for Himbaechel
 #
 # hclk - locs of hclk control this side. The location of the HCLK is determined
@@ -1556,7 +1337,6 @@ def fse_create_pll_clock_aliases(db, device):
                 for w_src in w_srcs.keys():
                     if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18', 'GW2A-18C'}:
                         if w_src in _pll_loc[device].keys():
-                            db.aliases[(row, col, w_src)] = _pll_loc[device][w_src]
                             # Himbaechel node
                             db.nodes.setdefault(w_src, ("PLL_O", set()))[1].add((row, col, w_src))
             # Himbaechel HCLK
@@ -1767,7 +1547,7 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
     dcs_inputs = {f'P{i}{j}{k}' for i in range(1, 5) for j in range(6, 8) for k in "ABCD"}
     for row, rd in enumerate(dev.grid):
         for col, rc in enumerate(rd):
-            for dest, srcs in rc.pure_clock_pips.items():
+            for dest, srcs in rc.clock_pips.items():
                 for src in srcs.keys():
                     if src in spines and not dest.startswith('GT'):
                         add_node(dev, src, "GLOBAL_CLK", row, col, src)
@@ -2758,9 +2538,8 @@ def from_fse(device, fse, dat: Datfile):
         tile = Tile(w, h, ttyp)
         tile.pips = fse_pips(fse, ttyp, 2, wirenames)
         tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
-        # copy for Himbaechel without hclk
+        # XXX remove after nextpnr update
         tile.pure_clock_pips = copy.deepcopy(tile.clock_pips)
-        tile.clock_pips.update(fse_hclk_pips(fse, ttyp, tile.aliases))
         tile.alonenode_6 = fse_alonenode(fse, ttyp, 6)
         if 5 in fse[ttyp]['shortval']:
             tile.bels = fse_luts(fse, ttyp)
@@ -2783,7 +2562,6 @@ def from_fse(device, fse, dat: Datfile):
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     fse_create_clocks(dev, device, dat, fse)
     fse_create_pll_clock_aliases(dev, device)
-    fse_create_hclk_aliases(dev, device, dat)
     fse_create_bottom_io(dev, device)
     fse_create_tile_types(dev, dat)
     fse_create_diff_types(dev, device)
@@ -3909,7 +3687,6 @@ def dat_portmap(dat, dev, device):
                             # NS-2 is a strange thingy
                             if nam in {'RESET', 'RESET_P', 'IDSEL1', 'IDSEL2', 'ODSEL5'}:
                                 bel.portmap[nam] = f'rPLL{nam}{wire}'
-                                dev.aliases[row, col, f'rPLL{nam}{wire}'] = (9, col, wire)
                             else:
                                 bel.portmap[nam] = wire
                         elif off == 0:
@@ -3917,7 +3694,6 @@ def dat_portmap(dat, dev, device):
                         else:
                             # not our cell, make an alias
                             bel.portmap[nam] = f'rPLL{nam}{wire}'
-                            dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
                             # Himbaechel node
                             dev.nodes.setdefault(f'X{col}Y{row}/rPLL{nam}{wire}', ("PLL_I", {(row, col, f'rPLL{nam}{wire}')}))[1].add((row, col + off, wire))
 
@@ -3929,7 +3705,6 @@ def dat_portmap(dat, dev, device):
                         else:
                             # not our cell, make an alias
                             bel.portmap[nam] = f'rPLL{nam}{wire}'
-                            dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
                         # Himbaechel node
                         if nam != 'LOCK':
                             global_name = get_pllout_global_name(row, col + off, wire, device)
@@ -3945,7 +3720,6 @@ def dat_portmap(dat, dev, device):
                     else:
                         # not our cell, make an alias
                         bel.portmap[nam] = f'rPLL{nam}{wire}'
-                        dev.aliases[row, col, f'rPLL{nam}{wire}'] = (row, col + off, wire)
                         # Himbaechel node
                         dev.nodes.setdefault(f'X{col}Y{row}/rPLL{nam}{wire}', ("PLL_I", {(row, col, f'rPLL{nam}{wire}')}))[1].add((row, col + off, wire))
                     # HCLK pips
@@ -3970,7 +3744,6 @@ def dat_portmap(dat, dev, device):
                             # so that it will not use such aliases. They have
                             # to be taken care of separately.
                             bel.portmap[nam] = f'PLLVR{nam}{wire}'
-                            dev.aliases[row, col, f'PLLVR{nam}{wire}'] = (9, 37, wire)
                             # Himbaechel node
                             dev.nodes.setdefault(f'X{col}Y{row}/PLLVR{nam}{wire}', ("PLL_I", {(row, col, f'PLLVR{nam}{wire}')}))[1].add((9, 37, wire))
                     for idx, nam in _pll_outputs:
@@ -3990,7 +3763,6 @@ def dat_portmap(dat, dev, device):
                     else:
                         vren = 'B0'
                     bel.portmap['VREN'] = f'PLLVRV{vren}'
-                    dev.aliases[row, col, f'PLLVRV{vren}'] = (0, 37, vren)
                     # Himbaechel node
                     dev.nodes.setdefault(f'X{col}Y{row}/PLLVRV{vren}', ("PLL_I", {(row, col, f'PLLVRV{vren}')}))[1].add((0, 37, vren))
                 if name.startswith('OSC'):
@@ -3999,14 +3771,7 @@ def dat_portmap(dat, dev, device):
                     bel.portmap.update(local_ports)
                     for port, alias in aliases.items():
                         bel.portmap[port] = port
-                        dev.aliases[row, col, port] = alias
-
-def dat_aliases(dat: Datfile, dev):
-    x11 = [p for p in dat.primitives if p.name == 'X11'][0]
-    for row in dev.grid:
-        for td in row:
-            for dest, (src,) in zip(x11.obj, x11.ins):
-                td.aliases[wirenames[dest]] = wirenames[src]
+                        #dev.aliases[row, col, port] = alias
 
 def tile_bitmap(dev, bitmap, empty=False):
     res = {}
