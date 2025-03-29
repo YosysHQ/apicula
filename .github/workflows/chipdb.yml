@@ -271,7 +271,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        yosys: [main, yosys-0.44]
+        yosys: [main, v0.51]
         nextpnr: [master, nextpnr-0.8]
     steps:
     - uses: actions/checkout@v4
