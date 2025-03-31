@@ -249,7 +249,7 @@ def main():
         for FBDIV_SEL in range(64):
             for ODIV_SEL in [2, 4, 8, 16, 32, 48, 64, 80, 96, 112, 128]:
                 PFD = FCLKIN / (IDIV_SEL + 1)
-                if not (limits["pfd_min"] < PFD < limits["pfd_max"]):
+                if not (limits["pfd_min"] <= PFD <= limits["pfd_max"]):
                     continue
                 CLKOUT = FCLKIN * (FBDIV_SEL + 1) / (IDIV_SEL + 1)
                 if not (limits["clkout_min"] < CLKOUT < limits["clkout_max"]):
