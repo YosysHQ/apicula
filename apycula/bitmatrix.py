@@ -90,7 +90,8 @@ def histogram(lst, bins):
     """
     l_bins = len(bins) - 1
     r_lst = [0] * l_bins
-    for val in lst:
+    from itertools import chain
+    for val in chain.from_iterable(lst):
         for i in range(l_bins):
             if val in range(bins[i], bins[i + 1]) or (i == l_bins - 1 and val == bins[-1]):
                 r_lst[i] += 1
