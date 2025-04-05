@@ -1,4 +1,5 @@
 from math import ceil
+import array
 import crc
 from apycula import bitmatrix
 
@@ -76,7 +77,7 @@ def read_bitstream(fname):
 def compressLine(line, key8Z, key4Z, key2Z):
     newline = []
     for i in range(0, len(line), 8):
-        val = line[i:i+8].tobytes().replace(8 * b'\x00', bytes([key8Z]))
+        val = array.array('B', line[i:i+8]).tobytes().replace(8 * b'\x00', bytes([key8Z]))
         val = val.replace(4 * b'\x00', bytes([key4Z]))
         newline += val.replace(2 * b'\x00', bytes([key2Z]))
     return newline
