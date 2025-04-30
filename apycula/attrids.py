@@ -15,7 +15,7 @@ iob_attrids = {
         'DIFFRESISTOR':          7, # *
         'SINGLERESISTOR':        8, # *
         'VREF':                  9, # *
-        'VCCIO':                 10,
+        'BANK_VCCIO':            10,
         'DIFFDRIVE':             11,
         'I3C_MODE':              12,
         'MIPI_INPUT':            13,

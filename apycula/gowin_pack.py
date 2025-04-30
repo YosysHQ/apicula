@@ -2310,14 +2310,14 @@ _init_io_attrs = {
                  'VREF': 'OFF', 'LVDS_OUT': 'OFF'},
         'OBUF': {'ODMUX_1': '1', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF',
-                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA', 'TO': 'INV', 'OPENDRAIN': 'OFF'},
+                 'SINGLERESISTOR': 'OFF', 'BANK_VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA', 'TO': 'INV', 'OPENDRAIN': 'OFF'},
         'TBUF': {'ODMUX_1': 'UNKNOWN', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF',
-                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
+                 'SINGLERESISTOR': 'OFF', 'BANK_VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
                  'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'OPENDRAIN': 'OFF'},
         'IOBUF': {'ODMUX_1': 'UNKNOWN', 'PULLMODE': 'UP', 'SLEWRATE': 'FAST',
                  'DRIVE': '8', 'HYSTERESIS': 'NONE', 'CLAMP': 'OFF', 'DIFFRESISTOR': 'OFF',
-                 'SINGLERESISTOR': 'OFF', 'VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
+                 'SINGLERESISTOR': 'OFF', 'BANK_VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
                  'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'PADDI': 'PADDI', 'OPENDRAIN': 'OFF'},
         }
 _refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE', 'OPEN_DRAIN': 'OPENDRAIN'}
@@ -2379,8 +2379,8 @@ def place_dff(db, tiledata, tile, parms, num, mode):
 
 _mipi_aux_attrs = {
         'A': {('IO_TYPE', 'LVDS25'), ('LPRX_A2', 'ENABLE'), ('ODMUX', 'TRIMUX'), ('OPENDRAIN', 'OFF'),
-              ('DIFFRESISTOR', 'OFF'), ('VCCIO', '2.5')},
-        'B': {('IO_TYPE', 'LVDS25'), ('VCCIO', '2.5')},
+              ('DIFFRESISTOR', 'OFF'), ('BANK_VCCIO', '2.5')},
+        'B': {('IO_TYPE', 'LVDS25'), ('BANK_VCCIO', '2.5')},
 }
 
 _sides = "AB"
@@ -2700,7 +2700,7 @@ def place(db, tilemap, bels, cst, args):
         # check IO standard
         vccio = None
         iostd = None
-        for iob in ios.values():
+        for iob_name, iob in ios.items():
             # diff io can't be placed at simplified io
             if iob.pos[0] in db.simplio_rows:
                 if iob.flags['mode'].startswith('ELVDS') or iob.flags['mode'].startswith('TLVDS'):
@@ -2711,20 +2711,24 @@ def place(db, tilemap, bels, cst, args):
                 if iob.attrs.get('SINGLERESISTOR', 'OFF') != 'OFF':
                     iob.attrs['DDR_DYNTERM'] = 'ON'
             if iob.flags['mode'] in {'OBUF', 'IOBUF', 'TLVDS_OBUF', 'TLVDS_IOBUF', 'TLVDS_TBUF', 'TLVDS_TBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF'}:
+                if 'BANK_VCCIO' in iob.attrs:
+                    if iob.attrs['BANK_VCCIO'] != _vcc_ios[iob.attrs['IO_TYPE']]:
+                        raise Exception(f"Conflict bank VCC at {iob_name}.")
                 if not vccio:
-                    iostd = iob.attrs['IO_TYPE']
-                    vccio = _vcc_ios[iostd]
-                elif vccio != _vcc_ios[iob.attrs['IO_TYPE']] and not iostd.startswith('LVDS') and not iob.attrs['IO_TYPE'].startswith('LVDS'):
+                    if not iob.attrs['IO_TYPE'].startswith('LVDS'):
+                        iostd = iob.attrs['IO_TYPE']
+                        vccio = _vcc_ios[iostd]
+                elif vccio != _vcc_ios[iob.attrs['IO_TYPE']] and not iob.attrs['IO_TYPE'].startswith('LVDS'):
                     snd_type = iob.attrs['IO_TYPE']
                     fst = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == iostd][0]
-                    snd = [name for name, iob in ios.items() if iob.attrs['IO_TYPE'] == snd_type][0]
+                    snd = iob_name
                     raise Exception(f"Different IO standard for bank {bank}: {fst} sets {iostd}, {snd} sets {iob.attrs['IO_TYPE']}.")
 
         if not vccio:
             iostd = 'LVCMOS12'
 
         in_bank_attrs = {}
-        in_bank_attrs['VCCIO'] = _vcc_ios[iostd]
+        in_bank_attrs['BANK_VCCIO'] = _vcc_ios[iostd]
 
         # set io bits
         for name, iob in ios.items():
@@ -2757,7 +2761,7 @@ def place(db, tilemap, bels, cst, args):
             for k, val in iob.attrs.items():
                 k = refine_io_attrs(k)
                 in_iob_attrs[k] = val
-            in_iob_attrs['VCCIO'] = in_bank_attrs['VCCIO']
+            in_iob_attrs['BANK_VCCIO'] = in_bank_attrs['BANK_VCCIO']
             #print(name, in_iob_attrs)
 
             # lvds
@@ -2770,11 +2774,11 @@ def place(db, tilemap, bels, cst, args):
                 in_iob_attrs['IO_TYPE'] = get_iostd_alias(in_iob_attrs['IO_TYPE'])
             if iob.flags['mode'] in {'TLVDS_IBUF', 'ELVDS_IBUF'}:
                 in_iob_attrs['ODMUX_1'] = 'UNKNOWN'
-                in_iob_attrs.pop('VCCIO', None)
+                in_iob_attrs.pop('BANK_VCCIO', None)
             if 'IO_TYPE' in in_iob_attrs and in_iob_attrs['IO_TYPE'] == 'MIPI':
                 in_iob_attrs['LPRX_A1'] = 'ENABLE'
                 in_iob_attrs.pop('SLEWRATE', None)
-                in_iob_attrs.pop('VCCIO', None)
+                in_iob_attrs.pop('BANK_VCCIO', None)
                 in_iob_attrs['PULLMODE'] = 'NONE'
                 in_iob_attrs['LVDS_ON'] = 'ENABLE'
                 in_iob_attrs['IOBUF_MIPI_LP'] = 'ENABLE'
@@ -2826,8 +2830,6 @@ def place(db, tilemap, bels, cst, args):
                         #continue
                     else:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
-                        if k in {'VCCIO'}:
-                            continue
                         if k == 'LVDS_OUT' and val not in {'ENABLE', 'ON'}:
                             continue
                         if k == 'IO_TYPE' and k in in_bank_attrs and in_bank_attrs[k].startswith('LVDS'):
@@ -2850,7 +2852,7 @@ def place(db, tilemap, bels, cst, args):
             if k not in attrids.iob_attrids:
                 print(f'XXX BANK: add {k} key handle')
             else:
-                if k in {'VCCIO', 'IO_TYPE'}:
+                if k in {'BANK_VCCIO', 'IO_TYPE'}:
                     add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
         bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, 'BANK', int(bank))
         btile = tilemap[(brow, bcol)]
