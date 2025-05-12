@@ -158,3 +158,138 @@ delay = 0.33591097680795373
 I'd say in this case we've pretty much guessed the formula. Now we can move on to comparing nextpnr's calculations with the vendor's report, given our knowledge of how the total network delay is obtained.
 
 
+# Comparison with nextpnr
+
+Let's describe the theoretical calculation of delays in the vendor IDE in the form of a diagram:
+
+![Network diagram from DFF output to LUT input](fig/.Q0-X01-C2.png)
+
+Note about the last wire `C2` - we model PIPs so that they connect two wires, so we have a wire `C2` although it may not actually be there as a piece of copper - it is after all only the input of the primitive. It clearly has no fanout and whatever delay it has is inside the primitive and is not related to network delays.
+
+That's why I took here a suitable element from vendor tables, which has all zeros and an incomprehensible name:)
+
+To compare delay values in nextpnr and IDE we use python mode.
+
+``` shell
+$ nextpnr-himbaechel --device GW1NZ-LV1QN48C6/I5 --pre-pack ~/src/nextpnr/python/interactive.py --vopt cst=t1k.cst --json top-synth.json
+```
+
+I have the nextpnr repository in `~/src/nextpnr`, and the last argument is any json after synthesis - it doesn't matter which one.
+
+
+``` python
+>>> net = ctx.createNet('test')
+>>> ctx.bindWire('X14Y4/Q0', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X14Y4/X01/Q0', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X14Y4/C2/X01', net, STRENGTH_WEAK)
+>>> dly0 = ctx.getPipDelay('X14Y4/X01/Q0').maxDelay()
+>>> dly0
+0
+>>> dly1 = ctx.getPipDelay('X14Y4/C2/X01').maxDelay()
+>>> dly1
+334
+>>> dly0 + dly1
+334
+```
+
+0.334 vs 0.336 - we got close enough!
+
+Now let's see what the situation is like when there are multiple sinks in the network.
+
+![Design with fanout](fig/timing-ex1.png)
+
+Let's take all four branches of the 'out' net from the report:
+
+```
+   AT     DELAY   TYPE   RF   FANOUT       LOC                NODE
+ ======= ======= ====== ==== ======== ============= ========================
+  0.000   0.000                                      active clock edge time
+  0.000   0.000                                      clk_i
+  0.000   0.000   tCL    RR   1        IOT10[A]      clk_i_ibuf/I
+  0.982   0.982   tINS   RR   5        IOT10[A]      clk_i_ibuf/O
+  1.226   0.244   tNET   RR   1        R5C12[0][A]   src_dff/CLK
+  1.684   0.458   tC2Q   RF   4        R5C12[0][A]   src_dff/Q
+  1.701   0.016   tNET   FF   1        R5C12[0][A]   inv_0/I0
+  2.327   0.626   tINS   FF   1        R5C12[0][A]   inv_0/F
+  3.757   1.430   tNET   FF   1        R5C15[0][A]   out_dff0/D
+```
+
+```
+   AT     DELAY   TYPE   RF   FANOUT       LOC                NODE
+ ======= ======= ====== ==== ======== ============= ========================
+  0.000   0.000                                      active clock edge time
+  0.000   0.000                                      clk_i
+  0.000   0.000   tCL    RR   1        IOT10[A]      clk_i_ibuf/I
+  0.982   0.982   tINS   RR   5        IOT10[A]      clk_i_ibuf/O
+  1.226   0.244   tNET   RR   1        R5C12[0][A]   src_dff/CLK
+  1.684   0.458   tC2Q   RF   4        R5C12[0][A]   src_dff/Q
+  2.499   0.815   tNET   FF   1        R5C15[1][A]   inv_1/I0
+  3.124   0.625   tINS   FR   1        R5C15[1][A]   inv_1/F
+  4.168   1.044   tNET   RR   1        R5C16[0][A]   out_dff1/D
+```
+
+```
+     AT     DELAY   TYPE   RF   FANOUT       LOC                NODE
+ ======= ======= ====== ==== ======== ============= ========================
+  0.000   0.000                                      active clock edge time
+  0.000   0.000                                      clk_i
+  0.000   0.000   tCL    RR   1        IOT10[A]      clk_i_ibuf/I
+  0.982   0.982   tINS   RR   5        IOT10[A]      clk_i_ibuf/O
+  1.226   0.244   tNET   RR   1        R5C12[0][A]   src_dff/CLK
+  1.684   0.458   tC2Q   RF   4        R5C12[0][A]   src_dff/Q
+  2.185   0.501   tNET   FF   1        R7C12[2][A]   inv_2/I0
+  3.007   0.822   tINS   FF   1        R7C12[2][A]   inv_2/F
+  5.087   2.079   tNET   FF   1        R5C17[0][A]   out_dff2/D
+```
+
+```
+   AT     DELAY   TYPE   RF   FANOUT       LOC                NODE
+ ======= ======= ====== ==== ======== ============= ========================
+  0.000   0.000                                      active clock edge time
+  0.000   0.000                                      clk_i
+  0.000   0.000   tCL    RR   1        IOT10[A]      clk_i_ibuf/I
+  0.982   0.982   tINS   RR   5        IOT10[A]      clk_i_ibuf/O
+  1.226   0.244   tNET   RR   1        R5C12[0][A]   src_dff/CLK
+  1.684   0.458   tC2Q   RF   4        R5C12[0][A]   src_dff/Q
+  2.499   0.815   tNET   FF   1        R2C12[2][B]   inv_3/I0
+  3.598   1.099   tINS   FF   1        R2C12[2][B]   inv_3/F
+  5.530   1.931   tNET   FF   1        R4C14[0][A]   out_dff3/D
+```
+
+Unpacked net:
+
+```
+R5C12_Q0 -> R5C12_D0
+R5C12_Q0 -> R5C12_E100 -> R5C13_E101 -> R5C13_E200 -> R5C15_E202 -> R5C15_D2
+R5C12_Q0 -> R5C12_S200 -> R7C12_S202 -> R7C12_C4
+R5C12_Q0 -> R5C12_N130 -> R4C12_N131 -> R4C12_N270 -> R2C12_N272 -> R2C12_B5
+```
+
+Let's draw diagrams for all branches by doing the maths for all four numbers and see if there is a column in the vendor's data (the same for all branches!) that gives us the delay from the report (remember that nextpnr doesn't care which column the vendor uses as it only takes into account the minimum and maximum of all four).
+
+![Diagram with fanout](fig/R5C12_Q0_4LUTS.png)
+
+``` python
+>>> net = ctx.createNet('test')
+>>> ctx.bindWire('X11Y4/Q0', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X11Y4/D0/Q0', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X11Y4/E100/Q0', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X12Y4/E200/E101', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X14Y4/D2/E202', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X11Y4/S200/Q0', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X11Y6/C4/S202', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X11Y4/N130/Q0', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X11Y3/N270/N131', net, STRENGTH_WEAK)
+>>> ctx.bindPip('X11Y1/B5/N272', net, STRENGTH_WEAK)
+>>> branch_0_dly = ctx.getPipDelay('X11Y4/D0/Q0').maxDelay(); branch_0_dly
+0
+>>> branch_1_dly = ctx.getPipDelay('X11Y4/E100/Q0').maxDelay() + ctx.getPipDelay('X12Y4/E200/E101').maxDelay() + ctx.getPipDelay('X14Y4/D2/E202').maxDelay(); branch_1_dly
+891
+>>> branch_2_dly = ctx.getPipDelay('X11Y4/S200/Q0').maxDelay() + ctx.getPipDelay('X11Y6/C4/S202').maxDelay(); branch_2_dly
+485
+>>> branch_3_dly = ctx.getPipDelay('X11Y4/N130/Q0').maxDelay() + ctx.getPipDelay('X11Y3/N270/N131').maxDelay() + ctx.getPipDelay('X11Y1/B5/N272').maxDelay(); branch_3_dly
+891
+>>> ((0.016 - 0) + (0.815 - 0.891) + (0.501 - 0.485) + (0.815 - 0.891)) / 4
+-0.03000000000000003
+```
+
