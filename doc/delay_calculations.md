@@ -162,7 +162,7 @@ I'd say in this case we've pretty much guessed the formula. Now we can move on t
 
 Let's describe the theoretical calculation of delays in the vendor IDE in the form of a diagram:
 
-![Network diagram from DFF output to LUT input](fig/.Q0-X01-C2.png)
+![Network diagram from DFF output to LUT input](fig/Q0-X01-C2.png)
 
 Note about the last wire `C2` - we model PIPs so that they connect two wires, so we have a wire `C2` although it may not actually be there as a piece of copper - it is after all only the input of the primitive. It clearly has no fanout and whatever delay it has is inside the primitive and is not related to network delays.
 
@@ -292,4 +292,7 @@ Let's draw diagrams for all branches by doing the maths for all four numbers and
 >>> ((0.016 - 0) + (0.815 - 0.891) + (0.501 - 0.485) + (0.815 - 0.891)) / 4
 -0.03000000000000003
 ```
+
+So nextpnr calculates on average with an error of 0.03.
+
 
