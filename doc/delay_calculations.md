@@ -293,6 +293,99 @@ Let's draw diagrams for all branches by doing the maths for all four numbers and
 -0.03000000000000003
 ```
 
-So nextpnr calculates on average with an error of 0.03.
+So nextpnr calculates on average with an error of 0.03. This is true for "normal" networks, including wires such as EW and SN and the inputs and outputs of large LUTs (MUX2_LUT5 for example).
+
+# Global clock networks
+
+An interesting category of wires is the global clock network. And it is not only that the outputs of this network are in every cell, but the most important thing is that the number of PIPs on the way to any cell is the same: central MUX -> spine -> tap -> branch.
+
+We use the last design, but now examine the four DFFs (out_dff0-3), specifically their clock inputs.
+
+![Design with fanout](fig/timing-ex1.png)
+
+Vendor IDE reports (sake of clarity, everything after DFF's CLK has been dropped):
+
+```
+    AT     DELAY    TYPE   RF   FANOUT       LOC                NODE           
+ ======== ======== ====== ==== ======== ============= ======================== 
+  10.000   10.000                                      active clock edge time  
+  10.000   0.000                                       clk_i                   
+  10.000   0.000    tCL    RR   1        IOT10[A]      clk_i_ibuf/I            
+  10.982   0.982    tINS   RR   5        IOT10[A]      clk_i_ibuf/O            
+  11.226   0.244    tNET   RR   1        R5C15[0][A]   out_dff0/CLK            
+```
+
+```
+    AT     DELAY    TYPE   RF   FANOUT       LOC                NODE           
+ ======== ======== ====== ==== ======== ============= ======================== 
+  10.000   10.000                                      active clock edge time  
+  10.000   0.000                                       clk_i                   
+  10.000   0.000    tCL    RR   1        IOT10[A]      clk_i_ibuf/I            
+  10.982   0.982    tINS   RR   5        IOT10[A]      clk_i_ibuf/O            
+  11.226   0.244    tNET   RR   1        R5C16[0][A]   out_dff1/CLK            
+```
+
+```
+    AT     DELAY    TYPE   RF   FANOUT       LOC                NODE           
+ ======== ======== ====== ==== ======== ============= ======================== 
+  10.000   10.000                                      active clock edge time  
+  10.000   0.000                                       clk_i                   
+  10.000   0.000    tCL    RR   1        IOT10[A]      clk_i_ibuf/I            
+  10.982   0.982    tINS   RR   5        IOT10[A]      clk_i_ibuf/O            
+  11.226   0.244    tNET   RR   1        R5C17[0][A]   out_dff2/CLK            
+```
+
+```
+    AT     DELAY    TYPE   RF   FANOUT       LOC                NODE           
+ ======== ======== ====== ==== ======== ============= ======================== 
+  10.000   10.000                                      active clock edge time  
+  10.000   0.000                                       clk_i                   
+  10.000   0.000    tCL    RR   1        IOT10[A]      clk_i_ibuf/I            
+  10.982   0.982    tINS   RR   5        IOT10[A]      clk_i_ibuf/O            
+  11.226   0.244    tNET   RR   1        R4C14[0][A]   out_dff3/CLK            
+```
+
+We note at once that regardless of the location of the sinks in different columns and different rows, the delay is the same and equal to 0.244. 
+
+
+```
+R7C14_SPINE24 -> R7C14_GT00 - R5C14_GT00 -> R5C14_GBO0 -> R5C15_GB00 -> R5C15_CLK0
+R7C14_SPINE24 -> R7C14_GT00 - R5C14_GT00 -> R5C14_GBO0 -> R5C16_GB00 -> R5C16_CLK0
+R7C18_SPINE24 -> R7C18_GT00 - R5C18_GT00 -> R5C18_GBO0 -> R5C17_GB00 -> R5C17_CLK0
+R7C14_SPINE24 -> R7C14_GT00 - R4C14_GT00 -> R4C14_GBO0 -> R4C14_GB00 -> R4C14_CLK0
+```
+
+We have common sections and forks, but this has no effect on the resulting delay, so we can forget about fanout when looking for a formula.
+
+Let us try to assume how this delay can be calculated.
+
+![Clock network](fig/timing-ex3.png)
+
+Let's see how well nextpnr uses the specified classes for global wires:
+
+``` python
+>>> net = ctx.createNet("test")
+>>> ctx.bindWire("X9Y0/F6", net, STRENGTH_WEAK)
+>>> pips = ['X10Y5/SPINE24/PCLKT0', 'X13Y6/GT00/SPINE24', 'X13Y4/GBO0/GT00', 'X14Y4/CLK0/GB00']
+>>>
+>>> for pip in pips:
+...     ctx.bindPip(pip, net, STRENGTH_WEAK)
+...
+>>> delay = 0
+>>> for pip in pips:
+...     pip_del = ctx.getPipDelay(pip).maxDelay()
+...     delay += pip_del
+...     print(pip, pip_del)
+...
+X10Y5/SPINE24/PCLKT0 155
+X13Y6/GT00/SPINE24 35
+X13Y4/GBO0/GT00 35
+X14Y4/CLK0/GB00 35
+>>> print(delay)
+260
+>>>
+```
+
+.240 vs .260 - that's good enough.
 
 
