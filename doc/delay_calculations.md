@@ -301,7 +301,7 @@ An interesting category of wires is the global clock network. And it is not only
 
 We use the last design, but now examine the four DFFs (out_dff0-3), specifically their clock inputs.
 
-![Design with fanout](fig/timing-ex1.png)
+![Design with fanout](fig/timing-ex2.png)
 
 Vendor IDE reports (sake of clarity, everything after DFF's CLK has been dropped):
 
