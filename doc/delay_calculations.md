@@ -388,4 +388,141 @@ X14Y4/CLK0/GB00 35
 
 .240 vs .260 - that's good enough.
 
+# Inside the primitives
+
+Looking into the composition of the GW1NZ-1 chip we will see what we have:
+ - 1152 LUTs
+ - 864 DFFs
+ - 4 BSRAM
+ - 1 PLL
+
+ That is, LUTs + DFFs make up ~99% of all elements. So let's see how well nextpnr counts delays in these elements.
+
+Take any branch of the last four considered:
+
+```
+   AT     DELAY   TYPE   RF   FANOUT       LOC                NODE
+ ======= ======= ====== ==== ======== ============= ========================
+  0.000   0.000                                      active clock edge time
+  0.000   0.000                                      clk_i
+  0.000   0.000   tCL    RR   1        IOT10[A]      clk_i_ibuf/I
+  0.982   0.982   tINS   RR   5        IOT10[A]      clk_i_ibuf/O
+  1.226   0.244   tNET   RR   1        R5C12[0][A]   src_dff/CLK
+  1.684   0.458   tC2Q   RF   4        R5C12[0][A]   src_dff/Q
+  1.701   0.016   tNET   FF   1        R5C12[0][A]   inv_0/I0
+  2.327   0.626   tINS   FF   1        R5C12[0][A]   inv_0/F
+  3.757   1.430   tNET   FF   1        R5C15[0][A]   out_dff0/D
+```
+
+DFF for starters. We have a line with type tC2Q, which with a very high probability means a delay between edges of input CLK and output Q.
+
+Let's see what we have in the vendor tables:
+
+``` python
+ipdb> for rk, rd in db.timing['C6/I5']['dff'].items():
+    print(rk, rd)
+
+di_clksetpos [0.25, 0.25, 0.3999999761581421, 0.3999999761581421]
+di_clksetneg [0.25, 0.25, 0.3999999761581421, 0.3999999761581421]
+di_clkholdpos [0.0, 0.0, 0.0, 0.0]
+di_clkholdneg [0.0, 0.0, 0.0, 0.0]
+ce_clksetpos [0.03750000149011612, 0.03750000149011612, 0.04333333298563957, 0.04333333298563957]
+ce_clksteneg [0.03750000149011612, 0.03750000149011612, 0.04333333298563957, 0.04333333298563957]
+ce_clkholdpos [0.01249999925494194, 0.01249999925494194, 0.014999998733401299, 0.014999998733401299]
+ce_clkholdneg [0.01249999925494194, 0.01249999925494194, 0.014999998733401299, 0.014999998733401299]
+lsr_clksetpos_syn [0.03750000149011612, 0.03750000149011612, 0.04333333298563957, 0.04333333298563957]
+lsr_clksetneg_syn [0.03750000149011612, 0.03750000149011612, 0.04333333298563957, 0.04333333298563957]
+lsr_clkholdpos_syn [0.01249999925494194, 0.01249999925494194, 0.014999998733401299, 0.014999998733401299]
+lsr_clkholdneg_syn [0.01249999925494194, 0.01249999925494194, 0.014999998733401299, 0.014999998733401299]
+clk_qpos [0.3333333134651184, 0.3333333134651184, 0.4583333134651184, 0.4583333134651184]
+clk_qneg [0.3333333134651184, 0.3333333134651184, 0.4583333134651184, 0.4583333134651184]
+lsr_q [0.8749999403953552, 1.25, 1.711666464805603, 1.8600000143051147]
+lsr_clksetpos_asyn [0.03750000149011612, 0.03750000149011612, 0.04333333298563957, 0.04333333298563957]
+lsr_clksetneg_asyn [0.03750000149011612, 0.03750000149011612, 0.04333333298563957, 0.04333333298563957]
+lsr_clkholdpos_asyn [0.01249999925494194, 0.01249999925494194, 0.014999998733401299, 0.014999998733401299]
+lsr_clkholdneg_asyn [0.01249999925494194, 0.01249999925494194, 0.014999998733401299, 0.014999998733401299]
+clk_clk [1.25, 1.25, 1.25, 1.25]
+lsr_lsr [2.5, 2.5, 2.5, 2.5]
+ipdb>
+```
+
+The records give us exactly the 0.458 we're looking for.
+
+``` python
+clk_qpos [0.3333333134651184, 0.3333333134651184, 0.4583333134651184, 0.4583333134651184]
+clk_qneg [0.3333333134651184, 0.3333333134651184, 0.4583333134651184, 0.4583333134651184]
+```
+
+Data from these tables is read nextpnr
+
+``` C++
+            elif group == "dff":
+                for reset_type in ('', 'P', 'C', 'S', 'R'):
+                    for clock_enable in ('', 'E'):
+                        cell_name = "DFF{}{}".format(reset_type, clock_enable)
+                        dff = tmg.add_cell_variant(speed, cell_name)
+                        dff.add_setup_hold("CLK", "D", ClockEdge.RISING, group_to_timingvalue(arc["di_clksetpos"]), group_to_timingvalue(arc["di_clkholdpos"]))
+                        dff.add_setup_hold("CLK", "CE", ClockEdge.RISING, group_to_timingvalue(arc["ce_clksetpos"]), group_to_timingvalue(arc["ce_clkholdpos"]))
+                        dff.add_clock_out("CLK", "Q", ClockEdge.RISING, group_to_timingvalue(arc["clk_qpos"]))
+
+...
+```
+
+and are used almost identically to the vendor report, see clk-to-q line (well, considering 3 vs. 2 decimal places).
+
+```
+Info: Critical path report for clock 'clk_IBUF_I_O' (posedge -> posedge):
+Info:       type curr  total name
+Info:   clk-to-q  0.46  0.46 Source ctr_q_DFFE_Q_25.Q
+Info:    routing  0.41  0.87 Net ctr_q[0] (13,1) -> (14,1)
+Info:                          Sink ctr_q_DFFE_Q_24_D_ALU_SUM_CIN_ALU_COUT.I1
+Info:                           prediction: 0.100000 ns estimate: 0.300000 ns
+Info:                  0.412 X14Y1/B1/E131
+Info:                  0.000 X13Y1/E130/Q0
+```
+
+Now LUTs. Let's see what we have in the vendor tables. There seems to be a significant difference between inputs I0-3 (or in vendor symbols A-D):
+
+``` python
+ipdb> for rk, rd in db.timing['C6/I5']['lut'].items():
+    print(rk, rd)
+
+a_f [0.7260000109672546, 0.7319999933242798, 1.0260000228881836, 1.031999945640564]
+b_f [0.7239999771118164, 0.7310000061988831, 1.0609999895095825, 1.0989999771118164]
+c_f [0.5559999942779541, 0.6019999980926514, 0.8019999861717224, 0.8220000267028809]
+d_f [0.38499999046325684, 0.3720000088214874, 0.625, 0.6259999871253967]
+a_ofx [0.8240000009536743, 0.8209999799728394, 1.1759999990463257, 1.180999994277954]
+b_ofx [0.8219999670982361, 0.8199999928474426, 1.2109999656677246, 1.2480000257492065]
+c_ofx [0.6539999842643738, 0.6909999847412109, 0.9520000219345093, 0.9710000157356262]
+d_ofx [0.4829999804496765, 0.4610000252723694, 0.7749999761581421, 0.7749999761581421]
+m0_ofx0 [0.3370000123977661, 0.33399999141693115, 0.47200000286102295, 0.43700000643730164]
+m1_ofx1 [0.2750000059604645, 0.3319999873638153, 0.3880000114440918, 0.5019999742507935]
+fx_ofx1 [0.06599999964237213, 0.09399999678134918, 0.1770000010728836, 0.16300000250339508]
+ipdb>
+```
+
+So let's see exactly which LUT input was used:
+
+```
+R5C12_Q0 -> R5C12_D0
+```
+
+D is used and it matches exactly the delay in the report:
+
+```
+  2.327   0.626   tINS   FF   1        R5C12[0][A]   inv_0/F
+```
+
+Now let's see what nextpnr does, it's worth noting here that because we need to find a variant specifically with D->F we use examples/nanolcd for tangnano1k because there are a lot of LUTs there.
+
+```
+Info:      logic  0.62  6.91 Source D1.LCD_G_LUT3_F_I1_LUT3_F_I1_LUT3_I0_F_LUT3_I1_F_LUT4_F_1.F
+Info:    routing  0.00  6.91 Net D1.LCD_G_LUT3_F_I1_LUT3_F_I1_LUT3_I0_F_LUT3_I1_F[3] (11,2) -> (11,2)
+Info:                          Sink D1.LCD_B_LUT2_F_I1_LUT4_F_1_I2_LUT2_I0_F_DFFC_Q.D
+Info:                           prediction: 0.000000 ns estimate: 0.200000 ns
+Info:                  0.000 X11Y2/XD4/F4
+```
+
+Here we have D4->F4 = 0.62 vs 0.626. 
+
 
