@@ -16,7 +16,7 @@ Those values are stored in the header area (line starting with `0x51`), line sta
 
 This algorithm is applied 8 bytes by 8 bytes. So if lines are not multiple of 64bits, a serie of dummy bits (set to `1`) must be added.
 
-## select values to use
+## Select values to use
 
 This step consist to search all values not used for data/EBR configuration (it's more or less the creation of an histogram):
 ```python
@@ -32,7 +32,9 @@ unusedVal = [i for i,val in enumerate(lst) if val==0]
 - `key4Z` take the value for index 1
 - `key2Z` take the value for index 2 (highest value)
 
-line starting with `0x51` must be updated accordingly, and bit `13` for line `0x10` must be set
+There may not be enough unused values for some or all keys, in which case the key-specific packing is not performed (in the most severe case, the file is not packed at all if all possible byte values are used).
+
+Line starting with `0x51` must be updated accordingly, and bit `13` for line `0x10` must be set
 
 ## Conversion
 
