@@ -3968,10 +3968,16 @@ def fse_wire_delays(db):
         db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
     for i in range(129, 153): # clock inputs (logic->clock)
         db.wire_delay[clknames[i]] = "CENT_SPINE_PCLK"
-    for i in range(1000, 1010): # HCLK
-        db.wire_delay[clknames[i]] = "X0" # XXX
+    for i in range(1000, 1002): # HCLK bridge muxes
+        db.wire_delay[clknames[i]] = "HclkHbrgMux"
+    for i in range(1002, 1010): # HCLK
+        db.wire_delay[clknames[i]] = "ISB" # XXX
+    for i in range(2, 6): # HCLK ins
+        db.wire_delay[hclknames[i]] = "HclkInMux"
+    for i in range(4): # HCLK outs
+        db.wire_delay[f'HCLK_OUT{i}'] = "HclkOutMux"
     for wire in {'DLLDLY_OUT', 'DLLDLY_CLKOUT', 'DLLDLY_CLKOUT0', 'DLLDLY_CLKOUT1'}:
-        db.wire_delay[wire] = "X0" # XXX
+        db.wire_delay[wire] = "ISB" # XXX
 
 # assign pads with plls
 # for now use static table and store the bel name although it is always PLL without a number
