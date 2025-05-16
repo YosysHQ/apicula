@@ -2925,13 +2925,6 @@ def header_footer(db, bs, compress):
     # data in 16bit format
     res = int(sum(bs[0::2]) * pow(2,8) + sum(bs[1::2]))
     checksum = res & 0xffff
-
-    if compress:
-        # update line 0x10 with compress enable bit
-        # rest (keys) is done in bslib.write_bitstream
-        hdr10 = int.from_bytes(db.cmd_hdr[4], 'big') | (1 << 13)
-        db.cmd_hdr[4] = bytearray.fromhex(f"{hdr10:016x}")
-
     # set the checksum
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
 
