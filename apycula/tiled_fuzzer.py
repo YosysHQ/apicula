@@ -228,12 +228,12 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
 
 
 if __name__ == "__main__":
-    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
+    with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f)
 
-    dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{device}/{device}.dat"))
+    dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.dat"))
 
-    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
+    with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.tm", 'rb') as f:
         tm = tm_h4x.read_tm(f, device)
 
     db = chipdb.from_fse(device, fse, dat)
