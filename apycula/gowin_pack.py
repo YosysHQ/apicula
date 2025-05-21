@@ -2104,7 +2104,7 @@ def bin_str_to_dec(str_val):
 _hclk_default_params ={"GSREN": "false", "DIV_MODE":"2"}
 def set_hclk_attrs(db, params, num, typ, cell_name):
     name_pattern = r'^_HCLK([0,1])_SECT([0,1])$'
-    params = dict(params or _hclk_default_params)
+    params = dict(_hclk_default_params | params)
     attrs = {}
     pattern_match = re.findall(name_pattern, num)
     if (not pattern_match):
