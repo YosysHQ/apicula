@@ -1160,12 +1160,16 @@ osc_attrvals = {
 # config
 cfg_attrids = {
         'DONE_AS_GPIO':     0,
+        'GWD':              1,
         'GSR':              2,
+        'GOE':              3,
+        'DONE':             4,
         'JTAG_AS_GPIO':     6,
         'READY_AS_GPIO':    7,
         'MSPI_AS_GPIO':     8,
         'RECONFIG_AS_GPIO': 9,
         'SSPI_AS_GPIO':     10,
+        'POWERSAVE':        16,
         'I2C_AS_GPIO':      20,
         'JTAG_EN':          21,
         'POR':              24, # power on reset

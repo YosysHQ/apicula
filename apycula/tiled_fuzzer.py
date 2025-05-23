@@ -270,7 +270,6 @@ if __name__ == "__main__":
     pnr_empty = run_pnr(codegen.Module(), codegen.Constraints(), {})
     db.cmd_hdr = pnr_empty.hdr
     db.cmd_ftr = pnr_empty.ftr
-    db.template = pnr_empty.bitmap
 
     # IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)

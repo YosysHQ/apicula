@@ -76,7 +76,6 @@ class Device:
     pin_bank: Dict[str, int] = field(default_factory = dict)
     cmd_hdr: List[ByteString] = field(default_factory=list)
     cmd_ftr: List[ByteString] = field(default_factory=list)
-    template: List[List[int]] = None
     # allowable values of bel attributes
     # {table_name: [(attr_id, attr_value)]}
     logicinfo: Dict[str, List[Tuple[int, int]]] = field(default_factory=dict)
