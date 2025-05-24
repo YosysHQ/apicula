@@ -117,12 +117,12 @@ def compressLine(line, key8Z, key4Z, key2Z):
 def write_bitstream_with_bsram_init(fname, bs, hdr, ftr, compress, bsram_init):
     new_bs = bitmatrix.vstack(bs, bsram_init)
     new_hdr = hdr.copy()
-    frames = int.from_bytes(new_hdr[-1][2:], 'big') + bitmatrix.shape(bsram_init)[0]
-    new_hdr[-1][2:] = frames.to_bytes(2, 'big')
     write_bitstream(fname, new_bs, new_hdr, ftr, compress)
 
 def write_bitstream(fname, bs, hdr, ftr, compress):
     bs = bitmatrix.fliplr(bs)
+    hdr[-1][2:] = bitmatrix.shape(bs)[0].to_bytes(2, 'big')
+
     if compress:
         padlen = (ceil(bitmatrix.shape(bs)[1] / 64) * 64) - bitmatrix.shape(bs)[1]
     else:
