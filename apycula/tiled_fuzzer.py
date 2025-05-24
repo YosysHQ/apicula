@@ -226,6 +226,61 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
         for row, col in locations[ttyp]:
             db.grid[row][col].bels.update(iob_bels[ttyp])
 
+# generate bitstream footer
+def gen_ftr():
+    # first line with CRC(?) at the end
+    line = bytearray(b'\xff'*20)
+    line[-2] = 0x34
+    line[-1] = 0x73
+    ftr = [line]
+    # bitmap CRC, filled in gowin_pack
+    ftr.append(bytearray(b'\x0a\x00\x00\x00\x00\x00\x00\x00'))
+    # noop
+    ftr.append(bytearray(b'\xff'*8))
+    # write done
+    ftr.append(bytearray(b'\x08\x00\x00\x00'))
+    # noop
+    ftr.append(bytearray(b'\xff'*8))
+    ftr.append(bytearray(b'\xff'*2))
+
+    return ftr
+
+# borrowed from https://github.com/trabucayre/openFPGALoader/blob/master/src/fsparser.cpp
+_chip_id = {
+        'GW1N-1'    : b'\x06\x00\x00\x00\x09\x00\x28\x1b',
+        'GW1NZ-1'   : b'\x06\x00\x00\x00\x01\x00\x68\x1b',
+        'GW1NS-2'   : b'\x06\x00\x00\x00\x03\x00\x08\x1b',
+        'GW1N-4'    : b'\x06\x00\x00\x00\x01\x00\x38\x1b',
+        'GW1NS-4'   : b'\x06\x00\x00\x00\x01\x00\x98\x1b',
+        'GW1N-9'    : b'\x06\x00\x00\x00\x11\x00\x58\x1b',
+        'GW1N-9C'   : b'\x06\x00\x00\x00\x11\x00\x48\x1b',
+        'GW2A-18'   : b'\x06\x00\x00\x00\x00\x00\x08\x1b',
+        'GW2A-18C'  : b'\x06\x00\x00\x00\x00\x00\x08\x1b',
+        'GW5A-25A'  : b'\x06\x00\x00\x00\x00\x01\x28\x1b',
+        }
+
+# generate bitsream header
+def gen_hdr():
+    hdr = [bytearray(b'\xff'*20)]
+    hdr.append(bytearray(b'\xff'*2))
+    # magic
+    hdr.append(bytearray(b'\xa5\xc3'))
+    # chip id
+    hdr.append(bytearray(_chip_id[device]))
+    # flags?
+    hdr.append(bytearray(b'\x10\x00\x00\x00\x00\x00\x00\x00'))
+    # compression keys
+    hdr.append(bytearray(b'\x51\x00\xff\xff\xff\xff\xff\xff'))
+    # something about the Security Bit
+    hdr.append(bytearray(b'\x0b\x00\x00\x00'))
+    # SPI address = 0
+    hdr.append(bytearray(b'\xd2\x00\xff\xff\x00\x00\x00\x00'))
+    # unknown
+    hdr.append(bytearray(b'\x12\x00\x00\x00'))
+    # number of rows, is filled in gowin_pack
+    hdr.append(bytearray(b'\x3b\x80\x00\x00'))
+
+    return hdr
 
 if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.fse", 'rb') as f:
@@ -267,9 +322,9 @@ if __name__ == "__main__":
         ttyp_pins = pin_locations.setdefault(ttyp, {})
         ttyp_pins.setdefault(name[:-1], set()).add(name)
 
-    pnr_empty = run_pnr(codegen.Module(), codegen.Constraints(), {})
-    db.cmd_hdr = pnr_empty.hdr
-    db.cmd_ftr = pnr_empty.ftr
+    # fill header/footer by hand
+    db.cmd_hdr = gen_hdr()
+    db.cmd_ftr = gen_ftr()
 
     # IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
