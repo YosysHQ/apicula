@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Union, ByteString, Any
+from typing import Dict, List, Set, Tuple, Union, Any
 from itertools import chain
 import re
 import copy
@@ -74,8 +74,9 @@ class Device:
     # {variant: {package: (net, row, col, AB, iostd)}}
     sip_cst: Dict[str, Dict[str, Tuple[str, int, int, str, str]]] = field(default_factory=dict)
     pin_bank: Dict[str, int] = field(default_factory = dict)
-    cmd_hdr: List[ByteString] = field(default_factory=list)
-    cmd_ftr: List[ByteString] = field(default_factory=list)
+    cmd_hdr: List[bytearray] = field(default_factory=list)
+    cmd_ftr: List[bytearray] = field(default_factory=list)
+    template: List[List[int]] = None
     # allowable values of bel attributes
     # {table_name: [(attr_id, attr_value)]}
     logicinfo: Dict[str, List[Tuple[int, int]]] = field(default_factory=dict)
