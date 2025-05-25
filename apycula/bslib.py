@@ -136,7 +136,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
     unused_bytes = []
     if compress:
         # search for smallest values not used in the bitstream
-        lst = bitmatrix.histogram(bs, bins=[i for i in range(257)]) # 257 so that the last basket is [255, 256] and not [254, 255]
+        lst = bitmatrix.byte_histogram(bs)
         unused_bytes = [i for i,val in enumerate(lst) if val==0]
         if unused_bytes:
             # We may simply not have the bytes we need for the keys.
