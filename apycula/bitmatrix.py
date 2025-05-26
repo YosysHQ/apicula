@@ -97,6 +97,17 @@ def histogram(lst, bins):
                 r_lst[i] += 1
     return r_lst
 
+def byte_histogram(lst):
+    """
+    Compute the histogram of a list of bytes.
+    Returns a list of 256 counters.
+    """
+    r_lst = [0] * 256
+    from itertools import chain
+    for val in chain.from_iterable(lst):
+        r_lst[val] += 1
+    return r_lst
+
 def any(bmp):
     """
     Test whether any matrix element evaluates to True.
