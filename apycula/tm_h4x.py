@@ -328,14 +328,17 @@ def read_tm(f, device):
         raise Exception("unknown family")
 
     tmdat = {}
-    a = enumerate(iter(lambda: f.read(chunklen), b''))
+    #a = enumerate(iter(lambda: f.read(chunklen), b''))
     for i, chunk in enumerate(iter(lambda: f.read(chunklen), b'')):
         try:
             speed_class = chunk_order[i]
         except IndexError:
             speed_class = str(i)
+        # XXX no gw5 for now
+        if len(chunk) != chunklen:
+            continue
         tmdat[speed_class] = {}
-        print("len(chunk):", len(chunk), "chunklen:", chunklen)
+        print(f'{i:2} class:{speed_class}' , "len(chunk):", len(chunk), "chunklen:", chunklen)
         #assert len(chunk) == chunklen # 5A the last chunk is smaller 12922 vs. 15552
         res = parse_chunk(chunk)
         for name, tm in res:

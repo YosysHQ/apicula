@@ -1,8 +1,10 @@
 module top (
 	input clk,
-	input key,
+	input key_i,
 	output [`LEDS_NR-1:0] led
 );
+
+wire key = key_i ^ `INV_BTN;
 
 reg [25:0] ctr_q;
 wire [25:0] ctr_d;

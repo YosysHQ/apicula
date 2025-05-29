@@ -2,11 +2,9 @@
 
 <img src="apicula.svg" width="250" />
 
-Documentation and open source tools for the Gowin FPGA bitstream format.
+Open source tools and [Documentation](https://github.com/YosysHQ/apicula/wiki) for the Gowin FPGA bitstream format.
 
 Project Apicula uses a combination of fuzzing and parsing of the vendor data files to provide Python tools for generating bitstreams.
-
-This project is supported by our generous sponsors. Have a look at our [contributors](https://github.com/YosysHQ/apicula/graphs/contributors) and sponsor them with via the various platforms linked on our [github](https://github.com/YosysHQ/apicula).
 
 ## Getting Started
 
@@ -18,13 +16,13 @@ Currently supported boards are
  * Sipeed Tang Nano 1K: GW1NZ-LV1QN48C6/I5
  * Sipeed Tang Nano 4K: GW1NSR-LV4CQN48PC7/I6
  * Sipeed Tang Nano 9K: GW1NR-LV9QN88PC6/I5 [^1]
- * Sipeed Tang Nano 20K: GW2AR-LV18QN88C8/I7
- * Sipeed Tang Primer 20K: GW2A-LV18PG256C8/I7
+ * Sipeed Tang Nano 20K: GW2AR-LV18QN88C8/I7 [^1]
+ * Sipeed Tang Primer 20K: GW2A-LV18PG256C8/I7 [^1]
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
  * @Disasm honeycomb: GW1NS-UX2CQN48C5/I4
  * szfpga: GW1NR-LV9LQ144PC6/I5
 
-[^1]: `C` devices require passing the `--family` flag as well as `--device` to Nextpnr, and stating the family in place of device when passing `-d` to `gowin_pack` because the C isn't part of the device ID but only present in the date code. Check `examples/Makefile` for the correct command.
+[^1]: `C` devices require passing the `--family` flag as well as `--device` to Nextpnr, and stating the family in place of device when passing `-d` to `gowin_pack` because the C isn't part of the device ID but only present in the date code. Check `examples/himbaechel/Makefile` for the correct command.
 
 Install the tools with pip.
 
@@ -99,55 +97,6 @@ I did a few [livestreams on twitch](https://www.twitch.tv/pepijnthefox) working 
 
 You can also come chat on [Matrix](https://matrix.to/#/#apicula:matrix.org) or [IRC](https://web.libera.chat/#yosys-apicula)
 
-## What remains to be done / how can I help?
+### Funding
 
-There is a lot of work left to do before this is a mature and complete FPGA flow.
-The upside is that there is something for people from all skill levels and backgrounds.
-
-### Fuzzing
-
-This project partially relies on the data files provided by the vendor to work.
-However, the exact meaning of these files is often not completely understood.
-Fuzzing can be used to discover the meaning of the vendor files.
-
-`tiled_fuzzer.py` is a fuzzer that uses vendor files to find bits in a specific tile type. Adding code for a new primitive or tile type is relatively easy. All that is neede is a function that uses `codegen.py` to generate the primitive of interest, which has to be added to the `fuzzers` list. Then the output at the bottom of the script can be adjusted to your needs.
-
-There is a `fuse_h4x.parse_tile` function which uses our understanding of the vendor files to look for matching items. On the other hand `fuse_h4x.scan_fuses` will just give you a list of fuses that were set in the tile, and `fuse_h4x.scan_tables` will go through *all* vendor data tables and spit out even a partial match. The latter will give false positives, but is helpful when discovering new tables.
-
-`fuzzer.py` is a bit more complex to write new fuzzers for, but could be usefull in some cases. It is for example much more efficient in fuzzing array parameters such as LUT bits, BRAM contents, and PLL settings. Have a look at `Lut4BitsFuzzer` for ideas about how to fuzz BRAM and DRAM for example.
-
-Things that could be fuzzed:
-
-* DRAM modes and bits
-* BRAM modes and bits
-* IO logic (LVDS etc.), expected to be complex.
-* PLL settings
-
-### Parsing
-
-For each FPGA, the vendor provides `.dat`, `.fse`, `.ini`, `.pwr`, and `.tm` files. Of these, parsers for `.dat`, `.fse`, `.ini` and `.tm` have been written.
-
-The format of the `.pwr` file is unknown, you're on your own here. I could only offer you some vague pointers based on experience from the other two files.
-
-For a description of the known file formats, [see the documentation](doc/filestructure.md).
-
-The parser for the `.fse` format is fairly robust and complete, but vendor software updates sometimes add new file and table types.
-The main thing lacking here is a better understanding of the meaning of all these tables. Part of this can be done with [fuzzing](#fuzzing), but another large part is just looking at the data for patterns and correlations. For example, some numbers might be indices into other tables, wire IDs, fuse IDs, or encoded X/Y positions.
-
-The parser for the `.dat` file is more fragile and incomplete. This is mainly because it just appears to be a fixed format struct with array fields. New vendor software versions sometimes add new fields, breaking the parser. Here there are actually a few gaps in the data that have not been decoded and named. It is suspected that at least some of these gaps are related to pinouts and packaging.
-
-The format of the '.tm' appears to be just a big collection of floats. Not all of them have a meaning that is well understood, but the parser itself is fairly complete.
-
-The `.ini` file is a table of IO configuration options. The format of these files appears to be fairly stable across IDE versions and the current parser is able to handle the vast majority of available files.
-
-
-
-### Refactoring
-
-There are quite a few sketchy places in the code that could use some tender loving care, without taking a deep dive into FPGA documenting.
-
-The `.dat` parser was sort of patched to output a JSON file, but it would be a lot nicer if one could just import it as a library and get Python datastructures back directly. Both parsers could optionally be extended to map known IDs to more human readable values (`wirenames.py` for example), provide a more convenient structure, and chomp of padding values.
-
-The fuzzers should be extended so that they run against all FPGA types. This is important to detect differences between FPGAs and generate ChipDBs for all of them. This does not require much in-depth knowledge. Just adding parameters for all FPGA types. A bit more involved is extending the fuzzer to fuzz global settings and constraints, these would need to be assigned config bits and toggle them accordingly.
-
-This project was funded through the <a href="/PET">NGI0 PET</a> Fund, a fund established by <a href="https://nlnet.nl">NLnet</a> with financial support from the European Commission's <a href="https://ngi.eu">Next Generation Internet</a> programme, under the aegis of DG Communications Networks, Content and Technology under grant agreement N<sup>o</sup> 825310.
+This project was funded through the <a href="https://nlnet.nl/PET">NGI0 PET</a> and [NGI Zero Entrust](https://nlnet.nl/entrust) Fund, a fund established by <a href="https://nlnet.nl">NLnet</a> with financial support from the European Commission's <a href="https://ngi.eu">Next Generation Internet</a> programme, under the aegis of DG Communications Networks, Content and Technology under grant agreement N<sup>o</sup> 825310 and 101069594.

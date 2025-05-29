@@ -1,9 +1,10 @@
 module top (
 	input clk,
-	input rst,
+	input rst_i,
 	output [`LEDS_NR-1:0] led
 );
 
+wire rst = rst_i ^ `INV_BTN;
 wire rst_s;
 wire tick_hz;
 

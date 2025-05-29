@@ -230,7 +230,7 @@ jobs:
     - name: Install and build
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools wheel twine
+        pip install setuptools==61.0 wheel twine
         python setup.py --version
         python setup.py sdist bdist_wheel
         # Validate that the resulting wheel can be executed
@@ -271,8 +271,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        yosys: [main, yosys-0.44]
-        nextpnr: [master, nextpnr-0.7]
+        yosys: [main, v0.53]
+        nextpnr: [master, nextpnr-0.8]
     steps:
     - uses: actions/checkout@v4
     - name: Download python package
@@ -300,19 +300,20 @@ jobs:
           libeigen3-dev
         cd yosys
         git checkout ${{ matrix.yosys }}
-        git submodule update --init
+        git submodule update --init --recursive
         make config-gcc
         make -j$(nproc)
         sudo make install
         cd ../nextpnr
         git checkout ${{ matrix.nextpnr }}
-        cmake . -DBUILD_PYTHON=OFF -DARCH="gowin;himbaechel" -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
+        git submodule update --init --recursive
+        mkdir -p build
+        cd build
+        cmake .. -DBUILD_PYTHON=OFF -DARCH="himbaechel" -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
         make -j$(nproc)
         sudo make install
-        cd ../examples
+        cd ../../examples
         make -j$(nproc) all
-        cd himbaechel
-        make -j$(nproc) -f Makefile.himbaechel all 
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
@@ -322,11 +323,6 @@ jobs:
       run: |
         cd examples
         make -j$(nproc) unpacked
-        for f in *-unpacked.v; do
-          yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
-        done
-        cd himbaechel
-        make -j$(nproc) -f Makefile.himbaechel unpacked
         for f in *-unpacked.v; do
           yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
         done

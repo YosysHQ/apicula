@@ -5,20 +5,16 @@ endif
 .SECONDARY:
 .PHONY: all clean
 
-#removed ones that nolonger exist (GW1NS-2) or fail (GW2A-18C)
-all: apycula/GW5A-25A.pickle apycula/GW2A-18C.pickle
-#all: apycula/GW1N-1.pickle
-
-#all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle \
-	 apycula/GW1NS-2.pickle apycula/GW1NS-4.pickle apycula/GW1N-9C.pickle \
-	 apycula/GW1NZ-1.pickle apycula/GW2A-18.pickle apycula/GW2A-18C.pickle
-
+all: apycula/GW1N-1.pickle apycula/GW1N-9.pickle apycula/GW1N-4.pickle \
+	 apycula/GW1NS-4.pickle apycula/GW1N-9C.pickle apycula/GW1NZ-1.pickle \
+	 apycula/GW2A-18.pickle apycula/GW2A-18C.pickle
+	 #apycula/GW2A-18.pickle apycula/GW2A-18C.pickle apycula/GW5A-25A.pickle
 
 %_stage1.pickle: apycula/tiled_fuzzer.py
 	python3 -m apycula.tiled_fuzzer $*
 
-%_stage2.pickle: apycula/clock_fuzzer.py %_stage1.pickle
-	python3 -m apycula.clock_fuzzer $*
+%_stage2.pickle: apycula/find_sdram_pins.py %_stage1.pickle
+	python3 -m apycula.find_sdram_pins $*
 
 apycula/%.pickle: %_stage2.pickle
 	gzip -c $< > $@

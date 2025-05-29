@@ -3,9 +3,9 @@ import random
 import os
 from apycula import bitmatrix
 
-gowinhome = os.getenv("GOWINHOME")
-if not gowinhome:
-    raise Exception("GOWINHOME not set")
+#gowinhome = os.getenv("GOWINHOME")
+#if not gowinhome:
+#    raise Exception("GOWINHOME not set")
 
 # device = os.getenv("DEVICE")
 device = sys.argv[1]
@@ -18,7 +18,7 @@ def readFse(f, device):
     print("check", rint(f, 4))
     tiles = {}
     ttyp = rint(f, 4)
-    #print("tile type", ttyp)
+    print(f"tile type:{ttyp}/{hex(ttyp)}")
     tiles['header'] = readOneFile(f, ttyp, device)
     while True:
         ttyp = rint(f, 4)
@@ -34,35 +34,34 @@ def readTable(f, size1, size2, w=2):
 def readOneFile(f, tileType, device):
     tmap = {"height": rint(f, 4),
             "width": rint(f, 4)}
-    #print("height: ", tmap["height"], "width: ", tmap["width"])
     tables = rint(f, 4)
-   
-    v1 = 0x1b8
-    v2 = 3
-    if (tileType < 0x400):
-        if ((0x1b7 < tileType) or (tileType < 0)):
-            print("Error: readOneFile 1")
-    else:
-        if (2 < tileType + -0x400):
-            print("Error: readOneFile 2")
-        
-        v2 = tileType + -0x400
-        tileType = v1
-  
-    v1 = tileType
-        
-            
+    print("height: ", tmap["height"], "width: ", tmap["width"], "tables:", tables)
+
+    #v1 = 0x1b8
+    #v2 = 3
+    #if (tileType < 0x400):
+    #    if ((0x1b7 < tileType) or (tileType < 0)):
+    #        print("Error: readOneFile 1")
+    #else:
+    #    if (2 < tileType + -0x400):
+    #        print("Error: readOneFile 2")
+
+    #    v2 = tileType + -0x400
+    #    tileType = v1
+
+    #v1 = tileType
+
     is5Series = False
     if device.lower().startswith("gw5a"): is5Series = True
 
     for i in range(tables):
         typ = rint(f, 4)
         size = rint(f, 4)
-        #print(hex(f.tell()), " Table type", typ, "/", hex(typ), "of size", size)
+        print(hex(f.tell()), " Table type", typ, "/", hex(typ), "of size", size)
         if typ == 61:
             size2 = rint(f, 4)
             typn = "grid"
-            t = readTable(f, size, size2, 4)            
+            t = readTable(f, size, size2, 4)
         elif typ == 1:
             # Check if the device is 5 series as tile type 1 needs to be read differently
             typn = "fuse"
@@ -82,20 +81,20 @@ def readOneFile(f, tileType, device):
                      0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23,
                      0x24, 0x32, 0x33, 0x38, 0x3c, 0x40, 0x42, 0x44,
                      0x47, 0x49, 0x4b, 0x4d, 0x4f, 0x50, 0x52, 0x54,
-                     0x56, 0x58, 0x59, 0x5d, 0x5e, 0x5f, 0x60, 0x61, 
-                     0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 
+                     0x56, 0x58, 0x59, 0x5d, 0x5e, 0x5f, 0x60, 0x61,
+                     0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
                      0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70, 0x71,
-                     0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 
-                     0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80, 0x81, 
+                     0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79,
+                     0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80, 0x81,
                      0x82, 0x83, 0x84, 0x85, 0x88, 0x89, 0x8a}:
             typn = "shortval"
             t = readTable(f, size, 14, 2)
         elif typ in {6, 0x45}:
             typn = "alonenode"
             t = readTable(f, size, 15, 2)
-        elif typ in {0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 
-                     0x0f, 0x10, 0x27, 0x31, 0x34, 0x37, 0x39, 0x3b, 
-                     0x3e, 0x3f, 0x41, 0x46, 0x48, 0x4a, 0x4c, 0x4e, 
+        elif typ in {0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+                     0x0f, 0x10, 0x27, 0x31, 0x34, 0x37, 0x39, 0x3b,
+                     0x3e, 0x3f, 0x41, 0x46, 0x48, 0x4a, 0x4c, 0x4e,
                      0x51, 0x53, 0x55, 0x57, 0x5c}:
             typn = "logicinfo"
             t = readTable(f, size, 3, 2)
@@ -106,11 +105,11 @@ def readOneFile(f, tileType, device):
             typn = "longval"
             t = readTable(f, size, 28, 2)
         elif typ == 0x43:
-            if device in {'GW1N-1', 'GW1N-9', 'GW1N-4', 'GW1NS-4'
+            if device in {'GW1N-1', 'GW1NZ-1', 'GW1N-9', 'GW1N-9C', 'GW1N-4', 'GW1NS-4',
                         'GW2A-18', 'GW2A-18C', 'GW5A-25A', 'GW5AS-25A'}:
                 typn = "logicinfo"
-                t = readTable(f, size, 3, 2) 
-            else: # GW1N-9C GW5A-138B GW5AST-138B GW5AT-138 GW5AT-138B GW5AT-75B
+                t = readTable(f, size, 3, 2)
+            else: # GW5A-138B GW5AST-138B GW5AT-138 GW5AT-138B GW5AT-75B
                 typn = "signedlogicinfo"
                 t = readTable(f, size, 6, 2)
         elif typ in {0x86, 0x87}:
@@ -128,7 +127,7 @@ def render_tile(d, ttyp, device):
     w = d[ttyp]['width']
     h = d[ttyp]['height']
 
-        
+
     is5Series = False
     if device.lower().startswith("gw5a"): is5Series = True
 
@@ -152,13 +151,13 @@ def render_tile(d, ttyp, device):
                                 highestnum = num
                             row = num // 100
                             col = num % 100
-                            if is5Series: 
+                            if is5Series:
                                 row = num // 200
                                 col = num % 200
 
                             if row > h:
                                 print("tile(r):", ttyp, "row:", row, "w:", w,"h:", h, "highest:", highestnum)
-                                
+
                             if col > w:
                                 print("tile(w):", ttyp, "col:", col, "w:", w,"h:", h, "highest:", highestnum)
 
@@ -238,7 +237,7 @@ def fuse_lookup(d, ttyp, fuse, device):
         num = d['header']['fuse'][1][fuse][ttyp]
         row = num // 100
         col = num % 100
-        if is5Series: 
+        if is5Series:
             row = num // 200
             col = num % 200
 
@@ -366,10 +365,10 @@ def exact_table_cover(t_rows, start, table=None):
     # Enforce that every destination node has a single source
     if table == 'wire':
         for id, row in enumerate(t_rows):
-            # Casting the wire_id to a string ensures that it doesn't conflict with fuse_ids 
+            # Casting the wire_id to a string ensures that it doesn't conflict with fuse_ids
             row_fuses[id].add(str(row[1]))
             secondary.add(str(row[1]))
-        
+
     g = xcover.covers(row_fuses, primary=primary, secondary=secondary, colored=False)
     if g:
         for r in g:
@@ -394,10 +393,10 @@ def scan_fuses(d, ttyp, tile, device):
             num = fuse[ttyp]
             frow = num // 100
             fcol = num % 100
-            #if is5Series: 
+            #if is5Series:
             #    frow = num // w
             #    fcol = num % w
-            #    print("GO FLUFFY") 
+            #    print("GO FLUFFY")
 
             if frow == row and fcol == col and fnum > 100:
                 fuses.append(fnum)
@@ -429,12 +428,3 @@ def reduce_rows(rows, fuses, start=16, tries=1000):
             features.add(feat)
     return features
 
-if __name__ == "__main__":
-
-    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
-        d = readFse(f, device)
-
-    bm = render_bitmap(d, device)
-    display("fuse.png", bm)
-    t = render_tile(d, 50, device)
-    display("tile.png", t)

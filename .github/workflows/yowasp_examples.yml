@@ -21,11 +21,11 @@ jobs:
         run: |
           python --version
           pip --version
-          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ yowasp-yosys yowasp-nextpnr-gowin
+          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ yowasp-yosys yowasp-nextpnr-himbaechel-gowin
       - name: build examples
         run: |
           cd examples
-          YOSYS=yowasp-yosys NEXTPNR=yowasp-nextpnr-gowin make all
+          YOSYS=yowasp-yosys NEXTPNR=yowasp-nextpnr-himbaechel-gowin make all
       - name: Archive artifact
         uses: actions/upload-artifact@v4
         with:

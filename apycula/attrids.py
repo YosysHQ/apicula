@@ -15,7 +15,7 @@ iob_attrids = {
         'DIFFRESISTOR':          7, # *
         'SINGLERESISTOR':        8, # *
         'VREF':                  9, # *
-        'VCCIO':                 10,
+        'BANK_VCCIO':            10,
         'DIFFDRIVE':             11,
         'I3C_MODE':              12,
         'MIPI_INPUT':            13,
@@ -35,7 +35,7 @@ iob_attrids = {
         'TRI_MUX':               27,
         'TRIMUX_PADDT':          28,
         'IOBUF_PADDI':           29,
-        'USED':                  30, # *
+        'USED':                  30,
         'IOBUF_OVERDRIVE':       31,
         'IOBUF_UNDERDRIVE':      32,
         'IOBUF_LVDS25_VCCIO':    33,
@@ -45,7 +45,7 @@ iob_attrids = {
         'LPRX_A2':               37,
         'MIPI':                  38,
         'LVDS_SEL':              39,
-        'VLDS_ON':               40,
+        'LVDS_ON':               40,
         'IOBUF_MIPI_LP':         41,
         'IOBUF_ODT_RESISTOR':    42,
         'IOBUF_CIB_CONTROL':     43,
@@ -877,8 +877,7 @@ cls_attrids = {
         'REG0_SD':          11,
         'REG1_SD':          12,
         'REG0_REGSET':      13,
-        'REG1_REGSET':      14,
-        'NEW ATTR ID?':     15
+        'REG1_REGSET':      14
     }
 
 cls_attrvals = {
@@ -931,6 +930,30 @@ dcs_attrvals = {
         'CLK3_GND':        20,
         'GND':             21,
         'VCC':             22,
+        }
+
+# DLLDLY
+dlldly_attrids = {
+        'ENABLED':          0,
+        'LOADN':            2,
+        'SIGN':             3,
+        'MODE':             4,
+        'ADJ0':             5,
+        'ADJ1':             6,
+        'ADJ2':             7,
+        'ADJ3':             8,
+        'ADJ4':             9,
+        'ADJ5':            10,
+        'ADJ6':            11,
+        'ADJ7':            12,
+    }
+
+dlldly_attrvals = {
+        'UNKNOWN':          0,
+        'ENABLE':           1,
+        'NORMAL':           3,
+        '1':                4,
+        'NEG':              5,
         }
 
 # DLL
@@ -1153,12 +1176,16 @@ osc_attrvals = {
 # config
 cfg_attrids = {
         'DONE_AS_GPIO':     0,
+        'GWD':              1,
         'GSR':              2,
+        'GOE':              3,
+        'DONE':             4,
         'JTAG_AS_GPIO':     6,
         'READY_AS_GPIO':    7,
         'MSPI_AS_GPIO':     8,
         'RECONFIG_AS_GPIO': 9,
         'SSPI_AS_GPIO':     10,
+        'POWERSAVE':        16,
         'I2C_AS_GPIO':      20,
         'JTAG_EN':          21,
         'POR':              24, # power on reset
@@ -1172,8 +1199,8 @@ cfg_attrvals = {
         'F1':               4,
         'F2':               5,
         'F3':               6,
-        'USED':             7,
-        'UNUSED':           8,
+        'UNUSED':           7,
+        'USED':             8,
         'FALSE':            9
     }
 
@@ -1227,7 +1254,7 @@ hclk_attrvals = {
         'DIVCIBRST2':       1,
         'DIVCIBRST3':       2,
         'DIV2':             3,
-        'DIVCIBRST0':       4, 
+        'DIVCIBRST0':       4,
         'DIVCIBRST1':       5,
         'DIVCIBRST4':       6,
         'DIVCIBRST5':       7,
@@ -1376,7 +1403,7 @@ iologic_attrids = {
         'IOLOGIC_UNKNOWN129':      129,
         'IOLOGIC_UNKNOWN130':      130,
         'IOLOGIC_UNKNOWN135':      135,
-        'IOLOGIC_UNKNOWN136':      136        
+        'IOLOGIC_UNKNOWN136':      136
     }
 
 iologic_attrvals = {

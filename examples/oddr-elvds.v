@@ -4,15 +4,18 @@
 */
 module top (
     input clk,
-	input key,
+	input key_i,
     output elvds_p,
     output elvds_n
 );
+
+wire key = key_i ^ `INV_BTN;
 
 reg [24:0] ctr_q;
 wire [24:0] ctr_d;
 wire i_tick;
 wire w_ddr;
+wire oen;
 
 // Sequential code (flip-flop)
 always @(posedge clk)
@@ -27,12 +30,12 @@ ODDR oddr_0(
 	.D1(1'b1),
 	.CLK(i_tick),
 	.Q0(w_ddr),
-	.Q1(),
-	.TX()
+	.Q1(oen),
+	.TX(~key)
 );
 
 ELVDS_TBUF diff_buf(
-		.OEN(~key),
+		.OEN(oen),
         .O(elvds_p),
         .OB(elvds_n),
         .I(w_ddr)

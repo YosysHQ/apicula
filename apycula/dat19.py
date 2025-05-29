@@ -50,7 +50,7 @@ class Datfile:
         self.compat_dict.update(self.read_io())
         self.cmux_ins: dict[int, list[int]] = self.read_io()['CmuxIns']
 
-            
+
     def read_u8(self):
         v = self.data[self._cur]
         self._cur += 1
@@ -97,21 +97,21 @@ class Datfile:
 
     def read_arr16_at(self, num:int, base:int, scale:int, offset:int):
         ret = []
-    
+
         for n in range(num):
             self._cur = (n + base) * 2 + offset
             ret.append(self.read_i16())
-        return ret 
+        return ret
 
     def read_arr32_at(self, num:int, base:int, scale:int, offset:int):
         ret = []
-    
+
         for n in range(num):
             self._cur = (n + base) * 4 + offset
             ret.append(self.read_i32())
-        return ret 
+        return ret
 
-        
+
     def read_arr32(self, num: int) -> list[int]:
         arr = [self.read_i32() for _ in range(num)]
         return arr
@@ -251,25 +251,25 @@ class Datfile:
     def read_5Astuff(self) -> dict:
         RSTable5ATOffset = 0x7b4a8
         ret = { }
-        
+
         #These are set (not read from file), but can't find reference
         #ret["UNKNOWN"] = 0x1d
         #ret["UNKNOWN"] = 0x1d
         #ret["UNKNOWN"] = 0x16
         #ret["UNKNOWN"] = 0x16
         #ret["UNKNOWN"] = 0xe
-        
+
         self._cur = RSTable5ATOffset + 0x240b0
         ret["TopHiq"] = self.read_u16()
-        ret["TopViq"] = self.read_u16() 
-        ret["BotHiq"] = self.read_u16() 
-        ret["BotViq"] = self.read_u16() 
+        ret["TopViq"] = self.read_u16()
+        ret["BotHiq"] = self.read_u16()
+        ret["BotViq"] = self.read_u16()
 
         ret["PllIn"]                = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xaf0, 0)
         ret["PllOut"]               = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xbe8, 0)
         ret["PllInDlt"]             = self.read_arr16_at(0xbc8, RSTable5ATOffset + 0xaf0, 0)
         ret["PllOutDlt"]            = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xcc0, 0)
-            
+
         ret["5ATIOLogicAIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1880, 0)
         ret["5ATIOLogicBIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x18b8, 0xc)
         ret["5ATIOLogicAOut"]       = self.read_arr16_at(0x27, RSTable5ATOffset + 0x18f8, 8)
@@ -280,7 +280,7 @@ class Datfile:
         ret["5ATIODelayBIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1988, 0)
 
         # The following address offsets are also mentioned
-        # All 5 are mentioned in FanIns, but only the 3rd and 4th are mentioned in FanOuts 
+        # All 5 are mentioned in FanIns, but only the 3rd and 4th are mentioned in FanOuts
         #ret["UNKNOWN"]             = self.read_scaledGrid16(0x20, 0x1d, 0x1d, RSTable5ATOffset + 0x3428, 0)
         #ret["UNKNOWN"]             = self.read_scaledGrid16(0xc, 0x16, 0x16, RSTable5ATOffset + 0x3b68, 0)
         #ret["UNKNOWN"]             = self.read_scaledGrid16(0xc, 0x16, 0x16, RSTable5ATOffset + 0x1e98, 8)
@@ -291,7 +291,7 @@ class Datfile:
         ret["MipiIns2"]             = self.read_scaledGrid16(0xc3, 3, 3, RSTable5ATOffset + 0x2680, 0xe)
         ret["MipiOuts1"]            = self.read_scaledGrid16(0x76, 3, 3, RSTable5ATOffset + 0x2520, 0)
         ret["MipiOuts2"]            = self.read_scaledGrid16(0x76, 3, 3, RSTable5ATOffset + 0x28c8, 6)
-    
+
         ret["MipiDPhyIns"]          = self.read_scaledGrid16(0xbb, 3, 3, RSTable5ATOffset + 0x91c0, 10)
         ret["MipiDPhyOuts"]         = self.read_scaledGrid16(0x6a, 3, 3, RSTable5ATOffset + 0x93f0, 0xc)
 
@@ -319,7 +319,7 @@ class Datfile:
         ret["MipiIO2"]              = self.read_scaledGrid16(10, 0xf, 0xf, RSTable5ATOffset + 0x24176, 0)
         for n in range(5):
             ret["MipiIOName1_{n}"]  = self.read_scaledGrid16(10, 0xf, 0x4b, 5, RSTable5ATOffset + 0x2420c + n)
-            ret["MipiIOName2_{n}"]  = self.read_scaledGrid16(10, 0xf, 0x4b, 5, RSTable5ATOffset + 0x244fa + n)            
+            ret["MipiIOName2_{n}"]  = self.read_scaledGrid16(10, 0xf, 0x4b, 5, RSTable5ATOffset + 0x244fa + n)
         ret["MipiBank1"]            = self.read_arr16_at(10, RSTable5ATOffset + 0x240e0, 0)
         ret["MipiBank2"]            = self.read_arr16_at(10, RSTable5ATOffset + 0x24176, 0)
 
@@ -327,10 +327,10 @@ class Datfile:
         ret["QuafIO2"]              = self.read_scaledGrid16(15, 0xf, 0xf, RSTable5ATOffset + 0x24977, 0)
         for n in range(5):
             ret["QuadIOName1_{n}"]  = self.read_scaledGrid16(15, 0xf, 0x4b, 5, RSTable5ATOffset + 0x2483c + n)
-            ret["QuafIOName2_{n}"]  = self.read_scaledGrid16(15, 0xf, 0xf, 5, RSTable5ATOffset + 0x24977 + n)            
+            ret["QuafIOName2_{n}"]  = self.read_scaledGrid16(15, 0xf, 0xf, 5, RSTable5ATOffset + 0x24977 + n)
         ret["QuadBank1"]            = self.read_arr16_at(15, RSTable5ATOffset + 0x123f0, 8)
         ret["QuadBank2"]            = self.read_arr16_at(15, RSTable5ATOffset + 0x12408, 2)
-        
+
         ret["AdcIO"]                = self.read_scaledGrid16(4, 0xf, 0xf, 1, RSTable5ATOffset + 0x25708)
         for n in range(5):
             ret["QuaAdcIOName_{n}"] = self.read_scaledGrid16(4, 0xf, 0x4b, 5, RSTable5ATOffset + 0x25744 + n)
@@ -379,7 +379,7 @@ class Datfile:
         ret["S1DdrDllIns2"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12cf8, 0xe)
         ret["S1DdrDllIns3"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12d70, 8)
         ret["S1DdrDllIns4"]         = self.read_scaledGrid16(4, 3, 3, RSTable5ATOffset + 0x12de8, 2)
- 
+
         ret["MDdrDllOuts1"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12c48, 0)
         ret["MDdrDllOuts2"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12cb8, 10)
         ret["MDdrDllOuts3"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d30, 4)
@@ -387,7 +387,7 @@ class Datfile:
         ret["MDdrDllOuts5"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e18, 8)
         ret["MDdrDllOuts6"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e40, 6)
         ret["MDdrDllOuts7"]         = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12e68, 4)
-            
+
         ret["S0DdrDllOuts1"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12c68, 0xe)
         ret["S0DdrDllOuts2"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12ce0, 8)
         ret["S0DdrDllOuts3"]        = self.read_scaledGrid16(9, 3, 3, RSTable5ATOffset + 0x12d58, 2)
@@ -409,7 +409,7 @@ class Datfile:
         ret["AdcULCCfgvsenctl"]     = self.read_scaledGrid16(3, 3, 3, RSTable5ATOffset + 0x13158, 0xc)
         ret["Adc25kIns"]            = self.read_scaledGrid16(0x17, 3, 3, RSTable5ATOffset + 0x13160, 0xe)
         ret["Adc25kOuts"]           = self.read_scaledGrid16(0x1b, 3, 3, RSTable5ATOffset + 0x131a8, 8)
-        
+
         ret["CibFabricNode"]        = self.read_scaledGrid16(6, 3, 3, RSTable5ATOffset + 0x131f8, 10)
         ret["SharedIOLogicIOBloc"]  = self.read_scaledGrid16(0x9c, 2, 2, RSTable5ATOffset + 0x13208, 0xe)
 
@@ -432,10 +432,10 @@ class Datfile:
         ret["RightBMBGA121NName"]   = self.read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x297f8, 0)
 
         ret["SpineColumn"]          = self.read_arr16_at(8, RSTable5ATOffset + 0x14e98, 0xe)
-    
+
 
         return ret
-            
+
     def read_portmap(self) -> dict:
         self._cur = 0x55D2C
         # These are ordered by position in the file
@@ -492,27 +492,27 @@ class Datfile:
             "MdicIn": self.read_clkins(0x36),
             "MdicInDlt": self.read_clkins(0x36),
             "CtrlIn": self.read_mult(0xE),
-            "CtrlInDlt": self.read_mult(0xE),            
-            "dsp12x12Ins": self.read_clkins(30),
-            "dsp12x12Outs": self.read_clkins(24),
-            "dsp12x12InDlt": self.read_clkins(30),
-            "dsp12x12OutDlt": self.read_clkins(24),
-            "dsp12x12SumIns": self.read_arr16(113),
-            "dsp12x12SumOuts": self.read_arr16(112),
-            "dsp12x12SumInDlt": self.read_arr16(113),
-            "dsp12x12SumOutDlt": self.read_arr16(112),
-            "dsp27x18Ins": self.read_arr16(163),
-            "dsp27x18Outs": self.read_arr16(139),
-            "dsp27x18InDlt": self.read_arr16(163),
-            "dsp27x18OutDlt": self.read_arr16(139),
-            "dspCtrlIns": self.read_clkins(6),
-            "dspCtrlInDlt": self.read_clkins(6),
+            "CtrlInDlt": self.read_mult(0xE),
+            #"dsp12x12Ins": self.read_clkins(30),
+            #"dsp12x12Outs": self.read_clkins(24),
+            #"dsp12x12InDlt": self.read_clkins(30),
+            #"dsp12x12OutDlt": self.read_clkins(24),
+            #"dsp12x12SumIns": self.read_arr16(113),
+            #"dsp12x12SumOuts": self.read_arr16(112),
+            #"dsp12x12SumInDlt": self.read_arr16(113),
+            #"dsp12x12SumOutDlt": self.read_arr16(112),
+            #"dsp27x18Ins": self.read_arr16(163),
+            #"dsp27x18Outs": self.read_arr16(139),
+            #"dsp27x18InDlt": self.read_arr16(163),
+            #"dsp27x18OutDlt": self.read_arr16(139),
+            #"dspCtrlIns": self.read_clkins(6),
+            #"dspCtrlInDlt": self.read_clkins(6),
         }
-        assert self._cur == 0x58c8e
+        assert self._cur == 0x58272 #0x58c8e
         return ret
 
     def read_io(self):
-        self._cur = 363662 # 0x58c8e
+        self._cur = 0x58272
         ret = {}
         ret["CiuConnection"] = {}
         for i in range(320):
@@ -542,11 +542,10 @@ class Datfile:
         ret["DqsCLoc"] = self.read_arr16(0x16)
         ret["JtagIns"] = self.read_arr16(5)
         ret["JtagOuts"] = self.read_arr16(11)
-        ret["ClksrcIns"] = self.read_arr16(0x26)
-        ret["ClksrcOuts"] = self.read_arr16(16)
+        ret["ClksrcIns"] = self.read_arr16(0x27)
+        ret["ClksrcOuts"] = self.read_arr16(17)
         ret["UfbIns"] = self.read_outs(0x5A)
         ret["UfbOuts"] = self.read_outs(0x20)
-        self._cur += 4
         ret["McuIns"] = self.read_outs(0x109)
         ret["McuOuts"] = self.read_outs(0x174)
         ret["EMcuIns"] = self.read_outs(0x10E)
@@ -561,7 +560,7 @@ class Datfile:
         ret["SpmiOuts"] = self.read_outs(0x2F)
         ret["I3cIns"] = self.read_outs(0x26)
         ret["I3cOuts"] = self.read_outs(0x28)
-        assert self._cur == 0x7BE5A, hex(self._cur)
+        assert self._cur == 0x7b43e, hex(self._cur)
         return ret
 
     def read_something5A(self):
@@ -594,7 +593,7 @@ class Datfile:
         ret["Cfg"]["RB"]        = self.read_arr32_at(0x96, RSTable5ATOffset, 0x4e0, 8)
 
         return ret
-            
+
     def read_something(self):
         self._cur = 0x026068
         ret = {

@@ -74,7 +74,7 @@ params = {
     "GW2A-18C": {
         "package": "PBGA256S",
         "device": "GW2A-18C",
-        "partnumber": "GW2A-LV18PG256SC8/I7", #"GW2AR-LV18PG256SC8/I7", "GW2AR-LV18QN88C8/I7" 
+        "partnumber": "GW2A-LV18PG256SC8/I7", #"GW2AR-LV18PG256SC8/I7", "GW2AR-LV18QN88C8/I7"
     },
     "GW5A-25A": {
         "package": "MBGA121N",
@@ -105,6 +105,19 @@ def tbrl2rc(fse, side, num):
         col = len(fse['header']['grid'][61][0])-1
     return (row, col)
 
+def rc2tbrl(db, row, col, num):
+    edge = 'T'
+    idx = col
+    if row == db.rows:
+        edge = 'B'
+    elif col == 1:
+        edge = 'L'
+        idx = row
+    elif col == db.cols:
+        edge = 'R'
+        idx = row
+    return f"IO{edge}{idx}{num}"
+
 # Read the packer vendor log to identify problem with primitives/attributes
 # returns dictionary {(primitive name, error code) : [full error text]}
 _err_parser = re.compile(r"(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
@@ -126,7 +139,8 @@ PnrResult = namedtuple('PnrResult', [
     'constrs',        # constraints
     'config',         # device config
     'attrs',          # port attributes
-    'errs'            # parsed log file
+    'errs',           # parsed log file
+    'version',        # IDE version
     ])
 
 def run_pnr(mod, constr, config):
@@ -140,7 +154,7 @@ def run_pnr(mod, constr, config):
         "use_mode_as_gpio"      : config.get('mode', "1"),
         "use_i2c_as_gpio"       : config.get('i2c', "1"),
         "bit_crc_check"         : "1",
-        "bit_compress"          : "0",
+        "bit_compress"          : "1",
         "bit_encrypt"           : "0",
         "bit_security"          : "1",
         "bit_incl_bsram_init"   : "0",
@@ -153,13 +167,12 @@ def run_pnr(mod, constr, config):
     opt = codegen.PnrOptions({
         "gen_posp"          : "1",
         "gen_io_cst"        : "1",
-        #"gen_ibis"          : "1",
+        "gen_ibis"          : "1",
         "ireg_in_iob"       : "0",
         "oreg_in_iob"       : "0",
         "ioreg_in_iob"      : "0",
         "timing_driven"     : "0",
-        "cst_warn_to_error" : "0"
-        })
+        "cst_warn_to_error" : "0"})
     #"show_all_warn" : "1",
 
     pnr = codegen.Pnr()
@@ -182,10 +195,12 @@ def run_pnr(mod, constr, config):
         #print(tmpdir); input()
         try:
             return PnrResult(
-                    *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
+                    #*bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
+                    *bslib.read_bitstream("/home/rabbit/src/templates/GW1NZ-1.fs"),
                     constr,
                     config, constr.attrs,
-                    read_err_log(tmpdir+"/impl/pnr/top.log"))
+                    read_err_log(tmpdir+"/impl/pnr/top.log"),
+                    bslib.read_bitstream_version(tmpdir+"/impl/pnr/top.fs"))
         except FileNotFoundError:
             print(tmpdir)
             input()
@@ -219,14 +234,69 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
         for row, col in locations[ttyp]:
             db.grid[row][col].bels.update(iob_bels[ttyp])
 
+# generate bitstream footer
+def gen_ftr():
+    # first line with CRC(?) at the end
+    line = bytearray(b'\xff'*20)
+    line[-2] = 0x34
+    line[-1] = 0x73
+    ftr = [line]
+    # bitmap CRC, filled in gowin_pack
+    ftr.append(bytearray(b'\x0a\x00\x00\x00\x00\x00\x00\x00'))
+    # noop
+    ftr.append(bytearray(b'\xff'*8))
+    # write done
+    ftr.append(bytearray(b'\x08\x00\x00\x00'))
+    # noop
+    ftr.append(bytearray(b'\xff'*8))
+    ftr.append(bytearray(b'\xff'*2))
+
+    return ftr
+
+# borrowed from https://github.com/trabucayre/openFPGALoader/blob/master/src/fsparser.cpp
+_chip_id = {
+        'GW1N-1'    : b'\x06\x00\x00\x00\x09\x00\x28\x1b',
+        'GW1NZ-1'   : b'\x06\x00\x00\x00\x01\x00\x68\x1b',
+        'GW1NS-2'   : b'\x06\x00\x00\x00\x03\x00\x08\x1b',
+        'GW1N-4'    : b'\x06\x00\x00\x00\x01\x00\x38\x1b',
+        'GW1NS-4'   : b'\x06\x00\x00\x00\x01\x00\x98\x1b',
+        'GW1N-9'    : b'\x06\x00\x00\x00\x11\x00\x58\x1b',
+        'GW1N-9C'   : b'\x06\x00\x00\x00\x11\x00\x48\x1b',
+        'GW2A-18'   : b'\x06\x00\x00\x00\x00\x00\x08\x1b',
+        'GW2A-18C'  : b'\x06\x00\x00\x00\x00\x00\x08\x1b',
+        'GW5A-25A'  : b'\x06\x00\x00\x00\x00\x01\x28\x1b',
+        }
+
+# generate bitsream header
+def gen_hdr():
+    hdr = [bytearray(b'\xff'*20)]
+    hdr.append(bytearray(b'\xff'*2))
+    # magic
+    hdr.append(bytearray(b'\xa5\xc3'))
+    # chip id
+    hdr.append(bytearray(_chip_id[device]))
+    # flags?
+    hdr.append(bytearray(b'\x10\x00\x00\x00\x00\x00\x00\x00'))
+    # compression keys
+    hdr.append(bytearray(b'\x51\x00\xff\xff\xff\xff\xff\xff'))
+    # something about the Security Bit
+    hdr.append(bytearray(b'\x0b\x00\x00\x00'))
+    # SPI address = 0
+    hdr.append(bytearray(b'\xd2\x00\xff\xff\x00\x00\x00\x00'))
+    # unknown
+    hdr.append(bytearray(b'\x12\x00\x00\x00'))
+    # number of rows, is filled in gowin_pack
+    hdr.append(bytearray(b'\x3b\x80\x00\x00'))
+
+    return hdr
 
 if __name__ == "__main__":
-    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.fse", 'rb') as f:
+    with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.fse", 'rb') as f:
         fse = fuse_h4x.readFse(f, device)
 
-    dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{device}/{device}.dat"))
+    dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.dat"))
 
-    with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
+    with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.tm", 'rb') as f:
         tm = tm_h4x.read_tm(f, device)
 
     db = chipdb.from_fse(device, fse, dat)
@@ -260,12 +330,10 @@ if __name__ == "__main__":
         ttyp_pins = pin_locations.setdefault(ttyp, {})
         ttyp_pins.setdefault(name[:-1], set()).add(name)
 
+    # fill header/footer by hand
+    db.cmd_hdr = gen_hdr()
+    db.cmd_ftr = gen_ftr()
 
-    pnr_empty = run_pnr(codegen.Module(), codegen.Constraints(), {})
-    db.cmd_hdr = pnr_empty.hdr
-    db.cmd_ftr = pnr_empty.ftr
-    db.template = pnr_empty.bitmap
- 
     # IOB
     diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
     fse_iob(fse, db, pin_locations, diff_cap_info, locations);
@@ -276,26 +344,23 @@ if __name__ == "__main__":
     chipdb.dat_portmap(dat, db, device)
     chipdb.add_hclk_bels(dat, db, device)
 
+
     # XXX GW1NR-9 has interesting IOBA pins on the bottom side
     if device == 'GW1N-9' :
         loc = locations[52][0]
         bel = db.grid[loc[0]][loc[1]].bels['IOBA']
         bel.portmap['GW9_ALWAYS_LOW0'] = wirenames[dat.portmap['IologicAIn'][40]]
         bel.portmap['GW9_ALWAYS_LOW1'] = wirenames[dat.portmap['IologicAIn'][42]]
-    chipdb.dat_aliases(dat, db)
 
     # GSR
     if device in {'GW2A-18', 'GW2A-18C', 'GW5A-25A'}:
-        db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
-        #print("timing: ", db.timing)
-
+        db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
-        db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
+        db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     else:
         raise Exception(f"No GSR for {device}")
 
 
     #TODO proper serialization format
-
     with open(f"{device}_stage1.pickle", 'wb') as f:
         pickle.dump(db, f)

@@ -3,7 +3,6 @@ from glob import glob
 import json
 import os
 import csv
-import sys
 
 VeryTrue = 2
 
@@ -20,7 +19,6 @@ def get_package(device, package, special_pins):
         if not gowinhome:
             raise Exception("GOWINHOME not set")
         with open(_pindef_index[(device, package)]) as f:
-            print("file:", f)
             pins = json.load(f)
         _pindef_files[(device, package)] = [d for d in pins['PIN_DATA'] if d['TYPE'] == 'I/O']
 
@@ -43,7 +41,7 @@ def all_packages(device):
     speeds = {}
     with open(f"{gowinhome}/IDE/data/device/device_info.csv", mode='r') as csv_file:
         csv_reader = csv.DictReader(csv_file, fieldnames =
-            ["unused_id", "partnumber", "series", "device", "package", "voltage", "speed"])
+            ["unused_id", "partnumber", "series", "device", "unused_0", "unused_1", "package", "voltage", "speed"])
         for row in csv_reader:
             if row['device'] != device:
                continue
@@ -132,18 +130,3 @@ def get_diff_cap_info(device, package, special_pins=False):
             res.update({neg_name : negative[neg_name]})
     return res
 
-if __name__ == "__main__":
-    device = sys.argv[1]
-    pins = all_packages(device)
-    #print(_pindef_index)
-
-    #package = "MBGA121N" # 5A
-    package = "PBGA256S"
-    special_pins = "PLL"
-    pins = get_package(device, package, special_pins)
-    #print(pins)
-    
-    for pin in pins:
-        if 'CFG' in pin.keys():
-            if 'PLL' in pin['CFG']: print(pin['NAME'], pin['CFG'])
-            #if pin['NAME'] in { 'IOR8A', 'IOR8B', 'IOL47A', 'IOL47A', 'IOR47A', 'IOR47B'}: print(pin)

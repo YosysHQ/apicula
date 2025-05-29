@@ -121,6 +121,18 @@ clknames.update({
 })
 
 clknames.update({n: f"UNK{n}" for n in range(210, 261)})
+
+# HCLK->clock network
+# Each HCLK can connect to other HCLKs through two MUXes in the clock system.
+# Here we assign numbers to these MUXes and their inputs - two per HCLK
+clknames.update({
+    1000: 'HCLKMUX0', 1001: 'HCLKMUX1',
+    1002: 'HCLK0_BANK_OUT0', 1003: 'HCLK0_BANK_OUT1',
+    1004: 'HCLK1_BANK_OUT0', 1005: 'HCLK1_BANK_OUT1',
+    1006: 'HCLK2_BANK_OUT0', 1007: 'HCLK2_BANK_OUT1',
+    1008: 'HCLK3_BANK_OUT0', 1009: 'HCLK3_BANK_OUT1',
+})
+
 clknumbers = {v: k for k, v in clknames.items()}
 
 # hclk
@@ -128,12 +140,12 @@ hclknames = clknames.copy()
 hclknames.update({n: f"HCLK_UNK{n}" for n in range(26)})
 # inputs
 hclknames.update({
-    2: 'HCLK_IN0', 3: 'HCLK_IN1', 4: 'HCLK_IN2', 5: 'HCLK_IN3'
+    2: 'HCLK_IN0', 3: 'HCLK_IN1', 4: 'HCLK_IN2', 5: 'HCLK_IN3', 8: 'HCLK_BANK_IN0', 9: 'HCLK_BANK_IN1'
 })
 
 # HCLK section inputs
 hclknames.update({
-    10: 'HCLK0_SECT0_IN', 11: 'HCLK0_SECT1_IN', 12: 'HCLK1_SECT0_IN', 13: 'HCLK1_SECT1_IN'
+    6: 'HCLK_BANK_OUT0', 7: 'HCLK_BANK_OUT1', 10: 'HCLK0_SECT0_IN', 11: 'HCLK0_SECT1_IN', 12: 'HCLK1_SECT0_IN', 13: 'HCLK1_SECT1_IN'
 })
 
 # Bypass connections from HCLK_IN to HCLK_OUT
