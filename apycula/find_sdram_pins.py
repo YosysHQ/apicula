@@ -124,6 +124,7 @@ params = {
 with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
     db = pickle.load(f)
 
+"""
 pool = Pool()
 
 if tiled_fuzzer.device in params:
@@ -155,6 +156,7 @@ if tiled_fuzzer.device in params:
                 seen[bel] = wire
 
         db.sip_cst.setdefault(device["device"], {})[device["package"]] = pinmap
+"""
 
 with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
     pickle.dump(db, f)
