@@ -13,6 +13,13 @@ def flipud(bmp):
     """
     return bmp[::-1]
 
+def transpose(bmp):
+    """
+    Transposes a bitmap (swaps rows and cols)
+    Returns a reference
+    """
+    return [[bmp[j][i] for j in range(len(bmp))] for i in range(len(bmp[0]))]
+    
 def vstack(bmp_0, bmp_1):
     """
     Stack matrices in sequence vertically (row wise).
