@@ -1,0 +1,61 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    paths:
+      - 'Dockerfile'
+      - 'GWVERSION'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'GWVERSION'
+
+env:
+  IMAGE_NAME: pepijndevos/apicula
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read Gowin IDE version from GWVERSION file
+        id: version
+        run: |
+          VERSION=$(cat GWVERSION)
+          if [ -z "$VERSION" ]; then
+            echo "Error: GWVERSION file is empty or does not exist"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using Gowin IDE version: $VERSION"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: pepijndevos
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          build-args: |
+            GOWIN_VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

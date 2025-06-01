@@ -1,8 +1,11 @@
 FROM python:3
 
+ARG GOWIN_VERSION
+ENV GOWIN_VERSION=${GOWIN_VERSION}
+
 WORKDIR /usr/src/gowin
 
-RUN curl -so gowin.tgz "https://cdn.gowinsemi.com.cn/Gowin_V1.9.10.03_linux.tar.gz" && \
+RUN curl -so gowin.tgz "https://cdn.gowinsemi.com.cn/Gowin_V${GOWIN_VERSION}_linux.tar.gz" && \
     tar -xf gowin.tgz && \
     rm gowin.tgz
 
