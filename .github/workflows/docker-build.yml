@@ -4,15 +4,14 @@ on:
   push:
     paths:
       - 'Dockerfile'
-      - 'VERSION'
+      - 'GWVERSION'
   pull_request:
     paths:
       - 'Dockerfile'
-      - 'VERSION'
+      - 'GWVERSION'
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: pepijndevos/apicula
 
 jobs:
   build:
@@ -25,29 +24,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Read Gowin IDE version from VERSION file
+      - name: Read Gowin IDE version from GWVERSION file
         id: version
         run: |
-          VERSION=$(cat VERSION)
+          VERSION=$(cat GWVERSION)
           if [ -z "$VERSION" ]; then
-            echo "Error: VERSION file is empty or does not exist"
+            echo "Error: GWVERSION file is empty or does not exist"
             exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using Gowin IDE version: $VERSION"
 
-      - name: Log in to the Container Registry
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: pepijndevos
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.version.outputs.version }}
             type=raw,value=latest,enable={{is_default_branch}}
