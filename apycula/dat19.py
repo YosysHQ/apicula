@@ -10,8 +10,8 @@ class Primitive:
     name: str
     num: int
     num_ins: int
-    obj: list[int]
-    ins: list[list[int]]
+    inputs: list[int]
+    input_src: list[list[int]]
 
 
 @dataclass
