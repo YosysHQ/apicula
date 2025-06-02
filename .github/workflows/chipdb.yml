@@ -11,7 +11,7 @@ on:
   pull_request:
 
 env:
-  APICULA_IMAGE: pepijndevos/apicula:1.9.8
+  APICULA_IMAGE: pepijndevos/apicula:1.9.10.03
 
 jobs:
   gw1n1:
