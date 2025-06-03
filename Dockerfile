@@ -9,6 +9,8 @@ RUN curl -so gowin.tgz "https://cdn.gowinsemi.com.cn/Gowin_V${GOWIN_VERSION}_lin
     tar -xf gowin.tgz && \
     rm gowin.tgz
 
+COPY gwlicense.ini IDE/bin/gwlicense.ini
+
 RUN pip install --no-cache-dir crc
 
 WORKDIR /usr/src/apicula
