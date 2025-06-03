@@ -195,15 +195,14 @@ def run_pnr(mod, constr, config):
         #print(tmpdir); input()
         try:
             return PnrResult(
-                    #*bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
-                    *bslib.read_bitstream("/home/rabbit/src/templates/GW1NZ-1.fs"),
+                    *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
                     constr,
                     config, constr.attrs,
                     read_err_log(tmpdir+"/impl/pnr/top.log"),
                     bslib.read_bitstream_version(tmpdir+"/impl/pnr/top.fs"))
         except FileNotFoundError:
-            print(tmpdir)
-            input()
+            print('ERROR', tmpdir)
+            #input()
             return None
 
 _tbrlre = re.compile(r"IO([TBRL])(\d+)")

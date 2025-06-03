@@ -21,14 +21,14 @@ def run_script(pinName : str, idx=None, iostd=None):
         mod.inouts.add(port)
         iob = codegen.Primitive("TBUF", name)
         iob.portmap["O"] = idxName
-        iob.portmap["I"] = ""
-        iob.portmap["OEN"] = ""
+        iob.portmap["I"] = "1'b1"
+        iob.portmap["OEN"] = "1'b0"
         mod.primitives[name] = iob
     elif pinName.startswith("O"):
         mod.outputs.add(port)
         iob = codegen.Primitive("OBUF", name)
         iob.portmap["O"] = idxName
-        iob.portmap["I"] = ""
+        iob.portmap["I"] = "1'b1"
         mod.primitives[name] = iob
     elif pinName.startswith("I"):
         mod.inputs.add(port)
@@ -124,7 +124,6 @@ params = {
 with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
     db = pickle.load(f)
 
-"""
 pool = Pool()
 
 if tiled_fuzzer.device in params:
@@ -156,7 +155,6 @@ if tiled_fuzzer.device in params:
                 seen[bel] = wire
 
         db.sip_cst.setdefault(device["device"], {})[device["package"]] = pinmap
-"""
 
 with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
     pickle.dump(db, f)

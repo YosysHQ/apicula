@@ -69,7 +69,6 @@ def read_bitstream(fname):
                     crcdat.extend(ba)
                 if not preamble and ba[0] == 0x3b: # frame count
                     frames = int.from_bytes(ba[2:], 'big')
-                    print("frame count: ", frames, ba)
                     is_hdr = False
                 if not preamble and ba[0] == 0x06: # device ID
                     if ba == b'\x06\x00\x00\x00\x11\x00\x58\x1b':     # GW1N-9
