@@ -61,11 +61,11 @@ def _io_mode_sort_func(mode):
     return l
 
 #
-def get_attr_name(attrname_table, code):
+def get_attr_name(attrname_table, code, tableName):
     for name, cod in attrname_table.items():
         if cod == code:
             return name
-    print(f'Unknown attr name for {code}/0x{code:x}.')
+    print(f'Unknown attr name for table: {tableName} code:{code}')
     return ''
 
 # fix names and types of the PLL attributes
@@ -191,7 +191,7 @@ def get_dff_type(dff_idx, in_attrs):
 # parse attributes and values use 'logicinfo' table
 # returns {attr: value}
 # attribute names are decoded with the attribute table, but the values are returned in raw form
-def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
+def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table, tableName):
     def is_neg_key(key):
         for k in key:
             if k < 0:
@@ -218,6 +218,8 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
             set_mask.update(bits)
     set_bits =  {(row, col) for row, col in set_mask if tile[row][col] == 1}
     neg_bits = {(row, col) for row, col in zero_mask if tile[row][col] == 1}
+    #set_bits = {}
+    #neg_bits = {}
 
     # find candidates from fuse table
     # the set bits are more unique
@@ -234,7 +236,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
             attrvals.update(clean_av) # set attributes
             for idx in clean_av:
                 attr, val = logicinfo_table[idx]
-                res[get_attr_name(attrname_table, attr)] = val
+                res[get_attr_name(attrname_table, attr, tableName)] = val
 
     # records with a negative keys and used fuses
     neg_attrvals = set()
@@ -257,7 +259,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
 
     for idx in neg_attrvals:
         attr, val = logicinfo_table[idx]
-        res[get_attr_name(attrname_table, attr)] = val
+        res[get_attr_name(attrname_table, attr, tableName)] = val
 
     # records with a negative keys and unused fuses
     cnd = {av for av, bits in fuse_table.items() if is_neg_key(av) and not bits.issubset(neg_bits)}
@@ -270,7 +272,7 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table):
         if keep:
             for idx in get_negative(av):
                 attr, val = logicinfo_table[idx]
-                res[get_attr_name(attrname_table, attr)] = val
+                res[get_attr_name(attrname_table, attr, tableName)] = val
     return res
 
 # { (row, col, type) : idx}
@@ -355,7 +357,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
             modes = { f'DEVICE="{_device}"' }
             if 'PLL' in db.shortval[tiledata.ttyp].keys():
-                attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], attrids.pll_attrids))
+                attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], attrids.pll_attrids, "PLL"))
                 for attrval in attrvals:
                     modes.add(attrval)
             if modes:
@@ -363,7 +365,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
             continue
         if name == "PLLVR":
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, 'A'), len(_pll_cells))
-            attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], attrids.pll_attrids))
+            attrvals = pll_attrs_refine(parse_attrvals(tile, db.logicinfo['PLL'], db.shortval[tiledata.ttyp]['PLL'], attrids.pll_attrids, "PLL"))
             modes = { f'DEVICE="{_device}"' }
             for attrval in attrvals:
                 modes.add(attrval)
@@ -371,7 +373,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                 bels[f'{name}{idx}'] = modes
             continue
         if name.startswith("OSC"):
-            attrvals = osc_attrs_refine(parse_attrvals(tile, db.logicinfo['OSC'], db.shortval[tiledata.ttyp]['OSC'], attrids.osc_attrids))
+            attrvals = osc_attrs_refine(parse_attrvals(tile, db.logicinfo['OSC'], db.shortval[tiledata.ttyp]['OSC'], attrids.osc_attrids, "OSC"))
             modes = set()
             for attrval in attrvals:
                 modes.add(attrval)
@@ -384,7 +386,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                 continue
             idx = _bsram_cells.setdefault(get_bsram_main_cell(db, row, col, name), len(_bsram_cells))
             #print(row, col, name, idx, tiledata.ttyp)
-            attrvals = parse_attrvals(tile, db.logicinfo['BSRAM'], db.shortval[tiledata.ttyp]['BSRAM_SP'], attrids.bsram_attrids)
+            attrvals = parse_attrvals(tile, db.logicinfo['BSRAM'], db.shortval[tiledata.ttyp]['BSRAM_SP'], attrids.bsram_attrids, "BSRAM")
             if not attrvals:
                 continue
             #print(row, col, name, idx, tiledata.ttyp, attrvals)
@@ -400,7 +402,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                 row, col = get_dsp_main_cell(db, row, col, name)
 
             if f'DSP{idx}' in db.shortval[tiledata.ttyp]:
-                attrvals = parse_attrvals(tile, db.logicinfo['DSP'], db.shortval[tiledata.ttyp][f'DSP{idx}'], attrids.dsp_attrids)
+                attrvals = parse_attrvals(tile, db.logicinfo['DSP'], db.shortval[tiledata.ttyp][f'DSP{idx}'], attrids.dsp_attrids, "DSP")
                 #print_sorted_dict(f'{row}, {col}, {name}, {idx}, {tiledata.ttyp} - ', attrvals)
                 for attrval in attrvals:
                     modes.add(attrval)
@@ -409,8 +411,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
             continue
         if name.startswith("IOLOGIC"):
             idx = name[-1]
-            attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids)
-            #print(attrvals)
+            attrvals = parse_attrvals(tile, db.logicinfo['IOLOGIC'], db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids, "IOLOGIC")
             if not attrvals:
                 continue
             # additional IOLOGIC components
@@ -450,7 +451,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                 bels.setdefault(name, set()).add(f"CLKODDRMUX_ECLK={attrids.iologic_num2val[attrvals['CLKODDRMUX_ECLK']]}")
         if name.startswith("DFF"):
             idx = int(name[3])
-            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids)
+            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids, "CLS")
             #print('parse', row, col, attrvals)
             # skip ALU and unsupported modes
             if attrvals.get('MODE') == attrids.cls_attrvals['SSRAM']:
@@ -463,7 +464,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
             continue
         if name.startswith("IOB"):
             idx = name[-1]
-            attrvals = parse_attrvals(tile, db.logicinfo['IOB'], db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids)
+            attrvals = parse_attrvals(tile, db.logicinfo['IOB'], db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids, "IOB")
             #print(row, col, attrvals)
             try: # we can ask for invalid pin here because the IOBs share some stuff
                 bank = chipdb.loc2bank(db, row, col)
@@ -504,14 +505,14 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
 
                 bels.setdefault(name, set()).add(mode)
         if name.startswith("BANK"):
-            attrvals = parse_attrvals(tile, db.logicinfo['IOB'], _bank_fuse_tables[tiledata.ttyp][name], attrids.iob_attrids)
+            attrvals = parse_attrvals(tile, db.logicinfo['IOB'], _bank_fuse_tables[tiledata.ttyp][name], attrids.iob_attrids, "IOB")
             #print('bank', row, col, attrvals)
 
             for a, v in attrvals.items():
                 bels.setdefault(name, set()).add(f'{a}={attrids.iob_num2val[v]}')
         if name.startswith("ALU"):
             idx = int(name[3])
-            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids)
+            attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids, "CLS")
             # skip ALU and unsupported modes
             if attrvals.get('MODE') != attrids.cls_attrvals['ALU']:
                 continue

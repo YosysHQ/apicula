@@ -21,14 +21,14 @@ def run_script(pinName : str, idx=None, iostd=None):
         mod.inouts.add(port)
         iob = codegen.Primitive("TBUF", name)
         iob.portmap["O"] = idxName
-        iob.portmap["I"] = ""
-        iob.portmap["OEN"] = ""
+        iob.portmap["I"] = "1'b1"
+        iob.portmap["OEN"] = "1'b0"
         mod.primitives[name] = iob
     elif pinName.startswith("O"):
         mod.outputs.add(port)
         iob = codegen.Primitive("OBUF", name)
         iob.portmap["O"] = idxName
-        iob.portmap["I"] = ""
+        iob.portmap["I"] = "1'b1"
         mod.primitives[name] = iob
     elif pinName.startswith("I"):
         mod.inputs.add(port)
