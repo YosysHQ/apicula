@@ -1,2 +1,0 @@
-# LUTRAM test project
-

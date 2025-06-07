@@ -90,10 +90,22 @@ def histogram(lst, bins):
     """
     l_bins = len(bins) - 1
     r_lst = [0] * l_bins
-    for val in lst:
+    from itertools import chain
+    for val in chain.from_iterable(lst):
         for i in range(l_bins):
             if val in range(bins[i], bins[i + 1]) or (i == l_bins - 1 and val == bins[-1]):
                 r_lst[i] += 1
+    return r_lst
+
+def byte_histogram(lst):
+    """
+    Compute the histogram of a list of bytes.
+    Returns a list of 256 counters.
+    """
+    r_lst = [0] * 256
+    from itertools import chain
+    for val in chain.from_iterable(lst):
+        r_lst[val] += 1
     return r_lst
 
 def any(bmp):

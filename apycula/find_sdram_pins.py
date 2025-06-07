@@ -1,146 +1,64 @@
-import pickle
-from apycula import chipdb
-from apycula import codegen
-from apycula import tiled_fuzzer
-from apycula import tracing
-from apycula import gowin_unpack
+#!/usr/bin/python3
 
-def find_pins(db, pnr:codegen.Pnr, trace_args):
-    pnr_result = pnr.run_pnr()
+import pickle
+from multiprocessing.dummy import Pool
+
+from apycula import codegen, tiled_fuzzer, gowin_unpack, chipdb
+
+def run_script(pinName : str, idx=None, iostd=None):
+    if idx == None:
+        port = pinName
+        idxName = pinName
+    else:
+        port = f"[{idx}:{idx}] {pinName}"
+        idxName = f"{pinName}[{idx}]"
+
+    mod = codegen.Module()
+    cst = codegen.Constraints()
+
+    name = "iobased"
+    if pinName.startswith("IO"):
+        mod.inouts.add(port)
+        iob = codegen.Primitive("TBUF", name)
+        iob.portmap["O"] = idxName
+        iob.portmap["I"] = ""
+        iob.portmap["OEN"] = ""
+        mod.primitives[name] = iob
+    elif pinName.startswith("O"):
+        mod.outputs.add(port)
+        iob = codegen.Primitive("OBUF", name)
+        iob.portmap["O"] = idxName
+        iob.portmap["I"] = ""
+        mod.primitives[name] = iob
+    elif pinName.startswith("I"):
+        mod.inputs.add(port)
+        iob = codegen.Primitive("IBUF", name)
+        iob.portmap["I"] = idxName
+        iob.portmap["O"] = ""
+        mod.primitives[name] = iob
+    else:
+        raise ValueError(pinName)
+
+    pnr_result = tiled_fuzzer.run_pnr(mod, cst, {})
     tiles = chipdb.tile_bitmap(db, pnr_result.bitmap)
 
-    trace_starts = []
-    for args in trace_args:
-        iob, pin_name, pin_idx, direction = args
-        iob_type = "IOB" + iob[-1]
-        fuzz_io_row, fuzz_io_col, bel_idx = gowin_unpack.tbrl2rc(db, iob)
-        fuzz_io_node = db.grid[fuzz_io_row][fuzz_io_col].bels[iob_type].portmap["O"]
-        trace_starts.append((fuzz_io_row, fuzz_io_col, fuzz_io_node))
+    for (i, j), tile in tiles.items():
+        bels, _, _ = gowin_unpack.parse_tile_(db, i, j, tile)
+        iob_location = f"R{i}C{j}"
+        print(iob_location, bels)
+        if bels and ("IOBA" in bels or "IOBB" in bels):
+            bel = next(iter(bels))
+            belname = tiled_fuzzer.rc2tbrl(db, i+1, j+1, bel[-1])
+            print(db.rows, db.cols)
+            print(idxName, belname)
+            return (idxName, i, j, bel[-1], iostd)
 
-    dests = [x for x in tracing.get_io_nodes(db) if x not in trace_starts]
-    pinout = {}
+    raise Exception(f"No IOB found for {port}")
 
-    all_paths = []
-    for trace_start, args in zip(trace_starts, trace_args):
-        iob, pin_name, pin_idx, direction = args
-        sdram_idxName = pin_name if pin_idx is None else f"{pin_name}[{pin_idx}]"
-
-        path_dict = tracing.get_path_dict(tiles, db, trace_start)
-        paths = tracing.get_paths(path_dict, [trace_start], dests)
-        all_paths.append(paths[0])
-        possible_pins = list({path[-1] for path in paths})
-        if len(possible_pins) > 1:
-            print(f"WARNING: Multiple candidates found for {sdram_idxName}: {possible_pins}")
-        if not possible_pins:
-            print(f"WARNING: No candidate found for {sdram_idxName}")
-        else:
-            pin_node = possible_pins[0]  #pin : [row, col, wire]
-            tbrl_pin = tracing.io_node_to_tbrl(db, pin_node)
-            pinout[sdram_idxName] = (*pin_node[:2], tbrl_pin[-1])
-    # all_paths = {k:v for k, v in enumerate(all_paths)}             
-    # # print(all_paths)
-    # tracing.visualize_grid(all_paths, db.rows, db.cols, save_name="sdram_pinout.jpeg")
-
-    return pinout
-
-def run_script(db, pins, device, package, partnumber):
-    sdram_pins = []
-    pinout = []
-
-    # No QFN48 in current db and QFN48P matches the device (from datasheets)
-    if device == "GW1NSR-4C" and package=="QFN48":
-        package = "QFN48P"
-    
-    for pinName, pincount, iostd in pins: 
-        if pincount == 0:
-            sdram_port = sdram_idxName = pinName
-            sdram_pins.append((sdram_port, pinName, None, iostd))
-        else:
-            sdram_port = f"[{pincount-1}:0] {pinName}"
-            for idx in range(pincount): 
-                sdram_pins.append((sdram_port, pinName, idx, iostd))
-    
-    #Use only pins without a special function to avoid placement errors
-    all_pins = db.pinout[device][package]
-    package_pins = [all_pins[k][0] for k in all_pins if not all_pins[k][1]]
-    
-    i = 0
-    while i < len(sdram_pins):
-        trace_args = []
-        pnr = codegen.Pnr()
-        pnr.cst = codegen.Constraints()
-        pnr.netlist_type = "verilog"
-        pnr.netlist = codegen.Module()
-        pnr.device = device
-        pnr.partnumber = partnumber
-
-        for fuzz_pin, sdram_pin in zip(package_pins, sdram_pins[i:i+len(package_pins)]):
-            sdram_port, sdram_pin_name, idx, iostd = sdram_pin
-            sdram_idxName = sdram_pin_name if idx is None else f"{sdram_pin_name}[{idx}]"
-            sdram_io_mod_name = f"{sdram_pin_name}_{idx}_iobased"
-
-            suffix = f"_{idx}" if idx is not None else ""
-            fuzz_input_wire = f"__{fuzz_pin}_input_{sdram_pin_name}{suffix}"
-            fuzz_output_wire = f"__{fuzz_pin}_output_{sdram_pin_name}{suffix}"
-
-            if sdram_pin_name.startswith("IO"):
-                pnr.cst.ports[fuzz_input_wire] = fuzz_pin
-                pnr.netlist.inputs.add(fuzz_input_wire)
-                trace_args.append((fuzz_pin, sdram_pin_name, idx, "input"))
-                pnr.netlist.inouts.add(sdram_port)
-                iob = codegen.Primitive("TBUF", sdram_io_mod_name)
-                iob.portmap["O"] = sdram_idxName
-                iob.portmap["I"] = fuzz_input_wire
-                iob.portmap["OEN"] = "1'b1"
-                pnr.netlist.primitives[sdram_io_mod_name] = iob
-
-            elif sdram_pin_name.startswith("O"):
-                trace_args.append((fuzz_pin, sdram_pin_name, idx, "input"))
-                pnr.cst.ports[fuzz_input_wire] = fuzz_pin
-                pnr.netlist.inputs.add(fuzz_input_wire)
-                pnr.netlist.outputs.add(sdram_port)
-                iob = codegen.Primitive("OBUF", sdram_io_mod_name)
-                iob.portmap["O"] = sdram_idxName
-                iob.portmap["I"] = fuzz_input_wire
-                pnr.netlist.primitives[sdram_io_mod_name] = iob
-
-            elif sdram_pin_name.startswith("I"):
-                trace_args.append((fuzz_pin, sdram_pin_name, idx, "output"))
-                pnr.cst.ports[fuzz_output_wire] = fuzz_pin
-                pnr.netlist.outputs.add(fuzz_output_wire)
-                pnr.netlist.inputs.add(sdram_port)
-                iob = codegen.Primitive("IBUF", sdram_io_mod_name)
-                iob.portmap["I"] = sdram_idxName
-                iob.portmap["O"] = fuzz_output_wire
-                pnr.netlist.primitives[sdram_io_mod_name] = iob
-            else:
-                raise ValueError(pinName)
-        
-        i += len(package_pins)
-        iter_pinout = find_pins(db, pnr, trace_args)
-        iter_pinout = [(k,*v,iostd) for k, v in iter_pinout.items()]
-        pinout.extend(iter_pinout)
-    
-    # draw_map = {k:[(r,c)] for k, r, c, _, _ in pinout }             
-    # tracing.visualize_grid(draw_map, db.rows, db.cols, save_name="sdram_pinout.jpeg")
-    return pinout
-
-
+# these are all system in package variants with magic wire names connected interally
+# pin names are obtained from litex-boards
+# (pin name, bus width, iostd)
 params = {
-    "GW1NS-4": [{
-        "package": "QFN48",#??
-        "device": "GW1NSR-4C",
-        "partnumber": "GW1NSR-LV4CQN48PC7/I6",
-        "pins": [
-            ("O_hpram_ck", 2, None),
-            ("O_hpram_ck_n", 2, None),
-            ("O_hpram_cs_n", 2, None),
-            ("O_hpram_reset_n", 2, None),
-            ("IO_hpram_dq", 16, None),
-            ("IO_hpram_rwds", 2, None),
-        ],
-    }],
-
     "GW1N-9": [{
         "package": "QFN88",
         "device": "GW1NR-9",
@@ -158,7 +76,6 @@ params = {
             ("O_sdram_ba", 2, "LVCMOS33")
         ],
     }],
-
     "GW1N-9C": [{
         "package": "QFN88P",
         "device": "GW1NR-9C",
@@ -172,7 +89,19 @@ params = {
             ("IO_psram_rwds", 2, None),
         ],
     }],
-    
+    "GW1NS-4": [{
+        "package": "QFN48",#??
+        "device": "GW1NSR-4C",
+        "partnumber": "GW1NSR-LV4CQN48PC7/I6",
+        "pins": [
+            ("O_hpram_ck", 2, None),
+            ("O_hpram_ck_n", 2, None),
+            ("O_hpram_cs_n", 2, None),
+            ("O_hpram_reset_n", 2, None),
+            ("IO_hpram_dq", 16, None),
+            ("IO_hpram_rwds", 2, None),
+        ],
+    }],
     "GW2A-18C": [{
         "package": "QFN88",
         "device": "GW2AR-18C",
@@ -192,16 +121,40 @@ params = {
     }],
 }
 
-if __name__ == "__main__": 
-    with open(f"{tiled_fuzzer.device}_stage2.pickle", 'rb') as f:
-        db = pickle.load(f)
+with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
+    db = pickle.load(f)
 
-    if tiled_fuzzer.device in params:
-        devices = params[tiled_fuzzer.device]
-        for device_args in devices:
-            tiled_fuzzer.params = device_args
-            pinmap = run_script(db, device_args["pins"], device_args["device"], device_args["package"], device_args["partnumber"])
-            db.sip_cst.setdefault(device_args["device"], {})[device_args["package"]] = pinmap
-    
-    with open(f"{tiled_fuzzer.device}_stage3.pickle", 'wb') as f:
-        pickle.dump(db, f)
+pool = Pool()
+
+if tiled_fuzzer.device in params:
+    devices = params[tiled_fuzzer.device]
+    for device in devices:
+        tiled_fuzzer.params = device
+        pins = device["pins"]
+
+        runs = []
+        for pinName, pinBuswidth, iostd in pins:
+            if (pinBuswidth == 0):
+                runs.append((pinName, None, iostd))
+            else:
+                for pinIdx in range(0, pinBuswidth):
+                    runs.append((pinName, pinIdx, iostd))
+
+        print(runs)
+
+        pinmap = pool.map(lambda params: run_script(*params), runs)
+
+        # check for duplicates
+        seen = {}
+        for pin in pinmap:
+            wire = pin[0]
+            bel = pin[1:4]
+            if bel in seen:
+                print("WARNING:", wire, "conflicts with", seen[bel], "at", bel)
+            else:
+                seen[bel] = wire
+
+        db.sip_cst.setdefault(device["device"], {})[device["package"]] = pinmap
+
+with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
+    pickle.dump(db, f)

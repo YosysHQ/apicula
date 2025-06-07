@@ -15,7 +15,7 @@ iob_attrids = {
         'DIFFRESISTOR':          7, # *
         'SINGLERESISTOR':        8, # *
         'VREF':                  9, # *
-        'VCCIO':                 10,
+        'BANK_VCCIO':            10,
         'DIFFDRIVE':             11,
         'I3C_MODE':              12,
         'MIPI_INPUT':            13,
@@ -35,7 +35,7 @@ iob_attrids = {
         'TRI_MUX':               27,
         'TRIMUX_PADDT':          28,
         'IOBUF_PADDI':           29,
-        'USED':                  30, # *
+        'USED':                  30,
         'IOBUF_OVERDRIVE':       31,
         'IOBUF_UNDERDRIVE':      32,
         'IOBUF_LVDS25_VCCIO':    33,
@@ -45,7 +45,7 @@ iob_attrids = {
         'LPRX_A2':               37,
         'MIPI':                  38,
         'LVDS_SEL':              39,
-        'VLDS_ON':               40,
+        'LVDS_ON':               40,
         'IOBUF_MIPI_LP':         41,
         'IOBUF_ODT_RESISTOR':    42,
         'IOBUF_CIB_CONTROL':     43,
@@ -916,6 +916,30 @@ dcs_attrvals = {
         'VCC':             22,
         }
 
+# DLLDLY
+dlldly_attrids = {
+        'ENABLED':          0,
+        'LOADN':            2,
+        'SIGN':             3,
+        'MODE':             4,
+        'ADJ0':             5,
+        'ADJ1':             6,
+        'ADJ2':             7,
+        'ADJ3':             8,
+        'ADJ4':             9,
+        'ADJ5':            10,
+        'ADJ6':            11,
+        'ADJ7':            12,
+    }
+
+dlldly_attrvals = {
+        'UNKNOWN':          0,
+        'ENABLE':           1,
+        'NORMAL':           3,
+        '1':                4,
+        'NEG':              5,
+        }
+
 # DLL
 dll_attrids = {
         'CLKSEL':           0,
@@ -1136,12 +1160,16 @@ osc_attrvals = {
 # config
 cfg_attrids = {
         'DONE_AS_GPIO':     0,
+        'GWD':              1,
         'GSR':              2,
+        'GOE':              3,
+        'DONE':             4,
         'JTAG_AS_GPIO':     6,
         'READY_AS_GPIO':    7,
         'MSPI_AS_GPIO':     8,
         'RECONFIG_AS_GPIO': 9,
         'SSPI_AS_GPIO':     10,
+        'POWERSAVE':        16,
         'I2C_AS_GPIO':      20,
         'JTAG_EN':          21,
         'POR':              24, # power on reset

@@ -1,0 +1,77 @@
+//File Title: Physical Constraints file
+//Part Number: GW1N-LV9QN48C6/I5
+
+IO_LOC "clk" 35;
+IO_LOC "clk_i" 35;
+
+CLOCK_LOC "clk" BUFG;
+
+IO_LOC "rst_i" 28;	// key0
+IO_LOC "key_i" 28;
+
+IO_LOC "led[0]" 9;
+IO_LOC "led[1]" 11;
+IO_LOC "led[2]" 40;
+IO_LOC "led[3]" 41;
+
+// fake
+IO_LOC "led[4]" 42;
+IO_LOC "led[5]" 43;
+IO_LOC "led[6]" 44;
+IO_LOC "led[7]" 45;
+
+IO_LOC "TXD" 23;
+IO_PORT "TXD" PULL_MODE=UP;
+IO_LOC "RXD" 24;
+IO_PORT "RXD" PULL_MODE=UP;
+
+// oser
+IO_LOC "oser_out" 29;
+IO_LOC "io16"     29;
+IO_LOC "pclk_o"   51;
+IO_LOC "fclk_o"   50;
+
+// ides
+IO_LOC "fclk_i" 43;
+IO_LOC "data_i" 46;
+IO_LOC "q_o[0]" 121;
+IO_LOC "q_o[1]" 42;
+IO_LOC "q_o[2]" 125;
+IO_LOC "q_o[3]" 48;
+IO_LOC "q_o[4]" 49;
+IO_LOC "q_o[5]" 117;
+IO_LOC "q_o[6]" 115;
+IO_LOC "q_o[7]" 113;
+
+// emulated lvds pins
+IO_LOC "elvds_p" 44;
+IO_LOC "elvds_n" 45;
+
+// true LVDS pins
+IO_LOC "tlvds_p" 42;
+IO_LOC "tlvds_n" 43;
+
+// RGB LCD
+IO_LOC "LCD_CLK"  110;
+IO_LOC "LCD_DEN"  111;
+IO_LOC "LCD_HYNC" 112;
+IO_LOC "LCD_SYNC" 113;
+IO_LOC "LCD_B[4]" 114;
+IO_LOC "LCD_B[3]" 115;
+IO_LOC "LCD_B[2]" 116;
+IO_LOC "LCD_B[1]" 117;
+IO_LOC "LCD_B[0]" 118;
+IO_LOC "LCD_G[5]" 119;
+IO_LOC "LCD_G[4]" 120;
+IO_LOC "LCD_G[3]" 121;
+IO_LOC "LCD_G[2]" 122;
+IO_LOC "LCD_G[1]" 123;
+IO_LOC "LCD_G[0]" 124;
+IO_LOC "LCD_R[4]" 125;
+IO_LOC "LCD_R[3]" 126;
+IO_LOC "LCD_R[2]" 128;
+IO_LOC "LCD_R[1]" 129;
+IO_LOC "LCD_R[0]" 130;
+
+IO_LOC "LCD_XR"   131;
+IO_LOC "LCD_XL"   132;
