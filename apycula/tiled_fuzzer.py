@@ -31,13 +31,8 @@ if not gowinhome:
 # device = os.getenv("DEVICE")
 device = sys.argv[1]
 params = {
-    "GW1NS-2": {
-        "package": "LQFP144",
-        "device": "GW1NS-2C",
-        "partnumber": "GW1NS-UX2CLQ144C5/I4",
-    },
     "GW1NS-4": {
-        "package": "QFN48",
+        "package": "QFN48P",
         "device": "GW1NSR-4C",
         "partnumber": "GW1NSR-LV4CQN48PC7/I6",
     },
@@ -316,7 +311,7 @@ if __name__ == "__main__":
         for col, typ in enumerate(row_dat):
             locations.setdefault(typ, []).append((row, col))
 
-    pin_names = pindef.get_locs(device, params['package'], True)
+    pin_names = pindef.get_locs(params['device'], params['package'], True)
     edges = {'T': fse['header']['grid'][61][0],
              'B': fse['header']['grid'][61][-1],
              'L': [row[0] for row in fse['header']['grid'][61]],
@@ -334,10 +329,10 @@ if __name__ == "__main__":
     db.cmd_ftr = gen_ftr()
 
     # IOB
-    diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
+    diff_cap_info = pindef.get_diff_cap_info(params['device'], params['package'], True)
     fse_iob(fse, db, pin_locations, diff_cap_info, locations);
 
-    pad_locs = pindef.get_pll_pads_locs(device, params['package'])
+    pad_locs = pindef.get_pll_pads_locs(params['device'], params['package'])
     chipdb.pll_pads(db, device, pad_locs)
 
     chipdb.dat_portmap(dat, db, device)

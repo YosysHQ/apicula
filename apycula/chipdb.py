@@ -2696,7 +2696,7 @@ def add_attr_val(dev, logic_table, attrs, attr, val):
             break
 
 def get_pins(device):
-    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A"}:
+    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A"}:
         raise Exception(f"unsupported device {device}")
     pkgs = pindef.all_packages(device)
     res = {}
@@ -2727,17 +2727,14 @@ def json_pinout(device):
             "GW1N-4": pins
         }, bank_pins)
     elif device == "GW1NS-4":
-        pkgs_sr, pins_sr, bank_pins_sr = get_pins("GW1NSR-4C")
-        pkgs, pins, bank_pins = get_pins("GW1NS-4")
+        pkgs, pins, bank_pins = get_pins("GW1NSR-4C")
         res = {}
         res.update(pkgs)
-        res.update(pkgs_sr)
         res_bank_pins = {}
         res_bank_pins.update(bank_pins)
-        res_bank_pins.update(bank_pins_sr)
         return (res, {
             "GW1NS-4": pins,
-            "GW1NSR-4C": pins_sr
+            "GW1NSR-4C": pins, # XXX for nextpnr compatibility (remove)
         }, res_bank_pins)
     elif device == "GW1N-9":
         pkgs, pins, bank_pins = get_pins("GW1N-9")
@@ -2764,19 +2761,6 @@ def json_pinout(device):
         return (res, {
             "GW1N-9C": pins,
             "GW1NR-9C": pins_r
-        }, res_bank_pins)
-    elif device == "GW1NS-2":
-        pkgs, pins, bank_pins = get_pins("GW1NS-2")
-        pkgs_c, pins_c, bank_pins_c = get_pins("GW1NS-2C")
-        res = {}
-        res.update(pkgs)
-        res.update(pkgs_c)
-        res_bank_pins = {}
-        res_bank_pins.update(bank_pins)
-        res_bank_pins.update(bank_pins_c)
-        return (res, {
-            "GW1NS-2": pins,
-            "GW1NS-2C": pins_c
         }, res_bank_pins)
     elif device == "GW2A-18":
         pkgs, pins, bank_pins = get_pins("GW2A-18")

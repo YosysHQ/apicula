@@ -415,7 +415,7 @@ blinky-pll-runber-synth.json: pll/GW1N-4-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -p "read_verilog $^; synth_gowin -json $@"
 
 # ============================================================
-#  Upack
+#  Unpack
 %-tangnano-unpacked.v: %-tangnano.fs
 	gowin_unpack -d GW1N-1 -o $@ $^
 
