@@ -18,7 +18,7 @@ _device = ""
 _pinout = ""
 _packages = {
         'GW1N-1' : 'LQFP144', 'GW1NZ-1' : 'QFN48', 'GW1N-4' : 'PBGA256', 'GW1N-9C' : 'UBGA332',
-        'GW1N-9' : 'PBGA256', 'GW1NS-4' : 'QFN48', 'GW1NS-2' : 'LQFP144', 'GW2A-18': 'PBGA256',
+        'GW1N-9' : 'PBGA256', 'GW1NS-4' : 'QFN48P', 'GW1NS-2' : 'LQFP144', 'GW2A-18': 'PBGA256',
         'GW2A-18C' : 'PBGA256S'
 }
 
