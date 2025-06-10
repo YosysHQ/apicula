@@ -143,7 +143,7 @@ class DeviceConfig:
             "bg_programming"        : "off",
             "secure_mode"           : "0"
         }
-        self.settings = settings or __default_pnr_config 
+        self.settings = settings or __default_pnr_config
 
     def __repr__(self):
         return str(self.settings)
@@ -165,10 +165,10 @@ class PnrOptions:
             "cst_warn_to_error" : "0",
             "top_module"        : "top",
             "output_base_name"  : "top"}
-            
-       
+
+
         self.options = options or __default_opt
-    
+
     def __repr__(self):
         return str(self.options)
 
@@ -219,8 +219,8 @@ run pnr
             device=self.device,
             device_desc=device_desc,
             opt=self.opt.text + self.cfg.text))
-        
-    
+
+
     # Read the packer vendor log to identify problem with primitives/attributes
     # returns dictionary {(primitive name, error code) : [full error text]}
     @staticmethod
@@ -236,7 +236,7 @@ run pnr
                     if line_type in ["Warning", "Error"]:
                         errs.setdefault((name, code), []).append(text)
         return errs
-        
+
     def run_pnr(self, *, device=None, constr=None, partnumber=None, opt=None):
         device = device or self.device
         constr = constr or self.cst
@@ -261,17 +261,18 @@ run pnr
             else:
                 shutil.copy(str(self.netlist), netlist)
 
-            
+
             # shutil.copy(str(self.cst), cst)
             with open(tmpdir+"/run.tcl", "w") as f:
                 self.write(f, cst=cst, netlist=netlist)
 
             subprocess.run([self.gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
+            #print(tmpdir); input()
             try:
                 return PnrResult(
                         *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
                         Constraints(),
-                        DeviceConfig(), 
+                        DeviceConfig(),
                         None,
                         None)
             except FileNotFoundError:

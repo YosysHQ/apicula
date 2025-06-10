@@ -2906,6 +2906,11 @@ def route(db, tilemap, pips):
                 bits.update(do_hclk_banks(db, row - 1, col - 1, src, dest))
             else:
                 bits = tiledata.pips[dest][src]
+                # check if we have 'not conencted to' situation
+                if dest in tiledata.alonenode:
+                    srcs, fuses = tiledata.alonenode[dest]
+                    if src not in srcs:
+                        bits |= fuses
         except KeyError:
             print(src, dest, "not found in tile", row, col)
             breakpoint()

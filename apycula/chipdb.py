@@ -51,6 +51,11 @@ class Tile:
     ttyp: int
     # a mapping from dest, source wire to bit coordinates
     pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
+    # This table will probably play an important role when setting the fuse,
+    # for now we use it to create default wires (as it was in older versions of
+    # the IDE)
+    # {dst: ({src}, {bits})}
+    alonenode: Dict[str, Tuple[Set[str], Set[Coord]]] = field(default_factory=dict)
     # XXX pure_clock_pips not used in apicula anymore but leave it untouched
     # for now as nextpnr is still counting on this field
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
@@ -218,11 +223,11 @@ def unpad(fuses, pad=-1):
     except ValueError:
         return fuses
 
-def fse_pips(fse, ttyp, table=2, wn=wirenames):
+def fse_pips(fse, ttyp, device, table=2, wn=wirenames):
     pips = {}
     if table in fse[ttyp]['wire']:
         for srcid, destid, *fuses in fse[ttyp]['wire'][table]:
-            fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+            fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
             if srcid < 0:
                 fuses = set()
                 srcid = -srcid
@@ -231,6 +236,47 @@ def fse_pips(fse, ttyp, table=2, wn=wirenames):
             pips.setdefault(dest, {})[src] = fuses
 
     return pips
+
+# use sources from alonenode to find missing source->sink pairs in pips
+def create_default_pips(tiles):
+    for tile in tiles.values():
+        for dest, srcs_fuse in tile.alonenode.items():
+            if dest in tile.pips:
+                for src in srcs_fuse[0]:
+                    if src not in tile.pips[dest]:
+                        tile.pips.setdefault(dest, {})[src] = set()
+
+# The new IDE introduces Q6 and Q7 as sources, and their connection fuses look suspiciously
+# similar to VCC connection fuses, so we rename Q6 and Q7 to VCC.
+def create_vcc_pips(dev, tiles):
+    for ttyp, tile in tiles.items():
+        if ttyp in dev.tile_types['C'] or ttyp in dev.tile_types['M']: # only CFU cells
+            for src_fuses in tile.pips.values():
+                for q in ['Q6', 'Q7']:
+                    if q in src_fuses:
+                        src_fuses['VCC'] = src_fuses[q]
+                src_fuses.pop('Q6', None)
+                src_fuses.pop('Q7', None)
+            for dest, srcs_fuse in tile.alonenode.items():
+                if 'Q6' in srcs_fuse[0] or 'Q7' in srcs_fuse[0]:
+                    tile.alonenode[dest] = (srcs_fuse[0] | {'VCC'}, srcs_fuse[1])
+
+# Remove suspicious PIPs
+# These PIPs contain one less fuse than the old bases. This applies to GW1N-9C,
+# GW2A-18 and GW2A-18C. For now, it's best to disable these things until we
+# find out. This will slightly worsen routing in the case of GW2A and will not
+# actually affect GW1N-9C.
+def remove_suspicious_pips(dev, device, tiles):
+    if device == 'GW1N-9C':
+        del dev.grid[0][46].pips['SEL3']['X02']
+        del dev.grid[0][46].pips['SEL3']['X04']
+        del dev.grid[0][46].pips['SEL3']['E242']
+    elif device in {'GW2A-18', 'GW2A-18C'}:
+        for ttyp, tile in tiles.items():
+            if ttyp in dev.tile_types['C']: # only CFU cells
+                del tile.pips['SEL7']['X01']
+                del tile.pips['SEL7']['X04']
+                del tile.pips['SEL7']['W242']
 
 _supported_hclk_wires = {'SPINE2', 'SPINE3', 'SPINE4', 'SPINE5', 'SPINE10', 'SPINE11',
                          'SPINE12', 'SPINE13', 'SPINE16', 'SPINE17', 'SPINE18', 'SPINE19',
@@ -241,12 +287,12 @@ _supported_hclk_wires = {'SPINE2', 'SPINE3', 'SPINE4', 'SPINE5', 'SPINE10', 'SPI
                          'LBDHCLK2', 'LBDHCLK3', 'RBDHCLK0', 'RBDHCLK1', 'RBDHCLK2',
                          'RBDHCLK3',
                          }
-def fse_alonenode(fse, ttyp, table = 6):
+def fse_alonenode(fse, ttyp, device, table = 6):
     pips = {}
     if 'alonenode' in fse[ttyp].keys():
         if table in fse[ttyp]['alonenode']:
             for destid, *tail in fse[ttyp]['alonenode'][table]:
-                fuses = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(tail[-2:])}
+                fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(tail[-2:])}
                 srcs = {wirenames.get(srcid, str(srcid)) for srcid in unpad(tail[:-2])}
                 dest = wirenames.get(destid, str(destid))
                 pips[dest] = (srcs, fuses)
@@ -255,6 +301,8 @@ def fse_alonenode(fse, ttyp, table = 6):
 # make PLL bels
 def fse_pll(device, fse, ttyp):
     bels = {}
+    #print("requested fse_pll types:", ttyp)
+
     if device in {'GW1N-1', 'GW1NZ-1'}:
         if ttyp == 88:
             bel = bels.setdefault('RPLLA', Bel())
@@ -281,6 +329,9 @@ def fse_pll(device, fse, ttyp):
             bel = bels.setdefault('RPLLA', Bel())
         elif ttyp in {74, 75, 76, 77, 78, 79}:
             bel = bels.setdefault('RPLLB', Bel())
+    elif device in {'GW5A-25A'}:
+        if ttyp in {74, 75, 76, 77, 78, 79}:
+            bel = bels.setdefault('RPLLB', Bel())
     return bels
 
 # add the ALU mode
@@ -293,12 +344,12 @@ def add_alu_mode(base_mode, modes, lut, new_alu_mode, new_mode_bits):
             alu_mode.update(lut.flags[15 - i])
 
 # also make DFFs, ALUs and shadow RAM
-def fse_luts(fse, ttyp):
+def fse_luts(fse, ttyp, device):
     data = fse[ttyp]['shortval'][5]
 
     luts = {}
     for lutn, bit, *fuses in data:
-        coord = fuse.fuse_lookup(fse, ttyp, fuses[0])
+        coord = fuse.fuse_lookup(fse, ttyp, fuses[0], device)
         bel = luts.setdefault(f"LUT{lutn}", Bel())
         bel.flags[bit] = {coord}
 
@@ -337,7 +388,7 @@ def fse_luts(fse, ttyp):
             for key0, key1, *fuses in data:
                 if key0 == 1 and key1 == 0:
                     for f in (f for f in fuses if f != -1):
-                        coord = fuse.fuse_lookup(fse, ttyp, f)
+                        coord = fuse.fuse_lookup(fse, ttyp, f, device)
                         mode.update({coord})
                     break
             lut = luts[f"LUT{alu_idx}"]
@@ -394,7 +445,7 @@ def fse_luts(fse, ttyp):
                 if key0 < 0:
                     for f in fuses:
                         if f == -1: break
-                        coord = fuse.fuse_lookup(fse, ttyp, f)
+                        coord = fuse.fuse_lookup(fse, ttyp, f, device)
                         mode.add(coord)
 
         bel = luts.setdefault(f"RAM16", Bel())
@@ -403,7 +454,7 @@ def fse_luts(fse, ttyp):
             if key0 == 2 and key1 == 0:
                 for f in fuses:
                     if f == -1: break
-                    coord = fuse.fuse_lookup(fse, ttyp, f)
+                    coord = fuse.fuse_lookup(fse, ttyp, f, device)
                     mode.add(coord)
         bel.portmap = {
             'DI': ("A5", "B5", "C5", "D5"),
@@ -429,6 +480,8 @@ def fse_osc(device, fse, ttyp):
     elif device == 'GW2AN-18':
         bel = osc.setdefault(f"OSCW", Bel())
     elif device == 'GW1N-2':
+        bel = osc.setdefault(f"OSCO", Bel())
+    elif device == 'GW5A-25A':
         bel = osc.setdefault(f"OSCO", Bel())
     else:
         raise Exception(f"Oscillator not yet supported on {device}")
@@ -506,7 +559,7 @@ _known_tables = {
             82: 'POWERSAVE',
         }
 
-def fse_fill_logic_tables(dev, fse):
+def fse_fill_logic_tables(dev, fse, device):
     # logicinfo
     for ltable in fse['header']['logicinfo'].keys():
         if ltable in _known_logic_tables.keys():
@@ -526,7 +579,7 @@ def fse_fill_logic_tables(dev, fse):
                 else:
                     table = ttyp_rec.setdefault(f"unknown_{lftable}", {})
                 for f, *fuses in fse[ttyp]['longfuse'][lftable]:
-                    table[(f, )] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+                    table[(f, )] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
         if 'shortval' in fse[ttyp].keys():
             ttyp_rec = dev.shortval.setdefault(ttyp, {})
             for stable in fse[ttyp]['shortval'].keys():
@@ -535,7 +588,7 @@ def fse_fill_logic_tables(dev, fse):
                 else:
                     table = ttyp_rec.setdefault(f"unknown_{stable}", {})
                 for f_a, f_b, *fuses in fse[ttyp]['shortval'][stable]:
-                    table[(f_a, f_b)] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+                    table[(f_a, f_b)] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
         if 'longval' in fse[ttyp].keys():
             ttyp_rec = dev.longval.setdefault(ttyp, {})
             for ltable in fse[ttyp]['longval'].keys():
@@ -544,7 +597,7 @@ def fse_fill_logic_tables(dev, fse):
                 else:
                     table = ttyp_rec.setdefault(f"unknown_{ltable}", {})
                 for f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, *fuses in fse[ttyp]['longval'][ltable]:
-                    table[(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15)] = {fuse.fuse_lookup(fse, ttyp, f) for f in unpad(fuses)}
+                    table[(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15)] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
 
 _hclk_in = {
             'TBDHCLK0': 0,  'TBDHCLK1': 1,  'TBDHCLK2': 2,  'TBDHCLK3': 3,
@@ -1064,7 +1117,7 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
             for hclk_loc in hclk_info[side]['hclk']:
                 row, col = hclk_loc
                 ttyp = fse['header']['grid'][61][row][col]
-                dev.hclk_pips[(row, col)] = fse_pips(fse, ttyp, table = 48, wn = hclknames)
+                dev.hclk_pips[(row, col)] = fse_pips(fse, ttyp, device, table = 48, wn = hclknames)
                 for dst in dev.hclk_pips[(row, col)].keys():
                     # from HCLK to interbank MUX
                     if dst in {'HCLK_BANK_OUT0', 'HCLK_BANK_OUT1'}:
@@ -1506,6 +1559,7 @@ _clock_data = {
         'GW1N-9C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {( 1, 0, 10, 1, 0), (19, 10, 29, 2, 3)}},
         'GW2A-18': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
         'GW2A-18C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
+        'GW5A-25A': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}}, # Fix me
         }
 def fse_create_clocks(dev, device, dat: Datfile, fse):
     center_col = dat.grid.center_x - 1
@@ -2045,6 +2099,7 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
               # XXX unsupported boards, pure theorizing
               ('OSCO', 'GW1N-2'):  ({'OSCOUT': 'Q7'}, {'OSCEN': (9, 1, 'B4')}),
               ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
+              ('OSCO', 'GW5A-25A'):  ({'OSCOUT': 'Q4'}, {}), # Fix me
               }
 
 # from logic to global clocks. An interesting piece of dat['CmuxIns'], it was
@@ -2532,13 +2587,14 @@ def from_fse(device, fse, dat: Datfile):
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
         tile = Tile(w, h, ttyp)
-        tile.pips = fse_pips(fse, ttyp, 2, wirenames)
-        tile.clock_pips = fse_pips(fse, ttyp, 38, clknames)
+        tile.pips = fse_pips(fse, ttyp, device, 2, wirenames)
+        tile.clock_pips = fse_pips(fse, ttyp, device, 38, clknames)
         # XXX remove after nextpnr update
         tile.pure_clock_pips = copy.deepcopy(tile.clock_pips)
-        tile.alonenode_6 = fse_alonenode(fse, ttyp, 6)
+        tile.alonenode = fse_alonenode(fse, ttyp, device, 69)
+        tile.alonenode_6 = fse_alonenode(fse, ttyp, device, 6)
         if 5 in fse[ttyp]['shortval']:
-            tile.bels = fse_luts(fse, ttyp)
+            tile.bels = fse_luts(fse, ttyp, device)
         elif 51 in fse[ttyp]['shortval']:
             tile.bels = fse_osc(device, fse, ttyp)
         elif ttyp in bram_ttypes:
@@ -2554,12 +2610,17 @@ def from_fse(device, fse, dat: Datfile):
         tile.bels.update(fse_iologic(device, fse, ttyp))
         tiles[ttyp] = tile
 
-    fse_fill_logic_tables(dev, fse)
+    fse_fill_logic_tables(dev, fse, device)
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     fse_create_clocks(dev, device, dat, fse)
     fse_create_pll_clock_aliases(dev, device)
     fse_create_bottom_io(dev, device)
     fse_create_tile_types(dev, dat)
+
+    create_vcc_pips(dev, tiles)
+    create_default_pips(tiles)
+    remove_suspicious_pips(dev, device, tiles)
+
     fse_create_diff_types(dev, device)
     fse_create_hclk_nodes(dev, device, fse, dat)
     fse_create_mipi(dev, device, dat)
@@ -2635,7 +2696,7 @@ def add_attr_val(dev, logic_table, attrs, attr, val):
             break
 
 def get_pins(device):
-    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NS-2", "GW1NS-2C", "GW1NS-4", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C"}:
+    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A"}:
         raise Exception(f"unsupported device {device}")
     pkgs = pindef.all_packages(device)
     res = {}
@@ -2666,17 +2727,14 @@ def json_pinout(device):
             "GW1N-4": pins
         }, bank_pins)
     elif device == "GW1NS-4":
-        pkgs_sr, pins_sr, bank_pins_sr = get_pins("GW1NSR-4C")
-        pkgs, pins, bank_pins = get_pins("GW1NS-4")
+        pkgs, pins, bank_pins = get_pins("GW1NSR-4C")
         res = {}
         res.update(pkgs)
-        res.update(pkgs_sr)
         res_bank_pins = {}
         res_bank_pins.update(bank_pins)
-        res_bank_pins.update(bank_pins_sr)
         return (res, {
             "GW1NS-4": pins,
-            "GW1NSR-4C": pins_sr
+            "GW1NSR-4C": pins, # XXX for nextpnr compatibility (remove)
         }, res_bank_pins)
     elif device == "GW1N-9":
         pkgs, pins, bank_pins = get_pins("GW1N-9")
@@ -2704,19 +2762,6 @@ def json_pinout(device):
             "GW1N-9C": pins,
             "GW1NR-9C": pins_r
         }, res_bank_pins)
-    elif device == "GW1NS-2":
-        pkgs, pins, bank_pins = get_pins("GW1NS-2")
-        pkgs_c, pins_c, bank_pins_c = get_pins("GW1NS-2C")
-        res = {}
-        res.update(pkgs)
-        res.update(pkgs_c)
-        res_bank_pins = {}
-        res_bank_pins.update(bank_pins)
-        res_bank_pins.update(bank_pins_c)
-        return (res, {
-            "GW1NS-2": pins,
-            "GW1NS-2C": pins_c
-        }, res_bank_pins)
     elif device == "GW2A-18":
         pkgs, pins, bank_pins = get_pins("GW2A-18")
         return (pkgs, {
@@ -2734,6 +2779,15 @@ def json_pinout(device):
         return (res, {
             "GW2A-18C": pins,
             "GW2AR-18C": pins_r
+        }, res_bank_pins)
+    elif device =="GW5A-25A": # Fix me
+        pkgs, pins, bank_pins = get_pins("GW5A-25A")
+        res = {}
+        res.update(pkgs)
+        res_bank_pins = {}
+        res_bank_pins.update(bank_pins)
+        return (res, {
+            "GW5A-25A": pins,
         }, res_bank_pins)
     else:
         raise Exception("unsupported device")
@@ -2864,6 +2918,7 @@ def dat_portmap(dat, dev, device):
                 elif name.startswith('PADD9'):
                     mac = int(name[-2])
                     idx = int(name[-1])
+                    print("DSP_I: row:", row, "col:", col, "name:", name, "mac:", mac, "idx:", idx)
                     column = mac * 2 + (idx // 2)
 
                     for i in range(12):
@@ -2912,6 +2967,7 @@ def dat_portmap(dat, dev, device):
                     # course, 2 columns per macro are not enough to describe 4
                     # pre-adds, so different lines are used for different
                     # pre-adds.
+                    odd_idx = 0
                     for i in range(len(dat.portmap['PaddIn'])):
                         off = dat.portmap['PaddInDlt'][i][column]
                         wire_idx = dat.portmap['PaddIn'][i][column]
@@ -2921,6 +2977,7 @@ def dat_portmap(dat, dev, device):
                         # input wire sequence: A0-8, B0-8,
                         # unknown -1
                         # ASEL
+                        #print("DSP_I: row:", row, "col:", col, "name:", name, "wire_idx:", wire_idx, "wire:", wire)
                         odd_idx = 9 * (idx & 1)
                         if i in range(odd_idx , 9 + odd_idx):
                             nam = f'A{i - odd_idx}'
@@ -3952,6 +4009,10 @@ def fse_wire_delays(db):
         db.wire_delay[wirenames[i]] = "CIN"
     for i in range(309, 314): # COUT0-COUT5
         db.wire_delay[wirenames[i]] = "COUT"
+    for i in range(545, 553): # 5A needs these
+        db.wire_delay[wirenames[i]] = "X8"
+    for i in range(556, 564): # 5A needs these
+        db.wire_delay[wirenames[i]] = "X8"
     for i in range(1001, 1049): # LWSPINE
         db.wire_delay[wirenames[i]] = "X8"
     # possibly LW wires for large chips, for now assign dummy value
@@ -4041,6 +4102,31 @@ _pll_pads = {
                   'IOR45B' : (45, 55, 'CLKIN_C', 'PLL'),
                   'IOR47A' : (45, 55, 'FB_T', 'PLL'),
                   'IOR47B' : (45, 55, 'FB_C', 'PLL'), },
+    'GW5A-25A': { 'IOT56B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOT58B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOT58A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT89A' : (0, 0, 'FB_T', 'PLL'),
+                  'IOT56A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT91A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT91B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOT61A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT63A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOL5B'  : (0, 0, 'FB_C', 'PLL'),
+                  'IOL5A'  : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOT1A'  : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOL3B'  : (0, 0, 'FB_C', 'PLL'),
+                  'IOR31A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOR31B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOR33A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOB89A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOL14A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOL3A'  : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOR33B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOB31B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOB4B'  : (0, 0, 'FB_C', 'PLL'),
+                  'IOB33A' : (0, 0, 'CLKIN_T', 'PLL'),
+                  'IOB54B' : (0, 0, 'FB_C', 'PLL'),
+                  'IOB12B' : (0, 0, 'CLKIN_C', 'PLL'), },
 }
 def pll_pads(dev, device, pad_locs):
     if device not in _pll_pads:

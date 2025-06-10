@@ -31,13 +31,8 @@ if not gowinhome:
 # device = os.getenv("DEVICE")
 device = sys.argv[1]
 params = {
-    "GW1NS-2": {
-        "package": "LQFP144",
-        "device": "GW1NS-2C",
-        "partnumber": "GW1NS-UX2CLQ144C5/I4",
-    },
     "GW1NS-4": {
-        "package": "QFN48",
+        "package": "QFN48P",
         "device": "GW1NSR-4C",
         "partnumber": "GW1NSR-LV4CQN48PC7/I6",
     },
@@ -73,8 +68,13 @@ params = {
     },
     "GW2A-18C": {
         "package": "PBGA256S",
-        "device": "GW2AR-18C",
-        "partnumber": "GW2AR-LV18PG256SC8/I7",
+        "device": "GW2A-18C",
+        "partnumber": "GW2A-LV18PG256SC8/I7", #"GW2AR-LV18PG256SC8/I7", "GW2AR-LV18QN88C8/I7"
+    },
+    "GW5A-25A": {
+        "package": "MBGA121N",
+        "device": "GW5A-25A",
+        "partnumber": "GW5A-LV25MG121NC1/I0",
     },
 }[device]
 
@@ -134,7 +134,8 @@ PnrResult = namedtuple('PnrResult', [
     'constrs',        # constraints
     'config',         # device config
     'attrs',          # port attributes
-    'errs'            # parsed log file
+    'errs',           # parsed log file
+    'version',        # IDE version
     ])
 
 def run_pnr(mod, constr, config):
@@ -148,11 +149,11 @@ def run_pnr(mod, constr, config):
         "use_mode_as_gpio"      : config.get('mode', "1"),
         "use_i2c_as_gpio"       : config.get('i2c', "1"),
         "bit_crc_check"         : "1",
-        "bit_compress"          : "0",
+        "bit_compress"          : "1",
         "bit_encrypt"           : "0",
         "bit_security"          : "1",
         "bit_incl_bsram_init"   : "0",
-        "loading_rate"          : "250/100",
+        #"loading_rate"          : "250/100",
         "spi_flash_addr"        : "0x00FFF000",
         "bit_format"            : "txt",
         "bg_programming"        : "off",
@@ -192,10 +193,11 @@ def run_pnr(mod, constr, config):
                     *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
                     constr,
                     config, constr.attrs,
-                    read_err_log(tmpdir+"/impl/pnr/top.log"))
+                    read_err_log(tmpdir+"/impl/pnr/top.log"),
+                    bslib.read_bitstream_version(tmpdir+"/impl/pnr/top.fs"))
         except FileNotFoundError:
-            print(tmpdir)
-            input()
+            print('ERROR', tmpdir)
+            #input()
             return None
 
 _tbrlre = re.compile(r"IO([TBRL])(\d+)")
@@ -284,7 +286,7 @@ def gen_hdr():
 
 if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.fse", 'rb') as f:
-        fse = fuse_h4x.readFse(f)
+        fse = fuse_h4x.readFse(f, device)
 
     dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.dat"))
 
@@ -309,7 +311,7 @@ if __name__ == "__main__":
         for col, typ in enumerate(row_dat):
             locations.setdefault(typ, []).append((row, col))
 
-    pin_names = pindef.get_locs(device, params['package'], True)
+    pin_names = pindef.get_locs(params['device'], params['package'], True)
     edges = {'T': fse['header']['grid'][61][0],
              'B': fse['header']['grid'][61][-1],
              'L': [row[0] for row in fse['header']['grid'][61]],
@@ -327,10 +329,10 @@ if __name__ == "__main__":
     db.cmd_ftr = gen_ftr()
 
     # IOB
-    diff_cap_info = pindef.get_diff_cap_info(device, params['package'], True)
+    diff_cap_info = pindef.get_diff_cap_info(params['device'], params['package'], True)
     fse_iob(fse, db, pin_locations, diff_cap_info, locations);
 
-    pad_locs = pindef.get_pll_pads_locs(device, params['package'])
+    pad_locs = pindef.get_pll_pads_locs(params['device'], params['package'])
     chipdb.pll_pads(db, device, pad_locs)
 
     chipdb.dat_portmap(dat, db, device)
@@ -345,7 +347,7 @@ if __name__ == "__main__":
         bel.portmap['GW9_ALWAYS_LOW1'] = wirenames[dat.portmap['IologicAIn'][42]]
 
     # GSR
-    if device in {'GW2A-18', 'GW2A-18C'}:
+    if device in {'GW2A-18', 'GW2A-18C', 'GW5A-25A'}:
         db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
         db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';

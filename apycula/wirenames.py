@@ -29,6 +29,8 @@ wirenames.update({n: f"LWSPINEBL{n - 1017}" for n in range(1017, 1025)})
 wirenames.update({n: f"LWSPINEBR{n - 1025}" for n in range(1025, 1033)})
 wirenames.update({n: f"LWSPINEB1L{n - 1033}" for n in range(1033, 1041)})
 wirenames.update({n: f"LWSPINEB1R{n - 1041}" for n in range(1041, 1049)})
+wirenames.update({n: f"5A25" for n in range(545, 553)}) # GW5A-25A need these
+wirenames.update({n: f"5A25" for n in range(556, 564)}) # GW5A-25A need these
 
 wirenumbers = {v: k for k, v in wirenames.items()}
 

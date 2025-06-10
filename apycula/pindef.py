@@ -41,7 +41,7 @@ def all_packages(device):
     speeds = {}
     with open(f"{gowinhome}/IDE/data/device/device_info.csv", mode='r') as csv_file:
         csv_reader = csv.DictReader(csv_file, fieldnames =
-            ["unused_id", "partnumber", "series", "device", "package", "voltage", "speed"])
+            ["unused_id", "partnumber", "series", "device", "unused_0", "unused_1", "package", "voltage", "speed"])
         for row in csv_reader:
             if row['device'] != device:
                continue

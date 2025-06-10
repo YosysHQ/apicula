@@ -19,24 +19,39 @@ def bitarr(frame, pad):
     data = frame.strip()[pad:-64]
     return [int(n, base=2) for n in data]
 
+def read_bitstream_version(fname):
+    ver = "UNKNOWN"
+    with open(fname) as inp:
+        for line in inp:
+            if line.startswith("//Tool Version:"):
+                ver = line[16:]
+                break
+    return ver
 
 def read_bitstream(fname):
     bitmap = []
+    returnBitmap = []
     hdr = []
     ftr = []
     is_hdr = True
     crcdat = bytearray()
     preamble = 3
     frames = 0
+    c = 0
+    is5ASeries = False
+
     calc = crc.Calculator(crc16arc)
     compressed = False
     compress_keys = {}
     with open(fname) as inp:
         for line in inp:
-            if line.startswith("//"): continue
+            if line.startswith("//"):
+                #print("line: ", line)
+                continue
             ba = bytearr(line)
             if not frames:
                 if is_hdr:
+                    #print("header:", ba)
                     hdr.append(ba)
                     if ba[0] == 0x10 and (int.from_bytes(ba, 'big') & (1 << 13)):
                         compressed = True
@@ -47,8 +62,10 @@ def read_bitstream(fname):
                             if ba[7]:
                                 compress_keys[f'{ba[7]:08b}'] = 2
                 else:
+                    #print("footer:", ba)
                     ftr.append(ba)
                 if not preamble and ba[0] != 0xd2: # SPI address
+                    #print("spi address", ba)
                     crcdat.extend(ba)
                 if not preamble and ba[0] == 0x3b: # frame count
                     frames = int.from_bytes(ba[2:], 'big')
@@ -69,23 +86,30 @@ def read_bitstream(fname):
                     elif ba == b'\x06\x00\x00\x00\x01\x00h\x1b':      # GW1NZ-1
                         padding = 0
                         compress_padding = 0
-                    elif ba == b'\x06\x00\x00\x00\x03\x00\x18\x1b':   # XXX
-                        padding = 0
                     elif ba == b'\x06\x00\x00\x00\x01\x00\x98\x1b':   # GW1NS-4
                         padding = 0
                         compress_padding = 8
                     elif ba == b'\x06\x00\x00\x00\x00\x00\x08\x1b':   # GW2A-18(C)
                         padding = 0
                         compress_padding = 16
+                    elif ba == b'\x06\x00\x00\x00\x00\x01\x28\x1b':   # GW5A-25A
+                        padding = 0
+                        is5ASeries = True
                     else:
                         raise ValueError("Unsupported device", ba)
                 preamble = max(0, preamble-1)
                 continue
-            crcdat.extend(ba[:-8])
-            crc1 = (ba[-7] << 8) + ba[-8]
-            crc2 = calc.checksum(crcdat)
-            assert crc1 == crc2, f"Not equal {crc1} {crc2} for {crcdat}"
-            crcdat = ba[-6:]
+            if is5ASeries == False:
+                crcdat.extend(ba[:-8])
+                crc1 = (ba[-7] << 8) + ba[-8]
+                crc2 = calc.checksum(crcdat)
+                assert crc1 == crc2, f"Not equal {crc1} {crc2} for {crcdat}"
+                if crc1 != crc2:
+                    print("frame: ", c, ba, len(ba))
+                    print("crcdata: ", crcdat, len(crcdat))
+                    print("crc error - frame:", c, frames, " : ", crc1, " != ", crc2)
+
+                crcdat = ba[-6:]
             if compressed:
                 uncompressed_line = ''
                 for byte_str in chunks(line[:-64], 8):
@@ -99,9 +123,16 @@ def read_bitstream(fname):
                 bitmap.append(bitarr(uncompressed_line, compress_padding))
             else:
                 bitmap.append(bitarr(line, padding))
-            frames = max(0, frames-1)
 
-    return bitmatrix.fliplr(bitmap), hdr, ftr
+            frames = max(0, frames-1)
+            c = c + 1
+
+        if is5ASeries == False:
+            returnBitmap = bitmatrix.fliplr(bitmap)
+        else:
+            returnBitmap = bitmatrix.transpose(bitmap)
+
+        return returnBitmap, hdr, ftr
 
 def compressLine(line, key8Z, key4Z, key2Z):
     newline = []
@@ -183,10 +214,19 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
 
 def display(fname, data):
     from PIL import Image
+    """
     im = Image.frombytes(
             mode='1',
             size=data.shape[::-1],
             data=bitmatrix.packbits(data, axis = 1))
+    """
+
+    tdata = bitmatrix.packbits(data, axis = 1)
+    im = Image.new('RGB', bitmatrix.shape(tdata)[::-1], 255)
+    idata = im.load()
+    for x in range(im.size[0]):
+        for y in range(im.size[1]):
+            idata[x, y] = (tdata[y][x], tdata[y][x], tdata[y][x])
     if fname:
         im.save(fname)
     return im
