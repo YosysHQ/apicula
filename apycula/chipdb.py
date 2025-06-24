@@ -51,18 +51,20 @@ class Tile:
     ttyp: int
     # a mapping from dest, source wire to bit coordinates
     pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
-    # This table will probably play an important role when setting the fuse,
-    # for now we use it to create default wires (as it was in older versions of
-    # the IDE)
-    # {dst: ({src}, {bits})}
-    alonenode: Dict[str, Tuple[Set[str], Set[Coord]]] = field(default_factory=dict)
+    # This table plays an important role when setting the fuse,
+    # The fuse pair specified here is installed in case the sink is not
+    # connected to any of the listed sources. In the old IDE this was an
+    # unnecessary mechanism since all the fuses were listed in the rows of the
+    # [‘wire’][2] table, this is not the case in the new IDE.
+    # {dst: [({src}, {bits})]}
+    alonenode: Dict[str, List[Tuple[Set[str], Set[Coord]]]] = field(default_factory=dict)
     # XXX pure_clock_pips not used in apicula anymore but leave it untouched
     # for now as nextpnr is still counting on this field
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     pure_clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     # fuses to disable the long wire columns. This is the table 'alonenode[6]' in the vendor file
-    # {dst: ({src}, {bits})}
-    alonenode_6: Dict[str, Tuple[Set[str], Set[Coord]]] = field(default_factory=dict)
+    # {dst: [({src}, {bits})]}
+    alonenode_6: Dict[str, List[Tuple[Set[str], Set[Coord]]]] = field(default_factory=dict)
     # a mapping from bel type to bel
     bels: Dict[str, Bel] = field(default_factory=dict)
 
@@ -240,11 +242,12 @@ def fse_pips(fse, ttyp, device, table=2, wn=wirenames):
 # use sources from alonenode to find missing source->sink pairs in pips
 def create_default_pips(tiles):
     for tile in tiles.values():
-        for dest, srcs_fuse in tile.alonenode.items():
+        for dest, srcs_fuses in tile.alonenode.items():
             if dest in tile.pips:
-                for src in srcs_fuse[0]:
-                    if src not in tile.pips[dest]:
-                        tile.pips.setdefault(dest, {})[src] = set()
+                for srcs_fuse in srcs_fuses:
+                    for src in srcs_fuse[0]:
+                        if src not in tile.pips[dest]:
+                            tile.pips.setdefault(dest, {})[src] = set()
 
 # The new IDE introduces Q6 and Q7 as sources, and their connection fuses look suspiciously
 # similar to VCC connection fuses, so we rename Q6 and Q7 to VCC.
@@ -260,23 +263,6 @@ def create_vcc_pips(dev, tiles):
             for dest, srcs_fuse in tile.alonenode.items():
                 if 'Q6' in srcs_fuse[0] or 'Q7' in srcs_fuse[0]:
                     tile.alonenode[dest] = (srcs_fuse[0] | {'VCC'}, srcs_fuse[1])
-
-# Remove suspicious PIPs
-# These PIPs contain one less fuse than the old bases. This applies to GW1N-9C,
-# GW2A-18 and GW2A-18C. For now, it's best to disable these things until we
-# find out. This will slightly worsen routing in the case of GW2A and will not
-# actually affect GW1N-9C.
-def remove_suspicious_pips(dev, device, tiles):
-    if device == 'GW1N-9C':
-        del dev.grid[0][46].pips['SEL3']['X02']
-        del dev.grid[0][46].pips['SEL3']['X04']
-        del dev.grid[0][46].pips['SEL3']['E242']
-    elif device in {'GW2A-18', 'GW2A-18C'}:
-        for ttyp, tile in tiles.items():
-            if ttyp in dev.tile_types['C']: # only CFU cells
-                del tile.pips['SEL7']['X01']
-                del tile.pips['SEL7']['X04']
-                del tile.pips['SEL7']['W242']
 
 _supported_hclk_wires = {'SPINE2', 'SPINE3', 'SPINE4', 'SPINE5', 'SPINE10', 'SPINE11',
                          'SPINE12', 'SPINE13', 'SPINE16', 'SPINE17', 'SPINE18', 'SPINE19',
@@ -295,7 +281,7 @@ def fse_alonenode(fse, ttyp, device, table = 6):
                 fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(tail[-2:])}
                 srcs = {wirenames.get(srcid, str(srcid)) for srcid in unpad(tail[:-2])}
                 dest = wirenames.get(destid, str(destid))
-                pips[dest] = (srcs, fuses)
+                pips.setdefault(dest, []).append((srcs, fuses))
     return pips
 
 # make PLL bels
@@ -2619,7 +2605,6 @@ def from_fse(device, fse, dat: Datfile):
 
     create_vcc_pips(dev, tiles)
     create_default_pips(tiles)
-    remove_suspicious_pips(dev, device, tiles)
 
     fse_create_diff_types(dev, device)
     fse_create_hclk_nodes(dev, device, fse, dat)
