@@ -465,7 +465,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
         if name.startswith("IOB"):
             idx = name[-1]
             attrvals = parse_attrvals(tile, db.logicinfo['IOB'], db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids, "IOB")
-            #print(row, col, attrvals)
+            #print(name, row, col, attrvals)
             try: # we can ask for invalid pin here because the IOBs share some stuff
                 bank = chipdb.loc2bank(db, row, col)
             except KeyError:
@@ -506,7 +506,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                 bels.setdefault(name, set()).add(mode)
         if name.startswith("BANK"):
             attrvals = parse_attrvals(tile, db.logicinfo['IOB'], _bank_fuse_tables[tiledata.ttyp][name], attrids.iob_attrids, "IOB")
-            #print('bank', row, col, attrvals)
+            #print(name, row, col, attrvals)
 
             for a, v in attrvals.items():
                 bels.setdefault(name, set()).add(f'{a}={attrids.iob_num2val[v]}')
