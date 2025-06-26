@@ -2697,6 +2697,7 @@ def place(db, tilemap, bels, cst, args):
 
     # second IO pass
     for bank, ios in _io_bels.items():
+        in_bank_attrs = {}
         # check IO standard
         vccio = None
         iostd = None
@@ -2711,6 +2712,9 @@ def place(db, tilemap, bels, cst, args):
                 if iob.attrs.get('SINGLERESISTOR', 'OFF') != 'OFF':
                     iob.attrs['DDR_DYNTERM'] = 'ON'
             if iob.flags['mode'] in {'OBUF', 'IOBUF', 'TLVDS_OBUF', 'TLVDS_IOBUF', 'TLVDS_TBUF', 'TLVDS_TBUF', 'ELVDS_OBUF', 'ELVDS_IOBUF'}:
+                if iob.flags['mode'] in {'ELVDS_OBUF', 'ELVDS_IOBUF'}:
+                    in_bank_attrs['BANK_VCCIO'] = '1.2'
+
                 if 'BANK_VCCIO' in iob.attrs:
                     if iob.attrs['BANK_VCCIO'] != _vcc_ios[iob.attrs['IO_TYPE']]:
                         raise Exception(f"Conflict bank VCC at {iob_name}.")
@@ -2727,8 +2731,8 @@ def place(db, tilemap, bels, cst, args):
         if not vccio:
             iostd = 'LVCMOS12'
 
-        in_bank_attrs = {}
-        in_bank_attrs['BANK_VCCIO'] = _vcc_ios[iostd]
+        if 'BANK_VCCIO' not in in_bank_attrs:
+            in_bank_attrs['BANK_VCCIO'] = _vcc_ios[iostd]
 
         # set io bits
         for name, iob in ios.items():
@@ -2767,10 +2771,10 @@ def place(db, tilemap, bels, cst, args):
             # lvds
             if iob.flags['mode'] in {'TLVDS_OBUF', 'TLVDS_TBUF', 'TLVDS_IOBUF'}:
                 in_iob_attrs.update({'LVDS_OUT': 'ON', 'ODMUX_1': 'UNKNOWN', 'ODMUX': 'TRIMUX',
-                    'SLEWRATE': 'FAST', 'PERSISTENT': 'OFF'})
+                                     'SLEWRATE': 'FAST', 'PERSISTENT': 'OFF', 'DRIVE': '0', 'DIFFRESISTOR': 'OFF'})
             elif iob.flags['mode'] in {'ELVDS_OBUF', 'ELVDS_TBUF', 'ELVDS_IOBUF'}:
                 in_iob_attrs.update({'ODMUX_1': 'UNKNOWN', 'ODMUX': 'TRIMUX',
-                    'PERSISTENT': 'OFF'})
+                    'PERSISTENT': 'OFF', 'DIFFRESISTOR': 'OFF'})
                 in_iob_attrs['IO_TYPE'] = get_iostd_alias(in_iob_attrs['IO_TYPE'])
             if iob.flags['mode'] in {'TLVDS_IBUF', 'ELVDS_IBUF'}:
                 in_iob_attrs['ODMUX_1'] = 'UNKNOWN'
@@ -2835,7 +2839,7 @@ def place(db, tilemap, bels, cst, args):
                         if k == 'IO_TYPE' and k in in_bank_attrs and in_bank_attrs[k].startswith('LVDS'):
                             continue
                         in_bank_attrs[k] = val
-                #print(row, col, atr)
+                #print(f"io{idx}:({row}, {col}):{sorted(iob_attrs)}")
                 bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
                 tile = tilemap[(row, col)]
                 for row_, col_ in bits:
@@ -2852,8 +2856,10 @@ def place(db, tilemap, bels, cst, args):
             if k not in attrids.iob_attrids:
                 print(f'XXX BANK: add {k} key handle')
             else:
-                if k in {'BANK_VCCIO', 'IO_TYPE'}:
+                if k in {'BANK_VCCIO', 'IO_TYPE', 'LVDS_OUT', 'DRIVE'}:
                     add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
+
+        #print(f"bank{int(bank)}:({brow}, {bcol}):{sorted(bank_attrs)}")
         bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, 'BANK', int(bank))
         btile = tilemap[(brow, bcol)]
         for row, col in bits:
