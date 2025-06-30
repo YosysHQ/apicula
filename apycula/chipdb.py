@@ -260,9 +260,12 @@ def create_vcc_pips(dev, tiles):
                         src_fuses['VCC'] = src_fuses[q]
                 src_fuses.pop('Q6', None)
                 src_fuses.pop('Q7', None)
-            for dest, srcs_fuse in tile.alonenode.items():
-                if 'Q6' in srcs_fuse[0] or 'Q7' in srcs_fuse[0]:
-                    tile.alonenode[dest] = (srcs_fuse[0] | {'VCC'}, srcs_fuse[1])
+            for dest, srcs_fuses in tile.alonenode.items():
+                for idx, srcs_fuse in enumerate(srcs_fuses):
+                    if 'Q6' in srcs_fuse[0] or 'Q7' in srcs_fuse[0]:
+                        srcs_fuse[0].discard('Q6')
+                        srcs_fuse[0].discard('Q7')
+                        tile.alonenode[dest][idx] = (srcs_fuse[0] | {'VCC'}, srcs_fuse[1])
 
 _supported_hclk_wires = {'SPINE2', 'SPINE3', 'SPINE4', 'SPINE5', 'SPINE10', 'SPINE11',
                          'SPINE12', 'SPINE13', 'SPINE16', 'SPINE17', 'SPINE18', 'SPINE19',
