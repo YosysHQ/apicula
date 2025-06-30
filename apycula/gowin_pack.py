@@ -288,8 +288,9 @@ def isolate_segments(pnr, db, tilemap):
                 tile = tilemap[(row, col)]
                 if wire not in tiledata.alonenode_6:
                     raise Exception(f"Wire {wire} is not in alonenode fuse table")
-                bits = tiledata.alonenode_6[wire][1]
-                #print(wire_ex, bits)
+                if len(tiledata.alonenode_6[wire]) != 1:
+                    raise Exception(f"Incorrect alonenode fuse table for {wire}")
+                bits = tiledata.alonenode_6[wire][0][1]
                 for row, col in bits:
                     tile[row][col] = 1
             else:
@@ -2869,23 +2870,6 @@ def place(db, tilemap, bels, cst, args):
     #    for io, bl in v.items():
     #        print(k, io, vars(bl))
 
-# The vertical columns of long wires can receive a signal from either the upper
-# or the lower end of the column.
-# The default source is the top end of the column, but if optimum routing has
-# resulted in the bottom end of the column being used, the top end must be
-# electrically disconnected by setting special fuses.
-def secure_long_wires(db, tilemap, row, col, src, dest):
-    if device in {"GW1N-1"}:
-        # the column runs across the entire height of the chip from the first to the last row
-        check_row = db.rows
-        fuse_row = 0
-        if row == check_row and dest in {'LT02', 'LT13'}:
-            tiledata = db.grid[fuse_row][col - 1]
-            if dest in tiledata.alonenode_6:
-                tile = tilemap[(fuse_row, col - 1)]
-                _, bits = tiledata.alonenode_6[dest]
-                for row, col in bits:
-                    tile[row][col] = 1
 
 # hclk interbank requires to set some non-route fuses
 def do_hclk_banks(db, row, col, src, dest):
@@ -2914,9 +2898,10 @@ def route(db, tilemap, pips):
                 bits = tiledata.pips[dest][src]
                 # check if we have 'not conencted to' situation
                 if dest in tiledata.alonenode:
-                    srcs, fuses = tiledata.alonenode[dest]
-                    if src not in srcs:
-                        bits |= fuses
+                    for srcs_fuses in tiledata.alonenode[dest]:
+                        srcs, fuses = srcs_fuses
+                        if src not in srcs:
+                            bits |= fuses
         except KeyError:
             print(src, dest, "not found in tile", row, col)
             breakpoint()
