@@ -19,10 +19,9 @@ Currently supported boards are
  * Sipeed Tang Nano 20K: GW2AR-LV18QN88C8/I7 [^1]
  * Sipeed Tang Primer 20K: GW2A-LV18PG256C8/I7 [^1]
  * Seeed RUNBER: GW1N-UV4LQ144C6/I5
- * @Disasm honeycomb: GW1NS-UX2CQN48C5/I4
  * szfpga: GW1NR-LV9LQ144PC6/I5
 
-[^1]: `C` devices require passing the `--family` flag as well as `--device` to Nextpnr, and stating the family in place of device when passing `-d` to `gowin_pack` because the C isn't part of the device ID but only present in the date code. Check `examples/himbaechel/Makefile` for the correct command.
+[^1]: `C` devices require passing the `--vopt family` flag as well as `--device` to Nextpnr, and stating the family in place of device when passing `-d` to `gowin_pack` because the C isn't part of the device ID but only present in the date code. Check `examples/Makefile` for the correct command.
 
 Install the tools with pip.
 
@@ -41,7 +40,7 @@ export PATH="$HOME/.local/bin:$PATH" # add binaries to the path
 
 From there, compile a blinky.
 
-The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber`, `tangnano`, `tangnano4k` or `honeycomb` accordingly. Also note the number of LEDs on your board: 8 for tec0117 and runber, 3 for honeycomb and tangnano. 
+The example below is for the Trenz TEC0117. For other devices, use the model numbers listed above for `--device`, and replace `tec0117` with `runber`, `tangnano`, `tangnano4k` or `tangnano9k` accordingly. Also note the number of LEDs on your board: 8 for tec0117 and runber, 3 for honeycomb and tangnano. 
 You can also use the Makefile in the examples folder to build the examples.
 
 ```bash
@@ -69,11 +68,16 @@ nextpnr-himbaechel --json blinky.json \
 gowin_pack -d GW1N-9C -o pack.fs pnrblinky.json
 ```
 
+For the Tangnano20k (TangPrimer20k) board, you need to call yosys with the chip family as follows:
+```
+yosys -D LEDS_NR=8 -p "read_verilog blinky.v; synth_gowin -json blinky.json -family gw2a"
+```
+
 ## Getting started for contributors
 
 In addition to the above, to run the fuzzers and build the ChipDB, the following additional dependencies are needed.
 
-Version 1.9.8 of the Gowin vendor tools. Newer versions may work, but have not been tested.
+Version 1.9.10.03 of the Gowin vendor tools. Newer versions may work, but have not been tested.
 
 Alternatively, you can use the `Dockerfile` to run the fuzzers in a container.
 
