@@ -34,6 +34,8 @@ class Bel:
     # there can be only one mode, modes are exclusive
     modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
     portmap: Dict[str, str] = field(default_factory=dict)
+    # where to set the fuses for the bel
+    fuse_cell_offset: Coord = field(default_factory=tuple)
 
     @property
     def mode_bits(self):
@@ -58,10 +60,8 @@ class Tile:
     # [‘wire’][2] table, this is not the case in the new IDE.
     # {dst: [({src}, {bits})]}
     alonenode: Dict[str, List[Tuple[Set[str], Set[Coord]]]] = field(default_factory=dict)
-    # XXX pure_clock_pips not used in apicula anymore but leave it untouched
     # for now as nextpnr is still counting on this field
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
-    pure_clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     # fuses to disable the long wire columns. This is the table 'alonenode[6]' in the vendor file
     # {dst: [({src}, {bits})]}
     alonenode_6: Dict[str, List[Tuple[Set[str], Set[Coord]]]] = field(default_factory=dict)
@@ -168,12 +168,15 @@ class Device:
     def bank_tiles(self):
         # { bank# : (row, col) }
         res = {}
-        for pos in self.corners.keys():
-            row, col = pos
-            for bel in self.grid[row][col].bels.keys():
-                if bel[0:4] == 'BANK':
-                    res.update({ bel[4:] : pos })
+        for row in range(self.rows):
+            for col in range(self.cols):
+                for bel in self.grid[row][col].bels.keys():
+                    if bel.startswith('BANK'):
+                        res.update({ bel[4:] : (row, col) })
         return res
+
+def is_GW5_family(device):
+    return device in {'GW5A-25A'}
 
 # XXX GW1N-4 and GW1NS-4 have next data in dat.portmap['CmuxIns']:
 # 62 [11, 1, 126]
@@ -233,8 +236,8 @@ def fse_pips(fse, ttyp, device, table=2, wn=wirenames):
             if srcid < 0:
                 fuses = set()
                 srcid = -srcid
-            src = wn.get(srcid, str(srcid))
-            dest = wn.get(destid, str(destid))
+            src = wn[srcid]
+            dest = wn[destid]
             pips.setdefault(dest, {})[src] = fuses
 
     return pips
@@ -478,15 +481,13 @@ def fse_osc(device, fse, ttyp):
     return osc
 
 def set_banks(fse, db):
-    # fill the bank# : corner tile table
-    w = db.cols - 1
-    h = db.rows - 1
-    for row, col in [(0, 0), (0, w), (h, 0), (h, w)]:
-        ttyp = fse['header']['grid'][61][row][col]
-        if 'longval' in fse[ttyp].keys():
-            if 37 in fse[ttyp]['longval'].keys():
-                for rd in fse[ttyp]['longval'][37]:
-                    db.grid[row][col].bels.setdefault(f"BANK{rd[0]}", Bel())
+    for row in range(db.rows):
+        for col in range(db.cols):
+            ttyp = db.grid[row][col].ttyp
+            if ttyp in db.longval:
+                if 'BANK' in db.longval[ttyp]:
+                    for rd in db.longval[ttyp]['BANK']:
+                        db.grid[row][col].bels.setdefault(f"BANK{rd[0]}", Bel())
 
 _known_logic_tables = {
             8:  'DCS',
@@ -1409,6 +1410,8 @@ def fse_iologic(device, fse, ttyp):
         return bels
     if device in {'GW1NS-4'} and ttyp in {86, 87, 135, 136, 137, 138}:
         return bels
+    if device in {'GW5A-25A'}:
+        return bels
     if 'shortval' in fse[ttyp].keys():
         if 21 in fse[ttyp]['shortval'].keys():
             bels['IOLOGICA'] = Bel()
@@ -1548,9 +1551,14 @@ _clock_data = {
         'GW1N-9C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {( 1, 0, 10, 1, 0), (19, 10, 29, 2, 3)}},
         'GW2A-18': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
         'GW2A-18C': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}},
-        'GW5A-25A': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}}, # Fix me
+        #'GW5A-25A': { 'tap_start': [[3, 2, 1, 0], [3, 2, 1, 0]], 'quads': {(10, 0, 28, 1, 0), (46, 28, 55, 2, 3)}}, # Fix me
         }
 def fse_create_clocks(dev, device, dat: Datfile, fse):
+    # XXX
+    if device not in _clock_data:
+        print(f"No clocks for {device} for now.")
+        return
+
     center_col = dat.grid.center_x - 1
     clkpin_wires = {}
     taps = {}
@@ -2149,10 +2157,14 @@ def fse_create_gsr(dev, device):
     # to the button and see how the routing has changed in which of the
     # previously found cells.
     row, col = (0, 0)
+    wire = 'C4'
     if device in {'GW2A-18', 'GW2A-18C'}:
         row, col = (27, 50)
+    elif device in {'GW5A-25A'}:
+        row, col = (28, 89)
+        wire = 'LSR0'
     dev.extra_func.setdefault((row, col), {}).update(
-        {'gsr': {'wire': 'C4'}})
+        {'gsr': {'wire': wire}})
 
 def fse_create_bandgap(dev, device):
     # The cell and wire are found by a test compilation where the BGEN input is
@@ -2578,8 +2590,6 @@ def from_fse(device, fse, dat: Datfile):
         tile = Tile(w, h, ttyp)
         tile.pips = fse_pips(fse, ttyp, device, 2, wirenames)
         tile.clock_pips = fse_pips(fse, ttyp, device, 38, clknames)
-        # XXX remove after nextpnr update
-        tile.pure_clock_pips = copy.deepcopy(tile.clock_pips)
         tile.alonenode = fse_alonenode(fse, ttyp, device, 69)
         tile.alonenode_6 = fse_alonenode(fse, ttyp, device, 6)
         if 5 in fse[ttyp]['shortval']:
@@ -2590,7 +2600,7 @@ def from_fse(device, fse, dat: Datfile):
             tile.bels = fse_bram(fse)
         elif ttyp in bram_aux_ttypes:
             tile.bels = fse_bram(fse, True)
-        elif ttyp in dsp_ttypes:
+        elif ttyp in dsp_ttypes and device not in {'GW5A-25A'}:
             tile.bels = fse_dsp(fse)
         elif ttyp in dsp_aux_ttypes:
             tile.bels = fse_dsp(fse, True)
@@ -2605,6 +2615,11 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_pll_clock_aliases(dev, device)
     fse_create_bottom_io(dev, device)
     fse_create_tile_types(dev, dat)
+    #XXX
+    if device in {'GW5A-25A'}:
+        dev.tile_types['P'] = set()
+        dev.tile_types['B'] = set()
+        dev.tile_types['D'] = set()
 
     create_vcc_pips(dev, tiles)
     create_default_pips(tiles)
@@ -2674,6 +2689,16 @@ def get_longval_fuses(dev, ttyp, attrs, table_name):
 # number of the bank, thus allowing the repetition of elements in the key
 def get_bank_fuses(dev, ttyp, attrs, table_name, bank_num):
     return get_table_fuses(attrs, {k[1:]:val for k, val in dev.longval[ttyp][table_name].items() if k[0] == bank_num})
+
+# get fuses for attr/val set for bank use whatever table is preset in the cell: IOBA or IOBB
+# returns a bit set
+def get_bank_io_fuses(dev, ttyp, attrs):
+    tablename = 'IOBA'
+    if tablename not in dev.longval[ttyp]:
+        tablename = 'IOBB'
+        if tablename not in dev.longval[ttyp]:
+            return set()
+    return get_table_fuses(attrs, dev.longval[ttyp][tablename])
 
 # add the attribute/value pair into an set, which is then passed to
 # get_longval_fuses() and get_shortval_fuses()
@@ -2837,6 +2862,128 @@ def create_port_wire(dev, row, col, row_off, col_off, bel, bel_name, port, wire,
     else:
         bel.portmap[port] = wire
 
+# The IO blocks in the GW5A family can (and in most cases will) be separated
+# into different cells. This includes not only fuses, but also wires like IBUF
+# output or OBUF input. But externally (as for example for specifying a pin in
+# a CST file) they are in the same cell.
+#
+#For example:
+#
+# IOT3A is located in cell (0, 2) and IOT3B is located in cell (0, 3), but from
+# the IDE point of view it is one cell IOT3 (0, 2).
+#
+# We solve this problem as follows: to minimize the logic in nextpnr, we place
+# A and B in the same IOT3 cell and make himbaechel nodes for the wires so that
+# B's ports are also seen in the IOT3 cell.
+#
+# This will allow nextpnr to do placement and routing, but doesn't account for
+# the fact that the fuses for B need to be set in a different cell. To solve
+# this, we add a descriptor field to each Bel that specifies the offsets to the
+# cell where the fuses should be set.
+# This breaks unpacking, but it is also solvable.
+
+# By experimentally placing the IBUF IO by setting constraints in the CST file
+# and then searching in which cell the bits were changed, the offsets depending
+# on the cell type were determined.
+_gw5_fuse_cell_offset = {
+        'top': {
+             50: (0, 0), 51: (0, 1), 242: (0, 0), 382: (0, 0), 383: (0, 1), 387: (0, 1),
+            388: (0, 0), 389: (0, 1), 390: (0, 0), 395: (0, 1), 400: (0, 1), 403: (0, 0),
+            410: (0, 0), 411: (0, 0), 420: (0, 0), 421: (0, 0), 422: (0, 1), 423: (0, 1),
+            466: (0, 0)
+            },
+        'bottom': {
+             48: (0, 0), 49: (0, 1), 247: (0, 0), 248: (0, 1), 251: (0, 1), 263: (0, 0),
+             274: (0, 1), 393: (0, 0), 394: (0, 0), 396: (0, 0), 397: (0, 0), 405: (0, 1),
+             407: (0, 0), 436: (0, 1), 437: (0,0), 438: (0, 1), 439: (0, 0),
+            },
+        'left': {
+            57: (0, 0), 74: (1, 0), 243: (0, 0), 244: (1, 0), 257: (0, 0), 258: (0, 0),
+            272: (0, 0), 384: (1, 0),
+            },
+        'right': {
+            54: (0, 0), 220: (0, 0), 245: (0, 0), 246: (1, 0), 260: (0, 0), 385: (1, 0),
+            391: (0, 0), 392: (0, 0), 399: (0, 0), 401: (0, 0), 419: (1, 0)
+            }
+}
+def fill_GW5A_io_bels(dev):
+    def fix_iobb(off):
+        # for now fix B bel only
+        if 'IOBB' in main_cell.bels:
+            print('GW5 IO bels', f' {ttyp} -> {main_cell.ttyp}')
+            main_cell.bels['IOBB'].fuse_cell_offset = off
+        else:
+            print('GW5 IO bels', f'skip {ttyp} -> {main_cell.ttyp}: no IOBB bel')
+
+    # top
+    for col, rc in enumerate(dev.grid[0]):
+        ttyp = rc.ttyp
+        if ttyp not in _gw5_fuse_cell_offset['top']:
+            continue
+
+        off = _gw5_fuse_cell_offset['top'][ttyp]
+        if off != (0, 0):
+            main_cell = dev.grid[0][col - off[1]]
+            fix_iobb(off)
+
+    # bottom
+    for col, rc in enumerate(dev.grid[0]):
+        ttyp = rc.ttyp
+        if ttyp not in _gw5_fuse_cell_offset['bottom']:
+            continue
+
+        off = _gw5_fuse_cell_offset['botom'][ttyp]
+        if off != (0, 0):
+            main_cell = dev.grid[dev.rows - 1][col - off[1]]
+            fix_iobb(off)
+
+    # left
+    for row in range(dev.rows):
+        rc = dev.grid[row][0]
+        ttyp = rc.ttyp
+        if ttyp not in _gw5_fuse_cell_offset['left']:
+            continue
+
+        off = _gw5_fuse_cell_offset['left'][ttyp]
+        if off != (0, 0):
+            main_cell = dev.grid[row - off[0]][0]
+            fix_iobb(off)
+
+    # right
+    for row in range(dev.rows):
+        rc = dev.grid[row][dev.cols - 1]
+        ttyp = rc.ttyp
+        if ttyp not in _gw5_fuse_cell_offset['right']:
+            continue
+
+        off = _gw5_fuse_cell_offset['right'][ttyp]
+        if off != (0, 0):
+            main_cell = dev.grid[row - off[0]][dev.cols - 1]
+            fix_iobb(off)
+
+def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
+    pin = belname[-1]
+    if pin == 'A' or not bel.fuse_cell_offset:
+        inp = wirenames[dat.portmap[f'Iobuf{pin}Out']]
+        bel.portmap['O'] = inp
+        out = wirenames[dat.portmap[f'Iobuf{pin}In']]
+        bel.portmap['I'] = out
+        oe = wirenames[dat.portmap[f'Iobuf{pin}OE']]
+        bel.portmap['OE'] = oe
+    else:
+        inp = wirenames[dat.portmap[f'Iobuf{pin}Out']]
+        nodename = add_node(dev, f'X{col}Y{row}/IOBB_O', "IO_O", row + bel.fuse_cell_offset[0], col + bel.fuse_cell_offset[1], inp)
+        nodename = add_node(dev, nodename, "IO_O", row, col, f'IOBB_{inp}')
+        bel.portmap['O'] = f'IOBB_{inp}'
+        out = wirenames[dat.portmap[f'Iobuf{pin}In']]
+        nodename = add_node(dev, f'X{col}Y{row}/IOBB_I', "IO_I", row + bel.fuse_cell_offset[0], col + bel.fuse_cell_offset[1], out)
+        nodename = add_node(dev, nodename, "IO_I", row, col, f'IOBB_{out}')
+        bel.portmap['I'] = f'IOBB_{out}'
+        oe = wirenames[dat.portmap[f'Iobuf{pin}OE']]
+        nodename = add_node(dev, f'X{col}Y{row}/IOBB_OE', "IO_OE", row + bel.fuse_cell_offset[0], col + bel.fuse_cell_offset[1], oe)
+        nodename = add_node(dev, nodename, "IO_OE", row, col, f'IOBB_{oe}')
+        bel.portmap['OE'] = f'IOBB_{oe}'
+
 def dat_portmap(dat, dev, device):
     for row, row_dat in enumerate(dev.grid):
         for col, tile in enumerate(row_dat):
@@ -2845,6 +2992,9 @@ def dat_portmap(dat, dev, device):
                     if not need_create_multiple_nodes(device, name):
                         continue
                 if name.startswith("IOB"):
+                    if is_GW5_family(device):
+                        create_GW5A_io_portmap(dat, dev, device, row, col, name, bel, tile)
+                        continue
                     if row in dev.simplio_rows:
                         idx = ord(name[-1]) - ord('A')
                         inp = wirenames[dat.portmap['IobufIns'][idx]]
@@ -4007,8 +4157,8 @@ def fse_wire_delays(db):
     for i in range(1049, 1130):
         db.wire_delay[str(i)] = "X8"
     # clock wires
-    for i in range(261):
-        db.wire_delay[clknames[i]] = "TAP_BRANCH_PCLK" # XXX
+    #for i in range(261):
+    #    db.wire_delay[clknames[i]] = "TAP_BRANCH_PCLK" # XXX
     for i in range(32):
         db.wire_delay[clknames[i]] = "SPINE_TAP_PCLK"
     for i in range(81, 105): # clock inputs (PLL outs)
@@ -4027,6 +4177,11 @@ def fse_wire_delays(db):
         db.wire_delay[f'HCLK_OUT{i}'] = "HclkOutMux"
     for wire in {'DLLDLY_OUT', 'DLLDLY_CLKOUT', 'DLLDLY_CLKOUT0', 'DLLDLY_CLKOUT1'}:
         db.wire_delay[wire] = "ISB" # XXX
+    # XXX for now
+    for wire in chain(clknames.values(), wirenames.values(), hclknames.values()):
+        if wire not in db.wire_delay:
+            db.wire_delay[wire] = "X8"
+
 
 # assign pads with plls
 # for now use static table and store the bel name although it is always PLL without a number

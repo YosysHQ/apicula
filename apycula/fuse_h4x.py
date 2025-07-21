@@ -51,8 +51,7 @@ def readOneFile(f, tileType, device):
 
     #v1 = tileType
 
-    is5Series = False
-    if device.lower().startswith("gw5a"): is5Series = True
+    is5Series = device.lower().startswith("gw5a")
 
     for i in range(tables):
         typ = rint(f, 4)
@@ -65,11 +64,13 @@ def readOneFile(f, tileType, device):
         elif typ == 1:
             # Check if the device is 5 series as tile type 1 needs to be read differently
             typn = "fuse"
-            if is5Series == False: t = readTable(f, size, tileType, 2)
-            else: t = readTable(f, size, 440, 2)
+            if is5Series:
+                t = readTable(f, size, 512, 2)
+            else:
+                t = readTable(f, size, 150, 2)
         elif typ in {0x02, 0x26, 0x30, 0x5a, 0x5b}:
             typn = "wire"
-            if is5Series == False: t = readTable(f, size, 8, 2)
+            if not is5Series: t = readTable(f, size, 8, 2)
             else: t = readTable(f, size, 9, 2)
         elif typ == 0x03:
             typn = "wiresearch"
@@ -117,7 +118,7 @@ def readOneFile(f, tileType, device):
             t = readTable(f, size, 6, 2)
         elif typ == 0x8b:
             typn = "drpfuse"
-            t = readTable(f, size, 3, 2)
+            t = readTable(f, size, 10, 2)
         else:
             raise ValueError("Unknown type {} at {}".format(hex(typ), hex(f.tell())))
         tmap.setdefault(typn, {})[typ] = t
@@ -128,8 +129,7 @@ def render_tile(d, ttyp, device):
     h = d[ttyp]['height']
 
 
-    is5Series = False
-    if device.lower().startswith("gw5a"): is5Series = True
+    is5Series = device.lower().startswith("gw5a")
 
     #if is5Series:
     #    h = h * 2
@@ -183,8 +183,7 @@ def render_bitmap(d, device):
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
 
-    is5Series = False
-    if device.lower().startswith("gw5a"): is5Series = True
+    is5Series = device.lower().startswith("gw5a")
 
     if is5Series:
         height = height * 2
@@ -227,8 +226,7 @@ def display(fname, data):
     return im
 
 def fuse_lookup(d, ttyp, fuse, device):
-    is5Series = False
-    if device.lower().startswith("gw5a"): is5Series = True
+    is5Series = device.lower().startswith("gw5a")
 
     w = d[ttyp]['width']
     h = d[ttyp]['height']
@@ -245,8 +243,6 @@ def fuse_lookup(d, ttyp, fuse, device):
             print("row too big", ttyp, row, h, col, w, num, h * w)
         if col > w:
             print("col too big", col, w)
-
-
         return row, col
 
 def tile_bitmap(d, bitmap, empty=False):
@@ -380,8 +376,7 @@ def exact_table_cover(t_rows, start, table=None):
         return []
 
 def scan_fuses(d, ttyp, tile, device):
-    is5Series = False
-    if device.lower().startswith("gw5a"): is5Series = True
+    is5Series = device.lower().startswith("gw5a")
 
     w = d[ttyp]['width']
     h = d[ttyp]['height']

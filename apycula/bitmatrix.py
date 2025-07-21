@@ -19,7 +19,7 @@ def transpose(bmp):
     Returns a reference
     """
     return [[bmp[j][i] for j in range(len(bmp))] for i in range(len(bmp[0]))]
-    
+
 def vstack(bmp_0, bmp_1):
     """
     Stack matrices in sequence vertically (row wise).
@@ -40,17 +40,23 @@ def shape(bmp):
     """
     return [len(bmp), len(bmp[0])]
 
+def fill(rows, cols, val):
+    """
+    Returns a new matrix of given shape, filled with val.
+    """
+    return [[val] * cols for i in range(rows)]
+
 def ones(rows, cols):
     """
     Returns a new matrix of given shape, filled with ones.
     """
-    return [[1] * cols for i in range(rows)]
+    return fill(rows, cols, 1)
 
 def zeros(rows, cols):
     """
     Returns a new matrix of given shape, filled with zeros.
     """
-    return [[0] * cols for i in range(rows)]
+    return fill(rows, cols, 0)
 
 def packbits(bmp, axis = None):
     """

@@ -95,7 +95,7 @@ class Datfile:
         arr = [self.read_i16() for _ in range(num)]
         return arr
 
-    def read_arr16_at(self, num:int, base:int, scale:int, offset:int):
+    def read_arr16_at(self, num:int, base:int, offset:int):
         ret = []
 
         for n in range(num):
@@ -103,7 +103,7 @@ class Datfile:
             ret.append(self.read_i16())
         return ret
 
-    def read_arr32_at(self, num:int, base:int, scale:int, offset:int):
+    def read_arr32_at(self, num:int, base:int, offset:int):
         ret = []
 
         for n in range(num):
@@ -589,8 +589,8 @@ class Datfile:
         ret["Cfg"]["RA"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 224, 8)
         ret["Cfg"]["TB"]        = self.read_arr32_at(200, RSTable5ATOffset + 700, 0)
         ret["Cfg"]["BB"]        = self.read_arr32_at(200, RSTable5ATOffset + 900, 0)
-        ret["Cfg"]["LB"]        = self.read_arr32_at(0x96, RSTable5ATOffset, 0x44c)
-        ret["Cfg"]["RB"]        = self.read_arr32_at(0x96, RSTable5ATOffset, 0x4e0, 8)
+        ret["Cfg"]["LB"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 0x44c, 0)
+        ret["Cfg"]["RB"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 0x4e0, 8)
 
         return ret
 

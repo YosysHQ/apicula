@@ -22,19 +22,25 @@ wirenames = { 0: "A0", 1: "B0", 2: "C0", 3: "D0", 4: "A1", 5: "B1", 6: "C1", 7: 
 267: "LB61", 268: "LB71", 269: "GB00", 270: "GB10", 271: "GB20", 272: "GB30", 273: "GB40", 274: "GB50", 275: "GB60", 276: "GB70", 277: "VCC", 278: "VSS",
 279: "LT00", 280: "LT10", 281: "LT20", 282: "LT30", 283: "LT02", 284: "LT13", 285: "LT01", 286: "LT04", 287: "LBO0", 288: "LBO1", 289: "SS00", 290: "SS40",
 291: "GT00", 292: "GT10", 293: "GBO0", 294: "GBO1", 295: "DI0", 296: "DI1", 297: "DI2", 298: "DI3", 299: "DI4", 300: "DI5", 301: "DI6", 302: "DI7",
-303: "CIN0", 304: "CIN1", 305: "CIN2", 306: "CIN3", 307: "CIN4", 308: "CIN5", 309: "COUT0", 310: "COUT1", 311: "COUT2", 312: "COUT3", 313: "COUT4", 314: "COUT5"}
+             303: "CIN0", 304: "CIN1", 305: "CIN2", 306: "CIN3", 307: "CIN4", 308: "CIN5", 309: "COUT0", 310: "COUT1", 311: "COUT2", 312: "COUT3", 313: "COUT4", 314: "COUT5", 315: "SPCLK_0", 316: "SPCLK_1"}
+
+wirenames.update({n: f"UNK{n}" for n in range(506, 569)})
+
 wirenames.update({n: f"LWSPINETL{n - 1001}" for n in range(1001, 1009)})
 wirenames.update({n: f"LWSPINETR{n - 1009}" for n in range(1009, 1017)})
 wirenames.update({n: f"LWSPINEBL{n - 1017}" for n in range(1017, 1025)})
 wirenames.update({n: f"LWSPINEBR{n - 1025}" for n in range(1025, 1033)})
 wirenames.update({n: f"LWSPINEB1L{n - 1033}" for n in range(1033, 1041)})
 wirenames.update({n: f"LWSPINEB1R{n - 1041}" for n in range(1041, 1049)})
-wirenames.update({n: f"5A25" for n in range(545, 553)}) # GW5A-25A need these
-wirenames.update({n: f"5A25" for n in range(556, 564)}) # GW5A-25A need these
+
+wirenames.update({n: f"UNK{n}" for n in range(1049, 1241)})
+
+wirenames.update({n: f"5A{n}" for n in range(545, 553)}) # GW5A-25A need these
+wirenames.update({n: f"5A{n}" for n in range(556, 564)}) # GW5A-25A need these
 
 wirenumbers = {v: k for k, v in wirenames.items()}
 
-clknames = wirenames.copy()
+clknames = {}
 clknames.update({n: f"SPINE{n}" for n in range(32)})
 clknames.update({n: f"LWT{n - 32}" for n in range(32, 40)})
 clknames.update({n: f"LWB{n - 40}" for n in range(40, 48)})
@@ -97,8 +103,9 @@ clknames.update({
     145: 'TRMDCLK0', 146: 'TLMDCLK0', 147: 'BRMDCLK0', 148: 'BLMDCLK0',
     149: 'BLMDCLK1', 150: 'BRMDCLK1', 151: 'TLMDCLK1', 152: 'TRMDCLK1',
 })
-clknames[153] = 'VCC'
-clknames.update({n: f"UNK{n}" for n in range(154, 170)})
+#clknames[153] = 'VCC'
+
+clknames.update({n: f"UNK{n}" for n in range(153, 170)})
 
 # HCLK?
 clknames.update({
@@ -120,7 +127,14 @@ clknames.update({
      204: 'P40A', 205: 'P41A', 206: 'P42A', 207: 'P43A', 208: 'P44A', 209: 'P45A',
 })
 
-clknames.update({n: f"UNK{n}" for n in range(210, 261)})
+
+clknames.update({n: f"UNK{n}" for n in range(210, 277)})
+clknames[277] = 'VCC'
+clknames.update({n: f"UNK{n}" for n in range(278, 281)})
+
+clknames.update({291: "GT00", 292: "GT10"})
+
+clknames.update({n: f"UNK{n}" for n in range(501, 570)})
 
 # HCLK->clock network
 # Each HCLK can connect to other HCLKs through two MUXes in the clock system.
@@ -132,6 +146,15 @@ clknames.update({
     1006: 'HCLK2_BANK_OUT0', 1007: 'HCLK2_BANK_OUT1',
     1008: 'HCLK3_BANK_OUT0', 1009: 'HCLK3_BANK_OUT1',
 })
+
+clknames.update({n: f"LWSPINETL{n - 1001}" for n in range(1001, 1009)})
+clknames.update({n: f"LWSPINETR{n - 1009}" for n in range(1009, 1017)})
+clknames.update({n: f"LWSPINEBL{n - 1017}" for n in range(1017, 1025)})
+clknames.update({n: f"LWSPINEBR{n - 1025}" for n in range(1025, 1033)})
+clknames.update({n: f"LWSPINEB1L{n - 1033}" for n in range(1033, 1041)})
+clknames.update({n: f"LWSPINEB1R{n - 1041}" for n in range(1041, 1049)})
+
+clknames.update({n: f"UNK{n}" for n in range(1049, 1225)})
 
 clknumbers = {v: k for k, v in clknames.items()}
 
@@ -157,6 +180,9 @@ hclknames.update({
 hclknames.update({
     20: 'HCLK_9_CLKDIV2_SECT0_OUT', 22:'HCLK_9_CLKDIV2_SECT2_OUT'
 })
+
+hclknames[277] = 'VCC'
+hclknames[278] = 'VSS'
 
 
 hclknumbers = {v: k for k, v in hclknames.items()}
