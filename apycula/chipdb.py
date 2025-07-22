@@ -2849,7 +2849,13 @@ def get_pllout_global_name(row, col, wire, device):
     raise Exception(f"bad PLL output {device} ({row}, {col}){wire}")
 
 def need_create_multiple_nodes(device, name):
-    return (name.startswith("RPLLA") and device in {'GW2A-18', 'GW2A-18C'}) or name == "BSRAM" or name.startswith("MULT") or name.startswith("PADD") or name.startswith("ALU54D")
+    if name.startswith("RPLLA") and device in {'GW2A-18', 'GW2A-18C'}:
+        return True
+    if name == "BSRAM" or name.startswith("MULT") or name.startswith("PADD") or name.startswith("ALU54D"):
+        return True
+    if name.startswith('IOB') and device in {'GW5A-25A'}:
+        return True
+    return False
 
 # create simple port or the Himbaechel node
 def create_port_wire(dev, row, col, row_off, col_off, bel, bel_name, port, wire, wire_type):
