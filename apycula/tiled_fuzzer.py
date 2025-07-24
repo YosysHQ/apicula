@@ -74,7 +74,7 @@ params = {
     "GW5A-25A": {
         "package": "MBGA121N",
         "device": "GW5A-25A",
-        "partnumber": "GW5A-LV25MG121NC1/I0",
+        "partnumber": "GW5A-LV25MG121NES",
     },
 }[device]
 
@@ -223,6 +223,7 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
             bel.is_diff = is_diff
             bel.is_true_lvds = is_true_lvds
             bel.is_diff_p = is_positive
+
             #print(f"type:{ttyp} [{row}][{col}], IOB{bel_name[-1]}, diff:{is_diff}, true lvds:{is_true_lvds}, p:{is_positive}")
     for ttyp, bels in iob_bels.items():
         for row, col in locations[ttyp]:
@@ -331,6 +332,8 @@ if __name__ == "__main__":
     # IOB
     diff_cap_info = pindef.get_diff_cap_info(params['device'], params['package'], True)
     fse_iob(fse, db, pin_locations, diff_cap_info, locations);
+    if chipdb.is_GW5_family(device):
+        chipdb.fill_GW5A_io_bels(db)
 
     pad_locs = pindef.get_pll_pads_locs(params['device'], params['package'])
     chipdb.pll_pads(db, device, pad_locs)

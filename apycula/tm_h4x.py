@@ -312,8 +312,10 @@ def read_tm(f, device):
         ]
     elif device.lower().startswith("gw5a"):
         chunk_order = [
-            "1",
-            "2",
+            "ES", # In the case of GW5A-25 engineering samples (ES), ‘C1/I0’
+                  # and ‘A0’ use the same delay variant. A duplicate set of delays
+                  # should be considered in the future.
+            "C2/I1",
             "3",
             "4",
             "5",
@@ -337,8 +339,11 @@ def read_tm(f, device):
         # XXX no gw5 for now
         if len(chunk) != chunklen:
             continue
+        # XXX GW5A-25A check it
+        if i >= 3 and device in {'GW5A-25A'}:
+            break
         tmdat[speed_class] = {}
-        print(f'{i:2} class:{speed_class}' , "len(chunk):", len(chunk), "chunklen:", chunklen)
+        #print(f'{i:2} class:{speed_class}' , "len(chunk):", len(chunk), "chunklen:", chunklen)
         #assert len(chunk) == chunklen # 5A the last chunk is smaller 12922 vs. 15552
         res = parse_chunk(chunk)
         for name, tm in res:

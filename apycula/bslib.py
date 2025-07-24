@@ -69,11 +69,12 @@ def read_bitstream(fname):
                     crcdat.extend(ba)
                 if not preamble and ba[0] == 0x3b: # frame count
                     frames = int.from_bytes(ba[2:], 'big')
+                    #print(f"frames:{frames}");
                     is_hdr = False
                 if not preamble and ba[0] == 0x06: # device ID
                     if ba == b'\x06\x00\x00\x00\x11\x00\x58\x1b':     # GW1N-9
                         padding = 4
-                        compress_padding = 44
+                        compress_padding = 44 # <-- when using compression, the width of one row in bits must be a multiple of 64
                     elif ba == b'\x06\x00\x00\x00\x11\x00H\x1b':      # GW1N-9C
                         padding = 4
                         compress_padding = 44
@@ -93,7 +94,8 @@ def read_bitstream(fname):
                         padding = 0
                         compress_padding = 16
                     elif ba == b'\x06\x00\x00\x00\x00\x01\x28\x1b':   # GW5A-25A
-                        padding = 0
+                        padding = 3
+                        compress_padding = 43
                         is5ASeries = True
                     else:
                         raise ValueError("Unsupported device", ba)
@@ -127,10 +129,9 @@ def read_bitstream(fname):
             frames = max(0, frames-1)
             c = c + 1
 
-        if is5ASeries == False:
-            returnBitmap = bitmatrix.fliplr(bitmap)
-        else:
-            returnBitmap = bitmatrix.transpose(bitmap)
+        returnBitmap = bitmatrix.fliplr(bitmap)
+        if is5ASeries:
+            returnBitmap = bitmatrix.transpose(returnBitmap)
 
         return returnBitmap, hdr, ftr
 
@@ -157,12 +158,12 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
     if compress:
         padlen = (ceil(bitmatrix.shape(bs)[1] / 64) * 64) - bitmatrix.shape(bs)[1]
     else:
-        padlen = bitmatrix.shape(bs)[1] % 8
+        padlen = (ceil(bitmatrix.shape(bs)[1] / 8) * 8) - bitmatrix.shape(bs)[1]
     pad = bitmatrix.ones(bitmatrix.shape(bs)[0], padlen)
-    no_compress_pad_bytes = (padlen - bitmatrix.shape(bs)[1] % 8) // 8
+    no_compress_pad_bytes = (padlen - ((ceil(bitmatrix.shape(bs)[1] / 8) * 8) - bitmatrix.shape(bs)[1])) // 8
     bs = bitmatrix.hstack(pad, bs)
     assert bitmatrix.shape(bs)[1] % 8 == 0
-    bs=bitmatrix.packbits(bs, axis = 1)
+    bs = bitmatrix.packbits(bs, axis = 1)
 
     unused_bytes = []
     if compress:

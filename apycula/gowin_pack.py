@@ -12,7 +12,7 @@ from collections import namedtuple
 from contextlib import closing
 from apycula import codegen
 from apycula import chipdb
-from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses, get_long_fuses
+from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses, get_bank_io_fuses, get_long_fuses
 from apycula import attrids
 from apycula import bslib
 from apycula import bitmatrix
@@ -2831,21 +2831,38 @@ def place(db, tilemap, bels, cst, args):
                 for k, val in atr.items():
                     if k not in attrids.iob_attrids:
                         print(f'XXX IO: add {k} key handle')
-                    #elif k == 'OPENDRAIN' and val == 'OFF' and 'LVDS' not in iob.flags['mode'] and 'IBUF' not in iob.flags['mode']:
-                        #continue
                     else:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
                         if k == 'LVDS_OUT' and val not in {'ENABLE', 'ON'}:
-                            continue
+                            if device not in {'GW5A-25A'}:
+                                continue
                         if k == 'IO_TYPE' and k in in_bank_attrs and in_bank_attrs[k].startswith('LVDS'):
                             continue
                         in_bank_attrs[k] = val
-                #print(f"io{idx}:({row}, {col}):{sorted(iob_attrs)}")
-                bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
-                tile = tilemap[(row, col)]
+                fuse_row, fuse_col = (row, col)
+                if device not in {'GW5A-25A'}:
+                    bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
+                else:
+                    print(row, col, f'mode:{mode_for_attrs}, idx:{iob_idx}')
+                    if mode_for_attrs == 'OBUF':
+                        iob_attrs.update({147}) # IOB_UNKNOWN51=TRIMUX
+                    elif mode_for_attrs == 'IBUF':
+                        iob_attrs.update({190}) # IOB_UNKNOWN62=263
+                    # fuses may be in another cell
+                    fuse_ttyp = tiledata.ttyp
+                    off = tiledata.bels[f'IOB{iob_idx}'].fuse_cell_offset
+                    if off:
+                        fuse_row += off[0]
+                        fuse_col += off[1]
+                        fuse_ttyp = db.grid[fuse_row][fuse_col].ttyp
+                    bits = get_longval_fuses(db, fuse_ttyp, iob_attrs, f'IOB{iob_idx}')
+
+                tile = tilemap[(fuse_row, fuse_col)]
                 for row_, col_ in bits:
                     tile[row_][col_] = 1
                 if idx == 'B':
+                    break
+                if not lvds_attrs:
                     break
 
         # bank bits
@@ -2857,11 +2874,12 @@ def place(db, tilemap, bels, cst, args):
             if k not in attrids.iob_attrids:
                 print(f'XXX BANK: add {k} key handle')
             else:
-                if k in {'BANK_VCCIO', 'IO_TYPE', 'LVDS_OUT', 'DRIVE'}:
+                if k in {'BANK_VCCIO', 'IO_TYPE', 'LVDS_OUT', 'DRIVE', 'OPENDRAIN'}:
                     add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
 
-        #print(f"bank{int(bank)}:({brow}, {bcol}):{sorted(bank_attrs)}")
         bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, 'BANK', int(bank))
+        bits.update(get_bank_io_fuses(db, tiledata.ttyp, bank_attrs))
+
         btile = tilemap[(brow, bcol)]
         for row, col in bits:
             btile[row][col] = 1
@@ -2933,14 +2951,17 @@ def gsr(db, tilemap, args):
             add_attr_val(db, 'GSR', gsr_attrs, attrids.gsr_attrids[k], attrids.gsr_attrvals[val])
 
     cfg_attrs = set()
-    for k, val in {'GSR': 'USED', 'GOE': 'F0'}.items():
+    cfg_function = 'F0'
+    if device in {'GW5A-25A'}:
+        cfg_function = 'F1'
+    for k, val in {'GSR': 'USED', 'GOE': cfg_function}.items():
         if k not in attrids.cfg_attrids:
             print(f'XXX CFG GSR: add {k} key handle')
         else:
             add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals[val])
-    add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['GSR'], attrids.cfg_attrvals['F0'])
-    add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['DONE'], attrids.cfg_attrvals['F0'])
-    add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['GWD'], attrids.cfg_attrvals['F0'])
+    add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['GSR'], attrids.cfg_attrvals[cfg_function])
+    add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['DONE'], attrids.cfg_attrvals[cfg_function])
+    add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['GWD'], attrids.cfg_attrvals[cfg_function])
 
     # The configuration fuses are described in the ['shortval'][60] table, global set/reset is
     # described in the ['shortval'][20] table. Look for cells with type with these tables
@@ -2949,6 +2970,10 @@ def gsr(db, tilemap, args):
     if device in {'GW2A-18', 'GW2A-18C'}:
         gsr_type = {1, 83}
         cfg_type = {1, 51}
+    elif device in {'GW5A-25A'}:
+        gsr_type = {49, 83}
+        cfg_type = {49, 51}
+
     for row, rd in enumerate(db.grid):
         for col, rc in enumerate(rd):
             bits = set()
@@ -2991,6 +3016,9 @@ def dualmode_pins(db, tilemap, args):
     cfg_type = {50, 51}
     if device in {'GW2A-18', 'GW2A-18C'}:
         cfg_type = {1, 51}
+    elif device in {'GW5A-25A'}:
+        cfg_type = {49, 51}
+
     for row, rd in enumerate(db.grid):
         for col, rc in enumerate(rd):
             bits = set()
@@ -3008,6 +3036,7 @@ def dualmode_pins(db, tilemap, args):
 def main():
     global device
     global pnr
+    global bsram_init_map
 
     pil_available = True
     try:
@@ -3046,9 +3075,14 @@ def main():
         mods = m.group(2) or ""
         num = m.group(4)
         device = f"{series}{mods}-{num}"
+
     with importlib.resources.path('apycula', f'{device}.pickle') as path:
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)
+
+    if not args.sspi_as_gpio and device in {'GW5A-25A'}:
+        # must be always on
+        args.sspi_as_gpio = True
 
     const_nets = {'GND': '$PACKER_GND', 'VCC': '$PACKER_GND'}
 
@@ -3056,6 +3090,7 @@ def main():
     _vcc_net = pnr['modules']['top']['netnames'].get(const_nets['VCC'], {'bits': []})['bits']
 
     tilemap = chipdb.tile_bitmap(db, bitmatrix.zeros(db.height, db.width), empty=True)
+
     cst = codegen.Constraints()
     pips = get_pips(pnr)
     route(db, tilemap, pips)
@@ -3077,15 +3112,21 @@ def main():
         for row, col in {(23, 63)}:
             tile[row][col] = 0
 
-    res = chipdb.fuse_bitmap(db, tilemap)
-    header_footer(db, res, args.compress)
+    main_map = chipdb.fuse_bitmap(db, tilemap)
     if pil_available and args.png:
-        bslib.display(args.png, res)
+        bslib.display(args.png, main_map)
+
+    if device in {'GW5A-25A'}:
+        main_map = bitmatrix.transpose(main_map)
+
+    header_footer(db, main_map, args.compress)
 
     if has_bsram_init:
-        bslib.write_bitstream_with_bsram_init(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress, bsram_init_map)
+        if device in {'GW5A-25A'}:
+            bsram_init_map = bitmatrix.transpose(bsram_init_map)
+        bslib.write_bitstream_with_bsram_init(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, bsram_init_map)
     else:
-        bslib.write_bitstream(args.output, res, db.cmd_hdr, db.cmd_ftr, args.compress)
+        bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress)
     if args.cst:
         with open(args.cst, "w") as f:
                 cst.write(f)

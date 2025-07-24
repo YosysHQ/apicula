@@ -11,7 +11,7 @@ from contextlib import closing
 from apycula import codegen
 from apycula import chipdb
 from apycula import attrids
-from apycula.bslib import read_bitstream
+from apycula.bslib import read_bitstream, display
 from apycula.wirenames import wirenames
 
 _device = ""
@@ -19,7 +19,7 @@ _pinout = ""
 _packages = {
         'GW1N-1' : 'LQFP144', 'GW1NZ-1' : 'QFN48', 'GW1N-4' : 'PBGA256', 'GW1N-9C' : 'UBGA332',
         'GW1N-9' : 'PBGA256', 'GW1NS-4' : 'QFN48P', 'GW1NS-2' : 'LQFP144', 'GW2A-18': 'PBGA256',
-        'GW2A-18C' : 'PBGA256S'
+        'GW2A-18C' : 'PBGA256S', 'GW5A-25A' : 'MBGA121N'
 }
 
 def print_sorted_dict(start, d):
@@ -216,10 +216,8 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table, tableName)
             zero_mask.update(bits)
         else:
             set_mask.update(bits)
-    set_bits =  {(row, col) for row, col in set_mask if tile[row][col] == 1}
+    set_bits = {(row, col) for row, col in set_mask if tile[row][col] == 1}
     neg_bits = {(row, col) for row, col in zero_mask if tile[row][col] == 1}
-    #set_bits = {}
-    #neg_bits = {}
 
     # find candidates from fuse table
     # the set bits are more unique
@@ -464,6 +462,9 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
             continue
         if name.startswith("IOB"):
             idx = name[-1]
+            #XXX
+            if idx != 'A':
+                continue
             attrvals = parse_attrvals(tile, db.logicinfo['IOB'], db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids, "IOB")
             #print(name, row, col, attrvals)
             try: # we can ask for invalid pin here because the IOBs share some stuff
@@ -506,10 +507,10 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                 bels.setdefault(name, set()).add(mode)
         if name.startswith("BANK"):
             attrvals = parse_attrvals(tile, db.logicinfo['IOB'], _bank_fuse_tables[tiledata.ttyp][name], attrids.iob_attrids, "IOB")
-            #print(name, row, col, attrvals)
+            print(name, row, col, attrvals)
 
             for a, v in attrvals.items():
-                bels.setdefault(name, set()).add(f'{a}={attrids.iob_num2val[v]}')
+                bels.setdefault(name, set()).add(f'{a}={attrids.iob_num2val.get(v, str(v))}')
         if name.startswith("ALU"):
             idx = int(name[3])
             attrvals = parse_attrvals(tile, db.logicinfo['SLICE'], db.shortval[tiledata.ttyp][f'CLS{idx // 2}'], attrids.cls_attrids, "CLS")
@@ -1210,12 +1211,20 @@ def fix_plls(db, mod):
         fix_pll_ports(pll)
 
 def main():
+    pil_available = True
+    try:
+        from PIL import Image
+    except ImportError:
+        pil_available = False
+
     parser = argparse.ArgumentParser(description='Unpack Gowin bitstream')
     parser.add_argument('bitstream')
     parser.add_argument('-d', '--device', required=True)
     parser.add_argument('-o', '--output', default='unpack.v')
     parser.add_argument('-s', '--cst', default=None)
     parser.add_argument('--noalu', action = 'store_true')
+    if pil_available:
+        parser.add_argument('--png')
 
     args = parser.parse_args()
 
@@ -1239,6 +1248,9 @@ def main():
     bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
     cst = codegen.Constraints()
+
+    if pil_available and args.png:
+        display(args.png, bitmap)
 
     # make wire aliases from Himbaechel nodes
     def by_name_len(el):
