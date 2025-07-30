@@ -16,7 +16,7 @@ clean:
 # ============================================================
 # TangPrimer25k
 %-primer25k.fs: %-primer25k.json
-	gowin_pack -d GW5A-25A -o $@ $<
+	gowin_pack -d GW5A-25A --cpu_as_gpio -o $@ $<
 
 %-primer25k.json: %-primer25k-synth.json primer25k.cst
 	$(NEXTPNR) -v --debug --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst

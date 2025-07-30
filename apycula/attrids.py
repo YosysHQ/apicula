@@ -1191,6 +1191,7 @@ cfg_attrids = {
         'I2C_AS_GPIO':      20,
         'JTAG_EN':          21,
         'POR':              24, # power on reset
+        'CPU_AS_GPIO':      28,
     }
 
 cfg_attrvals = {

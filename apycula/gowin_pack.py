@@ -2990,7 +2990,8 @@ def gsr(db, tilemap, args):
 
 def dualmode_pins(db, tilemap, args):
     pin_flags = {'JTAG_AS_GPIO': 'UNKNOWN', 'SSPI_AS_GPIO': 'UNKNOWN', 'MSPI_AS_GPIO': 'UNKNOWN',
-            'DONE_AS_GPIO': 'UNKNOWN', 'RECONFIG_AS_GPIO': 'UNKNOWN', 'READY_AS_GPIO': 'UNKNOWN'}
+            'DONE_AS_GPIO': 'UNKNOWN', 'RECONFIG_AS_GPIO': 'UNKNOWN', 'READY_AS_GPIO': 'UNKNOWN',
+                 'CPU_AS_GPIO': 'UNKNOWN'}
     if args.jtag_as_gpio:
         pin_flags['JTAG_AS_GPIO'] = 'YES'
     if args.sspi_as_gpio:
@@ -3003,6 +3004,8 @@ def dualmode_pins(db, tilemap, args):
         pin_flags['DONE_AS_GPIO'] = 'YES'
     if args.reconfign_as_gpio:
         pin_flags['RECONFIG_AS_GPIO'] = 'YES'
+    if args.cpu_as_gpio:
+        pin_flags['CPU_AS_GPIO'] = 'YES'
 
     set_attrs = set()
     clr_attrs = set()
@@ -3057,6 +3060,7 @@ def main():
     parser.add_argument('--ready_as_gpio', action = 'store_true')
     parser.add_argument('--done_as_gpio', action = 'store_true')
     parser.add_argument('--reconfign_as_gpio', action = 'store_true')
+    parser.add_argument('--cpu_as_gpio', action = 'store_true')
     if pil_available:
         parser.add_argument('--png')
 
