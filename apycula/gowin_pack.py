@@ -16,7 +16,6 @@ from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, 
 from apycula import attrids
 from apycula import bslib
 from apycula import bitmatrix
-from apycula.wirenames import wirenames, wirenumbers
 
 device = ""
 pnr = None

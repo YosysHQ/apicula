@@ -12,7 +12,6 @@ from apycula import codegen
 from apycula import chipdb
 from apycula import attrids
 from apycula.bslib import read_bitstream, display
-from apycula.wirenames import wirenames
 
 _device = ""
 _pinout = ""

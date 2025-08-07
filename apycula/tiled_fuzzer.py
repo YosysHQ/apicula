@@ -18,7 +18,7 @@ from apycula import codegen
 from apycula import bslib
 from apycula import pindef
 from apycula import fuse_h4x
-from apycula.wirenames import wirenames, clknames, wirenumbers, clknumbers
+from apycula import wirenames as wnames
 from apycula import dat19
 from apycula import tm_h4x
 from apycula import chipdb
@@ -297,7 +297,7 @@ if __name__ == "__main__":
     db = chipdb.from_fse(device, fse, dat)
     chipdb.set_banks(fse, db)
     db.timing = tm
-    chipdb.fse_wire_delays(db)
+    chipdb.fse_wire_delays(db, params['device'])
     db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
 
     corners = [
@@ -346,8 +346,8 @@ if __name__ == "__main__":
     if device == 'GW1N-9' :
         loc = locations[52][0]
         bel = db.grid[loc[0]][loc[1]].bels['IOBA']
-        bel.portmap['GW9_ALWAYS_LOW0'] = wirenames[dat.portmap['IologicAIn'][40]]
-        bel.portmap['GW9_ALWAYS_LOW1'] = wirenames[dat.portmap['IologicAIn'][42]]
+        bel.portmap['GW9_ALWAYS_LOW0'] = wnames.wirenames[dat.portmap['IologicAIn'][40]]
+        bel.portmap['GW9_ALWAYS_LOW1'] = wnames.wirenames[dat.portmap['IologicAIn'][42]]
 
     # GSR
     if device in {'GW2A-18', 'GW2A-18C', 'GW5A-25A'}:
