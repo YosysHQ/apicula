@@ -5,7 +5,7 @@ NEXTPNR ?= nextpnr-himbaechel
 
 all: \
 	in-out-primer25k.fs in-inv-out-primer25k.fs in-or-inv-out-primer25k.fs \
-	lut8-primer25k.fs
+	lut8-primer25k.fs big-shift-primer25k.fs
 
 
 clean: 
@@ -16,11 +16,14 @@ clean:
 # ============================================================
 # TangPrimer25k
 %-primer25k.fs: %-primer25k.json
-	gowin_pack -d GW5A-25A --cpu_as_gpio -o $@ $<
+	gowin_pack --sspi_as_gpio --cpu_as_gpio -d GW5A-25A -o $@ $<
 
 %-primer25k.json: %-primer25k-synth.json primer25k.cst
-	$(NEXTPNR) -v --debug --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst
+	$(NEXTPNR) -v --debug --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt cpu_as_gpio --vopt sspi_as_gpio
+
+big-shift-primer25k.json: big-shift-primer25k-synth.json big-shift-primer25k.cst
+	$(NEXTPNR) -v --debug --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=big-shift-primer25k.cst --vopt cpu_as_gpio --vopt sspi_as_gpio
 
 %-primer25k-synth.json: %.v
-	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a"
+	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a -noalu"
 

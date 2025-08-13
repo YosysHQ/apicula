@@ -248,6 +248,17 @@ class Datfile:
             ret.append(rowArr)
         return ret
 
+    def read_scaledGrid16i(self, numRows, numCols, rowScaling, colScaling, baseOffset):
+        ret = []
+
+        for row in range(numRows):
+            rowArr = []
+            for col in range(numCols):
+                self._cur = (row * rowScaling) + (col * colScaling * 2) + baseOffset
+                rowArr.append(self.read_i16())
+            ret.append(rowArr)
+        return ret
+
     def read_5Astuff(self) -> dict:
         RSTable5ATOffset = 0x7b4a8
         ret = { }
@@ -312,8 +323,8 @@ class Datfile:
 
         ret["CMuxTopInNodes"]       = self.read_scaledGrid16(0xbd, 0x54, 0x54, RSTable5ATOffset + 0x13fc4, 0)
         ret["CMuxBotInNodes"]       = self.read_scaledGrid16(0xbd, 0x54, 0x54, RSTable5ATOffset + 0x1bbcc, 0)
-        ret["CMuxTopIns"]           = self.read_scaledGrid16(0xbd, 0x3, 0x3, RSTable5ATOffset + 0x11be8, 4)
-        ret["CMuxBotIns"]           = self.read_scaledGrid16(0xbd, 0x3, 0x3, RSTable5ATOffset + 0x11e20, 2)
+        ret["CMuxTopIns"]           = self.read_scaledGrid16i(0xbd, 3, 6, 1, RSTable5ATOffset + 0x24304)
+        ret["CMuxBotIns"]           = self.read_scaledGrid16i(0xbd, 3, 6, 1, RSTable5ATOffset + 0x24772)
 
         ret["MipiIO1"]              = self.read_scaledGrid16(10, 0xf, 0xf, RSTable5ATOffset + 0x240e0, 0)
         ret["MipiIO2"]              = self.read_scaledGrid16(10, 0xf, 0xf, RSTable5ATOffset + 0x24176, 0)
@@ -410,7 +421,7 @@ class Datfile:
         ret["Adc25kIns"]            = self.read_scaledGrid16(0x17, 3, 3, RSTable5ATOffset + 0x13160, 0xe)
         ret["Adc25kOuts"]           = self.read_scaledGrid16(0x1b, 3, 3, RSTable5ATOffset + 0x131a8, 8)
 
-        ret["CibFabricNode"]        = self.read_scaledGrid16(6, 3, 3, RSTable5ATOffset + 0x131f8, 10)
+        ret["CibFabricNode"]        = self.read_scaledGrid16(6, 3, 6, 1, RSTable5ATOffset + 0x27254)
         ret["SharedIOLogicIOBloc"]  = self.read_scaledGrid16(0x9c, 2, 2, RSTable5ATOffset + 0x13208, 0xe)
 
         ret["TopAMBGA121N"]         = self.read_arr16_at(200, RSTable5ATOffset + 0x2668e, 0)
