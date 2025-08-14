@@ -352,11 +352,10 @@ def fse_luts(fse, ttyp, device):
 
     # main fuse: enable two ALUs in the slice
     # shortval(25/26/27) [1, 0, fuses]
-    for cls, fuse_idx in enumerate([25, 26, 27]):
-        try:
-            data = fse[ttyp]['shortval'][fuse_idx]
-        except KeyError:
+    for cls, fuse_idx in enumerate([25, 26, 27, 28]):
+        if fuse_idx == 28 and device not in {'GW5A-25A'}:
             continue
+        data = fse[ttyp]['shortval'][fuse_idx]
         for i in range(2):
             # DFF
             bel = luts.setdefault(f"DFF{cls * 2 + i}", Bel())
@@ -2775,6 +2774,7 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_CLKDIV_HCLK")
     if device in {'GW5A-25A'}:
         dev.chip_flags.append("HAS_PINCFG")
+        dev.chip_flags.append("HAS_DFF67")
 
 def from_fse(device, fse, dat: Datfile):
     wnames.select_wires(device)
