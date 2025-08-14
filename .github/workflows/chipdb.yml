@@ -237,6 +237,7 @@ jobs:
         python setup.py --version
         python setup.py sdist bdist_wheel
         # Validate that the resulting wheel can be executed
+        mv dist/Apycula-$(python setup.py --version)-py3-none-any.whl dist/apycula-$(python setup.py --version)-py3-none-any.whl
         pip install dist/apycula-$(python setup.py --version)-py3-none-any.whl
         gowin_pack --help
     - name: Archive artifact
