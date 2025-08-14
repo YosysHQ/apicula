@@ -16,6 +16,7 @@ from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, 
 from apycula import attrids
 from apycula import bslib
 from apycula import bitmatrix
+from apycula import wirenames as wnames
 
 device = ""
 pnr = None
@@ -51,6 +52,17 @@ def iob_is_vcc_net(flags, wire):
 
 def iob_is_connected(flags, wire):
     return f'NET_{wire}' in flags
+
+def iob_is_connected_to_HCLK_GCLK(connections):
+    if 'O' not in connections:
+        return False
+    for net_name in pnr['modules']['top']['netnames']:
+        net = pnr['modules']['top']['netnames'][net_name]
+        for out_bits in connections['O']:
+            if out_bits in net['bits']:
+                if 'ROUTING' in net['attributes'] and 'HCLK_GCLK' in net['attributes']['ROUTING']:
+                    return True
+    return False
 
 _verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
 def sanitize_name(name):
@@ -198,7 +210,7 @@ _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9'}
 def get_bels(data):
     later = []
-    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY)(\w*)")
+    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG)(\w*)")
 
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
@@ -2385,6 +2397,8 @@ _mipi_aux_attrs = {
         'B': {('IO_TYPE', 'LVDS25'), ('BANK_VCCIO', '2.5')},
 }
 
+_hclk_io_pairs = {(36, 11): (36, 30), (36, 25): (36, 32), (36, 53): (36, 28), (36, 74): (36, 90), }
+
 _sides = "AB"
 def place(db, tilemap, bels, cst, args):
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
@@ -2437,6 +2451,11 @@ def place(db, tilemap, bels, cst, args):
             pass
         elif typ == "BANDGAP":
             pass
+        elif typ == "PINCFG":
+            if args.i2c_as_gpio != ('I2C' in parms):
+                raise Exception(f" i2c_as_gpio has conflicting settings in nexpnr and gowin_pack.")
+            if args.sspi_as_gpio != ('SSPI' in parms):
+                raise Exception(f" sspi_as_gpio has conflicting settings in nexpnr and gowin_pack.")
         elif typ.startswith("FLASH"):
             pass
         elif typ.startswith("EMCU"):
@@ -2548,7 +2567,8 @@ def place(db, tilemap, bels, cst, args):
             if int(parms.get("IOLOGIC_IOB", "0")):
                 flags['USED_BY_IOLOGIC'] = True
 
-            io_desc = _io_bels.setdefault(bank, {})[bel_name] = IOBelDesc(row - 1, col - 1, num, {}, flags, cell['connections'])
+            io_desc = IOBelDesc(row - 1, col - 1, num, {}, flags, cell['connections'])
+            _io_bels.setdefault(bank, {})[bel_name] = io_desc
 
             # find io standard
             iostd = _default_iostd[mode]
@@ -2568,7 +2588,23 @@ def place(db, tilemap, bels, cst, args):
                 io_desc.attrs['MIPI'] = 'ENABLE'
             if 'I3C_IOBUF' in parms:
                 io_desc.attrs['I3C_IOBUF'] = 'ENABLE'
-
+            if device in {'GW5A-25A'}:
+                # mark clock ibuf
+                if iob_is_connected_to_HCLK_GCLK(io_desc.connections):
+                    # The GW5A-25A has an interesting phenomenon on the bottom
+                    # side of the chip: if certain pins are used as a clock
+                    # source (this also applies to the standard soldered E2)
+                    # and the routing passes through HCLK, fuses are set not
+                    # only in this IBUF, but also in another one. The purpose
+                    # of this mechanism is unclear; we have only found a few
+                    # such pins and are repeating this process.
+                    if (row - 1, col - 1) in _hclk_io_pairs:
+                        pair_row, pair_col = _hclk_io_pairs[row - 1, col - 1]
+                        io_desc_pair = IOBelDesc(pair_row, pair_col, 'A', {}, flags.copy(), {})
+                        _io_bels.setdefault(bank, {})[f'{bel_name}$pair'] = io_desc_pair
+                        io_desc_pair.flags['HCLK_PAIR'] = True
+                        io_desc_pair.attrs['IO_TYPE'] = iostd
+                    io_desc.flags['HCLK'] = True
             if pinless_io:
                 return
         elif typ.startswith("RAM16SDP") or typ == "RAMW":
@@ -2848,7 +2884,10 @@ def place(db, tilemap, bels, cst, args):
                     if mode_for_attrs == 'OBUF':
                         iob_attrs.update({147}) # IOB_UNKNOWN51=TRIMUX
                     elif mode_for_attrs == 'IBUF':
-                        iob_attrs.update({190}) # IOB_UNKNOWN62=263
+                        if 'HCLK' in iob.flags:
+                            iob_attrs.update({190}) # IOB_UNKNOWN67=263
+                        elif 'HCLK_PAIR' in iob.flags:
+                            iob_attrs.update({192}) # IOB_UNKNOWN67=266
                     # fuses may be in another cell
                     fuse_ttyp = tiledata.ttyp
                     off = tiledata.bels[f'IOB{iob_idx}'].fuse_cell_offset
@@ -2903,12 +2942,57 @@ def do_hclk_banks(db, row, col, src, dest):
     return res
 
 def route(db, tilemap, pips):
+    # The mux for clock wires can be "spread" across several cells. Here we determine whether pip is such a candidate.
+    def is_clock_pip(src, dest):
+        if src not in wnames.clknumbers:
+            return False
+        if device in {'GW5A-25A'}:
+            return wnames.clknumbers[src] < wnames.clknumbers['UNK212']
+        # XXX for future
+        return wnames.clknumbers[src] < wnames.clknumbers['P10A']
+
+    used_spines = set() # We don't know exactly where and how many fuses there
+                        # are to allow the use of a particular spine, so we check each cell for
+                        # potential fuses.
+
+    def set_clock_fuses(row, col, src, dest):
+        # SPINE->{GT00, GT10} must be set in the cell only
+        if dest in {'GT00', 'GT10'}:
+            bits = db.grid[row - 1][col - 1].clock_pips[dest][src]
+            tile = tilemap[(row - 1, col - 1)]
+            for brow, bcol in bits:
+                tile[brow][bcol] = 1
+            return
+
+        spine_enable_table = None
+        if dest.startswith('SPINE') and dest not in used_spines:
+            used_spines.update({dest})
+            spine_enable_table = f'5A_PCLK_ENABLE_{wnames.clknumbers[dest]:02}'
+
+        for row, rd in enumerate(db.grid):
+            for col, rc in enumerate(rd):
+                bits = set()
+                if dest in rc.clock_pips:
+                    if src in rc.clock_pips[dest]:
+                        bits = rc.clock_pips[dest][src]
+                if spine_enable_table in db.shortval[rc.ttyp]:
+                    bits.update(db.shortval[rc.ttyp][spine_enable_table][(1, 0)]) # XXX find the meaning
+                if bits:
+                    tile = tilemap[(row, col)]
+                    for brow, bcol in bits:
+                        tile[brow][bcol] = 1
+
     for row, col, src, dest in pips:
+        if device in {'GW5A-25A'} and is_clock_pip(src, dest):
+            set_clock_fuses(row, col, src, dest)
+            continue
+
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
 
         try:
-            if dest in tiledata.clock_pips:
+            # XXX consider use set_clock_fuses
+            if device not in {'GW5A-25A'} and dest in tiledata.clock_pips:
                 bits = tiledata.clock_pips[dest][src]
             elif (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1] and src in db.hclk_pips[row - 1, col - 1][dest]:
                 bits = db.hclk_pips[row - 1, col - 1][dest][src]
@@ -2990,7 +3074,7 @@ def gsr(db, tilemap, args):
 def dualmode_pins(db, tilemap, args):
     pin_flags = {'JTAG_AS_GPIO': 'UNKNOWN', 'SSPI_AS_GPIO': 'UNKNOWN', 'MSPI_AS_GPIO': 'UNKNOWN',
             'DONE_AS_GPIO': 'UNKNOWN', 'RECONFIG_AS_GPIO': 'UNKNOWN', 'READY_AS_GPIO': 'UNKNOWN',
-                 'CPU_AS_GPIO': 'UNKNOWN'}
+                 'CPU_AS_GPIO': 'UNKNOWN', 'I2C_AS_GPIO': 'UNKNOWN'}
     if args.jtag_as_gpio:
         pin_flags['JTAG_AS_GPIO'] = 'YES'
     if args.sspi_as_gpio:
@@ -3005,6 +3089,8 @@ def dualmode_pins(db, tilemap, args):
         pin_flags['RECONFIG_AS_GPIO'] = 'YES'
     if args.cpu_as_gpio:
         pin_flags['CPU_AS_GPIO'] = 'YES'
+    if args.i2c_as_gpio:
+        pin_flags['I2C_AS_GPIO'] = 'YES'
 
     set_attrs = set()
     clr_attrs = set()
@@ -3037,6 +3123,13 @@ def dualmode_pins(db, tilemap, args):
                 for brow, bcol in bits:
                     btile[brow][bcol] = 1
 
+def set_const_fuses(db, row, col, tile):
+    tiledata = db.grid[row][col]
+    if tiledata.ttyp in db.const:
+        for bits in db.const[tiledata.ttyp]:
+            brow, bcol = bits
+            tile[brow][bcol] = 1
+
 def main():
     global device
     global pnr
@@ -3060,6 +3153,7 @@ def main():
     parser.add_argument('--done_as_gpio', action = 'store_true')
     parser.add_argument('--reconfign_as_gpio', action = 'store_true')
     parser.add_argument('--cpu_as_gpio', action = 'store_true')
+    parser.add_argument('--i2c_as_gpio', action = 'store_true')
     if pil_available:
         parser.add_argument('--png')
 
@@ -3085,8 +3179,10 @@ def main():
         with closing(gzip.open(path, 'rb')) as f:
             db = pickle.load(f)
 
+    wnames.select_wires(device)
     if not args.sspi_as_gpio and device in {'GW5A-25A'}:
         # must be always on
+        print('Warning. For GW5A-25A SSPI must be set as GPIO.')
         args.sspi_as_gpio = True
 
     const_nets = {'GND': '$PACKER_GND', 'VCC': '$PACKER_GND'}
@@ -3117,7 +3213,11 @@ def main():
         for row, col in {(23, 63)}:
             tile[row][col] = 0
 
+    for row in range(db.rows):
+        for col in range(db.cols):
+            set_const_fuses(db, row, col, tilemap[(row, col)])
     main_map = chipdb.fuse_bitmap(db, tilemap)
+
     if pil_available and args.png:
         bslib.display(args.png, main_map)
 

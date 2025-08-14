@@ -94,7 +94,8 @@ clknames_pre5a.update({
     110: 'BHCLK0CLKDIV', 112:'BHCLK1CLKDIV',
     114: 'LHCLK0CLKDIV', 116:'LHCLK1CLKDIV',
 })
-# These are the external clock pins, one on each side
+
+# These are the external clock pins, two on each side
 clknames_pre5a.update({
     121: 'PCLKT0', 122: 'PCLKT1', 123: 'PCLKB0', 124: 'PCLKB1',
     125: 'PCLKL0', 126: 'PCLKL1', 127: 'PCLKR0', 128: 'PCLKR1',
@@ -107,6 +108,7 @@ clknames_pre5a.update({
     145: 'TRMDCLK0', 146: 'TLMDCLK0', 147: 'BRMDCLK0', 148: 'BLMDCLK0',
     149: 'BLMDCLK1', 150: 'BRMDCLK1', 151: 'TLMDCLK1', 152: 'TRMDCLK1',
 })
+
 #clknames_pre5a[153] = 'VCC'
 
 clknames_pre5a.update({n: f"UNK{n}" for n in range(153, 170)})
@@ -287,45 +289,45 @@ clknames_5a25a.update({
     110: 'BHCLK0CLKDIV', 112:'BHCLK1CLKDIV',
     114: 'LHCLK0CLKDIV', 116:'LHCLK1CLKDIV',
 })
-# These are the external clock pins, one on each side
-clknames_5a25a.update({
-    121: 'PCLKT0', 122: 'PCLKT1', 123: 'PCLKB0', 124: 'PCLKB1',
-    125: 'PCLKL0', 126: 'PCLKL1', 127: 'PCLKR0', 128: 'PCLKR1',
-})
+
+clknames_5a25a.update({n: f"UNK{n}" for n in range(117, 129)})
+
 clknames_5a25a.update({
     129: 'TRBDCLK0', 130: 'TRBDCLK1', 131: 'TRBDCLK2', 132: 'TRBDCLK3',
-    133: 'TLBDCLK1', 134: 'TLBDCLK2', 135: 'TLBDCLK3', 136: 'TLBDCLK0',
-    137: 'BRBDCLK2', 138: 'BRBDCLK3', 139: 'BRBDCLK0', 140: 'BRBDCLK1',
-    141: 'BLBDCLK3', 142: 'BLBDCLK0', 143: 'BLBDCLK1', 144: 'BLBDCLK2',
-    145: 'TRMDCLK0', 146: 'TLMDCLK0', 147: 'BRMDCLK0', 148: 'BLMDCLK0',
-    149: 'BLMDCLK1', 150: 'BRMDCLK1', 151: 'TLMDCLK1', 152: 'TRMDCLK1',
+    133: 'TLBDCLK0', 134: 'TLBDCLK1', 135: 'TLBDCLK2', 136: 'TLBDCLK3',
+    137: 'BRBDCLK0', 138: 'BRBDCLK1', 139: 'BRBDCLK2', 140: 'BRBDCLK3',
+    141: 'BLBDCLK0', 142: 'BLBDCLK1', 143: 'BLBDCLK2', 144: 'BLBDCLK3',
+    145: 'TRMDCLK0', 146: 'TRMDCLK1', 147: 'TLMDCLK0', 148: 'TLMDCLK1',
+    149: 'BRMDCLK0', 150: 'BRMDCLK1', 151: 'BLMDCLK0', 152: 'BLMDCLK1',
 })
 #clknames_5a25a[153] = 'VCC'
 
 clknames_5a25a.update({n: f"UNK{n}" for n in range(153, 170)})
 
-# HCLK?
+# HCLK
 clknames_5a25a.update({
-    170: 'TBDHCLK0', 171: 'TBDHCLK1', 172: 'TBDHCLK2', 173: 'TBDHCLK3', 174: 'BBDHCLK0',
-    175: 'BBDHCLK1', 176: 'BBDHCLK2', 177: 'BBDHCLK3', 178: 'LBDHCLK0', 179: 'LBDHCLK1',
-    180: 'LBDHCLK2', 181: 'LBDHCLK3', 182: 'RBDHCLK0', 183: 'RBDHCLK1', 184: 'RBDHCLK2',
-    185: 'RBDHCLK3'
+    169: 'TBDHCLK0', 170: 'TBDHCLK1', 171: 'TBDHCLK2', 172: 'TBDHCLK3',
+    173: 'RBDHCLK0', 174: 'RBDHCLK1', 175: 'RBDHCLK2', 176: 'RBDHCLK3',
+    177: 'BBDHCLK0', 178: 'BBDHCLK1', 179: 'BBDHCLK2', 180: 'BBDHCLK3',
+    181: 'LBDHCLK0', 182: 'LBDHCLK1', 183: 'LBDHCLK2', 184: 'LBDHCLK3',
 })
+
+
 # These wires are a mystery, they are a copy of P10-P15 etc, there is no reason
 # to have another number for the output, but it is these numbers that are
 # listed in tables 38, although the internal routes are routed to the
 # originals.
 # In general they are needed and the letter A is added to make the names
 # different.
-clknames_5a25a.update({
-     186: 'P10A', 187: 'P11A', 188: 'P12A', 189: 'P13A', 190: 'P14A', 191: 'P15A',
-     192: 'P20A', 193: 'P21A', 194: 'P22A', 195: 'P23A', 196: 'P24A', 197: 'P25A',
-     198: 'P30A', 199: 'P31A', 200: 'P32A', 201: 'P33A', 202: 'P34A', 203: 'P35A',
-     204: 'P40A', 205: 'P41A', 206: 'P42A', 207: 'P43A', 208: 'P44A', 209: 'P45A',
-})
+#clknames_5a25a.update({
+#     186: 'P10A', 187: 'P11A', 188: 'P12A', 189: 'P13A', 190: 'P14A', 191: 'P15A',
+#     192: 'P20A', 193: 'P21A', 194: 'P22A', 195: 'P23A', 196: 'P24A', 197: 'P25A',
+#     198: 'P30A', 199: 'P31A', 200: 'P32A', 201: 'P33A', 202: 'P34A', 203: 'P35A',
+#     204: 'P40A', 205: 'P41A', 206: 'P42A', 207: 'P43A', 208: 'P44A', 209: 'P45A',
+#})
 
 
-clknames_5a25a.update({n: f"UNK{n}" for n in range(210, 277)})
+clknames_5a25a.update({n: f"UNK{n}" for n in range(185, 277)})
 clknames_5a25a[277] = 'VCC'
 clknames_5a25a.update({n: f"UNK{n}" for n in range(278, 281)})
 
@@ -357,30 +359,29 @@ clknumbers_5a25a = {v: k for k, v in clknames_5a25a.items()}
 
 # hclk
 hclknames_5a25a = clknames_5a25a.copy()
-hclknames_5a25a.update({n: f"HCLK_UNK{n}" for n in range(26)})
-# inputs
-hclknames_5a25a.update({
-    2: 'HCLK_IN0', 3: 'HCLK_IN1', 4: 'HCLK_IN2', 5: 'HCLK_IN3', 8: 'HCLK_BANK_IN0', 9: 'HCLK_BANK_IN1'
-})
 
-# HCLK section inputs
-hclknames_5a25a.update({
-    6: 'HCLK_BANK_OUT0', 7: 'HCLK_BANK_OUT1', 10: 'HCLK0_SECT0_IN', 11: 'HCLK0_SECT1_IN', 12: 'HCLK1_SECT0_IN', 13: 'HCLK1_SECT1_IN'
-})
+hclknames_5a25a[0] = 'VSS'
+hclknames_5a25a[1] = 'VCC'
+hclknames_5a25a[187] = 'VSS'
+hclknames_5a25a[188] = 'VCC'
+hclknames_5a25a[374] = 'VSS'
+hclknames_5a25a[375] = 'VCC'
+hclknames_5a25a[561] = 'VSS'
+hclknames_5a25a[562] = 'VCC'
 
-# Bypass connections from HCLK_IN to HCLK_OUT
-hclknames_5a25a.update({
-    16: 'HCLK_9IN0', 17: 'HCLK_9IN1', 18: 'HCLK_9IN2', 19: 'HCLK_9IN3'
-})
+hclknames_5a25a.update({n: f"HCLK_UNK{n}" for n in range(2, 701)})
 
-# CLKDIV2 CLKOUT spurs on the GW1N-9C
-hclknames_5a25a.update({
-    20: 'HCLK_9_CLKDIV2_SECT0_OUT', 22:'HCLK_9_CLKDIV2_SECT2_OUT'
-})
+# HCLK->CLK
+hclknames_5a25a.update({n: f"HCLK_TO_GCLK0{i}" for i, n in enumerate([25, 27, 28, 29])})
+hclknames_5a25a.update({n: f"HCLK_TO_GCLK1{i}" for i, n in enumerate([212, 214, 215, 216])})
+hclknames_5a25a.update({n: f"HCLK_TO_GCLK2{i}" for i, n in enumerate([399, 401, 402, 403])})
+hclknames_5a25a.update({n: f"HCLK_TO_GCLK3{i}" for i, n in enumerate([586, 588, 589, 590])})
 
-hclknames_5a25a[277] = 'VCC'
-hclknames_5a25a[278] = 'VSS'
-
+# GCLK pins
+hclknames_5a25a.update({n: f"HCLK_GCLK0{i}" for i, n in enumerate(range(123, 131))})
+hclknames_5a25a.update({n: f"HCLK_GCLK1{i}" for i, n in enumerate(range(310, 318))})
+hclknames_5a25a.update({n: f"HCLK_GCLK2{i}" for i, n in enumerate(range(497, 505))})
+hclknames_5a25a.update({n: f"HCLK_GCLK3{i}" for i, n in enumerate(range(684, 692))})
 
 hclknumbers_5a25a = {v: k for k, v in hclknames_5a25a.items()}
 

@@ -27,6 +27,7 @@ from apycula import attrids
 gowinhome = os.getenv("GOWINHOME")
 if not gowinhome:
     raise Exception("GOWINHOME not set")
+gowin_debug = os.getenv("GOWIN_DEBUG")
 
 # device = os.getenv("DEVICE")
 device = sys.argv[1]
@@ -290,6 +291,10 @@ if __name__ == "__main__":
         fse = fuse_h4x.readFse(f, device)
 
     dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.dat"))
+
+    if gowin_debug:
+        with open(f"{device}-dat.pickle", 'wb') as f:
+            pickle.dump(dat, f)
 
     with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.tm", 'rb') as f:
         tm = tm_h4x.read_tm(f, device)
