@@ -233,11 +233,11 @@ jobs:
     - name: Install and build
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools==61.0 wheel twine
+        pip install --upgrade setuptools wheel twine
         python setup.py --version
         python setup.py sdist bdist_wheel
         # Validate that the resulting wheel can be executed
-        pip install dist/Apycula-$(python setup.py --version)-py3-none-any.whl
+        pip install dist/apycula-$(python setup.py --version)-py3-none-any.whl
         gowin_pack --help
     - name: Archive artifact
       uses: actions/upload-artifact@v4
