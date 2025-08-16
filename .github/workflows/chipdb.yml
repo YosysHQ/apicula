@@ -310,8 +310,6 @@ jobs:
         cd ../nextpnr
         git checkout ${{ matrix.nextpnr }}
         git submodule update --init --recursive
-        # XXX enable GW5A family in the nextpnr
-        sed -i 's/GW2A-18C/GW2A-18C GW5A-25A/' himbaechel/uarch/gowin/CMakeLists.txt
         mkdir -p build
         cd build
         cmake .. -DBUILD_PYTHON=OFF -DARCH="himbaechel" -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
