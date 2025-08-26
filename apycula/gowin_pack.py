@@ -2957,6 +2957,8 @@ def route(db, tilemap, pips):
     def is_clock_pip(src, dest):
         if src not in wnames.clknumbers:
             return False
+        if dest not in wnames.clknumbers:
+            return False
         if device in {'GW5A-25A'}:
             return wnames.clknumbers[src] < wnames.clknumbers['UNK212']
         # XXX for future
