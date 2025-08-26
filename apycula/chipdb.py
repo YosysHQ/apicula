@@ -323,9 +323,8 @@ def fse_pll(device, fse, ttyp):
 
 # add the ALU mode
 # new_mode_bits: string like "0110000010011010"
-def add_alu_mode(base_mode, modes, lut, new_alu_mode, new_mode_bits):
+def add_alu_mode(modes, lut, new_alu_mode, new_mode_bits):
     alu_mode = modes.setdefault(new_alu_mode, set())
-    alu_mode.update(base_mode)
     for i, bit in enumerate(new_mode_bits):
         if bit == '0':
             alu_mode.update(lut.flags[15 - i])
@@ -373,48 +372,41 @@ def fse_luts(fse, ttyp, device):
             # ALU
             alu_idx = cls * 2 + i
             bel = luts.setdefault(f"ALU{alu_idx}", Bel())
-            mode = set()
-            for key0, key1, *fuses in data:
-                if key0 == 1 and key1 == 0:
-                    for f in (f for f in fuses if f != -1):
-                        coord = fuse.fuse_lookup(fse, ttyp, f, device)
-                        mode.update({coord})
-                    break
             lut = luts[f"LUT{alu_idx}"]
             # ADD    INIT="0011 0000 1100 1100"
             #              add   0   add  carry
-            add_alu_mode(mode, bel.modes, lut, "0",     "0011000011001100")
+            add_alu_mode(bel.modes, lut, "0",     "0011000011001100")
             # SUB    INIT="1010 0000 0101 1010"
             #              add   0   add  carry
-            add_alu_mode(mode, bel.modes, lut, "1",     "1010000001011010")
+            add_alu_mode(bel.modes, lut, "1",     "1010000001011010")
             # ADDSUB INIT="0110 0000 1001 1010"
             #              add   0   sub  carry
-            add_alu_mode(mode, bel.modes, lut, "2",     "0110000010011010")
-            add_alu_mode(mode, bel.modes, lut, "hadder", "1111000000000000")
+            add_alu_mode(bel.modes, lut, "2",     "0110000010011010")
+            add_alu_mode(bel.modes, lut, "hadder", "1111000000000000")
             # NE     INIT="1001 0000 1001 1111"
             #              add   0   sub  carry
-            add_alu_mode(mode, bel.modes, lut, "3",     "1001000010011111")
+            add_alu_mode(bel.modes, lut, "3",     "1001000010011111")
             # GE
-            add_alu_mode(mode, bel.modes, lut, "4",     "1001000010011010")
+            add_alu_mode(bel.modes, lut, "4",     "1001000010011010")
             # LE
             # no mode, just swap I0 and I1
             # CUP
-            add_alu_mode(mode, bel.modes, lut, "6",     "1010000010100000")
+            add_alu_mode(bel.modes, lut, "6",     "1010000010100000")
             # CDN
-            add_alu_mode(mode, bel.modes, lut, "7",     "0101000001011111")
+            add_alu_mode(bel.modes, lut, "7",     "0101000001011111")
             # CUPCDN
             # We set bits 8 through 11 to make it distinct from SUB
-            add_alu_mode(mode, bel.modes, lut, "8",     "1010111101011010")
+            add_alu_mode(bel.modes, lut, "8",     "1010111101011010")
             # MULT   INIT="0111 1000 1000 1000"
             #
-            add_alu_mode(mode, bel.modes, lut, "9",     "0111100010001000")
+            add_alu_mode(bel.modes, lut, "9",     "0111100010001000")
             # CIN->LOGIC INIT="0000 0000 0000 0000"
             #                   nop   0   nop  carry
             # side effect: clears the carry
-            add_alu_mode(mode, bel.modes, lut, "C2L",   "0000000000000000")
+            add_alu_mode(bel.modes, lut, "C2L",   "0000000000000000")
             # 1->CIN     INIT="0000 0000 0000 1111"
             #                  nop   0   nop  carry
-            add_alu_mode(mode, bel.modes, lut, "ONE2C", "0000000000001111")
+            add_alu_mode(bel.modes, lut, "ONE2C", "0000000000001111")
             bel.portmap = {
                 'COUT': f"COUT{alu_idx}",
                 'CIN': f"CIN{alu_idx}",
@@ -2775,6 +2767,7 @@ def set_chip_flags(dev, device):
     if device in {'GW5A-25A'}:
         dev.chip_flags.append("HAS_PINCFG")
         dev.chip_flags.append("HAS_DFF67")
+        dev.chip_flags.append("HAS_CIN_MUX")
 
 def from_fse(device, fse, dat: Datfile):
     wnames.select_wires(device)

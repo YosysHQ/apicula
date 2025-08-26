@@ -2338,7 +2338,7 @@ _refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE', 'OPEN_DRAIN':
 def refine_io_attrs(attr):
     return _refine_attrs.get(attr, attr)
 
-def place_lut(db, tiledata, tile, parms, num):
+def place_lut(db, tiledata, tile, parms, num, row, col, slice_attrvals):
     lutmap = tiledata.bels[f'LUT{num}'].flags
     init = str(parms['INIT'])
     if len(init) > 16:
@@ -2350,8 +2350,9 @@ def place_lut(db, tiledata, tile, parms, num):
             fuses = lutmap[bitnum]
             for brow, bcol in fuses:
                 tile[brow][bcol] = 1
+    slice_attrvals.setdefault((row, col, int(num) // 2), {})
 
-def place_alu(db, tiledata, tile, parms, num):
+def place_alu(db, tiledata, tile, parms, num, row, col, slice_attrvals):
     lutmap = tiledata.bels[f'LUT{num}'].flags
     alu_bel = tiledata.bels[f"ALU{num}"]
     mode = str(parms['ALU_MODE'])
@@ -2365,31 +2366,42 @@ def place_alu(db, tiledata, tile, parms, num):
     for r, c in bits:
         tile[r][c] = 1
 
-def place_dff(db, tiledata, tile, parms, num, mode):
-        dff_attrs = set()
-        add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['REGMODE'], attrids.cls_attrvals['FF'])
+    # enable ALU
+    alu_mode_attrs = slice_attrvals.setdefault((row, col, int(num) // 2), {})
+    alu_mode_attrs.update({'MODE': 'ALU'})
+    alu_mode_attrs.update({f'MODE_5A_{int(num) % 2}': 'ALU'})
+
+    if 'CIN_NETTYPE' in parms:
+        if parms['CIN_NETTYPE'] == 'VCC':
+            alu_mode_attrs.update({'ALU_CIN_MUX': 'ALU_5A_CIN_VCC'})
+        elif parms['CIN_NETTYPE'] == 'GND':
+            alu_mode_attrs.update({'ALU_CIN_MUX': 'ALU_5A_CIN_GND'})
+        else:
+            alu_mode_attrs.update({'ALU_CIN_MUX': 'ALU_5A_CIN_COUT'})
+    elif 'ALU_CIN_MUX' not in alu_mode_attrs:
+        alu_mode_attrs.update({'ALU_CIN_MUX': 'ALU_5A_CIN_COUT'})
+
+def place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals):
+        dff_attrs = slice_attrvals.setdefault((row, col, int(num) // 2), {})
+        dff_attrs.update({'REGMODE': 'FF'})
+        # XXX always net for now
+        dff_attrs.update({'CEMUX_1': 'UNKNOWN', 'CEMUX_CE': 'SIG'})
         # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
         if mode in {'DFFR', 'DFFC', 'DFFNR', 'DFFNC', 'DFF', 'DFFN'}:
-            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['RESET'])
+            dff_attrs.update({f'REG{int(num) % 2}_REGSET': 'RESET'})
         else:
-            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids[f'REG{int(num) % 2}_REGSET'], attrids.cls_attrvals['SET'])
+            dff_attrs.update({f'REG{int(num) % 2}_REGSET': 'SET'})
         # are set/reset/clear/preset port needed?
         if mode not in {'DFF', 'DFFN'}:
-            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['LSRONMUX'], attrids.cls_attrvals['LSRMUX'])
+            dff_attrs.update({'LSRONMUX': 'LSRMUX'})
         # invert clock?
         if mode in {'DFFN', 'DFFNR', 'DFFNC', 'DFFNP', 'DFFNS'}:
-            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['INV'])
+            dff_attrs.update({'CLKMUX_CLK': 'INV'})
         else:
-            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['CLKMUX_CLK'], attrids.cls_attrvals['SIG'])
-
+            dff_attrs.update({'CLKMUX_CLK': 'SIG'})
         # async option?
         if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
-            add_attr_val(db, 'SLICE', dff_attrs, attrids.cls_attrids['SRMODE'], attrids.cls_attrvals['ASYNC'])
-
-        dffbits = get_shortval_fuses(db, tiledata.ttyp, dff_attrs, f'CLS{int(num) // 2}')
-        #print(f'({row - 1}, {col - 1}) mode:{mode}, num{num}, attrs:{dff_attrs}, bits:{dffbits}')
-        for brow, bcol in dffbits:
-            tile[brow][bcol] = 1
+            dff_attrs.update({'SRMODE': 'ASYNC'})
 
 _mipi_aux_attrs = {
         'A': {('IO_TYPE', 'LVDS25'), ('LPRX_A2', 'ENABLE'), ('ODMUX', 'TRIMUX'), ('OPENDRAIN', 'OFF'),
@@ -2400,7 +2412,7 @@ _mipi_aux_attrs = {
 _hclk_io_pairs = {(36, 11): (36, 30), (36, 25): (36, 32), (36, 53): (36, 28), (36, 74): (36, 90), }
 
 _sides = "AB"
-def place(db, tilemap, bels, cst, args):
+def place(db, tilemap, bels, cst, args, slice_attrvals):
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
@@ -2505,9 +2517,9 @@ def place(db, tilemap, bels, cst, args):
                 tile[r][c] = 1
         elif typ.startswith("DFF"):
             mode = typ.strip('E')
-            place_dff(db, tiledata, tile, parms, num, mode)
+            place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals)
         elif typ.startswith('LUT'):
-            place_lut(db, tiledata, tile, parms, num)
+            place_lut(db, tiledata, tile, parms, num, row, col, slice_attrvals)
 
         elif typ[:3] == "IOB":
             edge = 'T'
@@ -2608,18 +2620,17 @@ def place(db, tilemap, bels, cst, args):
             if pinless_io:
                 return
         elif typ.startswith("RAM16SDP") or typ == "RAMW":
-            ram_attrs = set()
-            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['MODE'], attrids.cls_attrvals['SSRAM'])
-            rambits = get_shortval_fuses(db, tiledata.ttyp, ram_attrs, 'CLS3')
+            for idx in range(4):
+                ram_attrs = slice_attrvals.setdefault((row, col, idx), {})
+                ram_attrs.update({'MODE': 'SSRAM'})
             # In fact, the WRE signal is considered active when it is low, so
             # we include an inverter on the LSR2 line here to comply with the
             # documentation
-            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['LSR_MUX_1'], attrids.cls_attrvals['0'])
-            add_attr_val(db, 'SLICE', ram_attrs, attrids.cls_attrids['LSR_MUX_LSR'], attrids.cls_attrvals['INV'])
-            rambits.update(get_shortval_fuses(db, tiledata.ttyp, ram_attrs, 'CLS2'))
-            #print(f'({row - 1}, {col - 1}) attrs:{ram_attrs}, bits:{rambits}')
-            for brow, bcol in rambits:
-                tile[brow][bcol] = 1
+            ram_attrs = slice_attrvals.setdefault((row, col, 2), {})
+            ram_attrs.update({'LSRONMUX': 'LSRMUX'})
+            ram_attrs.update({'LSR_MUX_LSR': 'INV'})
+            ram_attrs.update({'CLKMUX_1': 'UNKNOWN'})
+            ram_attrs.update({'CLKMUX_CLK': 'SIG'})
         elif typ ==  'IOLOGIC':
             #print(row, col, cellname)
             iologic_attrs = set_iologic_attrs(db, parms, attrs)
@@ -2666,7 +2677,7 @@ def place(db, tilemap, bels, cst, args):
             for r, c in bits:
                 tile[r][c] = 1
         elif typ.startswith('ALU'):
-            place_alu(db, tiledata, tile, parms, num)
+            place_alu(db, tiledata, tile, parms, num, row, col, slice_attrvals)
         elif typ == 'PLLVR':
             idx = 0
             if col != 28:
@@ -3130,6 +3141,37 @@ def set_const_fuses(db, row, col, tile):
             brow, bcol = bits
             tile[brow][bcol] = 1
 
+# set fuse for entire slice
+def set_slice_fuses(db, tilemap, slice_attrvals):
+    for pos, attrvals in slice_attrvals.items():
+        row, col, num = pos
+        if 'MODE' in attrvals and attrvals['MODE'] == 'SSRAM':
+            attrvals.update({'REG0_REGSET': 'UNKNOWN'})
+            attrvals.update({'REG1_REGSET': 'UNKNOWN'})
+        elif 'REGMODE' not in attrvals:
+            #if 'MODE' in attrvals and attrvals['MODE'] == 'ALU':
+            #    attrvals.update({'LSRONMUX': 'LSRMUX'})
+            #else:
+            attrvals.update({'LSRONMUX': '0'})
+            attrvals.update({'CLKMUX_1': '1'})
+        if 'REG0_REGSET' not in attrvals:
+            attrvals.update({'REG0_REGSET': 'RESET'})
+        if 'REG1_REGSET' not in attrvals:
+            attrvals.update({'REG1_REGSET': 'RESET'})
+        if num == 0 and 'ALU_CIN_MUX' not in attrvals:
+            attrvals.update({'ALU_CIN_MUX': 'ALU_5A_CIN_COUT'})
+
+        av = set()
+        for attr, val in attrvals.items():
+            add_attr_val(db, 'SLICE', av, attrids.cls_attrids[attr], attrids.cls_attrvals[val])
+
+        if f'CLS{num}' in db.shortval[db.grid[row - 1][col - 1].ttyp]:
+            print(f"slice ({row - 1}, {col - 1}), {num}, {attrvals}, {av}")
+            bits = get_shortval_fuses(db, db.grid[row - 1][col - 1].ttyp, av, f'CLS{num}')
+            tile = tilemap[(row - 1, col - 1)]
+            for brow, bcol in bits:
+                tile[brow][bcol] = 1
+
 def main():
     global device
     global pnr
@@ -3198,8 +3240,20 @@ def main():
     isolate_segments(pnr, db, tilemap)
     bels = get_bels(pnr)
     gsr(db, tilemap, args)
+    # LUT/RAM/ALU/DFF use shortval[][CLS0/1/2/3]
+    # Their fuses corresponding to attributes can be set independently, but the
+    # problem arises with default attributes, i.e., those whose fuses are set
+    # if the corresponding attributes are "NOT SPECIFIED". Naturally, in this
+    # case, the default fuses for DFF will be set when, for example, fuses for
+    # ALU are being processed, simply because ALU does not have attributes
+    # specified for DFF.
+    # Therefore, we will set fuses for attributes for the entire slice after we
+    # figure out which DFF/LUT/ALU/RAM fall into it.
+    # {(row, col, idx): {attr:val, attr:val}}
+    slice_attrvals = {}
     # routing can add pass-through LUTs
-    place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args)
+    place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args, slice_attrvals)
+    set_slice_fuses(db, tilemap, slice_attrvals)
     dualmode_pins(db, tilemap, args)
     # XXX Z-1 some kind of power saving for pll, disable
     # When comparing images with a working (IDE) and non-working PLL (apicula),
