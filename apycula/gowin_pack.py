@@ -2665,7 +2665,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals):
                     if f'DSP{mac}' in db.shortval[tiledata.ttyp]:
                         dspbits.update(get_shortval_fuses(db, tiledata.ttyp, dsp_attrs[mac], f'DSP{mac}'))
 
-            #1406.0iprint(f'({row - 1}, {col - 1}) attrs:{dsp_attrs}, bits:{sorted(dspbits)}')
+            #print(f'({row - 1}, {col - 1}) attrs:{dsp_attrs}, bits:{sorted(dspbits)}')
             for brow, bcol in dspbits:
                 tile[brow][bcol] = 1
         elif typ.startswith('RPLL'):
@@ -2891,7 +2891,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals):
                 if device not in {'GW5A-25A'}:
                     bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
                 else:
-                    print(row, col, f'mode:{mode_for_attrs}, idx:{iob_idx}')
+                    #print(row, col, f'mode:{mode_for_attrs}, idx:{iob_idx}')
                     if mode_for_attrs == 'OBUF':
                         iob_attrs.update({147}) # IOB_UNKNOWN51=TRIMUX
                     elif mode_for_attrs == 'IBUF':
@@ -3151,9 +3151,6 @@ def set_slice_fuses(db, tilemap, slice_attrvals):
             attrvals.update({'REG0_REGSET': 'UNKNOWN'})
             attrvals.update({'REG1_REGSET': 'UNKNOWN'})
         elif 'REGMODE' not in attrvals:
-            #if 'MODE' in attrvals and attrvals['MODE'] == 'ALU':
-            #    attrvals.update({'LSRONMUX': 'LSRMUX'})
-            #else:
             attrvals.update({'LSRONMUX': '0'})
             attrvals.update({'CLKMUX_1': '1'})
         if 'REG0_REGSET' not in attrvals:
@@ -3168,7 +3165,7 @@ def set_slice_fuses(db, tilemap, slice_attrvals):
             add_attr_val(db, 'SLICE', av, attrids.cls_attrids[attr], attrids.cls_attrvals[val])
 
         if f'CLS{num}' in db.shortval[db.grid[row - 1][col - 1].ttyp]:
-            print(f"slice ({row - 1}, {col - 1}), {num}, {attrvals}, {av}")
+            #print(f"slice ({row - 1}, {col - 1}), {num}, {attrvals}, {av}")
             bits = get_shortval_fuses(db, db.grid[row - 1][col - 1].ttyp, av, f'CLS{num}')
             tile = tilemap[(row - 1, col - 1)]
             for brow, bcol in bits:
