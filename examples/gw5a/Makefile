@@ -25,5 +25,5 @@ big-shift-primer25k.json: big-shift-primer25k-synth.json big-shift-primer25k.cst
 	$(NEXTPNR) -v --debug --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=big-shift-primer25k.cst --vopt cpu_as_gpio --vopt sspi_as_gpio
 
 %-primer25k-synth.json: %.v
-	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a -noalu"
+	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a"
 
