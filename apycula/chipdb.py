@@ -366,9 +366,6 @@ def fse_luts(fse, ttyp, device):
                 'CE' : f"CE{cls}", # clock enable
             }
 
-            if device in {'GW5A-25A'}: #XXX no ALU for GW5A for now
-                continue
-
             # ALU
             alu_idx = cls * 2 + i
             bel = luts.setdefault(f"ALU{alu_idx}", Bel())

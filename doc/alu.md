@@ -2,7 +2,11 @@
 
 In Gowin FPGA logic tiles, it is possible to configure a CLS (slice of two LUTs) in ALU mode. In this mode a hard logic carry chain is used in combination with programmable logic to implement fast arithmetic.
 
-ALU mode is available on the 3 CLS in each tile that have a flip-flop, and configured with a single bit. This selects the `F` LUT output to be passed through the ALU. Hard carry logic runs from west to east from LUT0 to LUT5 across tiles.
+ALU mode is available on the 3 CLS in each tile that have a flip-flop and LUT. One fuse selects whether the `F` LUT output will pass through the ALU. Hard carry logic runs from west to east from LUT0 to LUT5 across tiles.
+
+In chip series up to GW5A, of both LUTs are switched to ALUs simultaneously, while in GW5A, each LUT has its own fuse. In addition, in the GW5A series, the very first ALU (with index 0) has a MUX at the CIN input, allowing the initial value of CIN to be set as a constant, COUT of the previous ALU, or a signal from the logic.
+
+Signal formation in logic is still in question—no matter how hard I tried, the vendor IDE did not use this mechanism, but added an auxiliary ALU in front that formed CARRY. We do the same.
 
 ![tile carry connections](fig/alu_tile.png)
 
