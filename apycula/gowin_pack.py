@@ -2355,16 +2355,30 @@ def place_lut(db, tiledata, tile, parms, num, row, col, slice_attrvals):
 def place_alu(db, tiledata, tile, parms, num, row, col, slice_attrvals):
     lutmap = tiledata.bels[f'LUT{num}'].flags
     alu_bel = tiledata.bels[f"ALU{num}"]
-    mode = str(parms['ALU_MODE'])
     for r_c in lutmap.values():
         for r, c in r_c:
             tile[r][c] = 0
-    if mode in alu_bel.modes:
-        bits = alu_bel.modes[mode]
+    # ALU_RAW_LUT - bits for ALU LUT init value, which are formed in nextpnr as
+    # a result of optimization.
+    if 'RAW_ALU_LUT' in parms:
+        alu_init = parms['RAW_ALU_LUT']
+        if len(alu_init) > 16:
+            alu_init = alu_init[-16:]
+        else:
+            alu_init = alu_init*(16 // len(alu_init))
+        bits = set()
+        for bitnum, bit in enumerate(alu_init[::-1]):
+            if bit == '0':
+                bits.update(lutmap[bitnum])
     else:
-        bits = alu_bel.modes[str(int(mode, 2))]
+        mode = str(parms['ALU_MODE'])
+        if mode in alu_bel.modes:
+            bits = alu_bel.modes[mode]
+        else:
+            bits = alu_bel.modes[str(int(mode, 2))]
     for r, c in bits:
         tile[r][c] = 1
+    #print(row, col, num, bits)
 
     # enable ALU
     alu_mode_attrs = slice_attrvals.setdefault((row, col, int(num) // 2), {})
