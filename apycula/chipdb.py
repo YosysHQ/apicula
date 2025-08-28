@@ -370,12 +370,12 @@ def fse_luts(fse, ttyp, device):
             alu_idx = cls * 2 + i
             bel = luts.setdefault(f"ALU{alu_idx}", Bel())
             lut = luts[f"LUT{alu_idx}"]
-            # ADD    INIT="0011 0000 1100 1100"
+            # ADD    INIT="0110 0000 1100 1010"
             #              add   0   add  carry
-            add_alu_mode(bel.modes, lut, "0",     "0011000011001100")
-            # SUB    INIT="1010 0000 0101 1010"
-            #              add   0   add  carry
-            add_alu_mode(bel.modes, lut, "1",     "1010000001011010")
+            add_alu_mode(bel.modes, lut, "0",     "0110000001101010")
+            # SUB    INIT="1001 0000 1001 1010"
+            #              sub   0   sub  carry
+            add_alu_mode(bel.modes, lut, "1",     "1001000010011010")
             # ADDSUB INIT="0110 0000 1001 1010"
             #              add   0   sub  carry
             add_alu_mode(bel.modes, lut, "2",     "0110000010011010")

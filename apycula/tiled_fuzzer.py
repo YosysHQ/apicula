@@ -187,7 +187,8 @@ def run_pnr(mod, constr, config):
         with open(tmpdir+"/run.tcl", "w") as f:
             pnr.write(f)
 
-        subprocess.run([gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
+        print(["/usr/bin/env", "LD_PRELOAD=" + gowinhome + "/Programmer/bin/libfontconfig.so.1", gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
+        subprocess.run(["/usr/bin/env", "LD_PRELOAD=" + gowinhome + "/Programmer/bin/libfontconfig.so.1", gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
         #print(tmpdir); input()
         try:
             return PnrResult(

@@ -18,8 +18,8 @@ The ALU hard logic takes the shape of a full adder, where the carry chain is ful
 On the synthesis side, the ALU primitive supports 9 modes, wich correspond to a bit pattern stored in the LUT, as well as which ports are used, and which are set to constant values.
 
 ```
-add(0)    0011000011001100  A:-  B:I0 C:1 D:I1 CIN:0
-sub(1)    1010000001011010  A:I0 B:-  C:1 D:I1 CIN:1
+add(0)    0110000001101010  A:I0 B:I1 C:1 D:-  CIN:0
+sub(1)    1001000010011010  A:I0 B:I1 C:1 D:-  CIN:1
 addsub(2) 0110000010011010  A:I0 B:I1 C:1 D:I3 CIN:??
 ne(3)     1001000010011111  A:I0 B:I1 C:1 D:-  CIN:??
 ge(4)     1001000010011010  A:I0 B:I1 C:1 D:-  CIN:??
@@ -30,12 +30,12 @@ cupcdn(8) 1010000001011010  A:I0 B:I1 C:1 D:I3 CIN:??
 mul(9)    0111100010001000  A:I0 B:I1 C:0 D:1  CIN:??
 ```
 
-These values should be understood as follows: The lowest 4 bits are shared between the `LUT4` in the carry "selector" `LUT2`, so in the case of `ADD` `1100`, selecting `B`. In almost all cases `C:1` which means the output of the `LUT4` is controlled by `AAAA0000AAAA0000` avoiding the lower bits and explainging the zeros in most modes. In the case of `ADD` the `LUT4` function is therefore `00111100`, which is `B XOR D`. In the case of `MUL` `C:0` and `D:1` so indeed only `0000AAAA00000000` is used for the `LUT4`, having the function of `AND`, like the lower `LUT2`. I have confirmed the funcionality is identical with the other clusters set to `0000`. The full list of implemented logic functions:
+These values should be understood as follows: The lowest 4 bits are shared between the `LUT4` in the carry "selector" `LUT2`, so in the case of `ADD` `1010`, selecting `A`. In almost all cases `C:1` which means the output of the `LUT4` is controlled by `AAAA0000AAAA0000` avoiding the lower bits and explainging the zeros in most modes. In the case of `ADD` the `LUT4` function is therefore `01100110`, which is `A XOR B`. In the case of `MUL` `C:0` and `D:1` so indeed only `0000AAAA00000000` is used for the `LUT4`, having the function of `AND`, like the lower `LUT2`. I have confirmed the funcionality is identical with the other clusters set to `0000`. The full list of implemented logic functions:
 
 ```
 FN         LUT4             LUT2
-ADD(0)     B XOR D          B
-SUB(1)     !A XOR D         A
+ADD(0)     A XOR B          A
+SUB(1)     !A XOR B         A
 ADDSUB(2)  A XOR B XOR !D   A
 NE(3)      A XOR B          1
 GE/LE(4-5) A XOR B          A
