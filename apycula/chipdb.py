@@ -2811,6 +2811,8 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_tile_types(dev, dat)
     #XXX
     if device in {'GW5A-25A'}:
+        dev.tile_types.setdefault('C', set()).update(dev.tile_types['M'])
+        dev.tile_types['M'] = set()
         dev.tile_types['P'] = set()
         dev.tile_types['B'] = set()
         dev.tile_types['D'] = set()
