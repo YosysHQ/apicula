@@ -2018,7 +2018,10 @@ def set_osc_attrs(db, typ, params):
         if param == 'FREQ_DIV':
             fdiv = int(val, 2)
             if fdiv % 2 == 1:
-                raise Exception(f"Divisor of {typ} must be even")
+                if fdiv == 3 and device in {'GW5A-25A'}:
+                    fdiv = 0
+                else:
+                    raise Exception(f"Divisor of {typ} must be even")
             osc_attrs['MCLKCIB'] = fdiv
             osc_attrs['MCLKCIB_EN'] = "ENABLE"
             continue
