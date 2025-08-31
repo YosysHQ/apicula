@@ -5,7 +5,9 @@ Connect them as shown in the photo: apuicula/doc/fig/tangprimer25-lut-test.jpeg
 `default_nettype none
 
 (* top *)
-module top(input wire resetn, input wire key, input wire [7:0]pmod_keys, output wire [7:0]led);
+module top(input wire resetn, input wire key_i, input wire [7:0]pmod_keys, output wire [7:0]led);
+	wire key = key_i ^ `INV_BTN;
+
 	wire [7:0]w;
 	assign led = {~w[5], ~w[6], ~w[4:3], ~w[1:0], ~w[2], w[7]};
 
