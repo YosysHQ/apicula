@@ -2308,6 +2308,14 @@ def fse_create_logic2clk(dev, device, dat: Datfile):
         if row != -2:
             add_node(dev, wnames.clknames[clkwire_idx], "GLOBAL_CLK", row, col, wnames.wirenames[wire_idx])
             add_buf_bel(dev, row, col, wnames.wirenames[wire_idx])
+            #XXX These are entry points into the global clock system from
+            # logic, but there are remarkable pips in the tables - GBxx->entry
+            # point. Without additional checks in nextpnr, you can get a perfect
+            # loop.
+            # For now, instead of complicating nextpnr, we simply remove the
+            # possibility of entering the entry point from clock wires.
+            for i in range(8):
+                dev.grid[row][col].pips[wnames.wirenames[wire_idx]].pop(f'GB{i}0', None)
 
 def fse_create_osc(dev, device, fse):
     for row, rd in enumerate(dev.grid):
