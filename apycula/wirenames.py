@@ -333,7 +333,9 @@ clknames_5a25a.update({n: f"UNK{n}" for n in range(278, 281)})
 
 clknames_5a25a.update({291: "GT00", 292: "GT10"})
 
-clknames_5a25a.update({n: f"UNK{n}" for n in range(501, 570)})
+clknames_5a25a.update({n: f"UNK{n}" for n in range(501, 520)})
+clknames_5a25a[520] = 'OSC_O';
+clknames_5a25a.update({n: f"UNK{n}" for n in range(521, 570)})
 
 # HCLK->clock network
 # Each HCLK can connect to other HCLKs through two MUXes in the clock system.

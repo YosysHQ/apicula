@@ -461,7 +461,7 @@ def fse_osc(device, fse, ttyp):
     elif device == 'GW1N-2':
         bel = osc.setdefault(f"OSCO", Bel())
     elif device == 'GW5A-25A':
-        bel = osc.setdefault(f"OSCO", Bel())
+        bel = osc.setdefault(f"OSCA", Bel())
     else:
         raise Exception(f"Oscillator not yet supported on {device}")
     bel.portmap = {}
@@ -2247,10 +2247,7 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
               ('OSC',  'GW1N-9C'):  ({'OSCOUT': 'Q4'}, {}),
               ('OSC',  'GW2A-18'):  ({'OSCOUT': 'Q4'}, {}),
               ('OSC',  'GW2A-18C'):  ({'OSCOUT': 'Q4'}, {}),
-              # XXX unsupported boards, pure theorizing
-              ('OSCO', 'GW1N-2'):  ({'OSCOUT': 'Q7'}, {'OSCEN': (9, 1, 'B4')}),
-              ('OSCW', 'GW2AN-18'):  ({'OSCOUT': 'Q4'}, {}),
-              ('OSCO', 'GW5A-25A'):  ({'OSCOUT': 'Q4'}, {}), # Fix me
+              ('OSCA', 'GW5A-25A'):  ({}, {'OSCOUT': (19, 91, 'OSC_O'), 'OSCEN': (19, 90, 'SEL4')}),
               }
 
 # from logic to global clocks. An interesting piece of dat['CmuxIns'], it was
@@ -2312,15 +2309,39 @@ def fse_create_logic2clk(dev, device, dat: Datfile):
             dev.extra_func.setdefault((row, col), {}).setdefault('clock_gates', []).append(wnames.wirenames[wire_idx])
 
 def fse_create_osc(dev, device, fse):
+    skip_nodes = False
     for row, rd in enumerate(dev.grid):
         for col, rc in enumerate(rd):
             if 51 in fse[rc.ttyp]['shortval']:
+                # None of the supported chips, nor the planned TangMega138k,
+                # have more than one OSC. However, in the GW25 series, the
+                # fuses from Table 51 are found in several cells. The simplest
+                # way to avoid creating duplicate nodes for OSC inputs and
+                # outputs is to create them only in the first cell encountered.
+                if skip_nodes:
+                    dev.extra_func.setdefault((row, col), {}).update({'osc_fuses_only': {}})
+                    continue
                 osc_type = list(fse_osc(device, fse, rc.ttyp).keys())[0]
                 dev.extra_func.setdefault((row, col), {}).update(
                         {'osc': {'type': osc_type}})
                 _, aliases = _osc_ports[osc_type, device]
                 for port, alias in aliases.items():
                     dev.nodes.setdefault(f'X{col}Y{row}/{port}', (port, {(row, col, port)}))[1].add(alias)
+                    # Unlike previous series, GW5A has an OSC output as a clock
+                    # wire, which means that, as a clock source output, it should
+                    # be part of the clock MUX spread across the entire chip.
+                    # Unfortunately, this is not the case—during trial
+                    # compilations, a fuse was noticed for clock pip 520->211 and
+                    # then 211->SPINE. This means that the OSC output is not a
+                    # direct input to the clock MUX. So we are looking for all the
+                    # intermediate wires and making them nodes in the hope that one
+                    # of them will be picked up by the clock MUX.
+                    if port == 'OSCOUT' and device in {'GW5A-25A'}:
+                        a_row, a_col, a_wire = alias
+                        for dest, srcs in dev.grid[a_row][a_col].clock_pips.items():
+                            if a_wire in srcs:
+                                add_node(dev, dest, "GLOBAL_CLK", a_row, a_col, dest)
+                skip_nodes = True
 
 def fse_create_gsr(dev, device):
     # Since, in the general case, there are several cells that have a

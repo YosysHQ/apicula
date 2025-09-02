@@ -210,7 +210,7 @@ _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9'}
 def get_bels(data):
     later = []
-    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWO]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG)(\w*)")
+    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG)(\w*)")
 
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
@@ -2018,18 +2018,22 @@ def set_osc_attrs(db, typ, params):
         if param == 'FREQ_DIV':
             fdiv = int(val, 2)
             if fdiv % 2 == 1:
-                raise Exception(f"Divisor of {typ} must be even")
+                if fdiv == 3 and device in {'GW5A-25A'}:
+                    fdiv = 0
+                else:
+                    raise Exception(f"Divisor of {typ} must be even")
             osc_attrs['MCLKCIB'] = fdiv
             osc_attrs['MCLKCIB_EN'] = "ENABLE"
-            osc_attrs['NORMAL'] = "ENABLE"
-            if typ not in {'OSC', 'OSCW'}:
-                osc_attrs['USERPOWER_SAVE'] = 'ENABLE'
             continue
         if param == 'REGULATOR_EN':
             reg = int(val, 2)
             if reg == 1:
                 osc_attrs['OSCREG'] = "ENABLE"
             continue
+    if typ not in {'OSCA'}:
+        osc_attrs['NORMAL'] = "ENABLE"
+    if typ not in {'OSC', 'OSCW'}:
+        osc_attrs['USERPOWER_SAVE'] = 'ENABLE'
 
     fin_attrs = set()
     for attr, val in osc_attrs.items():
@@ -2511,7 +2515,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals):
         elif typ.startswith("BUFG"):
             continue
 
-        elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH', 'OSCW', 'OSCO'}:
+        elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH', 'OSCW', 'OSCO', 'OSCA'}:
             # XXX turn on (GW1NZ-1)
             if device == 'GW1NZ-1':
                 en_tiledata = db.grid[db.rows - 1][db.cols - 1]
@@ -2526,9 +2530,21 @@ def place(db, tilemap, bels, cst, args, slice_attrvals):
                 tile[r][c] = 0
 
             osc_attrs = set_osc_attrs(db, typ, parms)
-            bits = get_shortval_fuses(db, tiledata.ttyp, osc_attrs, 'OSC')
-            for r, c in bits:
-                tile[r][c] = 1
+            if device in {'GW5A-25A'}:
+                # set the fuses in all cells
+                for row_col, func_desc in db.extra_func.items():
+                    if 'osc' in func_desc or 'osc_fuses_only' in func_desc:
+                        osc_row, osc_col = row_col
+                        osc_tile = tilemap[osc_row, osc_col]
+                        bits = get_shortval_fuses(db, db.grid[osc_row][osc_col].ttyp, osc_attrs, 'OSC')
+                        #print(osc_row, osc_col, osc_attrs)
+                        for r, c in bits:
+                            osc_tile[r][c] = 1
+            else:
+                bits = get_shortval_fuses(db, tiledata.ttyp, osc_attrs, 'OSC')
+                for r, c in bits:
+                    tile[r][c] = 1
+
         elif typ.startswith("DFF"):
             mode = typ.strip('E')
             place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals)
@@ -2974,7 +2990,7 @@ def route(db, tilemap, pips):
         if dest not in wnames.clknumbers:
             return False
         if device in {'GW5A-25A'}:
-            return wnames.clknumbers[src] < wnames.clknumbers['UNK212']
+            return src == 'OSC_O' or wnames.clknumbers[src] < wnames.clknumbers['UNK212']
         # XXX for future
         return wnames.clknumbers[src] < wnames.clknumbers['P10A']
 

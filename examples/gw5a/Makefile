@@ -6,7 +6,8 @@ DEBUG = -v --debug
 .DEFAULT_GOAL := all
 all: \
 	in-out-primer25k.fs in-inv-out-primer25k.fs in-or-inv-out-primer25k.fs \
-	lut8-primer25k.fs big-shift-primer25k.fs alu-simple-primer25k.fs lutram-primer25k.fs
+	lut8-primer25k.fs big-shift-primer25k.fs alu-simple-primer25k.fs lutram-primer25k.fs \
+	blinky-osc-primer25k.fs
 
 
 clean: 
@@ -29,5 +30,5 @@ alu-%-primer25k.json: alu-%-primer25k-synth.json alu-%-primer25k.cst
 	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=$(basename $@).cst --vopt cpu_as_gpio --vopt sspi_as_gpio
 
 %-primer25k-synth.json: %.v
-	$(YOSYS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a"
+	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a"
 
