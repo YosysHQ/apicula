@@ -2305,6 +2305,8 @@ def fse_create_logic2clk(dev, device, dat: Datfile):
         if row != -2:
             add_node(dev, wnames.clknames[clkwire_idx], "GLOBAL_CLK", row, col, wnames.wirenames[wire_idx])
             add_buf_bel(dev, row, col, wnames.wirenames[wire_idx])
+            # Make list of the clock gates for nextpnr
+            dev.extra_func.setdefault((row, col), {}).setdefault('clock_gates', []).append(wnames.wirenames[wire_idx])
 
 def fse_create_osc(dev, device, fse):
     skip_nodes = False
