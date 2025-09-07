@@ -41,11 +41,13 @@ def main():
 
     device_name = args.device
     match = re.search(
-        r"(GW1[A-Z]{1,3})-[A-Z]{1,2}([0-9])[A-Z]{1,3}[0-9]{1,3}P*(C[0-9]/I[0-9])",
+        r"(GW[125][A-Z]{1,3})-[A-Z]{0,2}([0-9]{1,2})[A-Z]{1,3}[0-9]{1,3}P*N*(C[0-9]/I[0-9]|ES)",
         device_name,
     )
     if match:
         device_name = f"{match.group(1)}-{match.group(2)} {match.group(3)}"
+    else:
+        print(f'Warning: cannot decipher the name of the device {device_name}.')
 
     device_limits = {
         "GW1N-1 C6/I5": {
@@ -227,6 +229,29 @@ def main():
             "vco_max": 1250,
             "clkout_min": 3.90625,
             "clkout_max": 625,
+        },
+        "GW2AR-18 C8/I7": {
+            "comment": "untested",
+            "pll_name": "rPLL",
+            "pfd_min": 3,
+            "pfd_max": 500,
+            "vco_min": 500,
+            "vco_max": 1250,
+            "clkout_min": 3.90625,
+            "clkout_max": 625,
+        },
+        "GW5A-25 ES": {
+            "comment": "untested",
+            "pll_name": "rPLL",
+            "pfd_min": 19,
+            "pfd_max": 800,
+            "vco_min": 800,
+            "vco_max": 1600,
+            # The previous four parameters are taken from the datasheet (as in
+            # this case from https://cdn.gowinsemi.com.cn/DS1103E.pdf), but I
+            # don't know where these two come from:(
+            "clkout_min": 19,
+            "clkout_max": 1600,
         },
     }
 
