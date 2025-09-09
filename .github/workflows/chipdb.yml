@@ -275,7 +275,7 @@ jobs:
       fail-fast: false
       matrix:
         yosys: [main, v0.57]
-        nextpnr: [master, nextpnr-0.8]
+        nextpnr: [master, nextpnr-0.9]
     steps:
     - uses: actions/checkout@v4
     - name: Download python package
