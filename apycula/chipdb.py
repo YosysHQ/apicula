@@ -85,8 +85,10 @@ class Device:
     cmd_ftr: List[bytearray] = field(default_factory=list)
     template: List[List[int]] = None
     # allowable values of bel attributes
-    # {table_name: [(attr_id, attr_value)]}
-    logicinfo: Dict[str, List[Tuple[int, int]]] = field(default_factory=dict)
+    # {table_name: {(attr_id, attr_value): code}}
+    logicinfo: Dict[str, Dict[Tuple[int, int], int]] = field(default_factory=dict)
+    # reverse logicinfo, is not stored int pickle
+    rev_li: Dict[str, Dict[int, Tuple[int, int]]]  = field(default_factory=dict)
     # fuses for single feature only
     # {ttype: {table_name: {feature: {bits}}}
     longfuses: Dict[int, Dict[str, Dict[Tuple[int,], Set[Coord]]]] = field(default_factory=dict)
@@ -177,6 +179,14 @@ class Device:
                     if bel.startswith('BANK'):
                         res.update({ bel[4:] : (row, col) })
         return res
+
+    # make reverse logicinfo tables on demand
+    def rev_logicinfo(self, name):
+        if name not in self.rev_li:
+            table = self.rev_li.setdefault(name, {})
+            for attrval, code in self.logicinfo[name].items():
+                table[code] = attrval
+        return self.rev_li[name]
 
 def is_GW5_family(device):
     return device in {'GW5A-25A'}
@@ -565,11 +575,12 @@ def fse_fill_logic_tables(dev, fse, device):
     # logicinfo
     for ltable in fse['header']['logicinfo']:
         if ltable in _known_logic_tables:
-            table = dev.logicinfo.setdefault(_known_logic_tables[ltable], [])
+            table = dev.logicinfo.setdefault(_known_logic_tables[ltable], {})
         else:
-            table = dev.logicinfo.setdefault(f"unknown_{ltable}", [])
-        for attr, val, _ in fse['header']['logicinfo'][ltable]:
-            table.append((attr, val))
+            table = dev.logicinfo.setdefault(f"unknown_{ltable}", {})
+        for code, av in enumerate(fse['header']['logicinfo'][ltable]):
+            attr, val, _ = av
+            table[(attr, val)] = code
     # shortval
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
     for ttyp in ttypes:
@@ -2925,10 +2936,9 @@ def get_bank_io_fuses(dev, ttyp, attrs):
 # add the attribute/value pair into an set, which is then passed to
 # get_longval_fuses() and get_shortval_fuses()
 def add_attr_val(dev, logic_table, attrs, attr, val):
-    for idx, attr_val in enumerate(dev.logicinfo[logic_table]):
-        if attr_val[0] == attr and attr_val[1] == val:
-            attrs.add(idx)
-            break
+    table = dev.logicinfo[logic_table]
+    if (attr, val) in table:
+        attrs.add(table[(attr, val)])
 
 def get_pins(device):
     if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A"}:

@@ -178,5 +178,7 @@ if __name__ == "__main__":
             pinmap = run_script(db, device_args["pins"], device_args["device"], device_args["package"], device_args["partnumber"])
             db.sip_cst.setdefault(device_args["device"], {})[device_args["package"]] = pinmap
 
+    # the reverse logicinfo does not make sense to store in the database
+    db.rev_li = {}
     with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
         pickle.dump(db, f)
