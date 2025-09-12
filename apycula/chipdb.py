@@ -2937,8 +2937,9 @@ def get_bank_io_fuses(dev, ttyp, attrs):
 # get_longval_fuses() and get_shortval_fuses()
 def add_attr_val(dev, logic_table, attrs, attr, val):
     table = dev.logicinfo[logic_table]
-    if (attr, val) in table:
-        attrs.add(table[(attr, val)])
+    attrval = table.get((attr, val))
+    if attrval:
+        attrs.add(attrval)
 
 def get_pins(device):
     if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A"}:
