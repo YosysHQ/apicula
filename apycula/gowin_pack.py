@@ -181,7 +181,7 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
             if ptr_bit_inc[0] == '0':
                 continue
             logic_line = ptr_bit_inc[1] * 4 + (addr >> 12)
-            bit = db.logicinfo['BSRAM_INIT'][logic_line][0] - 1
+            bit = db.rev_logicinfo('BSRAM_INIT')[logic_line][0] - 1
             quad = {0x30: 0xc0, 0x20: 0x40, 0x10: 0x80, 0x00: 0x0}[addr & 0x30]
             map_row = quad + ((addr >> 6) & 0x3f)
             #print(f'map_row:{map_row}, addr: {addr}, bit {ptr_bit_inc[1]}, bit:{bit}')
