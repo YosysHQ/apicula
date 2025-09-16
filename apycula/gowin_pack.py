@@ -2363,7 +2363,7 @@ def place_alu(db, tiledata, tile, parms, num, row, col, slice_attrvals):
         for r, c in r_c:
             tile[r][c] = 0
     # XXX Fix for bug in nextpnr 0.9, will be unnecessary with the next release.
-    if parms['ALU_MODE'] == "0 ":
+    if "ALU_MODE" in parms and parms['ALU_MODE'] == "0 ":
         parms['RAW_ALU_LUT'] = "0011000011001100"
     # ALU_RAW_LUT - bits for ALU LUT init value, which are formed in nextpnr as
     # a result of optimization.
