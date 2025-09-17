@@ -77,6 +77,11 @@ def sanitize_name(name):
         return retname
     return f"\\{retname} "
 
+def attrs_upper(attrs):
+    for k, v in attrs.items():
+        if isinstance(v, str):
+            attrs[k] = v.upper()
+
 def extra_pll_bels(cell, row, col, num, cellname):
     # rPLL can occupy several cells, add them depending on the chip
     offx = 1
@@ -136,6 +141,7 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
     if typ == 'BSRAM_AUX' or 'INIT_RAM_00' not in parms:
         return
 
+    attrs_upper(attrs)
     subtype = attrs['BSRAM_SUBTYPE']
     if not has_bsram_init:
         has_bsram_init = True
@@ -210,7 +216,7 @@ _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9'}
 def get_bels(data):
     later = []
-    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG)(\w*)")
+    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA)(\w*)")
 
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
@@ -322,6 +328,7 @@ _permitted_freqs = {
         "GW1NS-2": (400, 500, 3.125,  1200, 400),
         "GW2A-18": (500, 625, 3.90625, 1250, 500),
         "GW2A-18C": (500, 625, 3.90625, 1250, 500),
+        "GW5A-25A": (800, 1600, 6.25, 1600, 800),
         }
 # input params are calculated as described in GOWIN doc (UG286-1.7E_Gowin Clock User Guide)
 # fref = fclkin / idiv
@@ -335,29 +342,39 @@ _permitted_freqs = {
 # There are not many resistors so the whole frequency range is divided into
 # 30MHz intervals and the number of this interval is one of the fuse sets. But
 # the resistor itself is not directly dependent on the input frequency.
-_freq_R = [[(2.6, 65100.0), (3.87, 43800.0), (7.53, 22250.0), (14.35, 11800.0), (28.51, 5940.0), (57.01, 2970.0), (114.41, 1480), (206.34, 820.0)], [(2.4, 69410.0), (3.53, 47150.0), (6.82, 24430.0), (12.93, 12880.0), (25.7, 6480.0), (51.4, 3240.0), (102.81, 1620), (187.13, 890.0)]]
+_freq_R = [[(2.6, 65100.0), (3.87, 43800.0), (7.53, 22250.0), (14.35, 11800.0), (28.51, 5940.0), (57.01, 2970.0), (114.41, 1480), (206.34, 820.0)],
+           [(2.4, 69410.0), (3.53, 47150.0), (6.82, 24430.0), (12.93, 12880.0), (25.7, 6480.0), (51.4, 3240.0), (102.81, 1620), (187.13, 890.0)],
+           [(3.24, 72300), (4.79, 48900), (9.22, 25400), (17.09, 13700), (34.08, 6870), (68.05, 3440), (136.1, 1720), (270.95, 864)]]
 def calc_pll_pump(fref, fvco):
     fclkin_idx = int((fref - 1) // 30)
     if (fclkin_idx == 13 and fref <= 395) or (fclkin_idx == 14 and fref <= 430) or (fclkin_idx == 15 and fref <= 465) or fclkin_idx == 16:
         fclkin_idx = fclkin_idx - 1
 
-    if device not in {'GW2A-18', 'GW2A-18C'}:
-        freq_Ri = _freq_R[0]
-    else:
+    if device in {'GW2A-18', 'GW2A-18C'}:
         freq_Ri = _freq_R[1]
+    elif device in {'GW5A-25A'}:
+        freq_Ri = _freq_R[2]
+    else:
+        freq_Ri = _freq_R[0]
     r_vals = [(fr[1], len(freq_Ri) - 1 - idx) for idx, fr in enumerate(freq_Ri) if fr[0] < fref]
     r_vals.reverse()
 
     # Find the resistor that provides the minimum current through the capacitor
-    if device not in {'GW2A-18', 'GW2A-18C'}:
-        K0 = (497.5 - math.sqrt(247506.25 - (2675.4 - fvco) * 78.46)) / 39.23
-        K1 = 4.8714 * K0 * K0 + 6.5257 * K0 + 142.67
-    else:
+    if device in {'GW2A-18', 'GW2A-18C'}:
         K0 = (-28.938 + math.sqrt(837.407844 - (385.07 - fvco) * 0.9892)) / 0.4846
         K1 = 0.1942 * K0 * K0 - 13.173 * K0 + 518.86
+        C1 = 6.69244e-11
+    elif device in {'GW5A-25A'}:
+        K1 = 120
+        if fvco >= 1400.0:
+            K1 = 240
+        C1 = 4.725e-11
+    else:
+        K0 = (497.5 - math.sqrt(247506.25 - (2675.4 - fvco) * 78.46)) / 39.23
+        K1 = 4.8714 * K0 * K0 + 6.5257 * K0 + 142.67
+        C1 = 6.69244e-11
     Kvco = 1000000.0 * K1
     Ndiv = fvco / fref
-    C1 = 6.69244e-11
 
     for R1, r_idx in r_vals:
         Ic = (1.8769 / (R1 * R1 * Kvco * C1)) * 4.0 * Ndiv
@@ -371,27 +388,109 @@ def calc_pll_pump(fref, fvco):
 _default_pll_inattrs = {
             'FCLKIN'        : '100.00',
             'IDIV_SEL'      : '0',
-            'DYN_IDIV_SEL'  : 'false',
+            'DYN_IDIV_SEL'  : 'FALSE',
             'FBDIV_SEL'     : '00000000000000000000000000000000',
-            'DYN_FBDIV_SEL' : 'false',
+            'DYN_FBDIV_SEL' : 'FALSE',
             'ODIV_SEL'      : '00000000000000000000000000001000',
-            'DYN_ODIV_SEL'  : 'false',
+            'DYN_ODIV_SEL'  : 'FALSE',
             'PSDA_SEL'      : '0000 ', # XXX extra space for compatibility, but it will work with or without it in the future
             'DUTYDA_SEL'    : '1000 ', # ^^^
-            'DYN_DA_EN'     : 'false',
+            'DYN_DA_EN'     : 'FALSE',
             'CLKOUT_FT_DIR' : '1',
             'CLKOUT_DLY_STEP': '00000000000000000000000000000000',
             'CLKOUTP_FT_DIR': '1',
             'CLKOUTP_DLY_STEP': '00000000000000000000000000000000',
             'DYN_SDIV_SEL'  : '00000000000000000000000000000010',
-            'CLKFB_SEL'     : 'internal',
+            'CLKFB_SEL'     : 'INTERNAL',
             'CLKOUTD_SRC'   : 'CLKOUT',
             'CLKOUTD3_SRC'  : 'CLKOUT',
-            'CLKOUT_BYPASS' : 'false',
-            'CLKOUTP_BYPASS': 'false',
-            'CLKOUTD_BYPASS': 'false',
+            'CLKOUT_BYPASS' : 'FALSE',
+            'CLKOUTP_BYPASS': 'FALSE',
+            'CLKOUTD_BYPASS': 'FALSE',
             'DEVICE'        : 'GW1N-1'
+        }
 
+_default_plla_inattrs = {
+            'FCLKIN'              : '100.00',
+            'A_IDIV_SEL'          : '1',
+            'A_FBDIV_SEL'         : '1',
+            'A_ODIV0_SEL'         : '8',
+            'A_ODIV1_SEL'         : '8',
+            'A_ODIV2_SEL'         : '8',
+            'A_ODIV3_SEL'         : '8',
+            'A_ODIV4_SEL'         : '8',
+            'A_ODIV5_SEL'         : '8',
+            'A_ODIV6_SEL'         : '8',
+            'A_MDIV_SEL'          : '8',
+            'A_MDIV_FRAC_SEL'     : '0',
+            'A_ODIV0_FRAC_SEL'    : '0',
+            'A_CLKOUT0_EN'        : 'TRUE',
+            'A_CLKOUT1_EN'        : 'TRUE',
+            'A_CLKOUT2_EN'        : 'TRUE',
+            'A_CLKOUT3_EN'        : 'TRUE',
+            'A_CLKOUT4_EN'        : 'TRUE',
+            'A_CLKOUT5_EN'        : 'TRUE',
+            'A_CLKOUT6_EN'        : 'TRUE',
+            'A_CLKFB_SEL'         : 'INTERNAL',
+            'A_CLKOUT0_DT_DIR'    : 1,
+            'A_CLKOUT1_DT_DIR'    : 1,
+            'A_CLKOUT2_DT_DIR'    : 1,
+            'A_CLKOUT3_DT_DIR'    : 1,
+            'A_CLKOUT0_DT_STEP'   : 0,
+            'A_CLKOUT1_DT_STEP'   : 0,
+            'A_CLKOUT2_DT_STEP'   : 0,
+            'A_CLKOUT3_DT_STEP'   : 0,
+            'A_CLK0_IN_SEL'       : 0,
+            'A_CLK0_OUT_SEL'      : 0,
+            'A_CLK1_IN_SEL'       : 0,
+            'A_CLK1_OUT_SEL'      : 0,
+            'A_CLK2_IN_SEL'       : 0,
+            'A_CLK2_OUT_SEL'      : 0,
+            'A_CLK3_IN_SEL'       : 0,
+            'A_CLK3_OUT_SEL'      : 0,
+            'A_CLK4_IN_SEL'       : 0,
+            'A_CLK4_OUT_SEL'      : 0,
+            'A_CLK5_IN_SEL'       : 0,
+            'A_CLK5_OUT_SEL'      : 0,
+            'A_CLK6_IN_SEL'       : 0,
+            'A_CLK6_OUT_SEL'      : 0,
+            'A_DYN_DPA_EN'        : 'FALSE',
+            'A_CLKOUT0_PE_COARSE' : 0,
+            'A_CLKOUT0_PE_FINE'   : 0,
+            'A_CLKOUT1_PE_COARSE' : 0,
+            'A_CLKOUT1_PE_FINE'   : 0,
+            'A_CLKOUT2_PE_COARSE' : 0,
+            'A_CLKOUT2_PE_FINE'   : 0,
+            'A_CLKOUT3_PE_COARSE' : 0,
+            'A_CLKOUT3_PE_FINE'   : 0,
+            'A_CLKOUT4_PE_COARSE' : 0,
+            'A_CLKOUT4_PE_FINE'   : 0,
+            'A_CLKOUT5_PE_COARSE' : 0,
+            'A_CLKOUT5_PE_FINE'   : 0,
+            'A_CLKOUT6_PE_COARSE' : 0,
+            'A_CLKOUT6_PE_FINE'   : 0,
+            'A_DYN_PE0_SEL'       : 'FALSE',
+            'A_DYN_PE1_SEL'       : 'FALSE',
+            'A_DYN_PE2_SEL'       : 'FALSE',
+            'A_DYN_PE3_SEL'       : 'FALSE',
+            'A_DYN_PE4_SEL'       : 'FALSE',
+            'A_DYN_PE5_SEL'       : 'FALSE',
+            'A_DYN_PE6_SEL'       : 'FALSE',
+            'A_DE0_EN'            : 'FALSE',
+            'A_DE1_EN'            : 'FALSE',
+            'A_DE2_EN'            : 'FALSE',
+            'A_DE3_EN'            : 'FALSE',
+            'A_DE4_EN'            : 'FALSE',
+            'A_DE5_EN'            : 'FALSE',
+            'A_DE6_EN'            : 'FALSE',
+            'A_RESET_I_EN'        : 'FALSE',
+            'A_RESET_O_EN'        : 'FALSE',
+            'A_DYN_ICP_SEL'       : 'FALSE',
+            'A_ICP_SEL'           : 0,
+            'A_DYN_LPF_SEL'       : 'FALSE',
+            'A_LPF_RES'           : 0,
+            'A_LPF_CAP'           : 0,
+            'A_SSC_EN'            : 0,
         }
 
 _default_pll_internal_attrs = {
@@ -416,10 +515,39 @@ _default_pll_internal_attrs = {
             'ICPSEL': 50,
 }
 
+_default_plla_internal_attrs = {
+            'A_RESET_EN'    : 'TRUE',
+            'PWDEN'         : 'ENABLE',
+            'PDN'           : 'ENABLE',
+            'PLOCK'         : 'ENABLE',
+            'FLOCK'         : 'ENABLE',
+            'FLTOP'         : 'ENABLE',
+            'A_GMC_SEL'     : 15,
+            'A_CLKIN_SEL'   : 'CLKIN0',
+            'FLDCOUNT'      : 32,
+            'A_VR_EN'       : 'DISABLE',
+            'A_DYN_DPA_EN'  : 'FALSE',
+            'A_RESET_I_EN'  : 'FALSE',
+            'A_RESET_O_EN'  : 'FALSE',
+            'A_DYN_ICP_SEL' : 'FALSE',
+            'A_DYN_LPF_SEL' : 'FALSE',
+            'A_SSC_EN'      : 'FALSE',
+            'A_CLKFBOUT_PE_COARSE' : 0,
+            'A_CLKFBOUT_PE_FINE' : 0,
+}
 
-def add_pll_default_attrs(attrs):
+def plla_attr_rename(attrs):
+    new_attrs = {}
+    for attr, val in attrs.items():
+        if attr != 'FCLKIN':
+            new_attrs['A_' + attr] = val
+        else:
+            new_attrs[attr] = val
+    return new_attrs
+
+def add_pll_default_attrs(attrs, default_attrs = _default_pll_inattrs):
     pll_inattrs = attrs.copy()
-    for k, v in _default_pll_inattrs.items():
+    for k, v in default_attrs.items():
         if k in pll_inattrs:
             continue
         pll_inattrs[k] = v
@@ -427,11 +555,17 @@ def add_pll_default_attrs(attrs):
 
 # typ - PLL type (RPLL, etc)
 def set_pll_attrs(db, typ, idx, attrs):
-    pll_inattrs = add_pll_default_attrs(attrs)
-    pll_attrs = _default_pll_internal_attrs.copy()
-
-    if typ not in {'RPLL', 'PLLVR'}:
+    attrs_upper(attrs)
+    if typ not in {'RPLL', 'PLLVR', 'PLLA'}:
         raise Exception(f"PLL type {typ} is not supported for now")
+    if typ in {'RPLL', 'PLLVR'}:
+        pll_inattrs = add_pll_default_attrs(attrs)
+        pll_attrs = _default_pll_internal_attrs.copy()
+    else:
+        new_attrs = plla_attr_rename(attrs)
+        pll_inattrs = add_pll_default_attrs(new_attrs, _default_plla_inattrs)
+        pll_attrs = _default_plla_internal_attrs.copy()
+
     if typ == 'PLLVR':
         pll_attrs[['PLLVCC0', 'PLLVCC1'][idx]] = 'ENABLE'
 
@@ -439,6 +573,19 @@ def set_pll_attrs(db, typ, idx, attrs):
     for attr, val in pll_inattrs.items():
         if attr in pll_attrs:
             pll_attrs[attr] = val
+        if attr.startswith('A_CLKOUT') and attr[-3:] == '_EN':
+            pll_attrs[attr] = val
+            continue
+        if attr.startswith('A_DYN_PE') and attr[-3:] == 'SEL':
+            pll_attrs[attr] = val
+            continue
+        if attr.startswith('A_DE') and attr[-3:] == 'EN':
+            pll_attrs[attr] = val
+            continue
+        if attr == 'A_CLKFB_SEL':
+            if val == 'INTERNAL':
+                pll_attrs[attr] = 'CLKFB2'
+            continue
         if attr == 'CLKOUTD_SRC':
             if val == 'CLKOUTP':
                 pll_attrs['CLKOUTDIVSEL'] = 'CLKOUTPS'
@@ -475,9 +622,17 @@ def set_pll_attrs(db, typ, idx, attrs):
             idiv = 1 + int(val, 2)
             pll_attrs['IDIV'] = idiv
             continue
+        if attr == 'A_IDIV_SEL':
+            idiv = int(val, 2)
+            pll_attrs['A_IDIV_SEL'] = idiv
+            continue
         if attr == 'FBDIV_SEL':
             fbdiv = 1 + int(val, 2)
             pll_attrs['FDIV'] = fbdiv
+            continue
+        if attr == 'A_FBDIV_SEL':
+            fbdiv = int(val, 2)
+            pll_attrs['A_FBDIV_SEL'] = fbdiv
             continue
         if attr == 'DYN_SDIV_SEL':
             pll_attrs['SDIV'] = int(val, 2)
@@ -485,6 +640,190 @@ def set_pll_attrs(db, typ, idx, attrs):
         if attr == 'ODIV_SEL':
             odiv = int(val, 2)
             pll_attrs['ODIV'] = odiv
+            continue
+        if attr == 'A_ODIV0_FRAC_SEL':
+            odiv_frac = int(val, 2)
+            pll_attrs['A_ODIV0_FRAC_SEL'] = odiv_frac
+            continue
+        if attr == 'A_ODIV0_SEL':
+            odiv = int(val, 2)
+            pll_attrs['A_ODIV0_SEL'] = odiv
+            continue
+        if attr == 'A_ODIV1_SEL':
+            odiv = int(val, 2)
+            pll_attrs['A_ODIV1_SEL'] = odiv
+            continue
+        if attr == 'A_ODIV2_SEL':
+            odiv = int(val, 2)
+            pll_attrs['A_ODIV2_SEL'] = odiv
+            continue
+        if attr == 'A_ODIV3_SEL':
+            odiv = int(val, 2)
+            pll_attrs['A_ODIV3_SEL'] = odiv
+            continue
+        if attr == 'A_ODIV4_SEL':
+            odiv = int(val, 2)
+            pll_attrs['A_ODIV4_SEL'] = odiv
+            continue
+        if attr == 'A_ODIV5_SEL':
+            odiv = int(val, 2)
+            pll_attrs['A_ODIV5_SEL'] = odiv
+            continue
+        if attr == 'A_ODIV6_SEL':
+            odiv = int(val, 2)
+            pll_attrs['A_ODIV6_SEL'] = odiv
+            continue
+        if attr == 'A_MDIV_SEL':
+            mdiv = int(val, 2)
+            pll_attrs['A_MDIV_SEL'] = mdiv
+            continue
+        if attr == 'A_MDIV_FRAC_SEL':
+            mdiv_frac_sel = int(val, 2)
+            pll_attrs['A_MDIV_FRAC_SEL'] = mdiv_frac_sel
+            continue
+        if attr == 'A_CLKOUT0_DT_DIR':
+            dt_dir = int(val, 2)
+            pll_attrs['A_CLKOUT0_DT_DIR'] = dt_dir
+            continue
+        if attr == 'A_CLKOUT1_DT_DIR':
+            dt_dir = int(val, 2)
+            pll_attrs['A_CLKOUT1_DT_DIR'] = dt_dir
+            continue
+        if attr == 'A_CLKOUT2_DT_DIR':
+            dt_dir = int(val, 2)
+            pll_attrs['A_CLKOUT2_DT_DIR'] = dt_dir
+            continue
+        if attr == 'A_CLKOUT3_DT_DIR':
+            dt_dir = int(val, 2)
+            pll_attrs['A_CLKOUT3_DT_DIR'] = dt_dir
+            continue
+        if attr == 'A_CLKOUT0_DT_STEP':
+            dt_step = int(val, 2)
+            pll_attrs['A_CLKOUT0_DT_STEP'] = dt_step
+            continue
+        if attr == 'A_CLKOUT1_DT_STEP':
+            dt_step = int(val, 2)
+            pll_attrs['A_CLKOUT1_DT_STEP'] = dt_step
+            continue
+        if attr == 'A_CLKOUT2_DT_STEP':
+            dt_step = int(val, 2)
+            pll_attrs['A_CLKOUT2_DT_STEP'] = dt_step
+            continue
+        if attr == 'A_CLKOUT3_DT_STEP':
+            dt_step = int(val, 2)
+            pll_attrs['A_CLKOUT3_DT_STEP'] = dt_step
+            continue
+        if attr == 'A_CLKIN0_SEL':
+            a_clkin_sel= int(val, 2)
+            pll_attrs['A_CLKIN0_SEL'] = a_clkin_sel
+            continue
+        if attr == 'A_CLKOUT0_SEL':
+            a_clkout_sel= int(val, 2)
+            pll_attrs['A_CLKOUT0_SEL'] = a_clkout_sel
+            continue
+        if attr == 'A_CLKIN1_SEL':
+            a_clkin_sel= int(val, 2)
+            pll_attrs['A_CLKIN1_SEL'] = a_clkin_sel
+            continue
+        if attr == 'A_CLKOUT1_SEL':
+            a_clkout_sel= int(val, 2)
+            pll_attrs['A_CLKOUT1_SEL'] = a_clkout_sel
+            continue
+        if attr == 'A_CLKIN2_SEL':
+            a_clkin_sel= int(val, 2)
+            pll_attrs['A_CLKIN2_SEL'] = a_clkin_sel
+            continue
+        if attr == 'A_CLKOUT2_SEL':
+            a_clkout_sel= int(val, 2)
+            pll_attrs['A_CLKOUT2_SEL'] = a_clkout_sel
+            continue
+        if attr == 'A_CLKIN3_SEL':
+            a_clkin_sel= int(val, 2)
+            pll_attrs['A_CLKIN3_SEL'] = a_clkin_sel
+            continue
+        if attr == 'A_CLKOUT3_SEL':
+            a_clkout_sel= int(val, 2)
+            pll_attrs['A_CLKOUT3_SEL'] = a_clkout_sel
+            continue
+        if attr == 'A_CLKIN4_SEL':
+            a_clkin_sel= int(val, 2)
+            pll_attrs['A_CLKIN4_SEL'] = a_clkin_sel
+            continue
+        if attr == 'A_CLKOUT4_SEL':
+            a_clkout_sel= int(val, 2)
+            pll_attrs['A_CLKOUT4_SEL'] = a_clkout_sel
+            continue
+        if attr == 'A_CLKIN5_SEL':
+            a_clkin_sel= int(val, 2)
+            pll_attrs['A_CLKIN5_SEL'] = a_clkin_sel
+            continue
+        if attr == 'A_CLKOUT5_SEL':
+            a_clkout_sel= int(val, 2)
+            pll_attrs['A_CLKOUT5_SEL'] = a_clkout_sel
+            continue
+        if attr == 'A_CLKIN6_SEL':
+            a_clkin_sel= int(val, 2)
+            pll_attrs['A_CLKIN6_SEL'] = a_clkin_sel
+            continue
+        if attr == 'A_CLKOUT6_SEL':
+            a_clkout_sel= int(val, 2)
+            pll_attrs['A_CLKOUT6_SEL'] = a_clkout_sel
+            continue
+        if attr == 'A_CLKOUT0_PE_COARSE':
+            pe_coarse = int(val, 2)
+            pll_attrs['A_CLKOUT0_PE_COARSE'] = pe_coarse
+            continue
+        if attr == 'A_CLKOUT0_PE_FINE':
+            pe_fine = int(val, 2)
+            pll_attrs['A_CLKOUT0_PE_FINE'] = pe_fine
+            continue
+        if attr == 'A_CLKOUT1_PE_COARSE':
+            pe_coarse = int(val, 2)
+            pll_attrs['A_CLKOUT1_PE_COARSE'] = pe_coarse
+            continue
+        if attr == 'A_CLKOUT1_PE_FINE':
+            pe_fine = int(val, 2)
+            pll_attrs['A_CLKOUT1_PE_FINE'] = pe_fine
+            continue
+        if attr == 'A_CLKOUT2_PE_COARSE':
+            pe_coarse = int(val, 2)
+            pll_attrs['A_CLKOUT2_PE_COARSE'] = pe_coarse
+            continue
+        if attr == 'A_CLKOUT2_PE_FINE':
+            pe_fine = int(val, 2)
+            pll_attrs['A_CLKOUT2_PE_FINE'] = pe_fine
+            continue
+        if attr == 'A_CLKOUT3_PE_COARSE':
+            pe_coarse = int(val, 2)
+            pll_attrs['A_CLKOUT3_PE_COARSE'] = pe_coarse
+            continue
+        if attr == 'A_CLKOUT3_PE_FINE':
+            pe_fine = int(val, 2)
+            pll_attrs['A_CLKOUT3_PE_FINE'] = pe_fine
+            continue
+        if attr == 'A_CLKOUT4_PE_COARSE':
+            pe_coarse = int(val, 2)
+            pll_attrs['A_CLKOUT4_PE_COARSE'] = pe_coarse
+            continue
+        if attr == 'A_CLKOUT4_PE_FINE':
+            pe_fine = int(val, 2)
+            pll_attrs['A_CLKOUT4_PE_FINE'] = pe_fine
+            continue
+        if attr == 'A_CLKOUT5_PE_COARSE':
+            pe_coarse = int(val, 2)
+            pll_attrs['A_CLKOUT5_PE_COARSE'] = pe_coarse
+            continue
+        if attr == 'A_CLKOUT5_PE_FINE':
+            pe_fine = int(val, 2)
+            pll_attrs['A_CLKOUT5_PE_FINE'] = pe_fine
+            continue
+        if attr == 'A_CLKOUT6_PE_COARSE':
+            pe_coarse = int(val, 2)
+            pll_attrs['A_CLKOUT6_PE_COARSE'] = pe_coarse
+            continue
+        if attr == 'A_CLKOUT6_PE_FINE':
+            pe_fine = int(val, 2)
+            pll_attrs['A_CLKOUT6_PE_FINE'] = pe_fine
             continue
         if attr == 'DYN_DA_EN':
             if val == 'true':
@@ -523,28 +862,41 @@ def set_pll_attrs(db, typ, idx, attrs):
             continue
 
     # static vs dynamic
-    if pll_inattrs['DYN_IDIV_SEL'] == 'false' and pll_inattrs['DYN_FBDIV_SEL'] == 'false' and pll_inattrs['DYN_ODIV_SEL'] == 'false':
-        # static. We can immediately check the compatibility of the divisors
-        clkout = fclkin * fbdiv / idiv
-        if clkout <= _permitted_freqs[device][2] or clkout > _permitted_freqs[device][1]:
-            raise Exception(f"CLKOUT = FCLKIN*(FBDIV_SEL+1)/(IDIV_SEL+1) = {clkout}MHz not in range {_permitted_freqs[device][2]} - {_permitted_freqs[device][1]}MHz")
-        pfd = fclkin / idiv
-        if pfd < 3.0 or pfd > _permitted_freqs[device][0]:
-            raise Exception(f"PFD = FCLKIN/(IDIV_SEL+1) = {pfd}MHz not in range 3.0 - {_permitted_freqs[device][0]}MHz")
-        fvco = odiv * fclkin * fbdiv / idiv
-        if fvco < _permitted_freqs[device][4] or  fvco > _permitted_freqs[device][3]:
-            raise Exception(f"VCO = FCLKIN*(FBDIV_SEL+1)*ODIV_SEL/(IDIV_SEL+1) = {fvco}MHz not in range {_permitted_freqs[device][4]} - {_permitted_freqs[device][3]}MHz")
-
-    # pump
-    fref = fclkin / idiv
-    fvco = (odiv * fbdiv * fclkin) / idiv
-    fclkin_idx, icp, r_idx = calc_pll_pump(fref, fvco)
-
+    if device in {'GW5A-25A'}:
+        # only static
+        Fpfd = fclkin / idiv
+        Fclkfb = Fpfd * fbdiv
+        # XXX internal feedback for now
+        Fvco = Fclkfb * mdiv
+        fclkin_idx, icp, r_idx = calc_pll_pump(Fpfd, Fvco)
+        pll_attrs['KVCO'] = fclkin_idx // 16
+        if Fvco >= 1400.0:
+            fclkin_idx += 1
+        pll_attrs['A_ICP_SEL'] = int(icp)
+        pll_attrs['A_LPF_RES_SEL'] = f"R{r_idx}"
+    else:
+        if pll_inattrs['DYN_IDIV_SEL'] == 'FALSE' and pll_inattrs['DYN_FBDIV_SEL'] == 'FALSE' and pll_inattrs['DYN_ODIV_SEL'] == 'FALSE':
+            # static. We can immediately check the compatibility of the divisors
+            clkout = fclkin * fbdiv / idiv
+            if clkout <= _permitted_freqs[device][2] or clkout > _permitted_freqs[device][1]:
+                raise Exception(f"CLKOUT = FCLKIN*(FBDIV_SEL+1)/(IDIV_SEL+1) = {clkout}MHz not in range {_permitted_freqs[device][2]} - {_permitted_freqs[device][1]}MHz")
+            pfd = fclkin / idiv
+            if pfd < 3.0 or pfd > _permitted_freqs[device][0]:
+                raise Exception(f"PFD = FCLKIN/(IDIV_SEL+1) = {pfd}MHz not in range 3.0 - {_permitted_freqs[device][0]}MHz")
+            fvco = odiv * fclkin * fbdiv / idiv
+            if fvco < _permitted_freqs[device][4] or  fvco > _permitted_freqs[device][3]:
+                raise Exception(f"VCO = FCLKIN*(FBDIV_SEL+1)*ODIV_SEL/(IDIV_SEL+1) = {fvco}MHz not in range {_permitted_freqs[device][4]} - {_permitted_freqs[device][3]}MHz")
+        # pump
+        fref = fclkin / idiv
+        fvco = (odiv * fbdiv * fclkin) / idiv
+        fclkin_idx, icp, r_idx = calc_pll_pump(fref, fvco)
+        pll_attrs['ICPSEL'] = int(icp)
+        pll_attrs['LPR'] = f"R{r_idx}"
     pll_attrs['FLDCOUNT'] = fclkin_idx
-    pll_attrs['ICPSEL'] = int(icp)
-    pll_attrs['LPR'] = f"R{r_idx}"
 
     fin_attrs = set()
+    for i in range(16):
+        add_attr_val(db, 'PLL', fin_attrs, i, 0)
     for attr, val in pll_attrs.items():
         if isinstance(val, str):
             val = attrids.pll_attrvals[val]
@@ -563,6 +915,8 @@ _dcs_spine2quadrant_idx = {
         }
 def set_dcs_attrs(db, spine, attrs):
     q, _ = _dcs_spine2quadrant_idx[spine]
+
+    attrs_upper(attrs)
     dcs_attrs = {}
     dcs_attrs[q] = attrs['DCS_MODE']
 
@@ -579,6 +933,7 @@ def set_bsram_attrs(db, typ, params):
     bsram_attrs['MODE'] = 'ENABLE'
     bsram_attrs['GSR'] = 'DISABLE'
 
+    attrs_upper(params)
     # We bring it into line with what is observed in the Gowin images - in the
     # ROM, port A has a signal CE = VCC and inversion is turned on on this pin.
     # We will provide VCC in nextpnr, and enable the inversion here.
@@ -690,6 +1045,7 @@ def set_bsram_attrs(db, typ, params):
 _ABLH = [('A', 'L'), ('A', 'H'), ('B', 'L'), ('B', 'H')]
 _01LH = [(0, 'L'), (1, 'H')]
 def set_multalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    attrs_upper(attrs)
     ce_val = 'UNKNOWN'
     if int(attrs['CE'], 2):
         ce_val = f"CEIN{int(attrs['CE'], 2)}"
@@ -934,6 +1290,7 @@ def set_multalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
 
 # MULTADDALU18X18
 def set_multaddalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    attrs_upper(attrs)
     ce_val = 'UNKNOWN'
     if int(attrs['CE'], 2):
         ce_val = f"CEIN{int(attrs['CE'], 2)}"
@@ -1178,6 +1535,7 @@ def set_multaddalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
 
 # MULTALU36X18
 def set_multalu36x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    attrs_upper(attrs)
     ce_val = 'UNKNOWN'
     if int(attrs['CE'], 2):
         ce_val = f"CEIN{int(attrs['CE'], 2)}"
@@ -1399,6 +1757,7 @@ def set_multalu36x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
                         dsp_attrs['RSTGENMUX_ALUSEL2'] = 'SYNC'
 # ALU54D
 def set_alu54d_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    attrs_upper(attrs)
     dsp_attrs['ALU_EN'] = "ENABLE"
     for i in range(2, 7):
         dsp_attrs[f'CPRNS_{i}'] = "ENABLE"
@@ -1564,6 +1923,7 @@ def set_alu54d_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
 
 # DSP PADD9
 def set_padd9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx):
+    attrs_upper(attrs)
     dsp_attrs[f'CINBY_{pair_idx + 7}'] = "ENABLE"
     dsp_attrs[f'CINNS_{pair_idx + 7}'] = "ENABLE"
     if pair_idx:
@@ -1721,6 +2081,7 @@ def set_padd9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, 
 
 # DSP mult9x9
 def set_mult9x9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx):
+    attrs_upper(attrs)
     ce_val = 'UNKNOWN'
     if int(attrs['CE'], 2):
         ce_val = f"CEIN{int(attrs['CE'], 2)}"
@@ -1956,6 +2317,7 @@ def set_dsp_attrs(db, typ, params, num, attrs):
 
 # special case - returns attrs for two macros []
 def set_dsp_mult36x36_attrs(db, typ, params, attrs):
+    attrs_upper(attrs)
     attrs['NET_ASEL'] = 'GND'
     attrs['NET_BSEL'] = 'GND'
 
@@ -2013,6 +2375,7 @@ def set_dsp_mult36x36_attrs(db, typ, params, attrs):
     return ret_attrs
 
 def set_osc_attrs(db, typ, params):
+    attrs_upper(params)
     osc_attrs = dict()
     for param, val in params.items():
         if param == 'FREQ_DIV':
@@ -2043,6 +2406,7 @@ def set_osc_attrs(db, typ, params):
     return fin_attrs
 
 def set_dlldly_attrs(db, typ, params, cell):
+    attrs_upper(params)
     dlldly_attrs = dict()
     dlldly_attrs['DLL_INSEL'] = params.get('DLL_INSEL', "1")
     dlldly_attrs['DLY_SIGN'] = params.get('DLY_SIGN', "0")
@@ -2117,8 +2481,9 @@ def bin_str_to_dec(str_val):
 
 
 
-_hclk_default_params ={"GSREN": "false", "DIV_MODE":"2"}
+_hclk_default_params ={"GSREN": "FALSE", "DIV_MODE":"2"}
 def set_hclk_attrs(db, params, num, typ, cell_name):
+    attrs_upper(params)
     name_pattern = r'^_HCLK([0,1])_SECT([0,1])$'
     params = dict(_hclk_default_params | params)
     attrs = {}
@@ -2156,11 +2521,11 @@ _iologic_default_attrs = {
         'DUMMY': {},
         'IOLOGIC': {},
         'IOLOGIC_DUMMY': {},
-        'IOLOGICI_EMPTY': {'GSREN': 'false', 'LSREN': 'true'},
-        'IOLOGICO_EMPTY': {'GSREN': 'false', 'LSREN': 'true'},
+        'IOLOGICI_EMPTY': {'GSREN': 'FALSE', 'LSREN': 'true'},
+        'IOLOGICO_EMPTY': {'GSREN': 'FALSE', 'LSREN': 'true'},
         'ODDR': { 'TXCLK_POL': '0'},
         'ODDRC': { 'TXCLK_POL': '0'},
-        'OSER4': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
+        'OSER4': { 'GSREN': 'FALSE', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER8': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
         'OSER10': { 'GSREN': 'false', 'LSREN': 'true'},
         'OSER16': { 'GSREN': 'false', 'LSREN': 'true', 'CLKOMUX': 'ENABLE'},
@@ -2174,6 +2539,7 @@ _iologic_default_attrs = {
         'IDES16': { 'GSREN': 'false', 'LSREN': 'true', 'CLKIMUX': 'ENABLE'},
         }
 def iologic_mod_attrs(attrs):
+    attrs_upper(attrs)
     if 'TXCLK_POL' in attrs:
         if int(attrs['TXCLK_POL']) == 0:
             attrs['TSHX'] = 'SIG'
@@ -2212,6 +2578,7 @@ def make_iodelay_attrs(in_attrs, param):
     in_attrs.pop('C_STATIC_DLY', None);
 
 def set_iologic_attrs(db, attrs, param):
+    attrs_upper(attrs)
     in_attrs = _iologic_default_attrs[param['IOLOGIC_TYPE']].copy()
     in_attrs.update(attrs)
     iologic_mod_attrs(in_attrs)
@@ -2362,6 +2729,9 @@ def place_alu(db, tiledata, tile, parms, num, row, col, slice_attrvals):
     for r_c in lutmap.values():
         for r, c in r_c:
             tile[r][c] = 0
+    # XXX Fix for bug in nextpnr 0.9, will be unnecessary with the next release.
+    if "ALU_MODE" in parms and parms['ALU_MODE'] == "0 ":
+        parms['RAW_ALU_LUT'] = "0011000011001100"
     # ALU_RAW_LUT - bits for ALU LUT init value, which are formed in nextpnr as
     # a result of optimization.
     if 'RAW_ALU_LUT' in parms:
@@ -2430,7 +2800,7 @@ _mipi_aux_attrs = {
 _hclk_io_pairs = {(36, 11): (36, 30), (36, 25): (36, 32), (36, 53): (36, 28), (36, 74): (36, 90), }
 
 _sides = "AB"
-def place(db, tilemap, bels, cst, args, slice_attrvals):
+def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
@@ -2706,6 +3076,14 @@ def place(db, tilemap, bels, cst, args, slice_attrvals):
             #print(typ, tiledata.ttyp, bits)
             for r, c in bits:
                 tile[r][c] = 1
+        elif typ.startswith('PLLA'):
+            pll_attrs = set_pll_attrs(db, 'PLLA', 0,  parms)
+            bits = get_shortval_fuses(db, 1024, pll_attrs, 'PLL')
+            slot_bitmap = extra_slots.setdefault(db.extra_func[row - 1, col - 1]['pll']['slot_idx'], bitmatrix.zeros(8, 35))
+            for r, c in bits:
+                slot_bitmap[r][c] = 1
+            #for rd in slot_bitmap:
+            #    print(rd)
         elif typ.startswith('ALU'):
             place_alu(db, tiledata, tile, parms, num, row, col, slice_attrvals)
         elif typ == 'PLLVR':
@@ -2990,7 +3368,8 @@ def route(db, tilemap, pips):
         if dest not in wnames.clknumbers:
             return False
         if device in {'GW5A-25A'}:
-            return src == 'OSC_O' or wnames.clknumbers[src] < wnames.clknumbers['UNK212']
+            return wnames.clknumbers[src] < wnames.clknumbers['UNK212'] \
+                    or wnames.clknumbers[src] in range(wnames.clknumbers['MPLL4CLKOUT0'], wnames.clknumbers['UNK569'] + 1)
         # XXX for future
         return wnames.clknumbers[src] < wnames.clknumbers['P10A']
 
@@ -3018,7 +3397,7 @@ def route(db, tilemap, pips):
                 if dest in rc.clock_pips:
                     if src in rc.clock_pips[dest]:
                         bits = rc.clock_pips[dest][src]
-                if spine_enable_table in db.shortval[rc.ttyp]:
+                if spine_enable_table in db.shortval[rc.ttyp] and (1, 0) in db.shortval[rc.ttyp][spine_enable_table]:
                     bits.update(db.shortval[rc.ttyp][spine_enable_table][(1, 0)]) # XXX find the meaning
                 if bits:
                     tile = tilemap[(row, col)]
@@ -3069,6 +3448,8 @@ def header_footer(db, bs, compress):
     checksum = res & 0xffff
     # set the checksum
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
+    if device in {'GW5A-25A'}:
+        db.cmd_ftr.insert(1, bytearray(b'\x68\x00\x00\x00\x00\x00\x00\x00'))
 
 def gsr(db, tilemap, args):
     gsr_attrs = set()
@@ -3262,6 +3643,7 @@ def main():
     _vcc_net = pnr['modules']['top']['netnames'].get(const_nets['VCC'], {'bits': []})['bits']
 
     tilemap = chipdb.tile_bitmap(db, bitmatrix.zeros(db.height, db.width), empty=True)
+    extra_slots = {}
 
     cst = codegen.Constraints()
     pips = get_pips(pnr)
@@ -3281,7 +3663,7 @@ def main():
     # {(row, col, idx): {attr:val, attr:val}}
     slice_attrvals = {}
     # routing can add pass-through LUTs
-    place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args, slice_attrvals)
+    place(db, tilemap, itertools.chain(bels, _pip_bels) , cst, args, slice_attrvals, extra_slots)
     set_slice_fuses(db, tilemap, slice_attrvals)
     dualmode_pins(db, tilemap, args)
     # XXX Z-1 some kind of power saving for pll, disable
@@ -3312,9 +3694,9 @@ def main():
     if has_bsram_init:
         if device in {'GW5A-25A'}:
             bsram_init_map = bitmatrix.transpose(bsram_init_map)
-        bslib.write_bitstream_with_bsram_init(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, bsram_init_map)
+        bslib.write_bitstream_with_bsram_init(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map)
     else:
-        bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress)
+        bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots)
     if args.cst:
         with open(args.cst, "w") as f:
                 cst.write(f)

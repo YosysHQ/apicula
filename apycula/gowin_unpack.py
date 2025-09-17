@@ -1243,7 +1243,7 @@ def main():
     global _pinout
     _pinout = db.pinout[_device][_packages[_device]]
 
-    bitmap = read_bitstream(args.bitstream)[0]
+    bitmap, _, _, extra_slots = read_bitstream(args.bitstream)
     bm = chipdb.tile_bitmap(db, bitmap)
     mod = codegen.Module()
     cst = codegen.Constraints()
@@ -1270,6 +1270,12 @@ def main():
                 mod.wire_aliases[chipdb.wire2global(row + 2, col + 1, db, f'S1{i}1')] = f'R{row + 1}C{col + 1}_SN{i}0'
                 mod.wire_aliases[chipdb.wire2global(row + 1, col + 0, db, f'W1{i}1')] = f'R{row + 1}C{col + 1}_EW{i}0'
                 mod.wire_aliases[chipdb.wire2global(row + 1, col + 2, db, f'E1{i}1')] = f'R{row + 1}C{col + 1}_EW{i}0'
+
+    # Slots have no wires only func fuses
+    if extra_slots:
+        for slot_idx, slot_bitmap in extra_slots.items():
+            av = parse_attrvals(slot_bitmap, db.rev_logicinfo('PLL'), db.shortval[1024]['PLL'], attrids.pll_attrids, "PLL")
+            print('Slot:', slot_idx, av)
 
     # XXX this PLLs have empty main cell
     if _device in {'GW1N-9C', 'GW1N-9'}:

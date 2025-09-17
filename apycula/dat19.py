@@ -186,9 +186,9 @@ class Datfile:
             (7, 0): "d",  # dsp padding
             (7, 1): "D",  # dsp
             (8, 0): "p",  # pll padding
-            (10, 0): "2", # unknown
             (8, 1): "P",  # pll
             (9, 1): "Q",  # dll
+            (10, 0): "2", # unknown
             (10, 1): "3", # unknown
             (11, 1): "4", # unknown
             (12, 1): "5"  # unknown
@@ -276,10 +276,10 @@ class Datfile:
         ret["BotHiq"] = self.read_u16()
         ret["BotViq"] = self.read_u16()
 
-        ret["PllIn"]                = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xaf0, 0)
-        ret["PllOut"]               = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xbe8, 0)
-        ret["PllInDlt"]             = self.read_arr16_at(0xbc8, RSTable5ATOffset + 0xaf0, 0)
-        ret["PllOutDlt"]            = self.read_arr16_at(0xcb, RSTable5ATOffset + 0xcc0, 0)
+        ret["PllIn"]                = self.read_arr16_at(0xd8, 0, RSTable5ATOffset + 0x1b58)
+        ret["PllOut"]               = self.read_arr16_at(0x20, 0, RSTable5ATOffset + 0x1d08)
+        ret["PllInDlt"]             = self.read_arr16_at(0xd8, 0, RSTable5ATOffset + 0x1d48)
+        ret["PllOutDlt"]            = self.read_arr16_at(0x20, 0, RSTable5ATOffset + 0x1ef8)
 
         ret["5ATIOLogicAIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x1880, 0)
         ret["5ATIOLogicBIn"]        = self.read_arr16_at(0x3e, RSTable5ATOffset + 0x18b8, 0xc)
@@ -298,6 +298,16 @@ class Datfile:
         #ret["UNKNOWN"]             = self.read_scaledGrid16(0x20, 0x16, 0x16, RSTable5ATOffset + 0x1fa0, 8)
         #ret["UNKNOWN"]             = self.read_scaledGrid16(0x8, 0xe, 0xe, RSTable5ATOffset + 0x2260, 8)
 
+        ret["PllLTIns"]             = self.read_scaledGrid16(216, 3, 6, 1, RSTable5ATOffset + 0x1f38)
+        ret["PllLTOuts"]            = self.read_scaledGrid16( 32, 3, 6, 1, RSTable5ATOffset + 0x2448)
+        ret["PllLBIns"]             = self.read_scaledGrid16(216, 3, 6, 1, RSTable5ATOffset + 0x2508)
+        ret["PllLBOuts"]            = self.read_scaledGrid16( 32, 3, 6, 1, RSTable5ATOffset + 0x2a18)
+        ret["PllRTIns"]             = self.read_scaledGrid16(216, 3, 6, 1, RSTable5ATOffset + 0x2ad8)
+        ret["PllRTOuts"]            = self.read_scaledGrid16( 32, 3, 6, 1, RSTable5ATOffset + 0x2fe8)
+        ret["PllRBIns"]             = self.read_scaledGrid16(216, 3, 6, 1, RSTable5ATOffset + 0x30a8)
+        ret["PllRBOuts"]            = self.read_scaledGrid16( 32, 3, 6, 1, RSTable5ATOffset + 0x35b8)
+
+        """
         ret["MipiIns1"]             = self.read_scaledGrid16(0xc3, 3, 3, RSTable5ATOffset + 0x22d0, 0xe)
         ret["MipiIns2"]             = self.read_scaledGrid16(0xc3, 3, 3, RSTable5ATOffset + 0x2680, 0xe)
         ret["MipiOuts1"]            = self.read_scaledGrid16(0x76, 3, 3, RSTable5ATOffset + 0x2520, 0)
@@ -316,6 +326,7 @@ class Datfile:
 
         ret["Gtrl12UparDBIns"]      = self.read_scaledGrid16(0x69, 3, 3, RSTable5ATOffset + 0x6048, 6)
         ret["Gtrl12UparDBOuts"]     = self.read_scaledGrid16(0x69, 3, 3, RSTable5ATOffset + 0x8620, 10)
+        """
 
         ret["Ae350SocIns"]          = self.read_scaledGrid16(0x1b1, 3, 3, RSTable5ATOffset + 0x86a0, 6)
         ret["Ae350SocOuts"]         = self.read_scaledGrid16(0x206, 3, 3, RSTable5ATOffset + 0x8bb0, 10)

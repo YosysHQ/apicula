@@ -250,7 +250,7 @@ def main():
             # The previous four parameters are taken from the datasheet (as in
             # this case from https://cdn.gowinsemi.com.cn/DS1103E.pdf), but I
             # don't know where these two come from:(
-            "clkout_min": 19,
+            "clkout_min": 6.25,
             "clkout_max": 1600,
         },
     }

@@ -131,7 +131,7 @@ def read_err_log(fname):
 
 # Result of the vendor router-packer run
 PnrResult = namedtuple('PnrResult', [
-    'bitmap', 'hdr', 'ftr',
+    'bitmap', 'hdr', 'ftr', 'extra_slots',
     'constrs',        # constraints
     'config',         # device config
     'attrs',          # port attributes
@@ -273,7 +273,9 @@ def gen_hdr():
     # chip id
     hdr.append(bytearray(_chip_id[device]))
     # flags?
-    hdr.append(bytearray(b'\x10\x00\x00\x00\x00\x00\x00\x00'))
+    hdr.append(bytearray(b'\x10\x00\x00\x00\x00\xae\x00\x00'))
+    if params['device'] in {'GW5A-25A'}:
+        hdr.append(bytearray(b'\x62\x00\x00\x00\x00\x00\x00\x40'))
     # compression keys
     hdr.append(bytearray(b'\x51\x00\xff\xff\xff\xff\xff\xff'))
     # something about the Security Bit

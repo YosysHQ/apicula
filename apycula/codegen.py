@@ -178,7 +178,7 @@ class PnrOptions:
 
 # Result of the vendor router-packer run
 PnrResult = namedtuple('PnrResult', [
-    'bitmap', 'hdr', 'ftr',
+    'bitmap', 'hdr', 'ftr', 'extra_slots',
     'constrs',        # constraints
     'config',         # device config
     'attrs',          # port attributes
