@@ -579,7 +579,7 @@ def set_pll_attrs(db, typ, idx, attrs):
         if attr.startswith('A_DYN_PE') and attr[-3:] == 'SEL':
             pll_attrs[attr] = val
             continue
-        if attr.startswith('A_DE') and attr[-3:] == 'EN':
+        if attr.startswith('A_DE') and attr[-3:] == '_EN':
             pll_attrs[attr] = val
             continue
         if attr == 'A_CLKFB_SEL':

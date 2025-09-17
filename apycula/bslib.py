@@ -78,7 +78,6 @@ def read_bitstream(fname):
                         slot_size = ba[3]
                         #print("Slot size:", slot_size)
                         slot_bitmap = []
-                        i = 0
                         for byt in chunks(line.strip()[8 * 4:-8 * 18], 8):
                             slot_bitmap.append([int(n, base=2) for n in byt])
                         slot_bitmap = bitmatrix.fliplr(slot_bitmap)

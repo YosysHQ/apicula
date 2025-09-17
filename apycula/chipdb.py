@@ -1346,7 +1346,7 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
 
 # GW5A PLLs do not use the main grid, but are located in so-called slots, so it
 # makes sense to use the extra_func mechanism for their arbitrary placement.
-# Slots (the name is taken from the ceiling) are bit cells of different widths
+# Slots (name is chosen arbitrarily) are bit cells of different widths
 # but equal heights, with no geometric organization but with unique numbers.
 # A slot with a specific number is responsible for a fixed primitive—for
 # example, slot 6 is the left PLL, slot 8 is the lower PLL.
@@ -1391,7 +1391,7 @@ def fse_create_slot_plls(dev, device, fse, dat):
         # There is one interesting catch here: the hardware has one
         # physical wire as a PLL output, which acts as both a logic
         # and clock signal (let's say F0 and MPLL0CLKOUT0). But if
-        # we make a Himabechel node out of them, only one wire will
+        # we make a Himbaechel node out of them, only one wire will
         # remain with its type, and it will be F0, and the type
         # will be logical, and the global router will refuse to
         # route.  As a workaround, we can make MPLL0CLKOUT0->F0 PIP
