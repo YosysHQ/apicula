@@ -24,6 +24,23 @@ First CRC is special, like ECP5, as it also covers the commands after the preamb
 For comparison ECP5 preamble is `0xFF` `0xFF` `0xBD` `0xB3`
 “File checksum” matches value displayed in programmer, unlikely actually used by hardware
 
+## Slots
+Slots (the name was chosen for lack of a better term) are single cells located outside the main grid. They are designed to accommodate fuses for a single functional block, such as a PLL.
+
+The slots have the same height of 8 rows and different widths. There is no geometric reference to the main grid or to each other, but there is a unique number that defines the function of the slot - for example, slot number 8 is intended for the lowest PLL.     
+
+Slots that are not used in a particular design are simply not included in the output file.
+
+Slot commands:
+
+`0x6a` `0x00` `0x00` `0x00` `0x00` `0x00` `0x00` `slot_index` - beginning of the slot description with the `slot_index` index, a special case when `slot_index=0xff` is specified - this is the beginning of the slot block if the  slots were included in the design at all.
+
+`0x6d` `0x00` `0x00` `0x00` + 16 bytes of `0xff` - unknown.
+
+`0x6b` `0x80` `0x00` + `slot_size` - size in bytes, actually the width of the slot since the height is always equal to 8. This is followed by the slot content bytes, followed by two CRC bytes and 16 bytes of `0xff`.
+
+`0x68` `0x00` `0x00` `0x00` `0x00` `0x00` `0x00` `0x00` - end of the slot block
+
 ## Other commands
 
 Command always followed by 3 “option” bytes, usually `0x00` except for “load config”, like ECP5 commands
