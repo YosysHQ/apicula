@@ -23,7 +23,7 @@ def readFse(f, device):
     while True:
         ttyp = rint(f, 4)
         if ttyp == 0x9a1d85: break
-        #print("tile type", ttyp)
+        print(f"tile type:{ttyp}/{hex(ttyp)}")
         tiles[ttyp] = readOneFile(f, ttyp, device)
     return tiles
 
@@ -243,6 +243,13 @@ def fuse_lookup(d, ttyp, fuse, device):
             print("row too big", ttyp, row, h, col, w, num, h * w)
         if col > w:
             print("col too big", col, w)
+        return row, col
+
+def drpfuse_lookup(d, ttyp, fuse, device):
+    if fuse >= 0:
+        num = d['header']['drpfuse'][139][fuse][ttyp]
+        row = num // 200
+        col = num % 200
         return row, col
 
 def tile_bitmap(d, bitmap, empty=False):

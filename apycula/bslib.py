@@ -33,6 +33,10 @@ def read_bitstream(fname):
     returnBitmap = []
     hdr = []
     ftr = []
+    # additional slots
+    # { slot_no: bitmap }
+    extra_slots = {}
+    current_slot = 0xff
     is_hdr = True
     crcdat = bytearray()
     preamble = 3
@@ -63,6 +67,24 @@ def read_bitstream(fname):
                                 compress_keys[f'{ba[7]:08b}'] = 2
                 else:
                     #print("footer:", ba)
+                    # Slots
+                    if ba[0] == 0x6a:
+                        if ba[7] == 0xff: # start of slots
+                            continue
+                        current_slot = ba[7]
+                        #print("Slot:", current_slot)
+                        continue
+                    if ba[0] == 0x6b and ba[1] == 0x80 and ba[2] == 0: # slot data
+                        slot_size = ba[3]
+                        #print("Slot size:", slot_size)
+                        slot_bitmap = []
+                        for byt in chunks(line.strip()[8 * 4:-8 * 18], 8):
+                            slot_bitmap.append([int(n, base=2) for n in byt])
+                        slot_bitmap = bitmatrix.fliplr(slot_bitmap)
+                        extra_slots[current_slot] = bitmatrix.transpose(slot_bitmap)
+                        #for rd in extra_slots[current_slot]:
+                        #    print(rd)
+                        continue
                     ftr.append(ba)
                 if not preamble and ba[0] != 0xd2: # SPI address
                     #print("spi address", ba)
@@ -133,7 +155,7 @@ def read_bitstream(fname):
         if is5ASeries:
             returnBitmap = bitmatrix.transpose(returnBitmap)
 
-        return returnBitmap, hdr, ftr
+        return returnBitmap, hdr, ftr, extra_slots
 
 def compressLine(line, key8Z, key4Z, key2Z):
     newline = []
@@ -146,12 +168,12 @@ def compressLine(line, key8Z, key4Z, key2Z):
         newline += val
     return newline
 
-def write_bitstream_with_bsram_init(fname, bs, hdr, ftr, compress, bsram_init):
+def write_bitstream_with_bsram_init(fname, bs, hdr, ftr, compress, extra_slots, bsram_init):
     new_bs = bitmatrix.vstack(bs, bsram_init)
     new_hdr = hdr.copy()
-    write_bitstream(fname, new_bs, new_hdr, ftr, compress)
+    write_bitstream(fname, new_bs, new_hdr, ftr, compress, extra_slots)
 
-def write_bitstream(fname, bs, hdr, ftr, compress):
+def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots):
     bs = bitmatrix.fliplr(bs)
     hdr[-1][2:] = bitmatrix.shape(bs)[0].to_bytes(2, 'big')
 
@@ -207,8 +229,57 @@ def write_bitstream(fname, bs, hdr, ftr, compress):
             f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
             f.write('1'*48)
             f.write('\n')
-        for ba in ftr:
-            preamble = max(0, preamble-1)
+
+        # end of main grid
+        f.write(''.join(f"{b:08b}" for b in ftr[0]))
+        f.write('\n')
+
+        if extra_slots:
+            # slot preamble
+            crcdat = bytearray()
+            ba = bytearray(b'\x6a\x00\x00\x00\x00\x00\x00\xff')
+            crcdat.extend(ba)
+            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write('\n')
+            ba = bytearray(b'\x6d\x00\x00\x00')
+            crcdat.extend(ba)
+            f.write(''.join(f"{b:08b}" for b in ba))
+            ba = bytearray(b'\xff'*16)
+            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write('\n')
+
+            for slot_idx, slot_bitmap in extra_slots.items():
+                # slot header
+                ba = bytearray(b'\x6a\x00\x00\x00\x00\x00\x00')
+                crcdat.extend(ba)
+                f.write(''.join(f"{b:08b}" for b in ba))
+                ba = bytearray.fromhex(f"{slot_idx:02x}")
+                crcdat.extend(ba)
+                f.write(''.join(f"{b:08b}" for b in ba))
+                f.write('\n')
+
+                ba = bytearray(b'\x6b\x80\x00')
+                crcdat.extend(ba)
+                f.write(''.join(f"{b:08b}" for b in ba))
+                shape = bitmatrix.shape(slot_bitmap)
+                ba = bytearray.fromhex(f"{shape[0] * shape[1] // 8:02x}")
+                crcdat.extend(ba)
+                f.write(''.join(f"{b:08b}" for b in ba))
+
+                # slot bitmap
+                bs = bitmatrix.transpose(slot_bitmap)
+                bs = bitmatrix.fliplr(bs)
+                bs = bitmatrix.packbits(bs, axis = 1)
+                for ba in bs:
+                    crcdat.extend(ba)
+                    f.write(''.join(f"{b:08b}" for b in ba))
+                crc_ = calc.checksum(crcdat)
+                crcdat = bytearray(b'\xff'*2)
+                f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
+                f.write('1'*128)
+                f.write('\n')
+
+        for ba in ftr[1:]:
             f.write(''.join(f"{b:08b}" for b in ba))
             f.write('\n')
 

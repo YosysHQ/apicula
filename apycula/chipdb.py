@@ -87,7 +87,7 @@ class Device:
     # allowable values of bel attributes
     # {table_name: {(attr_id, attr_value): code}}
     logicinfo: Dict[str, Dict[Tuple[int, int], int]] = field(default_factory=dict)
-    # reverse logicinfo, is not stored int pickle
+    # reverse logicinfo, is not stored in the pickle
     rev_li: Dict[str, Dict[int, Tuple[int, int]]]  = field(default_factory=dict)
     # fuses for single feature only
     # {ttype: {table_name: {feature: {bits}}}
@@ -327,8 +327,8 @@ def fse_pll(device, fse, ttyp):
         elif ttyp in {74, 75, 76, 77, 78, 79}:
             bel = bels.setdefault('RPLLB', Bel())
     elif device in {'GW5A-25A'}:
-        if ttyp in {74, 75, 76, 77, 78, 79}:
-            bel = bels.setdefault('RPLLB', Bel())
+        # GW5A-25A does not use the main grid
+        pass
     return bels
 
 # add the ALU mode
@@ -582,8 +582,10 @@ def fse_fill_logic_tables(dev, fse, device):
             attr, val, _ = av
             table[(attr, val)] = code
     # shortval
-    ttypes = {t for row in fse['header']['grid'][61] for t in row}
+    ttypes = chain({t for row in fse['header']['grid'][61] for t in row}, range(1024, 1027))
     for ttyp in ttypes:
+        if ttyp not in fse:
+            continue
         if 'longfuse' in fse[ttyp]:
             ttyp_rec = dev.longfuses.setdefault(ttyp, {})
             for lftable in fse[ttyp]['longfuse']:
@@ -606,7 +608,10 @@ def fse_fill_logic_tables(dev, fse, device):
                 else:
                     table = ttyp_rec.setdefault(f"unknown_{stable}", {})
                 for f_a, f_b, *fuses in fse[ttyp]['shortval'][stable]:
-                    table[(f_a, f_b)] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
+                    if ttyp < 1024:
+                        table[(f_a, f_b)] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
+                    else:
+                        table[(f_a, f_b)] = {fuse.drpfuse_lookup(fse, ttyp - 1024, f, device) for f in unpad(fuses)}
         if 'longval' in fse[ttyp]:
             ttyp_rec = dev.longval.setdefault(ttyp, {})
             for ltable in fse[ttyp]['longval']:
@@ -1339,6 +1344,87 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                                 if src.startswith('HCLK'):
                                     hclks[src].add((row, col, src))
 
+# GW5A PLLs do not use the main grid, but are located in so-called slots, so it
+# makes sense to use the extra_func mechanism for their arbitrary placement.
+# Slots (name is chosen arbitrarily) are bit cells of different widths
+# but equal heights, with no geometric organization but with unique numbers.
+# A slot with a specific number is responsible for a fixed primitive—for
+# example, slot 6 is the left PLL, slot 8 is the lower PLL.
+# Only the slots that are used are added to the binary image.
+def fse_create_slot_plls(dev, device, fse, dat):
+    if device not in {"GW5A-25A"}:
+        return
+    for row, col, slot_idx, io_table in {(27, 0, 6, 'PllLB'), (27, 91, 2, 'PllRB'), (0, 0, 5, 'PllLT'), (0, 91, 3, 'PllRT'), (0, 45, 4, 'old_style'), (36, 45, 8, 'old_style')}:
+        extra = dev.extra_func.setdefault((row, col), {})
+        pll = extra.setdefault('pll', {})
+        pll['slot_idx'] = slot_idx
+        portmap = pll.setdefault('inputs', {})
+        pll_idx = slot_idx
+        # inputs
+        wire_type = 'PLL_I'
+        for idx, nam in _plla_inputs:
+            if io_table == 'old_style':
+                wire_idx, wrow, wcol = dat.gw5aStuff['PllIn'][idx], row + 1, col + 1 + dat.gw5aStuff['PllInDlt'][idx]
+            else:
+                wire_idx, wrow, wcol = dat.gw5aStuff[io_table + 'Ins'][idx]
+            wrow -= 1
+            wcol -= 1
+            wire = wnames.wirenames[wire_idx]
+            if wrow == row and wcol == col:
+                portmap[nam] = wire
+            else:
+                # not our cell, make an alias
+                portmap[nam] = f'PLLA{nam}{wire}'
+                # Himbaechel node
+                dev.nodes.setdefault(f'X{col}Y{row}/PLLA{nam}{wire}', (wire_type, {(row, col, f'PLLA{nam}{wire}')}))[1].add((wrow, wcol, wire))
+        # For PLL outputs, we specify wires from tables, but they
+        # are not particularly important because they are logic
+        # wires, and PLL output only makes sense when routing
+        # through a global clock system.
+        # The global MUX is spread across the entire chip, so it
+        # doesn't matter what coordinates we specify — gowin_pack for
+        # the GW5 series goes through all the cells in search of
+        # the necessary fuses — but what does matter is the
+        # uniqueness of the wire name. So we create coordinate - free
+        # Himbaechel nodes by carefully selecting names for the
+        # outputs.
+        # There is one interesting catch here: the hardware has one
+        # physical wire as a PLL output, which acts as both a logic
+        # and clock signal (let's say F0 and MPLL0CLKOUT0). But if
+        # we make a Himbaechel node out of them, only one wire will
+        # remain with its type, and it will be F0, and the type
+        # will be logical, and the global router will refuse to
+        # route.  As a workaround, we can make MPLL0CLKOUT0->F0 PIP
+        # without a fuse. This will artificially separate the
+        # wires.
+        portmap = pll.setdefault('outputs', {})
+        for idx, nam in _plla_outputs:
+            wire_type = 'PLL_O'
+            portmap[nam] = f'MPLL{nam}'
+            dev.wire_delay[portmap[nam]] = 'X0'
+            if io_table == 'old_style':
+                wire_idx, wrow, wcol = dat.gw5aStuff['PllOut'][idx], row + 1, col + 1 + dat.gw5aStuff['PllOutDlt'][idx]
+            else:
+                wire_idx, wrow, wcol = dat.gw5aStuff[io_table + 'Outs'][idx]
+            wrow -= 1
+            wcol -= 1
+            wire = wnames.wirenames[wire_idx]
+            logic_wire = wire
+            if wrow != row or wcol != col:
+                logic_wire = f'PLLA{nam}{wire}'
+                # not our cell, make an alias
+                # Himbaechel node
+                dev.nodes.setdefault(f'X{col}Y{row}/PLLA{nam}{wire}', (wire_type, set()))[1].add((row, col, logic_wire))
+                dev.nodes.setdefault(f'X{col}Y{row}/PLLA{nam}{wire}', (wire_type, set()))[1].add((wrow, wcol, wire))
+            if nam.startswith('CLKOUT'):
+                dev.nodes.setdefault(f'MPLL{pll_idx}{nam}', (wire_type, set()))[1].add((row, col, f'MPLL{nam}'))
+            dev.grid[row][col].pips.setdefault(logic_wire, {}).update({portmap[nam]:set()})
+        # CLKFBOUT is missing from the tables, so we create it manually.
+        nam = 'CLKFBOUT'
+        portmap[nam] = f'PLLA{nam}'
+        # Himbaechel node
+        dev.nodes.setdefault(f'MPLL{pll_idx}{nam}', (wire_type, set()))[1].add((row, col, f'PLLA{nam}'))
+
 # DHCEN (as I imagine) is an additional control input of the HCLK input
 # multiplexer. We have four input multiplexers - HCLK_IN0, HCLK_IN1, HCLK_IN2,
 # HCLK_IN3 (GW1N-9C with its additional four multiplexers stands separately,
@@ -1531,6 +1617,11 @@ def fse_create_pll_clock_aliases(db, device):
                         if w_src in _pll_loc[device].keys():
                             # Himbaechel node
                             db.nodes.setdefault(w_src, ("PLL_O", set()))[1].add((row, col, w_src))
+                    elif device in {'GW5A-25A'}:
+                        if w_src.startswith('MPLL'):
+                            db.nodes.setdefault(w_src, ("PLL_O", set()))[1].add((row, col, w_src))
+                            db.nodes.setdefault(w_dst, ("PLL_O", set()))[1].add((row, col, w_dst))
+
             # Himbaechel HCLK
             if (row, col) in db.hclk_pips:
                 for w_dst, w_srcs in db.hclk_pips[row, col].items():
@@ -1767,7 +1858,10 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
                 if dest in spines or dest in dcs_inputs:
                     add_node(dev, dest, "GLOBAL_CLK", row, col, dest)
                     for src in { wire for wire in srcs.keys() if wire not in {'VCC', 'VSS'}}:
-                        add_node(dev, src, "GLOBAL_CLK", row, col, src)
+                        if src.startswith('PLL'):
+                            add_node(dev, src, "PLL_O", row, col, src)
+                        else:
+                            add_node(dev, src, "GLOBAL_CLK", row, col, src)
                 if device not in {'GW5A-25A'}:
                     if dest in {'HCLKMUX0', 'HCLKMUX1'}:
                         # this interbank communication between HCLKs
@@ -2258,7 +2352,7 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
               ('OSC',  'GW1N-9C'):  ({'OSCOUT': 'Q4'}, {}),
               ('OSC',  'GW2A-18'):  ({'OSCOUT': 'Q4'}, {}),
               ('OSC',  'GW2A-18C'):  ({'OSCOUT': 'Q4'}, {}),
-              ('OSCA', 'GW5A-25A'):  ({}, {'OSCOUT': (19, 91, 'OSC_O'), 'OSCEN': (19, 90, 'SEL4')}),
+              ('OSCA', 'GW5A-25A'):  ({}, {'OSCOUT': (19, 91, 'MPLL3CLKIN2'), 'OSCEN': (19, 90, 'SEL4')}),
               }
 
 # from logic to global clocks. An interesting piece of dat['CmuxIns'], it was
@@ -2843,11 +2937,12 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_pll_clock_aliases(dev, device)
     fse_create_bottom_io(dev, device)
     fse_create_tile_types(dev, dat)
-    #XXX
+    # No SSRAM in GW5A-25A
     if device in {'GW5A-25A'}:
         dev.tile_types.setdefault('C', set()).update(dev.tile_types['M'])
-        dev.tile_types['M'] = set()
         dev.tile_types['P'] = set()
+        dev.tile_types['M'] = set()
+        # XXX
         dev.tile_types['B'] = set()
         dev.tile_types['D'] = set()
 
@@ -2858,6 +2953,7 @@ def from_fse(device, fse, dat: Datfile):
 
     fse_create_diff_types(dev, device)
     fse_create_hclk_nodes(dev, device, fse, dat)
+    fse_create_slot_plls(dev, device, fse, dat)
     fse_create_mipi(dev, device, dat)
     fse_create_i3c(dev, device, dat)
     fse_create_io16(dev, device)
@@ -3047,7 +3143,19 @@ _pll_inputs = [(5, 'CLKFB'), (6, 'FBDSEL0'), (7, 'FBDSEL1'), (8, 'FBDSEL2'), (9,
                (24, 'PSDA0'), (25, 'PSDA1'), (26, 'PSDA2'), (27, 'PSDA3'),
                (28, 'DUTYDA0'), (29, 'DUTYDA1'), (30, 'DUTYDA2'), (31, 'DUTYDA3'),
                (32, 'FDLY0'), (33, 'FDLY1'), (34, 'FDLY2'), (35, 'FDLY3')]
+_plla_inputs = [(0, 'RESET'), (2, 'RESET_I'), (4, 'CLKIN'), (5, 'CLKFB'), (91, 'PSSEL0'),
+                (92, 'PSSEL1'), (93, 'PSDIR'), (94, 'PSPULSE'), (100, 'PSSEL2'), (101, 'PLLPWD'),
+                (102, 'RESET_O'), (191, 'SSCPOL'), (192, 'SSCON'), (193, 'SSCMDSEL0'),
+                (194, 'SSCMDSEL1'), (195, 'SSCMDSEL2'), (196, 'SSCMDSEL3'), (197, 'SSCMDSEL4'),
+                (198, 'SSCMDSEL5'), (199, 'SSCMDSEL6'), (200, 'SSCMDSEL_FRAC0'), (201, 'SSCMDSEL_FRAC1'),
+                (202, 'SSCMDSEL_FRAC2'), (204, 'MDCLK'), (205, 'MDOPC0'), (206, 'MDOPC1'),
+                (207, 'MDAINC'), (208, 'MDWDI0'), (209, 'MDWDI1'), (210, 'MDWDI2'), (211, 'MDWDI3'),
+                (212, 'MDWDI4'), (213, 'MDWDI5'), (214, 'MDWDI6'), (215, 'MDWDI7'),]
 _pll_outputs = [(0, 'CLKOUT'), (1, 'LOCK'), (2, 'CLKOUTP'), (3, 'CLKOUTD'), (4, 'CLKOUTD3')]
+_plla_outputs = [(1, 'LOCK'), (10, 'CLKOUT0'), (11, 'CLKOUT1'), (12, 'CLKOUT2'), (13, 'CLKOUT3'),
+                 (14, 'CLKOUT4'), (15, 'CLKOUT5'), (16, 'CLKOUT6'),
+                 (24, 'MDRDO0'), (25, 'MDRDO1'), (26, 'MDRDO2'), (27, 'MDRDO3'), (28, 'MDRDO4'),
+                 (29, 'MDRDO5'), (30, 'MDRDO6'), (31, 'MDRDO7'), ]
 _iologic_inputs =  [(0, 'D'), (1, 'D0'), (2, 'D1'), (3, 'D2'), (4, 'D3'), (5, 'D4'),
                     (6, 'D5'), (7, 'D6'), (8, 'D7'), (9, 'D8'), (10, 'D9'), (11, 'D10'),
                     (12, 'D11'), (13, 'D12'), (14, 'D13'), (15, 'D14'), (16, 'D15'),
@@ -4196,7 +4304,7 @@ def dat_portmap(dat, dev, device):
                     bel.portmap['VREN'] = f'PLLVRV{vren}'
                     # Himbaechel node
                     dev.nodes.setdefault(f'X{col}Y{row}/PLLVRV{vren}', ("PLL_I", {(row, col, f'PLLVRV{vren}')}))[1].add((0, 37, vren))
-                if name.startswith('OSC'):
+                elif name.startswith('OSC'):
                     # local ports
                     local_ports, aliases = _osc_ports[name, device]
                     bel.portmap.update(local_ports)
@@ -4418,6 +4526,8 @@ def fse_wire_delays(db, dev):
         db.wire_delay[f'HCLK_OUT{i}'] = "HclkOutMux"
     for wire in {'DLLDLY_OUT', 'DLLDLY_CLKOUT', 'DLLDLY_CLKOUT0', 'DLLDLY_CLKOUT1'}:
         db.wire_delay[wire] = "ISB" # XXX
+    if wire.startswith('MPLL'):
+        db.wire_delay[wire] = "X0"
     # XXX for now
     for wire in chain(wnames.clknames.values(), wnames.wirenames.values(), wnames.hclknames.values()):
         if wire not in db.wire_delay:
