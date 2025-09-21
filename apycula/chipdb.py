@@ -3257,10 +3257,10 @@ def fill_GW5A_io_bels(dev):
     def fix_iobb(off):
         # for now fix B bel only
         if 'IOBB' in main_cell.bels:
-            print('GW5 IO bels', f' {ttyp} -> {main_cell.ttyp}')
+            print(f'GW5 IO bels col:{col} {ttyp} -> {main_cell.ttyp}')
             main_cell.bels['IOBB'].fuse_cell_offset = off
         else:
-            print('GW5 IO bels', f'skip {ttyp} -> {main_cell.ttyp}: no IOBB bel')
+            print(f'GW5 IO bels col:{col} skip {ttyp} -> {main_cell.ttyp}: no IOBB bel')
 
     # top
     for col, rc in enumerate(dev.grid[0]):
@@ -3274,12 +3274,12 @@ def fill_GW5A_io_bels(dev):
             fix_iobb(off)
 
     # bottom
-    for col, rc in enumerate(dev.grid[0]):
+    for col, rc in enumerate(dev.grid[dev.rows - 1]):
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['bottom']:
             continue
 
-        off = _gw5_fuse_cell_offset['botom'][ttyp]
+        off = _gw5_fuse_cell_offset['bottom'][ttyp]
         if off != (0, 0):
             main_cell = dev.grid[dev.rows - 1][col - off[1]]
             fix_iobb(off)
