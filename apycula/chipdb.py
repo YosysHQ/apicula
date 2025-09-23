@@ -140,6 +140,8 @@ class Device:
     # { (y, x, idx) : {min_x, min_y, max_x, max_y, top_row, bottom_row, top_wire, bottom_wire,
     # top_gate_wire[name, ], bottom_gate_wire[name,]}}
     segments: Dict[Tuple[int, int, int], Dict[str, Any]] = field(default_factory=dict)
+    # GW5A renames the DCS inputs from CLK to CLKIN
+    dcs_prefix: str = field(default = "CLK")
 
     @property
     def rows(self):
@@ -1844,10 +1846,7 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
 
     spines = {f'SPINE{i}' for i in range(32)}
     hclk_srcs = {f'HCLK{i}_BANK_OUT{j}' for i in range(4) for j in range(2)}
-    if device not in {'GW5A-25A'}:
-        dcs_inputs = {f'P{i}{j}{k}' for i in range(1, 5) for j in range(6, 8) for k in "ABCD"}
-    else:
-        dcs_inputs = {}
+    dcs_inputs = {f'P{i}{j}{k}' for i in range(1, 5) for j in range(6, 8) for k in "ABCD"}
 
     for row, rd in enumerate(dev.grid):
         for col, rc in enumerate(rd):
@@ -1967,30 +1966,72 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
     # 'dcs':
     #        0 /* first DCS */ : its ports
     #        1 /* second DCS*/ : its ports
-    if device not in {'GW5A-25A'}:
-        for q, types in enumerate([(85, 84), (80, 81), (80, 81), (85, 84)]):
-            # stop if chip has only 2 quadrants
-            if q < 2 and device not in {'GW1N-9', 'GW1N-9C', 'GW2A-18', 'GW2A-18C'}:
-                continue
-            for j in range(2):
-                for row in range(dev.rows):
-                    for col in range(dev.cols):
-                        if types[j] == fse['header']['grid'][61][row][col]:
-                            break
+    # GW5A series:
+    # Here, tracing the wires showed that there is no system in their
+    # arrangement; the inputs of one DCS can be strictly in one cell, or they
+    # can be in five different ones. And, as is traditional for this series,
+    # fuses can be fragmented across many cells.
+    # We will solve the fuse issue simply by going through all the cells and
+    # installing them where we find them in gowin_pack.
+    # We will trace the wires and compile them into a single table. The
+    # location of the Bels is no longer important, so we will assign them to
+    # the same place as in the previous series.
+    # {(quandrant, dcs_idx): [(col, wire)]} // row is always 18
+    gw5_dcs_inputs = {
+            (0, 0) : [(48, 'D7'), (44, 'D4'), (45, 'D7'), (46, 'D7'), (47, 'D7')],
+            (0, 1) : [(47, 'D2'), (47, 'D3'), (47, 'C3'), (47, 'B3'), (47, 'A3')],
+            (1, 0) : [(48, 'D6'), (44, 'C3'), (45, 'D6'), (46, 'D6'), (47, 'D6')],
+            (1, 1) : [(47, 'C1'), (47, 'C2'), (47, 'B2'), (47, 'A2'), (47, 'D1')],
+            (2, 0) : [(48, 'C6'), (44, 'A1'), (45, 'C6'), (46, 'C6'), (47, 'C6')],
+            (2, 1) : [(44, 'A5'), (47, 'A0'), (44, 'D5'), (44, 'C5'), (44, 'B5')],
+            (3, 0) : [(48, 'C7'), (44, 'B2'), (45, 'C7'), (46, 'C7'), (47, 'C7')],
+            (3, 1) : [(47, 'B0'), (47, 'B1'), (47, 'A1'), (47, 'D0'), (47, 'C0')],
+    }
+    for q, types in enumerate([(85, 84), (80, 81), (80, 81), (85, 84)]):
+        # stop if chip has only 2 quadrants
+        if q < 2 and device not in {'GW1N-9', 'GW1N-9C', 'GW2A-18', 'GW2A-18C', 'GW5A-25A'}:
+            continue
+        for j in range(2):
+            for row in range(dev.rows):
+                for col in range(dev.cols):
+                    if types[j] == fse['header']['grid'][61][row][col]:
+                        break
+                else:
+                    continue
+                break
+            extra_func = dev.extra_func.setdefault((row, col), {})
+            dcs_block = extra_func.setdefault('dcs', {})
+            dcs = dcs_block.setdefault(q // 2, {})
+            spine_idx = f'SPINE{q * 8 + j + 6}'
+            dcs['clkout'] = spine_idx
+            dev.nodes.setdefault(spine_idx, ("GLOBAL_CLK", set()))[1].add((row, col, spine_idx))
+            dcs['clk'] = []
+            for port in "ABCD":
+                wire_name = f'P{q + 1}{j + 6}{port}'
+                dcs['clk'].append(wire_name)
+                dev.nodes.setdefault(wire_name, ("GLOBAL_CLK", set()))[1].add((row, col, wire_name))
+            if device in {'GW5A-25A'}:
+                dcs['input_prefix'] = 'CLKIN'
+                w_col, wire = gw5_dcs_inputs[(q, j)][0]
+                if row == 18 and col == w_col:
+                    dcs['selforce'] = wire
+                else:
+                    # not our cell, make an alias
+                    dcs['selforce'] = f'DCS{q}{j}{wire}'
+                    # Himbaechel node
+                    dev.nodes.setdefault(f'X{col}Y{row}/DCS{q}{j}{wire}', ("DCS_I", {(row, col, dcs['selforce'])}))[1].add((row, w_col, wire))
+                dcs['clksel'] = []
+                for i, w_desc in enumerate(gw5_dcs_inputs[(q, j)][1:]):
+                    w_col, wire = w_desc
+                    if row == 18 and col == w_col:
+                        dcs['clksel'].append(wire)
                     else:
-                        continue
-                    break
-                extra_func = dev.extra_func.setdefault((row, col), {})
-                dcs_block = extra_func.setdefault('dcs', {})
-                dcs = dcs_block.setdefault(q // 2, {})
-                spine_idx = f'SPINE{q * 8 + j + 6}'
-                dcs['clkout'] = spine_idx
-                dev.nodes.setdefault(spine_idx, ("GLOBAL_CLK", set()))[1].add((row, col, spine_idx))
-                dcs['clk'] = []
-                for port in "ABCD":
-                    wire_name = f'P{q + 1}{j + 6}{port}'
-                    dcs['clk'].append(wire_name)
-                    dev.nodes.setdefault(wire_name, ("GLOBAL_CLK", set()))[1].add((row, col, wire_name))
+                        # not our cell, make an alias
+                        w_name = f'DCS{q}{j}{i}{wire}'
+                        dcs['clksel'].append(w_name)
+                        # Himbaechel node
+                        dev.nodes.setdefault(f'X{col}Y{row}/{w_name}', ("DCS_I", {(row, col, w_name)}))[1].add((row, w_col, wire))
+            else:
                 if q < 2:
                     dcs['selforce'] = 'C2'
                     dcs['clksel'] = ['C1', 'D1', 'A2', 'B2']
@@ -2894,6 +2935,9 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_DFF67")
         dev.chip_flags.append("HAS_CIN_MUX")
 
+    if device in {'GW5A-25A'}:
+        dev.dcs_prefix = "CLKIN"
+
 def from_fse(device, fse, dat: Datfile):
     wnames.select_wires(device)
     dev = Device()
@@ -3257,10 +3301,10 @@ def fill_GW5A_io_bels(dev):
     def fix_iobb(off):
         # for now fix B bel only
         if 'IOBB' in main_cell.bels:
-            print(f'GW5 IO bels col:{col} {ttyp} -> {main_cell.ttyp}')
+            print('GW5 IO bels', f' {ttyp} -> {main_cell.ttyp}')
             main_cell.bels['IOBB'].fuse_cell_offset = off
         else:
-            print(f'GW5 IO bels col:{col} skip {ttyp} -> {main_cell.ttyp}: no IOBB bel')
+            print('GW5 IO bels', f'skip {ttyp} -> {main_cell.ttyp}: no IOBB bel')
 
     # top
     for col, rc in enumerate(dev.grid[0]):
@@ -3274,12 +3318,12 @@ def fill_GW5A_io_bels(dev):
             fix_iobb(off)
 
     # bottom
-    for col, rc in enumerate(dev.grid[dev.rows - 1]):
+    for col, rc in enumerate(dev.grid[0]):
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['bottom']:
             continue
 
-        off = _gw5_fuse_cell_offset['bottom'][ttyp]
+        off = _gw5_fuse_cell_offset['botom'][ttyp]
         if off != (0, 0):
             main_cell = dev.grid[dev.rows - 1][col - off[1]]
             fix_iobb(off)
