@@ -2800,6 +2800,17 @@ _mipi_aux_attrs = {
 _hclk_io_pairs = {(36, 11): (36, 30), (36, 25): (36, 32), (36, 53): (36, 28), (36, 74): (36, 90), }
 
 _sides = "AB"
+
+def set_dcs_fuses(db, tilemap, dcs_idx, dcs_attrs, spine_idx):
+    dcs_name = f'DCS{dcs_idx + 6}'
+    for row, rd in enumerate(db.grid):
+        for col, rc in enumerate(rd):
+            if rc.ttyp in db.longfuses and dcs_name in db.longfuses[rc.ttyp]:
+                tile = tilemap[(row, col)]
+                bits = get_long_fuses(db, rc.ttyp, dcs_attrs, spine_idx)
+                for brow, bcol in bits:
+                    tile[brow][bcol] = 1
+
 def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
         tiledata = db.grid[row-1][col-1]
@@ -3146,9 +3157,12 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             spine = db.extra_func[row - 1, col - 1]['dcs'][int(num)]['clkout']
             dcs_attrs = set_dcs_attrs(db, spine, attrs)
             _, idx = _dcs_spine2quadrant_idx[spine]
-            bits = get_long_fuses(db, tiledata.ttyp, dcs_attrs, idx)
-            for r, c in bits:
-                tile[r][c] = 1
+            if device in {'GW5A-25A'}:
+                set_dcs_fuses(db, tilemap, int(num), dcs_attrs, idx)
+            else:
+                bits = get_long_fuses(db, tiledata.ttyp, dcs_attrs, idx)
+                for r, c in bits:
+                    tile[r][c] = 1
         else:
             print("unknown type", typ)
 

@@ -7,7 +7,7 @@ DEBUG = -v --debug
 all: \
 	in-out-primer25k.fs in-inv-out-primer25k.fs in-or-inv-out-primer25k.fs \
 	lut8-primer25k.fs big-shift-primer25k.fs alu-simple-primer25k.fs lutram-primer25k.fs \
-	blinky-osc-primer25k.fs pll7-primer25k.fs
+	blinky-osc-primer25k.fs pll7-primer25k.fs dcs-primer25k.fs
 
 
 clean: 
