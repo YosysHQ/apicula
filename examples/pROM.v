@@ -30,47 +30,6 @@ module top
     reg         [15:0]  pixel_count;
     reg         [15:0]  line_count;
 
-	/* 480x272 4.3" LCD with SC7283 driver, pixel freq = 9MHz */
-	localparam      VBackPorch = 16'd12;
-	localparam      VPulse 	= 16'd4;
-	localparam      HightPixel  = 16'd272;
-	localparam      VFrontPorch= 16'd8;
-
-	localparam      HBackPorch = 16'd43;
-	localparam      HPulse 	= 16'd4;
-	localparam      WidthPixel  = 16'd480;
-	localparam      HFrontPorch= 16'd8;
-
-
-    localparam      PixelForHS  =   WidthPixel + HBackPorch + HFrontPorch;  	
-    localparam      LineForVS   =   HightPixel + VBackPorch + VFrontPorch;
-
-    always @(posedge pixel_clk or negedge rst)begin
-        if (!rst) begin
-            line_count       <=  16'b0;    
-            pixel_count      <=  16'b0;
-            end
-        else if (pixel_count ==  PixelForHS) begin
-            pixel_count      <=  16'b0;
-            line_count       <=  line_count + 1'b1;
-            end
-        else if (line_count == LineForVS) begin
-            line_count       <=  16'b0;
-            pixel_count      <=  16'b0;
-            end
-        else begin
-            pixel_count       <=  pixel_count + 1'b1;
-        end
-    end
-
-
-    assign  LCD_HYNC = ((pixel_count >= HPulse) && (pixel_count <= (PixelForHS - HFrontPorch))) ? 1'b0 : 1'b1;
-	assign  LCD_SYNC = (((line_count >= VPulse) && (line_count <= (LineForVS - 0)))) ? 1'b0 : 1'b1;
-
-    assign  LCD_DEN = ((pixel_count >= HBackPorch)&&
-                        (pixel_count <= PixelForHS-HFrontPorch) &&
-                        (line_count >= VBackPorch) &&
-                        (line_count <= LineForVS-VFrontPorch-1)) ? 1'b1 : 1'b0;
 
 	wire [7:0] dout;
 	reg [11:0] addr;
@@ -82,11 +41,16 @@ module top
         .data(dout)
     );	
 
-`define START_X 16'd160
-`define STOP_X  (`START_X + 16'd256)
-`define START_Y 16'd18
-`define STOP_Y  (`START_Y + 16'd256)
- 
+	display display(
+		.pixel_clk(pixel_clk),
+		.rst(rst),
+		.pixel_count(pixel_count),
+		.line_count(line_count),
+		.LCD_HYNC(LCD_HYNC),
+		.LCD_SYNC(LCD_SYNC),
+		.LCD_DEN(LCD_DEN)
+	);
+
 	wire [7:0] vmem_start_col;
 	wire [7:0] vmem_start_row;
 	assign vmem_start_col = pixel_count - `START_X;
