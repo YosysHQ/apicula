@@ -41,6 +41,30 @@ Slot commands:
 
 `0x68` `0x00` `0x00` `0x00` `0x00` `0x00` `0x00` `0x00` - end of the slot block
 
+## BSRAM init (GW5A)
+The data for initialising BSRAM in chips up to the GW5A series is a single continuous array containing data for all BSRAM elements in the entire chip and located immediately after the description of the main grid fuse - in fact, it is simply a continuation of the main matrix, with no separator bytes.
+
+It's a completely different story in the GW5A series, where initialisation data is only specified for elements that are actually used*. Therefore, we will need commands to specify where to place the initialisation data in the chip. These commands operate on vertical blocks 256 bits wide as units.
+
+`0x12` (or `0x92` when `bit_crc_check` not set) `0x00` `0x00` `0x00` - start of description of one or more consecutive blocks.
+
+`0x70` `0x00` `0x00` index_lsb index_msb 0*index - The index of the first block.
+
+Blocks are numbered from zero, but you cannot take the first two because they simply do not exist. Here is a fragment of the beginning of the 10th row of the chip grid (rows with BSRAM). Before we get to the letter B, which symbolises BSRAM, we have cells with IO and cells with routing wires.
+
+dat.grid.rows[10] = [1RRRRBbbBbbBb...
+
+The tail contains a zero byte repeated index times. The theory is that the receiving mechanism in the chip is not that complex and it uses every zero byte to shift some internal position for recording further data.
+
+`0x4e` `0x80` count_lsb count_msb - number of consecutive blocks.
+Specifies data for how many 256-byte blocks follow next.
+
+Next comes the actual data for the BSRAM blocks, with 256 lines per block. At the end of each line there are two CRC bytes and 6 bytes of `0xff`.
+
+18 * `0xff` two bytes CRC - end of description of one sequence of blocks.
+
+* This is true to a certain extent — if there is both used and unused BSRAM in a single block, the data for the entire block is still unloaded.
+
 ## Other commands
 
 Command always followed by 3 “option” bytes, usually `0x00` except for “load config”, like ECP5 commands
@@ -75,7 +99,6 @@ Followed by 3x `0x00` bytes
  - [56:32]: unknown, always `0x00FFFF`
  - [31:0] : SPI flash address (or `0x00000000` if N/A)
 
-`0x12` (or `0x92` when `bit_crc_check` not set) Unknown `0x000000`
 
 Last command before `0x3B` (or `0xBB` when `bit_crc_check` not set) config frame load command, probably equiv to `LSC_INIT_ADDRESS`
 - [23]   : `1` when `bit_crc_check` set
