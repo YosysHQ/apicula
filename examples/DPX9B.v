@@ -36,8 +36,8 @@ module top
 	display display(
 		.pixel_clk(pixel_clk),
 		.rst(rst),
-		.pixel_count(pixel_count),
-		.line_count(line_count),
+		.x(pixel_count),
+		.y(line_count),
 		.LCD_HYNC(LCD_HYNC),
 		.LCD_SYNC(LCD_SYNC),
 		.LCD_DEN(LCD_DEN)
@@ -79,11 +79,6 @@ module top
 		end
 	end
 
-`define START_X 16'd160
-`define STOP_X  (`START_X + 16'd256)
-`define START_Y 16'd18
-`define STOP_Y  (`START_Y + 16'd256)
- 
 	wire [7:0] vmem_start_col;
 	wire [7:0] vmem_start_row;
 	assign vmem_start_col = pixel_count - `START_X;
@@ -105,8 +100,8 @@ module top
 		end
 	end
 
-    assign LCD_R = color[8:4];
-    assign LCD_G = color[8:3];
-    assign LCD_B = color[8:4];
+    assign LCD_R = LCD_DEN ? color[8:4] : 0;
+    assign LCD_G = LCD_DEN ? color[8:3] : 0;
+    assign LCD_B = LCD_DEN ? color[8:4] : 0;
 endmodule
 

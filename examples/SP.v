@@ -35,8 +35,8 @@ module top
 	display display(
 		.pixel_clk(pixel_clk),
 		.rst(rst),
-		.pixel_count(pixel_count),
-		.line_count(line_count),
+		.x(pixel_count),
+		.y(line_count),
 		.LCD_HYNC(LCD_HYNC),
 		.LCD_SYNC(LCD_SYNC),
 		.LCD_DEN(LCD_DEN)
@@ -65,12 +65,6 @@ module top
 		.write_data(rom_data)
 	);
 
-
-`define START_X 16'd160
-`define STOP_X  (`START_X + 16'd256)
-`define START_Y 16'd18
-`define STOP_Y  (`START_Y + 16'd256)
- 
 	wire [7:0] vmem_start_col;
 	wire [7:0] vmem_start_row;
 	assign vmem_start_col = pixel_count - `START_X;
@@ -83,15 +77,6 @@ module top
 	wire is_out_x = pixel_count < `START_X || pixel_count >= `STOP_X;
 	wire is_out_y = line_count < `START_Y || line_count >= `STOP_Y;
 
-	/*
-	always @(negedge pixel_clk) begin
-		if (is_out_x) begin
-			rw_addr <= write_addr[15:5];
-		end else begin
-			rw_addr <= read_addr;
-		end
-	end
-	*/
    assign rw_addr = is_out_x ? write_addr[15:5] :  read_addr;
 
 	reg [15:0] color;
@@ -111,9 +96,9 @@ module top
         end
     end
 
-    assign LCD_R = color[4:0];
-    assign LCD_G = color[10:5];
-    assign LCD_B = color[15:11];
+    assign LCD_R = LCD_DEN ? color[4:0] : 0;
+    assign LCD_G = LCD_DEN ? color[10:5] : 0;
+    assign LCD_B = LCD_DEN ? color[15:11] : 0;
 
 endmodule
 
