@@ -10,9 +10,9 @@ module top
 	output	wire LCD_HYNC,
 	output	wire LCD_SYNC,
 	output	wire LCD_DEN,
-	output	wire [4:0]	LCD_R,
-	output	wire [5:0]	LCD_G,
-	output	wire [4:0]	LCD_B
+	output	wire [`R_MSB:0]	LCD_R,
+	output	wire [`G_MSB:0]	LCD_G,
+	output	wire [`B_MSB:0]	LCD_B
 );
 
 	wire rst = rst_i ^ `INV_BTN;
@@ -98,8 +98,8 @@ module top
 		end
 	end
 
-    assign LCD_R = LCD_DEN ? color[4:0] : 0;
-    assign LCD_G = LCD_DEN ? color[5:0] : 0;
-    assign LCD_B = LCD_DEN ? color[4:0] : 0;
+    assign LCD_R = LCD_DEN ? color[4:0] >> (4 - `R_MSB) : 0;
+    assign LCD_G = LCD_DEN ? color[5:0] >> (5 - `G_MSB) : 0;
+    assign LCD_B = LCD_DEN ? color[4:0] >> (4 - `B_MSB) : 0;
 endmodule
 

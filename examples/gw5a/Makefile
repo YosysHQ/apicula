@@ -7,7 +7,8 @@ DEBUG = -v --debug
 all: \
 	in-out-primer25k.fs in-inv-out-primer25k.fs in-or-inv-out-primer25k.fs \
 	lut8-primer25k.fs big-shift-primer25k.fs alu-simple-primer25k.fs lutram-primer25k.fs \
-	blinky-osc-primer25k.fs pll7-primer25k.fs dcs-primer25k.fs
+	blinky-osc-primer25k.fs pll7-primer25k.fs dcs-primer25k.fs \
+	bsram-DPB-primer25k.fs
 
 
 clean: 
@@ -32,3 +33,5 @@ alu-%-primer25k.json: alu-%-primer25k-synth.json alu-%-primer25k.cst
 %-primer25k-synth.json: %.v
 	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a"
 
+bsram-%-primer25k-synth.json: pll/GW5A-25A.vh io444.vh display-640x480.v %-image-rom.v %-video-ram.v %.v clock-PLLA.v
+	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw5a"
