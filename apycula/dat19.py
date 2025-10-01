@@ -270,7 +270,7 @@ class Datfile:
         #ret["UNKNOWN"] = 0x16
         #ret["UNKNOWN"] = 0xe
 
-        self._cur = RSTable5ATOffset + 0x240b0
+        self._cur = RSTable5ATOffset + 0x24be0
         ret["TopHiq"] = self.read_u16()
         ret["TopViq"] = self.read_u16()
         ret["BotHiq"] = self.read_u16()
