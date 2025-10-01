@@ -7,7 +7,10 @@ DEBUG = -v --debug
 all: \
 	in-out-primer25k.fs in-inv-out-primer25k.fs in-or-inv-out-primer25k.fs \
 	lut8-primer25k.fs big-shift-primer25k.fs alu-simple-primer25k.fs lutram-primer25k.fs \
-	blinky-osc-primer25k.fs pll7-primer25k.fs dcs-primer25k.fs
+	blinky-osc-primer25k.fs pll7-primer25k.fs dcs-primer25k.fs \
+	bsram-DPB-primer25k.fs bsram-DPB16-primer25k.fs bsram-DPX9B-primer25k.fs bsram-DPX9B18-primer25k.fs \
+	bsram-pROM-primer25k.fs bsram-pROMX9-primer25k.fs bsram-SP-primer25k.fs bsram-SPX9-primer25k.fs \
+	bsram-SDPB-primer25k.fs bsram-SDPX9B-primer25k.fs 
 
 
 clean: 

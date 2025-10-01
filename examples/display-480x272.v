@@ -27,15 +27,15 @@ module display(input wire pixel_clk, input wire rst, output wire [15:0] x, outpu
     reg [15:0] line_count;
     reg [15:0] pixel_count;
 
-    assign x = pixel_count >= WidthPixel? x : pixel_count;
-    assign y = line_count >= HeightPixel ? x : line_count;
+    assign x = pixel_count;
+    assign y = line_count;
 
     always @(posedge pixel_clk or negedge rst)begin
-        pixel_count <= pixel_count + 1'b1;
         if (!rst) begin
             pixel_count <= 16'b0;
             line_count  <= 16'b0;
         end else begin 
+            pixel_count <= pixel_count + 1'b1;
             if (pixel_count ==  TotalWidth - 1) begin
                 pixel_count <= 16'b0;
                 line_count  <= line_count + 16'b1;

@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import pickle
+import bisect
 import gzip
 import itertools
 import math
@@ -20,8 +21,8 @@ from apycula import wirenames as wnames
 
 device = ""
 pnr = None
-has_bsram_init = False
 bsram_init_map = None
+gw5a_bsrams = []
 
 # Sometimes it is convenient to know where a port is connected to enable
 # special fuses for VCC/VSS cases.
@@ -135,20 +136,27 @@ def extra_dsp_bels(cell, row, col, num, cellname):
 # is present - bits 4 and 5 radically change the position of the bits in the
 # chip, we take this into account.
 # We repeat for bits up to the 13th --- since this is the maximum address in one SRAM block.
-def store_bsram_init_val(db, row, col, typ, parms, attrs):
+def store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset = 0):
     global bsram_init_map
-    global has_bsram_init
+
     if typ == 'BSRAM_AUX' or 'INIT_RAM_00' not in parms:
         return
 
     attrs_upper(attrs)
     subtype = attrs['BSRAM_SUBTYPE']
-    if not has_bsram_init:
-        has_bsram_init = True
-        # 256 * bsram rows * chip bit width
-        bsram_init_map = bitmatrix.zeros(256 * len(db.simplio_rows), db.width)
-    # 3 BSRAM cells have width 3 * 60
-    loc_map = bitmatrix.zeros(256, 3 * 60)
+    if not bsram_init_map:
+        if device in {'GW5A-25A'}:
+            # 72 * bsram rows * chip bit width
+            bsram_init_map = bitmatrix.zeros(72 * len(db.simplio_rows), db.width)
+        else:
+            # 256 * bsram rows * chip bit width
+            bsram_init_map = bitmatrix.zeros(256 * len(db.simplio_rows), db.width)
+    if device in {'GW5A-25A'}:
+        # 1 BSRAM cell have width 72
+        loc_map = bitmatrix.zeros(256, 72)
+    else:
+        # 3 BSRAM cells have width 3 * 60
+        loc_map = bitmatrix.zeros(256, 3 * 60)
     #print("mapping")
     if not subtype.strip():
         width = 256
@@ -188,21 +196,28 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs):
                 continue
             logic_line = ptr_bit_inc[1] * 4 + (addr >> 12)
             bit = db.rev_logicinfo('BSRAM_INIT')[logic_line][0] - 1
-            quad = {0x30: 0xc0, 0x20: 0x40, 0x10: 0x80, 0x00: 0x0}[addr & 0x30]
+            quad = {0x30: 0xc0, 0x20: 0x40, 0x10: 0x80, 0x00: 0x00}[addr & 0x30]
             map_row = quad + ((addr >> 6) & 0x3f)
             #print(f'map_row:{map_row}, addr: {addr}, bit {ptr_bit_inc[1]}, bit:{bit}')
             loc_map[map_row][bit] = 1
 
-    # now put one cell init data into global place
+    # now put one cell init data into global space
     height = 256
+    if device in {'GW5A-25A'}:
+        height = 72
+        loc_map = bitmatrix.transpose(loc_map)
     y = 0
     for brow in db.simplio_rows:
         if row == brow:
             break
         y += height
-    x = 0
-    for jdx in range(col):
-        x += db.grid[0][jdx].width
+
+    if device in {'GW5A-25A'}:
+        x = 256 * map_offset
+    else:
+        x = 0
+        for jdx in range(col):
+            x += db.grid[0][jdx].width
     loc_map = bitmatrix.flipud(loc_map)
     for row in loc_map:
         x0 = x
@@ -3051,9 +3066,12 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             for r, c in bits:
                 tile[r][c] = 1
         elif typ in _bsram_cell_types or typ == 'BSRAM_AUX':
-            store_bsram_init_val(db, row - 1, col -1, typ, parms, attrs)
             if typ == 'BSRAM_AUX':
                 typ = cell['type']
+            elif device in {'GW5A-25A'}:
+                bisect.insort(gw5a_bsrams, (col - 1, row - 1, typ, parms, attrs))
+            else:
+                store_bsram_init_val(db, row - 1, col -1, typ, parms, attrs)
             bsram_attrs = set_bsram_attrs(db, typ, parms)
             bsrambits = get_shortval_fuses(db, tiledata.ttyp, bsram_attrs, f'BSRAM_{typ}')
             #print(f'({row - 1}, {col - 1}) attrs:{bsram_attrs}, bits:{bsrambits}')
@@ -3705,12 +3723,42 @@ def main():
 
     header_footer(db, main_map, args.compress)
 
-    if has_bsram_init:
-        if device in {'GW5A-25A'}:
-            bsram_init_map = bitmatrix.transpose(bsram_init_map)
+    if device in {'GW5A-25A'} and gw5a_bsrams:
+        # In the series preceding GW5A, the data for initialising BSRAM was
+        # specified as one huge array describing all BSRAM primitives at once.
+        # As a result, this array was unloaded immediately after the main grid
+        # without any identifying marks.
+        # In the GW5A series, the approach is different: only data for those
+        # primitives that are actually used is unloaded.
+        # This requires the use of commands describing BSRAM positions in the
+        # output file. When testing file generation using Gowin IDE and setting
+        # BSRAM positions as specified in the documentation for the GW5A series
+        # (SUG1018-1.7E_Arora Ⅴ Design Physical Constraints User Guide. pdf),
+        # it was found that the number of blocks in the output file describing
+        # BSRAM is not proportional to the number of primitives used — that is,
+        # one command lock describes several primitives located next to each
+        # other, and another block begins only if there is a gap in the BSRAM
+        # location.
+        # Thus, for the GW5A series, we first need to collect data on the
+        # location of BSRAM primitives, and only then proceed directly to
+        # encoding the initialisation data.
+        #import ipdb; ipdb.set_trace()
+        last_col = -1
+        map_offset = -1
+        for bsram in gw5a_bsrams:
+            col, row, typ, parms, attrs = bsram
+            if col != last_col:
+                last_col = col
+                map_offset += 1
+            store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset)
+
+        bsram_init_map = bitmatrix.transpose(bsram_init_map)
+        bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map, gw5a_bsrams)
+    elif bsram_init_map:
         bslib.write_bitstream_with_bsram_init(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map)
     else:
         bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots)
+
     if args.cst:
         with open(args.cst, "w") as f:
                 cst.write(f)

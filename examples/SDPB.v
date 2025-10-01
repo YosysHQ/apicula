@@ -29,8 +29,8 @@ module top
 
 	assign LCD_CLK = pixel_clk;
 
-    reg         [15:0]  pixel_count;
-    reg         [15:0]  line_count;
+    wire [15:0]  pixel_count;
+    wire [15:0]  line_count;
 
 	
 	display display(

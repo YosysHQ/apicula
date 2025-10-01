@@ -2934,6 +2934,7 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_PINCFG")
         dev.chip_flags.append("HAS_DFF67")
         dev.chip_flags.append("HAS_CIN_MUX")
+        dev.chip_flags.append("NEED_BSRAM_RESET_FIX")
 
     if device in {'GW5A-25A'}:
         dev.dcs_prefix = "CLKIN"
@@ -2964,7 +2965,7 @@ def from_fse(device, fse, dat: Datfile):
             tile.bels = fse_osc(device, fse, ttyp)
         elif ttyp in bram_ttypes:
             tile.bels = fse_bram(fse)
-        elif ttyp in bram_aux_ttypes:
+        elif ttyp in bram_aux_ttypes and device not in {'GW5A-25A'}:
             tile.bels = fse_bram(fse, True)
         elif ttyp in dsp_ttypes and device not in {'GW5A-25A'}:
             tile.bels = fse_dsp(fse)
@@ -2987,7 +2988,6 @@ def from_fse(device, fse, dat: Datfile):
         dev.tile_types['P'] = set()
         dev.tile_types['M'] = set()
         # XXX
-        dev.tile_types['B'] = set()
         dev.tile_types['D'] = set()
 
     # GW5 series have DFF6 and DFF7, so leave Q6 and Q7 as is
@@ -3301,10 +3301,10 @@ def fill_GW5A_io_bels(dev):
     def fix_iobb(off):
         # for now fix B bel only
         if 'IOBB' in main_cell.bels:
-            print('GW5 IO bels', f' {ttyp} -> {main_cell.ttyp}')
+            print(f'GW5 IO bels col:{col} {ttyp} -> {main_cell.ttyp}')
             main_cell.bels['IOBB'].fuse_cell_offset = off
         else:
-            print('GW5 IO bels', f'skip {ttyp} -> {main_cell.ttyp}: no IOBB bel')
+            print(f'GW5 IO bels col:{col} skip {ttyp} -> {main_cell.ttyp}: no IOBB bel')
 
     # top
     for col, rc in enumerate(dev.grid[0]):
@@ -3318,12 +3318,12 @@ def fill_GW5A_io_bels(dev):
             fix_iobb(off)
 
     # bottom
-    for col, rc in enumerate(dev.grid[0]):
+    for col, rc in enumerate(dev.grid[dev.rows - 1]):
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['bottom']:
             continue
 
-        off = _gw5_fuse_cell_offset['botom'][ttyp]
+        off = _gw5_fuse_cell_offset['bottom'][ttyp]
         if off != (0, 0):
             main_cell = dev.grid[dev.rows - 1][col - off[1]]
             fix_iobb(off)
