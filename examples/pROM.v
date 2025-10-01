@@ -9,9 +9,9 @@ module top
 	output	wire LCD_HYNC,
 	output	wire LCD_SYNC,
 	output	wire LCD_DEN,
-	output	wire [4:0]	LCD_R,
-	output	wire [5:0]	LCD_G,
-	output	wire [4:0]	LCD_B
+	output	wire [`R_MSB:0]	LCD_R,
+	output	wire [`G_MSB:0]	LCD_G,
+	output	wire [`B_MSB:0]	LCD_B
 );
 
 	wire rst = rst_i ^ `INV_BTN;
@@ -19,88 +19,17 @@ module top
 	wire gnd;
 	assign gnd = 1'b0;
 
-	rPLL pll(
-	    .CLKOUT(pixel_clk),  // 9MHz
-		.CLKIN(clk),
-		.CLKFB(gnd),
-		.RESET(!rst),
-		.RESET_P(!rst),
-		.FBDSEL({gnd, gnd, gnd, gnd, gnd, gnd}),
-		.IDSEL({gnd, gnd, gnd, gnd, gnd, gnd}),
-		.ODSEL({gnd, gnd, gnd, gnd, gnd, gnd}),
-		.DUTYDA({gnd, gnd, gnd, gnd}),
-		.PSDA({gnd, gnd, gnd, gnd}),
-		.FDLY({gnd, gnd, gnd, gnd})
-	);
-	defparam pll.DEVICE = `PLL_DEVICE;
-	defparam pll.FCLKIN = `PLL_FCLKIN;
-	defparam pll.FBDIV_SEL = `PLL_FBDIV_SEL_LCD;
-	defparam pll.IDIV_SEL =  `PLL_IDIV_SEL_LCD;
-	defparam pll.ODIV_SEL = `PLL_ODIV_SEL;
-	defparam pll.CLKFB_SEL="internal";
-	defparam pll.CLKOUTD3_SRC="CLKOUT";
-	defparam pll.CLKOUTD_BYPASS="false";
-	defparam pll.CLKOUTD_SRC="CLKOUT";
-	defparam pll.CLKOUTP_BYPASS="false";
-	defparam pll.CLKOUTP_DLY_STEP=0;
-	defparam pll.CLKOUTP_FT_DIR=1'b1;
-	defparam pll.CLKOUT_BYPASS="false";
-	defparam pll.CLKOUT_DLY_STEP=0;
-	defparam pll.CLKOUT_FT_DIR=1'b1;
-	defparam pll.DUTYDA_SEL="1000";
-	defparam pll.DYN_DA_EN="false";
-	defparam pll.DYN_FBDIV_SEL="false";
-	defparam pll.DYN_IDIV_SEL="false";
-	defparam pll.DYN_ODIV_SEL="false";
-	defparam pll.DYN_SDIV_SEL=10;
-	defparam pll.PSDA_SEL="0000";
+	clock_pll clok_pll(
+		.clk(clk),
+		.rst(rst),
+		.write_clk(),
+		.pixel_clk(pixel_clk));
 
 	assign		LCD_CLK		=	pixel_clk;
 
     reg         [15:0]  pixel_count;
     reg         [15:0]  line_count;
 
-	/* 480x272 4.3" LCD with SC7283 driver, pixel freq = 9MHz */
-	localparam      VBackPorch = 16'd12;
-	localparam      VPulse 	= 16'd4;
-	localparam      HightPixel  = 16'd272;
-	localparam      VFrontPorch= 16'd8;
-
-	localparam      HBackPorch = 16'd43;
-	localparam      HPulse 	= 16'd4;
-	localparam      WidthPixel  = 16'd480;
-	localparam      HFrontPorch= 16'd8;
-
-
-    localparam      PixelForHS  =   WidthPixel + HBackPorch + HFrontPorch;  	
-    localparam      LineForVS   =   HightPixel + VBackPorch + VFrontPorch;
-
-    always @(posedge pixel_clk or negedge rst)begin
-        if (!rst) begin
-            line_count       <=  16'b0;    
-            pixel_count      <=  16'b0;
-            end
-        else if (pixel_count ==  PixelForHS) begin
-            pixel_count      <=  16'b0;
-            line_count       <=  line_count + 1'b1;
-            end
-        else if (line_count == LineForVS) begin
-            line_count       <=  16'b0;
-            pixel_count      <=  16'b0;
-            end
-        else begin
-            pixel_count       <=  pixel_count + 1'b1;
-        end
-    end
-
-
-    assign  LCD_HYNC = ((pixel_count >= HPulse) && (pixel_count <= (PixelForHS - HFrontPorch))) ? 1'b0 : 1'b1;
-	assign  LCD_SYNC = (((line_count >= VPulse) && (line_count <= (LineForVS - 0)))) ? 1'b0 : 1'b1;
-
-    assign  LCD_DEN = ((pixel_count >= HBackPorch)&&
-                        (pixel_count <= PixelForHS-HFrontPorch) &&
-                        (line_count >= VBackPorch) &&
-                        (line_count <= LineForVS-VFrontPorch-1)) ? 1'b1 : 1'b0;
 
 	wire [7:0] dout;
 	reg [11:0] addr;
@@ -112,11 +41,16 @@ module top
         .data(dout)
     );	
 
-`define START_X 16'd160
-`define STOP_X  (`START_X + 16'd256)
-`define START_Y 16'd18
-`define STOP_Y  (`START_Y + 16'd256)
- 
+	display display(
+		.pixel_clk(pixel_clk),
+		.rst(rst),
+		.x(pixel_count),
+		.y(line_count),
+		.LCD_HYNC(LCD_HYNC),
+		.LCD_SYNC(LCD_SYNC),
+		.LCD_DEN(LCD_DEN)
+	);
+
 	wire [7:0] vmem_start_col;
 	wire [7:0] vmem_start_row;
 	assign vmem_start_col = pixel_count - `START_X;
@@ -138,9 +72,9 @@ module top
 		end
 	end
 
-    assign LCD_R = color[4:0];
-    assign LCD_G = color[10:5];
-    assign LCD_B = color[15:11];
+    assign LCD_R = LCD_DEN ? color[4:0]   >> (4 - `R_MSB) : 0;
+    assign LCD_G = LCD_DEN ? color[10:5]  >> (5 - `G_MSB) : 0;
+    assign LCD_B = LCD_DEN ? color[15:11] >> (4 - `B_MSB) : 0;
 
 endmodule
 

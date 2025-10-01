@@ -245,7 +245,7 @@ clean:
 pll-nanolcd-tangnano20k-synth.json: pll/GW2A-18-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw2a"
 
-bsram-%-tangnano20k-synth.json: pll/GW2A-18-dyn.vh %-image-rom.v %-video-ram.v %.v
+bsram-%-tangnano20k-synth.json: pll/GW2A-18-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw2a"
 
 attosoc-tangnano20k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
@@ -268,7 +268,7 @@ dvi-example-tangnano20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chan
 pll-nanolcd-primer20k-synth.json: pll/GW2A-18-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw2a"
 
-bsram-%-primer20k-synth.json: pll/GW2A-18-dyn.vh %-image-rom.v %-video-ram.v %.v
+bsram-%-primer20k-synth.json: pll/GW2A-18-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw2a"
 
 attosoc-%-synth.json: attosoc/attosoc.v attosoc/picorv32.v
@@ -291,7 +291,7 @@ dvi-example-primer20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channe
 pll-nanolcd-tangnano-synth.json: pll/GW1N-1-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -noalu -json $@"
 
-bsram-%-tangnano-synth.json: pll/GW1N-1-dyn.vh %-image-rom.v %-video-ram.v %.v
+bsram-%-tangnano-synth.json: pll/GW1N-1-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
 
 # ============================================================
@@ -311,7 +311,7 @@ pll-nanolcd-tangnano1k.fs: pll-nanolcd-tangnano1k.json
 pll-nanolcd-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -noalu -json $@"
 	
-bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh %-image-rom.v %-video-ram.v %.v
+bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
 
 # ============================================================
@@ -350,7 +350,7 @@ pll-nanolcd-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh pll-nanolcd/TOP.v pll-nano
 pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
 	gowin_pack -c -d GW1N-9C --sspi_as_gpio --mspi_as_gpio -o $@ $^
 
-bsram-%-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh %-image-rom.v %-video-ram.v %.v
+bsram-%-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
 
 dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channel.v
@@ -370,7 +370,7 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chann
 blinky-pll-miniszfpga-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=4 -p "read_verilog $^; synth_gowin -json $@"
 
-bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh %-image-rom.v %-video-ram.v %.v
+bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
 
 # ============================================================
@@ -387,7 +387,7 @@ bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh %-image-rom.v %-video-ram.v %.v
 blinky-pll-szfpga-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=4 -p "read_verilog $^; synth_gowin -json $@"
 
-bsram-%-szfpga-synth.json: pll/GW1N-9-dyn.vh %-image-rom.v %-video-ram.v %.v
+bsram-%-szfpga-synth.json: pll/GW1N-9-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@"
 
 # ============================================================
