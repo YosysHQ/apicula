@@ -280,7 +280,9 @@ def parse_chunk(chunk):
         if off < len(chunk):
             yield parser.__name__[6:], parser(chunk[off:])
 
-
+_aliases = {
+        "gw5a" : {"ES": ["C1/I0", "A0"]},
+        }
 def read_tm(f, device):
     if device.lower().startswith("gw1n"):
         chunk_order = [
@@ -349,6 +351,10 @@ def read_tm(f, device):
         for name, tm in res:
             if tm:
                 tmdat[speed_class][name] = tm
+                for series, aliases in _aliases.items():
+                    if device.lower().startswith(series) and speed_class in aliases:
+                        for al in aliases[speed_class]:
+                            tmdat.setdefault(al, {})[name] = tm
     return tmdat
 
 
