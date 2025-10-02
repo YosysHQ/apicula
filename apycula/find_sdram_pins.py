@@ -24,6 +24,7 @@ def find_pins(db, pnr:codegen.Pnr, trace_args):
     for trace_start, args in zip(trace_starts, trace_args):
         iob, pin_name, pin_idx, direction = args
         sdram_idxName = pin_name if pin_idx is None else f"{pin_name}[{pin_idx}]"
+        print(args)
 
         path_dict = tracing.get_path_dict(tiles, db, trace_start)
         paths = tracing.get_paths(path_dict, [trace_start], dests)
@@ -163,6 +164,22 @@ params = {
             ("O_sdram_addr", 11, "LVCMOS33"),
             ("O_sdram_ba", 2, "LVCMOS33"),
             ("IO_sdram_dq", 32, "LVCMOS33"),
+        ]
+    }],
+    "GW5A-25A": [{
+        "package": "MBGA121N",
+        "device": "GW5A-25A",
+        "partnumber": "GW5A-LV25MG121NES",
+        "pins": [
+            ("O_sdram_clk", 0, "LVCMOS33"),
+            ("O_sdram_cs_n", 0, "LVCMOS33"),
+            ("O_sdram_cas_n", 0, "LVCMOS33"),
+            ("O_sdram_ras_n", 0, "LVCMOS33"),
+            ("O_sdram_wen_n", 0, "LVCMOS33"),
+            ("O_sdram_addr", 12, "LVCMOS33"),
+            ("O_sdram_ba", 2, "LVCMOS33"),
+            ("O_sdram_dqm", 2, "LVCMOS33"),
+            ("IO_sdram_dq", 16, "LVCMOS33"),
         ]
     }],
 }
