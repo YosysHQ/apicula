@@ -3332,7 +3332,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
                 else:
                     #print(row, col, f'mode:{mode_for_attrs}, idx:{iob_idx}')
-                    if mode_for_attrs == 'OBUF':
+                    if mode_for_attrs in {'OBUF', 'IOBUF'}:
                         iob_attrs.update({147}) # IOB_UNKNOWN51=TRIMUX
                     elif mode_for_attrs == 'IBUF':
                         if 'HCLK' in iob.flags:
