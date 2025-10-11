@@ -1,7 +1,7 @@
 YOSYS ?= yosys
 NEXTPNR ?= nextpnr-himbaechel
 DEBUG = -v --debug
-#DEBUG =
+DEBUG =
 
 .DEFAULT_GOAL := all
 all: \
@@ -10,7 +10,8 @@ all: \
 	blinky-osc-primer25k.fs pll7-primer25k.fs dcs-primer25k.fs \
 	bsram-DPB-primer25k.fs bsram-DPB16-primer25k.fs bsram-DPX9B-primer25k.fs bsram-DPX9B18-primer25k.fs \
 	bsram-pROM-primer25k.fs bsram-pROMX9-primer25k.fs bsram-SP-primer25k.fs bsram-SPX9-primer25k.fs \
-	bsram-SDPB-primer25k.fs bsram-SDPX9B-primer25k.fs 
+	bsram-SDPB-primer25k.fs bsram-SDPX9B-primer25k.fs bsram-SDPB32-primer25k.fs \
+	femto-riscv-15-primer25k.fs femto-riscv-16-primer25k.fs femto-riscv-18-primer25k.fs
 
 
 clean: 
@@ -37,3 +38,13 @@ alu-%-primer25k.json: alu-%-primer25k-synth.json alu-%-primer25k.cst
 
 bsram-%-primer25k-synth.json: pll/GW5A-25A.vh io444.vh display-640x480.v %-image-rom.v %-video-ram.v %.v clock-PLLA.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw5a"
+
+femto-%-primer25k-synth.json: femto-%.v
+	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -nolutram -family gw5a"
+
+attosoc-primer25k.json: attosoc-primer25k-synth.json primer25k.cst
+	$(NEXTPNR) $(DEBUG) --top attosoc --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt cpu_as_gpio --vopt sspi_as_gpio
+
+attosoc-primer25k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
+	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -nolutram -strict-gw5a-dffs -family gw5a"
+
