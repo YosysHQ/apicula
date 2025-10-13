@@ -1050,6 +1050,7 @@ def set_bsram_attrs(db, typ, params):
                 bsram_attrs[f'{typ}A_MODE'] = 'RBW'
                 bsram_attrs[f'{typ}B_MODE'] = 'RBW'
     fin_attrs = set()
+    #print(bsram_attrs)
     for attr, val in bsram_attrs.items():
         if isinstance(val, str):
             val = attrids.bsram_attrvals[val]

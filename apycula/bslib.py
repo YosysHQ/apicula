@@ -354,6 +354,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
                 f.write('1'*128)
                 f.write('\n')
         if gw5a_bsram_init_map:
+            crcdat = bytearray()
             write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams)
 
         for ba in ftr[1:]:
