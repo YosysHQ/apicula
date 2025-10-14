@@ -21,7 +21,7 @@ module top
 	wire gnd;
 	assign gnd = 1'b0;
 
-	clock_pll clok_pll(
+	clock_pll clock_pll(
 		.clk(clk),
 		.rst(rst),
 		.write_clk(write_clk),
