@@ -20,7 +20,7 @@ module top
 	wire pixel_clk;
 	wire write_clk;
 
-	clock_pll clok_pll(
+	clock_pll clock_pll(
 		.clk(clk),
 		.rst(rst),
 		.write_clk(write_clk),
