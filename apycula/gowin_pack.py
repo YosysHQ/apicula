@@ -236,6 +236,10 @@ def get_bels(data):
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
             continue
+        # skip unused outs
+        if cell['type'] == "OBUF" and "NET_I" not in cell['parameters']:
+            continue
+
         bel = cell['attributes']['NEXTPNR_BEL']
         if bel in {"VCC", "GND"}: continue
         if bel[-4:] in {'/GND', '/VCC'}:
