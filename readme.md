@@ -32,7 +32,7 @@ pip install apycula
 Note that on some systems the installed binaries might not be on the path. Either add the binaries to the path, or use the path of the _installed binary_ directly. (running the source files will lead to import errors)
 
 ```bash
-which gowin_bba # check if binaries are on the path
+which gowin_pack # check if binaries are on the path
 python -m site --user-base # find the site packages base directory
 ls $HOME/.local/bin # confirm the binaries are installed in this folder
 export PATH="$HOME/.local/bin:$PATH" # add binaries to the path
