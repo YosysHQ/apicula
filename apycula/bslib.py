@@ -353,8 +353,11 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
                 f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
                 f.write('1'*128)
                 f.write('\n')
+        else:
+            crcdat = bytearray()
         if gw5a_bsram_init_map:
             write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams)
+            crcdat = bytearray()
 
         for ba in ftr[1:]:
             f.write(''.join(f"{b:08b}" for b in ba))
