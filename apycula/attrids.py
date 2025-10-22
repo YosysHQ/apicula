@@ -68,6 +68,7 @@ iob_attrids = {
         'IOB_UNKNOWN61':         61,
         'IOB_UNKNOWN62':         62,
         'IOB_UNKNOWN66':         66,
+        'IOB_UNKNOWN67':         67,
         'IOB_UNKNOWN68':         68,
         'IOB_UNKNOWN69':         69,
         'IOB_UNKNOWN70':         70,
