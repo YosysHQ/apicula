@@ -25,13 +25,13 @@ clean:
 	gowin_pack --sspi_as_gpio --cpu_as_gpio -d GW5A-25A -o $@ $<
 
 %-primer25k.json: %-primer25k-synth.json primer25k.cst
-	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt cpu_as_gpio --vopt sspi_as_gpio
+	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt sspi_as_gpio
 
 big-shift-primer25k.json: big-shift-primer25k-synth.json big-shift-primer25k.cst
-	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=big-shift-primer25k.cst --vopt cpu_as_gpio --vopt sspi_as_gpio
+	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=big-shift-primer25k.cst --vopt sspi_as_gpio
 
 alu-%-primer25k.json: alu-%-primer25k-synth.json alu-%-primer25k.cst
-	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=$(basename $@).cst --vopt cpu_as_gpio --vopt sspi_as_gpio
+	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=$(basename $@).cst --vopt sspi_as_gpio
 
 %-primer25k-synth.json: %.v
 	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a"
@@ -43,7 +43,7 @@ femto-%-primer25k-synth.json: femto-%.v
 	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -nolutram -family gw5a"
 
 attosoc-primer25k.json: attosoc-primer25k-synth.json primer25k.cst
-	$(NEXTPNR) $(DEBUG) --top attosoc --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt cpu_as_gpio --vopt sspi_as_gpio
+	$(NEXTPNR) $(DEBUG) --top attosoc --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt sspi_as_gpio
 
 attosoc-primer25k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -nolutram -strict-gw5a-dffs -family gw5a"
