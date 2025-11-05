@@ -350,6 +350,9 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
     clock_pips = {}
     bels = {}
     for name, bel in tiledata.bels.items():
+        if name.startswith("ADC"):
+            attrvals = parse_attrvals(tile, db.rev_logicinfo('ADC'), db.shortval[tiledata.ttyp]['ADC'], attrids.adc_attrids, "ADC")
+            print(row, col, name, tiledata.ttyp, attrvals)
         if name.startswith("RPLL"):
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
             modes = { f'DEVICE="{_device}"' }
@@ -461,13 +464,22 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
             continue
         if name.startswith("IOB"):
             idx = name[-1]
-            #XXX
-            if idx != 'A':
+            io_row, io_col = row, col
+            io_tile = tile
+            io_ttyp = tiledata.ttyp
+
+            if idx == 'B' and _device == 'GW5A-25A' and tiledata.bels[name].fuse_cell_offset:
+                io_row += tiledata.bels[name].fuse_cell_offset[0]
+                io_col += tiledata.bels[name].fuse_cell_offset[1]
+                io_tiledata = db.grid[io_row][io_col]
+                io_ttyp = io_tiledata.ttyp
+            # XXX
+            if idx == 'B' and 'IOBB' not in db.longval[io_ttyp]:
                 continue
-            attrvals = parse_attrvals(tile, db.rev_logicinfo('IOB'), db.longval[tiledata.ttyp][f'IOB{idx}'], attrids.iob_attrids, "IOB")
-            #print(name, row, col, attrvals)
+            attrvals = parse_attrvals(io_tile, db.rev_logicinfo('IOB'), db.longval[io_ttyp][f'IOB{idx}'], attrids.iob_attrids, "IOB")
+            #print(name, io_row, io_col, attrvals)
             try: # we can ask for invalid pin here because the IOBs share some stuff
-                bank = chipdb.loc2bank(db, row, col)
+                bank = chipdb.loc2bank(db, io_row, io_col)
             except KeyError:
                 bank = None
             if attrvals:
@@ -506,7 +518,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                 bels.setdefault(name, set()).add(mode)
         if name.startswith("BANK"):
             attrvals = parse_attrvals(tile, db.rev_logicinfo('IOB'), _bank_fuse_tables[tiledata.ttyp][name], attrids.iob_attrids, "IOB")
-            print(name, row, col, attrvals)
+            #print(name, row, col, attrvals)
 
             for a, v in attrvals.items():
                 bels.setdefault(name, set()).add(f'{a}={attrids.iob_num2val.get(v, str(v))}')
@@ -1274,8 +1286,14 @@ def main():
     # Slots have no wires only func fuses
     if extra_slots:
         for slot_idx, slot_bitmap in extra_slots.items():
-            av = parse_attrvals(slot_bitmap, db.rev_logicinfo('PLL'), db.shortval[1024]['PLL'], attrids.pll_attrids, "PLL")
-            print('Slot:', slot_idx, av)
+            if slot_idx in {2, 3, 4, 5, 6, 8}:
+                av = parse_attrvals(slot_bitmap, db.rev_logicinfo('PLL'), db.shortval[1024]['PLL'], attrids.pll_attrids, "PLL")
+                print('Slot:', slot_idx, av)
+            elif slot_idx in {1}:
+                av = parse_attrvals(slot_bitmap, db.rev_logicinfo('ADC'), db.shortval[1026]['ADC'], attrids.adc_attrids, "ADC")
+                print('Slot:', slot_idx, av)
+            else:
+                print('Unknown Slot:', slot_idx)
 
     # XXX this PLLs have empty main cell
     if _device in {'GW1N-9C', 'GW1N-9'}:

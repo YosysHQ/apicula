@@ -429,8 +429,8 @@ class Datfile:
         ret["AdcLRCCfgvsenctl2"]    = self.read_scaledGrid16(0x24, 3, 3, RSTable5ATOffset + 0x130b8, 8)
         ret["AdcULCOuts"]           = self.read_scaledGrid16(0x12, 3, 3, RSTable5ATOffset + 0x13128, 0)
         ret["AdcULCCfgvsenctl"]     = self.read_scaledGrid16(3, 3, 3, RSTable5ATOffset + 0x13158, 0xc)
-        ret["Adc25kIns"]            = self.read_scaledGrid16(0x17, 3, 3, RSTable5ATOffset + 0x13160, 0xe)
-        ret["Adc25kOuts"]           = self.read_scaledGrid16(0x1b, 3, 3, RSTable5ATOffset + 0x131a8, 8)
+        ret["Adc25kIns"]            = self.read_scaledGrid16i(25, 3, 6, 1, RSTable5ATOffset + 0x26dfe)
+        ret["Adc25kOuts"]           = self.read_scaledGrid16i(28, 3, 6, 1, RSTable5ATOffset + 0x26e94)
 
         ret["CibFabricNode"]        = self.read_scaledGrid16(6, 3, 6, 1, RSTable5ATOffset + 0x27254)
         ret["SharedIOLogicIOBloc"]  = self.read_scaledGrid16(0x9c, 2, 2, RSTable5ATOffset + 0x13208, 0xe)

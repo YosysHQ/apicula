@@ -112,7 +112,7 @@ def readOneFile(f, tileType, device):
                 t = readTable(f, size, 3, 2)
             else: # GW5A-138B GW5AST-138B GW5AT-138 GW5AT-138B GW5AT-75B
                 typn = "signedlogicinfo"
-                t = readTable(f, size, 6, 2)
+                t = readTable(f, size, 3, 2)
         elif typ in {0x86, 0x87}:
             typn = "signedlogicinfo"
             t = readTable(f, size, 6, 2)

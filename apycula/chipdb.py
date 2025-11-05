@@ -503,6 +503,7 @@ _known_logic_tables = {
             59: 'CFG',
             62: 'OSC',
             63: 'USB',
+            67: 'ADC',
             92: '5A_PCLK_ENABLE',
         }
 
@@ -1345,6 +1346,53 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                                 pips.setdefault(dst, {}).update({src: set()})
                                 if src.startswith('HCLK'):
                                     hclks[src].add((row, col, src))
+
+# ADC in GW5A series are placed in slots AND in the main grid.
+def fse_create_adc(dev, device, fse, dat):
+    if device not in {"GW5A-25A"}:
+        return
+    row, col = 0, dev.cols - 1
+    dev.grid[row][col].bels['ADC'] = Bel()
+    extra = dev.extra_func.setdefault((row, col), {})
+    adc = extra.setdefault('adc', {})
+    adc['slot_idx'] = 1 # 25A has one adc and it is placed in the slot 1
+
+    portmap = adc.setdefault('inputs', {})
+    for idx, nam in _adc_inputs:
+        wrow, wcol, wire_idx = dat.gw5aStuff['Adc25kIns'][idx]
+        if wrow == -1 or wcol == -1:
+            continue
+        wrow -= 1
+        wcol -= 1
+        wire_type = 'ADC_I'
+        if nam == 'CLK' or nam == 'MDRP_CLK':
+            wire_type = 'TILE_CLK'
+        wire = wnames.wirenames[wire_idx]
+        if wrow == row and wcol == col:
+            portmap[nam] = wire
+        else:
+            # not our cell, make an alias
+            portmap[nam] = f'ADC{nam}{wire}'
+            # Himbaechel node
+            dev.nodes.setdefault(f'X{col}Y{row}/ADC{nam}{wire}', (wire_type, {(row, col, f'ADC{nam}{wire}')}))[1].add((wrow, wcol, wire))
+
+    portmap = adc.setdefault('outputs', {})
+    for idx, nam in _adc_outputs:
+        wrow, wcol, wire_idx = dat.gw5aStuff['Adc25kOuts'][idx]
+        if wrow == -1 or wcol == -1:
+            continue
+        wrow -= 1
+        wcol -= 1
+        wire_type = 'ADC_O'
+        wire = wnames.wirenames[wire_idx]
+        if wrow == row and wcol == col:
+            portmap[nam] = wire
+        else:
+            # not our cell, make an alias
+            portmap[nam] = f'ADC{nam}{wire}'
+            # Himbaechel node
+            dev.nodes.setdefault(f'X{col}Y{row}/ADC{nam}{wire}', (wire_type, {(row, col, f'ADC{nam}{wire}')}))[1].add((wrow, wcol, wire))
+
 
 # GW5A PLLs do not use the main grid, but are located in so-called slots, so it
 # makes sense to use the extra_func mechanism for their arbitrary placement.
@@ -2999,6 +3047,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_diff_types(dev, device)
     fse_create_hclk_nodes(dev, device, fse, dat)
     fse_create_slot_plls(dev, device, fse, dat)
+    fse_create_adc(dev, device, fse, dat)
     fse_create_mipi(dev, device, dat)
     fse_create_i3c(dev, device, dat)
     fse_create_io16(dev, device)
@@ -3179,6 +3228,17 @@ def json_pinout(device):
     else:
         raise Exception("unsupported device")
 
+_adc_inputs = [(0, 'CLK'), (2, 'VSENCTL0'), (3, 'VSENCTL1'), (4, 'VSENCTL2'), (5, 'ADCMODE'),
+               (6, 'DRSTN'), (7, 'ADCREQI'), (8, 'MDRP_CLK'), (10, 'MDRP_WDATA0'), (11, 'MDRP_WDATA1'),
+               (12, 'MDRP_WDATA2'), (13, 'MDRP_WDATA3'), (14, 'MDRP_WDATA4'), (15, 'MDRP_WDATA5'),
+               (16, 'MDRP_WDATA6'), (17, 'MDRP_WDATA7'), (18, 'MDRP_A_INC'), (20, 'MDRP_OPCODE0'),
+               (21, 'MDRP_OPCODE1'), (22, 'ADCEN')];
+_adc_outputs = [(0, 'ADCRDY'), (2, 'ADCVALUE0'), (3, 'ADCVALUE1'), (4, 'ADCVALUE2'), (5, 'ADCVALUE3'),
+                (6, 'ADCVALUE4'), (7, 'ADCVALUE5'), (8, 'ADCVALUE6'), (9, 'ADCVALUE7'), (10, 'ADCVALUE8'),
+                (11, 'ADCVALUE9'), (12, 'ADCVALUE10'), (13, 'ADCVALUE11'), (14, 'ADCVALUE12'),
+                (15, 'ADCVALUE13'), (17, 'MDRP_RDATA0'), (18, 'MDRP_RDATA1'), (19, 'MDRP_RDATA2'),
+                (20, 'MDRP_RDATA3'), (21, 'MDRP_RDATA4'), (22, 'MDRP_RDATA5'), (23, 'MDRP_RDATA6'),
+                (24, 'MDRP_RDATA7')]
 _pll_inputs = [(5, 'CLKFB'), (6, 'FBDSEL0'), (7, 'FBDSEL1'), (8, 'FBDSEL2'), (9, 'FBDSEL3'),
                (10, 'FBDSEL4'), (11, 'FBDSEL5'),
                (12, 'IDSEL0'), (13, 'IDSEL1'), (14, 'IDSEL2'), (15, 'IDSEL3'), (16, 'IDSEL4'),
