@@ -2338,8 +2338,11 @@ def fse_create_diff_types(dev, device):
         dev.diff_io_types.remove('TLVDS_TBUF')
         dev.diff_io_types.remove('TLVDS_IOBUF')
         dev.diff_io_types.remove('ELVDS_IOBUF')
-    elif device not in {'GW2A-18', 'GW2A-18C', 'GW1N-4'}:
+    elif device not in {'GW5A-25A', 'GW2A-18', 'GW2A-18C', 'GW1N-4'}:
         dev.diff_io_types.remove('TLVDS_IOBUF')
+
+    if device in {'GW5A-25A'}:
+        dev.diff_io_types.append('TLVDS_IBUF_ADC')
 
 def fse_create_mipi(dev, device, dat: Datfile):
     # The MIPI OBUF is a slightly modified differential TBUF, such units are
@@ -3422,6 +3425,9 @@ def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
         bel.portmap['I'] = out
         oe = wnames.wirenames[dat.portmap[f'Iobuf{pin}OE']]
         bel.portmap['OE'] = oe
+        # XXX
+        adcen = 'CE1'
+        bel.portmap['ADCEN'] = adcen
     else:
         inp = wnames.wirenames[dat.portmap[f'Iobuf{pin}Out']]
         nodename = add_node(dev, f'X{col}Y{row}/IOBB_O', "IO_O", row + bel.fuse_cell_offset[0], col + bel.fuse_cell_offset[1], inp)

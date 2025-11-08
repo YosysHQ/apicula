@@ -56,7 +56,7 @@ iob_attrids = {
         'MIPI_IBUF_DRIVE':       48,
         'MIPI_IBUF_DRIVE_LEVEL': 49,
 
-        'IOB_UNKNOWN50':         50,
+        'IOB_GW5_PULL_50':       50,
         'IOB_UNKNOWN51':         51,
         'IOB_UNKNOWN52':         52,
         'IOB_UNKNOWN55':         55,
@@ -67,13 +67,15 @@ iob_attrids = {
         'IOB_UNKNOWN60':         60,
         'IOB_UNKNOWN61':         61,
         'IOB_UNKNOWN62':         62,
+        'IOB_GW5_VCCX_64':       64,
         'IOB_UNKNOWN66':         66,
         'IOB_UNKNOWN67':         67,
         'IOB_GW5_ADC_IN':        68,
-        'IOB_UNKNOWN69':         69,
+        'IOB_GW5_ADC_DYN_IN':    69,
         'IOB_UNKNOWN70':         70,
         'IOB_UNKNOWN71':         71,
-        'IOB_UNKNOWN72':         72
+        'IOB_UNKNOWN72':         72,
+        'IOB_UNKNOWN76':         76,
         }
 
 iob_attrvals = {
@@ -260,8 +262,11 @@ iob_attrvals = {
             'LVCMOS18OD12':     163,
 
             # 5A ADC
-            'ADC_P_PAD':        255,
-            'ADC_N_PAD':        247,
+            'UNKNOWN247':       247,
+            'UNKNOWN254':       254,
+            'GW5_ADC_IN':       255,
+
+            'UKNOWN_310':       310,
         }
 
 # ADC

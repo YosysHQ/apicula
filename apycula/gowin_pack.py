@@ -2976,15 +2976,15 @@ def check_adc_io(db, io_loc):
     res = iore.fullmatch(io_loc)
     if not res:
         raise Exception(f"Bad IOLOC {ioloc} in the ADC src list.")
-    adc_bus, io_row, io_col = res.groups()
+    adc_bus, io_col, io_row = res.groups()
     row = int(io_row)
     col = int(io_col)
-    bank = chipdb.loc2bank(db, row, col)
-    if (adc_bus == '0' and bank not in "067") or (adc_bus == '1' and bank not in "2345"):
-        raise Exception(f"Bad IO({row}, {col}) bank {bank} for ADC bus {adc_bus}.")
+    pin_bus = db.extra_func[row, col]['adcio']['bus']
+    if pin_bus != f'BUS{adc_bus}':
+        raise Exception(f"IO({row}, {col}) has ADC bus {pin_bus[-1]}, but used in bus {adc_bus}.")
 
     for pos, desc in adc_iolocs.items():
-        if desc['bus'] == adc_bus:
+        if desc['bus'] == adc_bus and adc_bus in "01":
             raise Exception(f"IO at ({row}, {col}) and at ({pos[0]}, {pos[1]}) have same bus {adc_bus}. Only one IO in the one bus allowed.")
 
     adc = adc_iolocs.setdefault((row, col), {})
@@ -3142,6 +3142,10 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     raise ValueError(f"Cannot place {cellname} at {bel_name} - it is a true lvds pin")
                 if not iob.is_true_lvds and mode[0] == 'T':
                     raise ValueError(f"Cannot place {cellname} at {bel_name} - it is an emulated lvds pin")
+                if parms['DIFF_TYPE'] == 'TLVDS_IBUF_ADC':
+                    # ADC diff io
+                    check_adc_io(db, f'2/X{col - 1}Y{row - 1}')
+                    continue
             else:
                 if int(parms["ENABLE_USED"], 2):
                     if int(parms["INPUT_USED"], 2):
@@ -3780,13 +3784,25 @@ def set_const_fuses(db, row, col, tile):
 def set_adc_iobuf_fuses(db, tilemap):
     for ioloc in adc_iolocs.keys():
         row, col = ioloc
-        print("ADC IO:", row, col)
+        bus = adc_iolocs[ioloc]['bus']
         tiledata = db.grid[row][col]
         # A
         attrs = {}
-        attrs['IO_TYPE'] = 'ADC_P_PAD'
+        if bus not in '01':
+            attrs['IOB_GW5_ADC_DYN_IN'] = 'ENABLE'
+            attrs['IOB_UNKNOWN70'] = 'UNKNOWN'
+            attrs['IOB_UNKNOWN71'] = 'UNKNOWN'
+        attrs['IO_TYPE'] = 'GW5_ADC_IN'
         attrs['IOB_GW5_ADC_IN'] = 'ENABLE'
         attrs['PULLMODE'] = 'NONE'
+        attrs['HYSTERESIS'] = 'NONE'
+        attrs['CLAMP'] = 'OFF'
+        attrs['OPENDRAIN'] = 'OFF'
+        attrs['DDR_DYNTERM'] = 'NA'
+        attrs['IO_BANK'] = 'NA'
+        attrs['PADDI'] = 'PADDI'
+        attrs['IOB_GW5_PULL_50'] = 'NONE'
+        attrs['IOB_GW5_VCCX_64'] = '3.3'
 
         io_attrs = set()
         for k, val in attrs.items():
@@ -3803,9 +3819,25 @@ def set_adc_iobuf_fuses(db, tilemap):
             col += tiledata.bels['IOBB'].fuse_cell_offset[1]
             tiledata = db.grid[row][col]
 
-        io_attrs = {}
-        io_attrs['IO_TYPE'] = 'ADC_N_PAD'
-        io_attrs['PADDI'] = 'PADDI'
+        attrs = {}
+        if bus in '01':
+            attrs['IOB_UNKNOWN60'] = 'ON'
+            attrs['IOB_UNKNOWN61'] = 'ON'
+        else:
+            attrs['IOB_GW5_ADC_DYN_IN'] = 'ENABLE'
+            attrs['IOB_UNKNOWN70'] = 'UNKNOWN'
+            attrs['IOB_UNKNOWN71'] = 'UNKNOWN'
+        attrs['IO_TYPE'] = 'GW5_ADC_IN'
+        attrs['IOB_GW5_ADC_IN'] = 'ENABLE'
+        attrs['PULLMODE'] = 'NONE'
+        attrs['HYSTERESIS'] = 'NONE'
+        attrs['CLAMP'] = 'OFF'
+        attrs['OPENDRAIN'] = 'OFF'
+        attrs['DDR_DYNTERM'] = 'NA'
+        attrs['IO_BANK'] = 'NA'
+        attrs['PADDI'] = 'PADDI'
+        attrs['IOB_GW5_PULL_50'] = 'NONE'
+        attrs['IOB_GW5_VCCX_64'] = '3.3'
 
         io_attrs = set()
         for k, val in attrs.items():

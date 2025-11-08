@@ -320,7 +320,7 @@ def get_dsp_main_cell(db, row, col, typ):
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowin_unpack io standard is determined first and it is known.
 # (bels, pips, clock_pips)
-def parse_tile_(db, row, col, tile, default=True, noiostd = True):
+def parse_tile_(db, row, col, tile, bm, default=True, noiostd = True):
     if not _bank_fuse_tables:
         # create bank fuse table
         for ttyp in db.longval.keys():
@@ -472,6 +472,7 @@ def parse_tile_(db, row, col, tile, default=True, noiostd = True):
                 io_row += tiledata.bels[name].fuse_cell_offset[0]
                 io_col += tiledata.bels[name].fuse_cell_offset[1]
                 io_tiledata = db.grid[io_row][io_col]
+                io_tile = bm[io_row, io_col]
                 io_ttyp = io_tiledata.ttyp
             # XXX
             if idx == 'B' and 'IOBB' not in db.longval[io_ttyp]:
@@ -1314,7 +1315,7 @@ def main():
             t = bm[(row, col)]
         except KeyError:
             continue
-        bels, pips, clock_pips = parse_tile_(db, row, col, t)
+        bels, pips, clock_pips = parse_tile_(db, row, col, t, bm)
         #print("bels:", bels)
         tile2verilog(row, col, bels, pips, clock_pips, mod, cst, db)
 
@@ -1323,7 +1324,7 @@ def main():
         # skip banks & dual pisn
         if (row, col) in db.corners:
             continue
-        bels, pips, clock_pips = parse_tile_(db, row, col, t, noiostd = False)
+        bels, pips, clock_pips = parse_tile_(db, row, col, t, bm, noiostd = False)
         #print("bels:", idx, bels)
         #print(pips)
         #print(clock_pips)

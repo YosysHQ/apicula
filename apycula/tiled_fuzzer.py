@@ -219,7 +219,7 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
         for bel_name in bels:
             is_diff = False
             if bel_name in diff_cap_info.keys():
-                is_diff, is_true_lvds, is_positive = diff_cap_info[bel_name]
+                is_diff, is_true_lvds, is_positive, adc_bus = diff_cap_info[bel_name]
             bel = iob_bels.setdefault(ttyp, {}).setdefault(f'IOB{bel_name[-1]}', chipdb.Bel())
             bel.simplified_iob = is_simplified
             bel.is_diff = is_diff
@@ -230,6 +230,15 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
     for ttyp, bels in iob_bels.items():
         for row, col in locations[ttyp]:
             db.grid[row][col].bels.update(iob_bels[ttyp])
+
+    # adc bus
+    for pin, desc in diff_cap_info.items():
+        _, _, _, adc_bus = desc
+        if adc_bus:
+            side, num = _tbrlre.match(pin).groups()
+            row, col = tbrl2rc(fse, side, num)
+            extra = db.extra_func.setdefault((row, col), {})
+            extra.setdefault('adcio', {})['bus'] = adc_bus
 
 # generate bitstream footer
 def gen_ftr():
@@ -338,7 +347,7 @@ if __name__ == "__main__":
     db.cmd_ftr = gen_ftr()
 
     # IOB
-    diff_cap_info = pindef.get_diff_cap_info(params['device'], params['package'], True)
+    diff_cap_info = pindef.get_diff_adc_cap_info(params['device'], params['package'], True)
     fse_iob(fse, db, pin_locations, diff_cap_info, locations);
     if chipdb.is_GW5_family(device):
         chipdb.fill_GW5A_io_bels(db)

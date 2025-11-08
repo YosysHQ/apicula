@@ -101,8 +101,8 @@ def get_pll_pads_locs(device, package):
     return [(pin['NAME'], *pin['CFG'].split('/')) for pin in df
             if 'CFG' in pin.keys() and 'PLL' in pin['CFG']]
 
-# { name : (is_diff, is_true_lvds, is_positive)}
-def get_diff_cap_info(device, package, special_pins=False):
+# { name : (is_diff, is_true_lvds, is_positive, adc_bus)}
+def get_diff_adc_cap_info(device, package, special_pins=False):
     df = get_package(device, package, special_pins)
     res = {}
     # If one pin of the pair is forbidden for the diff IO,
@@ -112,16 +112,21 @@ def get_diff_cap_info(device, package, special_pins=False):
     for pin in df:
         is_positive = False
         is_diff = 'DIFF' in pin.keys()
+        adc_bus = None
+        if 'ADC_INPUT' in pin.keys() and pin['ADC_INPUT']:
+            adc_bus = pin['ADC_INPUT']
+
         if not is_diff:
-            res[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive)
+            res[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive, adc_bus)
             continue
         is_true_lvds = 'TRUELVDS' in pin.keys()
+
         if pin['DIFF'] == 'P':
             is_positive = True
-            positive[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive, str(pin['PAIR']))
+            positive[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive, adc_bus, str(pin['PAIR']))
         else:
             is_positive = False
-            negative[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive)
+            negative[str(pin['NAME'])] = (is_diff, is_true_lvds, is_positive, adc_bus)
     # check the pairs
     for pos_name, pos_flags in positive.items():
         neg_name = pos_flags[-1]
