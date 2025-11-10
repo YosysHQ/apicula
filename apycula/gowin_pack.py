@@ -699,6 +699,8 @@ def set_adc_attrs(db, idx, attrs):
             if val == 0:
                 adc_attrs[attr] = 'DISABLE'
             else:
+                if val & 1 << 11:
+                    val -= 1 << 12;
                 adc_attrs[attr] = val
             continue
 
