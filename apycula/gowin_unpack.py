@@ -320,7 +320,7 @@ def get_dsp_main_cell(db, row, col, typ):
 # with iostd by default, e.g. from the clock fuzzer
 # With normal gowin_unpack io standard is determined first and it is known.
 # (bels, pips, clock_pips)
-def parse_tile_(db, row, col, tile, bm, default=True, noiostd = True):
+def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
     if not _bank_fuse_tables:
         # create bank fuse table
         for ttyp in db.longval.keys():
