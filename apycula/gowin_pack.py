@@ -3711,6 +3711,9 @@ def gsr(db, tilemap, args):
     elif device in {'GW5A-25A'}:
         gsr_type = {49, 83}
         cfg_type = {49, 51}
+    elif device in {'GW5AST-138C'}:
+        gsr_type = {220}
+        cfg_type = {220}
 
     for row, rd in enumerate(db.grid):
         for col, rc in enumerate(rd):
@@ -3761,6 +3764,8 @@ def dualmode_pins(db, tilemap, args):
         cfg_type = {1, 51}
     elif device in {'GW5A-25A'}:
         cfg_type = {49, 51}
+    elif device in {'GW5AST-138C'}:
+        cfg_type = {220}
 
     for row, rd in enumerate(db.grid):
         for col, rc in enumerate(rd):
