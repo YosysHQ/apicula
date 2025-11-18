@@ -23,6 +23,7 @@ device = ""
 pnr = None
 bsram_init_map = None
 gw5a_bsrams = []
+adc_iolocs = {} # pos: {}
 
 # Sometimes it is convenient to know where a port is connected to enable
 # special fuses for VCC/VSS cases.
@@ -231,7 +232,7 @@ _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9'}
 def get_bels(data):
     later = []
-    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA)(\w*)")
+    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA|ADC)(\w*)")
 
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
@@ -551,6 +552,27 @@ _default_plla_internal_attrs = {
             'A_CLKFBOUT_PE_FINE' : 0,
 }
 
+_default_adc_attrs = {
+            'CLK_SEL'              : "0",
+            'DIV_CTL'              : "0",
+            'PHASE_SEL'            : "0",
+            'UNK0'                 : "101",
+            'ADC_EN_SEL'           : "0",
+            'IBIAS_CTL'            : "1000",
+            'UNK1'                 : "1",
+            'UNK2'                 : "10000",
+            'CHOP_EN'              : "1",
+            'GAIN'                 : "100",
+            'CAP_CTL'              : "0",
+            'BUF_EN'               : "0",
+            'CSR_VSEN_CTRL'        : "0",
+            'CSR_ADC_MODE'         : "1",
+            'CSR_SAMPLE_CNT_SEL'   : "0",
+            'CSR_RATE_CHANGE_CTRL' : "0",
+            'CSR_FSCAL'            : bin(730),
+            'CSR_OFFSET'           : bin(1180),
+}
+
 def plla_attr_rename(attrs):
     new_attrs = {}
     for attr, val in attrs.items():
@@ -567,6 +589,128 @@ def add_pll_default_attrs(attrs, default_attrs = _default_pll_inattrs):
             continue
         pll_inattrs[k] = v
     return pll_inattrs
+
+def add_adc_default_attrs(attrs, default_attrs = _default_adc_attrs):
+    adc_inattrs = attrs.copy()
+    for k, v in default_attrs.items():
+        if k in adc_inattrs:
+            continue
+        adc_inattrs[k] = v
+    return adc_inattrs
+
+def set_adc_attrs(db, idx, attrs):
+    attrs_upper(attrs)
+    adc_inattrs = add_adc_default_attrs(attrs)
+
+    # parse attrs
+    adc_attrs = {}
+    for attr, vl in adc_inattrs.items():
+        val = int(vl, 2)
+        if not attr.startswith('BUF_BK'):
+            adc_attrs[attr] = val
+        if attr == 'CLK_SEL':
+            if val == 1:
+                adc_attrs[attr] = 'CLK_CLK'
+            continue
+        if attr == 'DIV_CTL':
+            if val:
+                adc_attrs[attr] = 2**val
+            continue
+        if attr == 'PHASE_SEL':
+            if val:
+                adc_attrs[attr] = 'PHASE_180'
+            continue
+        if attr == 'ADC_EN_SEL':
+            if val == 1:
+                adc_attrs[attr] = 'ADC'
+            continue
+        if attr == 'UNK0':
+            if val == 0:
+                adc_attrs[attr] = 'DISABLE'
+            else:
+                adc_attrs[attr] = val
+            continue
+        if attr == 'UNK1':
+            if val == 1:
+                adc_attrs[attr] = 'OFF'
+            continue
+        if attr == 'UNK2':
+            if val == 0:
+                adc_attrs[attr] = 'DISABLE'
+            continue
+        if attr == 'IBIAS_CTL':
+            if val == 0:
+                adc_attrs[attr] = 'DISABLE'
+            else:
+                adc_attrs[attr] = val
+            continue
+        if attr == 'CHOP_EN':
+            if val == 1:
+                adc_attrs[attr] = 'ON'
+            else:
+                adc_attrs[attr] = 'UNKNOWN'
+            continue
+        if attr == 'GAIN':
+            if val == 0:
+                adc_attrs[attr] = 'DISABLE'
+            else:
+                adc_attrs[attr] = val
+            continue
+        if attr == 'CAP_CTL':
+            adc_attrs[attr] = val
+            continue
+        if attr == 'BUF_EN':
+            for i in range(12):
+                if val & (2**i):
+                    adc_attrs[f'BUF_{i}_EN'] = 'ON'
+            del(adc_attrs[attr])
+            continue
+        if attr == 'CSR_ADC_MODE':
+            if val == 1:
+                adc_attrs[attr] = '1'
+            else:
+                adc_attrs[attr] = 'UNKNOWN'
+            continue
+        if attr == 'CSR_VSEN_CTRL':
+            if val == 4:
+                adc_attrs[attr] = 'UNK1'
+            elif val == 7:
+                adc_attrs[attr] = 'UNK0'
+            continue
+        if attr == 'CSR_SAMPLE_CNT_SEL':
+            if val > 4:
+               adc_attrs[attr] = 2048
+            else:
+               adc_attrs[attr] = (2**val) * 64
+            continue
+        if attr == 'CSR_RATE_CHANGE_CTRL':
+            if val > 4:
+                adc_attrs[attr] = 80
+            else:
+                adc_attrs[attr] = (2**val) * 4
+            continue
+        if attr == 'CSR_FSCAL':
+            if val in range(452, 841):
+                adc_attrs['CSR_FSCAL1'] = val
+            adc_attrs['CSR_FSCAL0'] = val
+            del(adc_attrs[attr])
+            continue
+        if attr == 'CSR_OFFSET':
+            if val == 0:
+                adc_attrs[attr] = 'DISABLE'
+            else:
+                if val & 1 << 11:
+                    val -= 1 << 12;
+                adc_attrs[attr] = val
+            continue
+
+    fin_attrs = set()
+    #print(adc_attrs)
+    for attr, val in adc_attrs.items():
+        if isinstance(val, str):
+            val = attrids.adc_attrvals[val]
+        add_attr_val(db, 'ADC', fin_attrs, attrids.adc_attrids[attr], val)
+    return fin_attrs
 
 # typ - PLL type (RPLL, etc)
 def set_pll_attrs(db, typ, idx, attrs):
@@ -2827,7 +2971,29 @@ def set_dcs_fuses(db, tilemap, dcs_idx, dcs_attrs, spine_idx):
                 for brow, bcol in bits:
                     tile[brow][bcol] = 1
 
+def check_adc_io(db, io_loc):
+    global adc_iolocs
+
+    iore = re.compile(r"(\d+)/X(\d+)Y(\d+)")
+    res = iore.fullmatch(io_loc)
+    if not res:
+        raise Exception(f"Bad IOLOC {ioloc} in the ADC src list.")
+    adc_bus, io_col, io_row = res.groups()
+    row = int(io_row)
+    col = int(io_col)
+    pin_bus = db.extra_func[row, col]['adcio']['bus']
+    if pin_bus != f'BUS{adc_bus}':
+        raise Exception(f"IO({row}, {col}) has ADC bus {pin_bus[-1]}, but used in bus {adc_bus}.")
+
+    for pos, desc in adc_iolocs.items():
+        if desc['bus'] == adc_bus and adc_bus in "01":
+            raise Exception(f"IO at ({row}, {col}) and at ({pos[0]}, {pos[1]}) have same bus {adc_bus}. Only one IO in the one bus allowed.")
+
+    adc = adc_iolocs.setdefault((row, col), {})
+    adc['bus'] = adc_bus
+
 def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
+    global adc_ios
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
         tiledata = db.grid[row-1][col-1]
         tile = tilemap[(row-1, col-1)]
@@ -2978,6 +3144,10 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     raise ValueError(f"Cannot place {cellname} at {bel_name} - it is a true lvds pin")
                 if not iob.is_true_lvds and mode[0] == 'T':
                     raise ValueError(f"Cannot place {cellname} at {bel_name} - it is an emulated lvds pin")
+                if parms['DIFF_TYPE'] == 'TLVDS_IBUF_ADC':
+                    # ADC diff io
+                    check_adc_io(db, f'2/X{col - 1}Y{row - 1}')
+                    continue
             else:
                 if int(parms["ENABLE_USED"], 2):
                     if int(parms["INPUT_USED"], 2):
@@ -3098,6 +3268,28 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             #print(f'({row - 1}, {col - 1}) attrs:{dsp_attrs}, bits:{sorted(dspbits)}')
             for brow, bcol in dspbits:
                 tile[brow][bcol] = 1
+        elif typ.startswith('ADC'):
+            # extract adc ios
+            for attr, val in attrs.items():
+                if attr.startswith('ADC_IO_'):
+                    check_adc_io(db, val)
+
+            # main grid cell
+            adc_attrs = set_adc_attrs(db, 0, parms)
+            bits = set()
+            if 'ADC' in db.shortval[tiledata.ttyp]:
+                bits = get_shortval_fuses(db, tiledata.ttyp, adc_attrs, 'ADC')
+            #print(typ, tiledata.ttyp, bits)
+            for r, c in bits:
+                tile[r][c] = 1
+            # slot
+            bits = get_shortval_fuses(db, 1026, adc_attrs, 'ADC')
+            slot_bitmap = extra_slots.setdefault(db.extra_func[row - 1, col - 1]['adc']['slot_idx'], bitmatrix.zeros(8, 6))
+            #print(bits)
+            for r, c in bits:
+                slot_bitmap[r][c] = 1
+            #for rd in slot_bitmap:
+            #    print(rd)
         elif typ.startswith('RPLL'):
             pll_attrs = set_pll_attrs(db, 'RPLL', 0,  parms)
             bits = set()
@@ -3192,6 +3384,10 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
         vccio = None
         iostd = None
         for iob_name, iob in ios.items():
+            # ADC IOs can't be used as gpio
+            if (iob.pos[0], iob.pos[1]) in adc_iolocs:
+                raise Exception(f"{iob_name} is ADC IO. Can't use it as GPIO.")
+
             # diff io can't be placed at simplified io
             if iob.pos[0] in db.simplio_rows:
                 if iob.flags['mode'].startswith('ELVDS') or iob.flags['mode'].startswith('TLVDS'):
@@ -3587,6 +3783,73 @@ def set_const_fuses(db, row, col, tile):
             brow, bcol = bits
             tile[brow][bcol] = 1
 
+def set_adc_iobuf_fuses(db, tilemap):
+    for ioloc in adc_iolocs.keys():
+        row, col = ioloc
+        bus = adc_iolocs[ioloc]['bus']
+        tiledata = db.grid[row][col]
+        # A
+        attrs = {}
+        if bus not in '01':
+            attrs['IOB_GW5_ADC_DYN_IN'] = 'ENABLE'
+            attrs['IOB_UNKNOWN70'] = 'UNKNOWN'
+            attrs['IOB_UNKNOWN71'] = 'UNKNOWN'
+        attrs['IO_TYPE'] = 'GW5_ADC_IN'
+        attrs['IOB_GW5_ADC_IN'] = 'ENABLE'
+        attrs['PULLMODE'] = 'NONE'
+        attrs['HYSTERESIS'] = 'NONE'
+        attrs['CLAMP'] = 'OFF'
+        attrs['OPENDRAIN'] = 'OFF'
+        attrs['DDR_DYNTERM'] = 'NA'
+        attrs['IO_BANK'] = 'NA'
+        attrs['PADDI'] = 'PADDI'
+        attrs['IOB_GW5_PULL_50'] = 'NONE'
+        attrs['IOB_GW5_VCCX_64'] = '3.3'
+
+        io_attrs = set()
+        for k, val in attrs.items():
+            add_attr_val(db, 'IOB', io_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
+
+        bits = get_longval_fuses(db, tiledata.ttyp, io_attrs, 'IOBA')
+        tile = tilemap[(row, col)]
+        for row_, col_ in bits:
+            tile[row_][col_] = 1
+
+        # B
+        if tiledata.bels['IOBB'].fuse_cell_offset:
+            row += tiledata.bels['IOBB'].fuse_cell_offset[0]
+            col += tiledata.bels['IOBB'].fuse_cell_offset[1]
+            tiledata = db.grid[row][col]
+
+        attrs = {}
+        if bus in '01':
+            attrs['IOB_UNKNOWN60'] = 'ON'
+            attrs['IOB_UNKNOWN61'] = 'ON'
+        else:
+            attrs['IOB_GW5_ADC_DYN_IN'] = 'ENABLE'
+            attrs['IOB_UNKNOWN70'] = 'UNKNOWN'
+            attrs['IOB_UNKNOWN71'] = 'UNKNOWN'
+        attrs['IO_TYPE'] = 'GW5_ADC_IN'
+        attrs['IOB_GW5_ADC_IN'] = 'ENABLE'
+        attrs['PULLMODE'] = 'NONE'
+        attrs['HYSTERESIS'] = 'NONE'
+        attrs['CLAMP'] = 'OFF'
+        attrs['OPENDRAIN'] = 'OFF'
+        attrs['DDR_DYNTERM'] = 'NA'
+        attrs['IO_BANK'] = 'NA'
+        attrs['PADDI'] = 'PADDI'
+        attrs['IOB_GW5_PULL_50'] = 'NONE'
+        attrs['IOB_GW5_VCCX_64'] = '3.3'
+
+        io_attrs = set()
+        for k, val in attrs.items():
+            add_attr_val(db, 'IOB', io_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
+
+        bits = get_longval_fuses(db, tiledata.ttyp, io_attrs, 'IOBB')
+        tile = tilemap[(row, col)]
+        for row_, col_ in bits:
+            tile[row_][col_] = 1
+
 # set fuse for entire slice
 def set_slice_fuses(db, tilemap, slice_attrvals):
     for pos, attrvals in slice_attrvals.items():
@@ -3711,6 +3974,8 @@ def main():
         for row, col in {(23, 63)}:
             tile[row][col] = 0
 
+    set_adc_iobuf_fuses(db, tilemap)
+
     for row in range(db.rows):
         for col in range(db.cols):
             set_const_fuses(db, row, col, tilemap[(row, col)])
@@ -3766,3 +4031,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# vim: set et sw=4 ts=4:
