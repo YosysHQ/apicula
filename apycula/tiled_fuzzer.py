@@ -77,6 +77,11 @@ params = {
         "device": "GW5A-25A",
         "partnumber": "GW5A-LV25MG121NES",
     },
+    "GW5AST-138C": {
+        "package": "PBGA484A",
+        "device": "GW5AST-138C",
+        "partnumber": "GW5AST-LV138PG484AC1/I0",
+    },
 }[device]
 
 # utils
@@ -367,8 +372,12 @@ if __name__ == "__main__":
         bel.portmap['GW9_ALWAYS_LOW1'] = wnames.wirenames[dat.portmap['IologicAIn'][42]]
 
     # GSR
-    if device in {'GW2A-18', 'GW2A-18C', 'GW5A-25A'}:
+    if device in {'GW2A-18', 'GW2A-18C'}:
         db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+    elif device in {'GW5A-25A'}:
+        db.grid[27][88].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'LSR0';
+    elif device in {'GW5AST-138C'}:
+        db.grid[108][165].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'D7';
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
         db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     else:

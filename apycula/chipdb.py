@@ -191,7 +191,7 @@ class Device:
         return self.rev_li[name]
 
 def is_GW5_family(device):
-    return device in {'GW5A-25A'}
+    return device in {'GW5A-25A', 'GW5AST-138C'}
 
 
 # XXX GW1N-4 and GW1NS-4 have next data in dat.portmap['CmuxIns']:
@@ -2553,6 +2553,9 @@ def fse_create_gsr(dev, device):
     elif device in {'GW5A-25A'}:
         row, col = (28, 89)
         wire = 'LSR0'
+    elif device in {'GW5AST-138C'}:
+        row, col = (108, 165)
+        wire = 'D7'
     dev.extra_func.setdefault((row, col), {}).update(
         {'gsr': {'wire': wire}})
 
