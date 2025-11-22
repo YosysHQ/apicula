@@ -260,7 +260,8 @@ iob_attrvals = {
             'LVCMOS33OD12':     161,
             'LVCMOS25OD12':     162,
             'LVCMOS18OD12':     163,
-
+            # voltage
+            '1.0':              193,
             # 5A ADC
             'UNKNOWN247':       247,
             'UNKNOWN254':       254,
