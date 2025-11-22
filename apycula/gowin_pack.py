@@ -3543,6 +3543,9 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                         fuse_row += off[0]
                         fuse_col += off[1]
                         fuse_ttyp = db.grid[fuse_row][fuse_col].ttyp
+                    # IOR3 A and B are actually A only in different cells
+                    if (row, col, iob_idx) == (2, 91, 'B'):
+                        iob_idx = 'A'
                     bits = get_longval_fuses(db, fuse_ttyp, iob_attrs, f'IOB{iob_idx}')
 
                 tile = tilemap[(fuse_row, fuse_col)]

@@ -2286,12 +2286,14 @@ def fse_create_simplio_rows(dev, dat: Datfile):
                 row -= 1
             dev.simplio_rows.add(row)
 
-def fse_create_tile_types(dev, dat: Datfile):
+def fse_create_tile_types(dev, device, dat: Datfile):
     type_chars = 'PCMIBD'
     for fn in type_chars:
         dev.tile_types[fn] = set()
     for row, rd in enumerate(dat.grid.rows):
         for col, fn in enumerate(rd):
+            if fn == '4' and device in {'GW5A-25A'}:
+                fn = 'I'
             if fn in type_chars:
                 i = row
                 if i > 0:
@@ -3036,7 +3038,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_clocks(dev, device, dat, fse)
     fse_create_pll_clock_aliases(dev, device)
     fse_create_bottom_io(dev, device)
-    fse_create_tile_types(dev, dat)
+    fse_create_tile_types(dev, device, dat)
     # No SSRAM in GW5A-25A
     if device in {'GW5A-25A'}:
         dev.tile_types.setdefault('C', set()).update(dev.tile_types['M'])
@@ -3364,6 +3366,7 @@ _gw5_fuse_cell_offset = {
             391: (0, 0), 392: (0, 0), 399: (0, 0), 401: (0, 0), 419: (1, 0)
             }
 }
+
 def fill_GW5A_io_bels(dev):
     def fix_iobb(off):
         # for now fix B bel only
@@ -3419,9 +3422,36 @@ def fill_GW5A_io_bels(dev):
             main_cell = dev.grid[row - off[0]][dev.cols - 1]
             fix_iobb(off)
 
+# Some IOs in 25A have pins that differ from most others. These pins are not
+# described in the tables and were discovered by tracking why IOs located in
+# certain cells were not working.
+_gw5_25a_io = {
+        (0, 91, 'A')  : { 'I': 'A6', 'OE': 'A7', 'O': 'OF7'} ,        # TCK
+        (0, 91, 'B')  : { 'I': 'SEL1', 'OE': 'SEL2', 'O': 'Q5'} ,     # TDI
+        (2, 91, 'A')  : { 'I': 'A0', 'OE': 'A1', 'O': 'Q3'} ,         # TMS
+        (2, 91, 'B')  : { 'I': 'B0', 'OE': 'B1', 'O': 'Q4'} ,         # TDO
+        (3, 91, 'A')  : {} ,         #  skip
+        (3, 91, 'B')  : {} ,         #  skip
+        (36, 1, 'A')  : { 'I': 'C0', 'OE': 'C1', 'O': 'F2'} ,         # RECONFIG_N
+        (36, 63, 'A') : { 'I': 'SEL0', 'OE': 'SEL1', 'O': 'F7'} ,     # DONE
+}
 def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
     pin = belname[-1]
-    if pin == 'A' or not bel.fuse_cell_offset:
+    if (row, col, pin) in _gw5_25a_io:
+        if (row, col) == (3, 91):
+            return
+        for port_wire in _gw5_25a_io[row, col, pin].items():
+            port, wire = port_wire
+            if (row, col, pin) in {(0, 91, 'B'), (2, 91, 'A'), (2, 91, 'B')}:
+                nodename = add_node(dev, f'X{col}Y{row}/IOB{pin}_{port}', f"IO_{port[0]}", row + 1, col, wire)
+                nodename = add_node(dev, nodename, f"IO_{port[0]}", row, col, f'IOB{pin}_{wire}')
+                bel.portmap[port] = f'IOB{pin}_{wire}'
+            else:
+                bel.portmap[port] = wire
+        # XXX
+        adcen = 'CE1'
+        bel.portmap['ADCEN'] = adcen
+    elif pin == 'A' or not bel.fuse_cell_offset:
         inp = wnames.wirenames[dat.portmap[f'Iobuf{pin}Out']]
         bel.portmap['O'] = inp
         out = wnames.wirenames[dat.portmap[f'Iobuf{pin}In']]
