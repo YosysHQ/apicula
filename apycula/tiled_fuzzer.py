@@ -1,6 +1,7 @@
 import re
 import os
 import sys
+import copy
 import tempfile
 import subprocess
 from pathlib import Path
@@ -43,9 +44,9 @@ params = {
         "partnumber": "GW1N-LV9PG256C6/I5",
     },
     "GW1N-9C": {
-        "package": "UBGA332",
-        "device": "GW1N-9C",
-        "partnumber": "GW1N-LV9UG332C6/I5",
+        "package": "QFN88P",
+        "device": "GW1NR-9C",
+        "partnumber": "GW1NR-LV9QN88PC6/I5",
     },
     "GW1N-4": {
         "package": "PBGA256",
@@ -107,9 +108,10 @@ def tbrl2rc(fse, side, num):
     return (row, col)
 
 def rc2tbrl(db, row, col, num):
-    edge = 'T'
     idx = col
-    if row == db.rows:
+    if row == 1:
+        edge = 'T'
+    elif row == db.rows:
         edge = 'B'
     elif col == 1:
         edge = 'L'
@@ -208,32 +210,33 @@ def run_pnr(mod, constr, config):
             return None
 
 _tbrlre = re.compile(r"IO([TBRL])(\d+)")
-def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
+def fse_iob(fse, db, diff_cap_info, locations):
     iob_bels = {}
     is_true_lvds = False
     is_positive = False
-    for ttyp, tiles in pin_locations.items():
-        # tiles are unique, so one is enough but we need A&B pins
-        for tile, bels in tiles.items():
-            if len(bels) >= 2:
-                break
-        # crate all IO bels
-        is_simplified = len(bels) > 2
-        side, num = _tbrlre.match(tile).groups()
-        row, col = tbrl2rc(fse, side, num)
-        for bel_name in bels:
-            is_diff = False
-            if bel_name in diff_cap_info.keys():
-                is_diff, is_true_lvds, is_positive, adc_bus = diff_cap_info[bel_name]
-            bel = iob_bels.setdefault(ttyp, {}).setdefault(f'IOB{bel_name[-1]}', chipdb.Bel())
-            bel.simplified_iob = is_simplified
-            bel.is_diff = is_diff
-            bel.is_true_lvds = is_true_lvds
-            bel.is_diff_p = is_positive
-
-            #print(f"type:{ttyp} [{row}][{col}], IOB{bel_name[-1]}, diff:{is_diff}, true lvds:{is_true_lvds}, p:{is_positive}")
+    for ttyp in fse.keys():
+        if ttyp == 'header' or 'longval' not in fse[ttyp]:
+            continue
+        # for ttyp, tiles in pin_locations.items():
+        # crieate all IO bels
+        for idx, fuse_table_n in {'A':23, 'B':24, 'C':40, 'D':41, 'E':42, 'F':43, 'G':44, 'H':45, 'I':46, 'J':47}.items():
+            if fuse_table_n in fse[ttyp]['longval']:
+                iob_bels.setdefault(ttyp, {}).setdefault(f'IOB{idx}', chipdb.Bel())
     for ttyp, bels in iob_bels.items():
+        first_cell = True
         for row, col in locations[ttyp]:
+            if first_cell:
+                for bel_name, bel in bels.items():
+                    bel.is_simplified = len(iob_bels) > 2
+                    name = rc2tbrl(db, row + 1, col + 1, bel_name[-1])
+                    if name in diff_cap_info.keys():
+                        is_diff, is_true_lvds, is_positive, adc_bus = diff_cap_info[name]
+                        bel.is_diff = is_diff
+                        bel.is_true_lvds = is_true_lvds
+                        bel.is_diff_p = is_positive
+                        first_cell = False
+
+                    #print(f"type:{ttyp} [{row}][{col}], {name}, diff:{bel.is_diff}, true lvds:{bel.is_true_lvds}, p:{bel.is_diff_p}")
             db.grid[row][col].bels.update(iob_bels[ttyp])
 
     # adc bus
@@ -244,6 +247,12 @@ def fse_iob(fse, db, pin_locations, diff_cap_info, locations):
             row, col = tbrl2rc(fse, side, num)
             extra = db.extra_func.setdefault((row, col), {})
             extra.setdefault('adcio', {})['bus'] = adc_bus
+
+    if device in {'GW5A-25A'}:
+        # fix IOR3AB
+        db.grid[2][db.cols - 1].bels['IOBA'].is_diff = False
+        db.grid[2][db.cols - 1].bels['IOBA'].is_true_lvds = False
+        db.grid[2][db.cols - 1].bels['IOBB'] = copy.deepcopy(db.grid[2][db.cols - 1].bels['IOBA'])
 
 # generate bitstream footer
 def gen_ftr():
@@ -317,10 +326,10 @@ if __name__ == "__main__":
         tm = tm_h4x.read_tm(f, device)
 
     db = chipdb.from_fse(device, fse, dat)
-    chipdb.set_banks(fse, db)
+    chipdb.set_banks(fse, dat, db)
     db.timing = tm
     chipdb.fse_wire_delays(db, params['device'])
-    db.packages, db.pinout, db.pin_bank = chipdb.json_pinout(device)
+    db.packages, db.pinout, _ = chipdb.json_pinout(device)
 
     corners = [
         (0, 0, fse['header']['grid'][61][0][0]),
@@ -353,7 +362,7 @@ if __name__ == "__main__":
 
     # IOB
     diff_cap_info = pindef.get_diff_adc_cap_info(params['device'], params['package'], True)
-    fse_iob(fse, db, pin_locations, diff_cap_info, locations);
+    fse_iob(fse, db, diff_cap_info, locations);
     if chipdb.is_GW5_family(device):
         chipdb.fill_GW5A_io_bels(db)
 
