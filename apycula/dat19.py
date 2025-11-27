@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from dataclasses import dataclass
 
-
 @dataclass
 class Primitive:
     name: str
@@ -38,14 +37,13 @@ class Datfile:
         if partType == 0:       # 1/2 Series
             self.compat_dict.update(self.read_something())
         elif partType == 1:
-            print(f"PartType {partType} is not supported")
-
+            raise Exception(f"PartType {partType} is not supported")
         elif partType == 2:  # 5 Series
             self.gw5aStuff = self.read_5Astuff()
-            self.compat_dict.update(self.read_something5A())
-
+            self.compat_dict.update(self.read_something())
         elif partType == 4:
-            print(f"PartType {partType} is not supported")
+            raise Exception(f"PartType {partType} is not supported")
+
 
         self.compat_dict.update(self.read_io())
         self.cmux_ins: dict[int, list[int]] = self.read_io()['CmuxIns']

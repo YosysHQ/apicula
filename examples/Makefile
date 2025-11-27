@@ -380,7 +380,7 @@ bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh io565.vh display-480x272.v %-im
 	gowin_pack -c -d GW1N-9 -o $@ $<
  
 %-szfpga.json: %-szfpga-synth.json szfpga.cst
-	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --vopt family=GW1N-9 --vopt cst=szfpga.cst
+	$(NEXTPNR) --seed=3 --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --vopt family=GW1N-9 --vopt cst=szfpga.cst
 
 %-szfpga-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"

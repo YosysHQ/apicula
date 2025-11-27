@@ -24,7 +24,7 @@ end
 // Combinational code (boolean logic)
 assign ctr_d = ctr_q + 1'b1;
 assign led[`LEDS_NR-1:2] = {(`LEDS_NR - 2){1'b1}};
-assign led[0] = ctr_q[24:24];
+assign led[0] = ~ctr_q[24:24];
 
 wire aux_wire;
 

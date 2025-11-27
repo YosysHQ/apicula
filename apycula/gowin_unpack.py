@@ -1309,7 +1309,7 @@ def main():
         bm[(45, 55)] = bm_pll[(45, 55)]
 
     # banks first: need to know iostandards
-    for pos in db.corners.keys():
+    for pos in db.bank_tiles.values():
         row, col = pos
         try:
             t = bm[(row, col)]
@@ -1321,8 +1321,8 @@ def main():
 
     for idx, t in bm.items():
         row, col = idx
-        # skip banks & dual pisn
-        if (row, col) in db.corners:
+        # skip banks
+        if (row, col) in db.bank_tiles.values():
             continue
         bels, pips, clock_pips = parse_tile_(db, row, col, t, bm, noiostd = False)
         #print("bels:", idx, bels)

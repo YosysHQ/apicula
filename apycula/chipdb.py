@@ -142,6 +142,9 @@ class Device:
     segments: Dict[Tuple[int, int, int], Dict[str, Any]] = field(default_factory=dict)
     # GW5A renames the DCS inputs from CLK to CLKIN
     dcs_prefix: str = field(default = "CLK")
+    # pin configurations. { 'IOR3B' : {'MODE0', 'CCLK'}}  (example, not real)
+    # store alternative pin configurations that may not be present in a specific package.
+    cfg: Dict[str, Set[str]] = field(default_factory=dict)
 
     @property
     def rows(self):
@@ -159,16 +162,6 @@ class Device:
     def width(self):
         return sum(tile.width for tile in self.grid[0])
 
-    # XXX consider removing
-    @property
-    def corners(self):
-        # { (row, col) : bank# }
-        return {
-            (0, 0) : '0',
-            (0, self.cols - 1) : '1',
-            (self.rows - 1, self.cols - 1) : '2',
-            (self.rows - 1, 0) : '3'}
-
     # Some chips have bits responsible for different banks in the same corner tile.
     # Here stores the correspondence of the bank number to the (row, col) of the tile.
     @property
@@ -179,7 +172,7 @@ class Device:
             for col in range(self.cols):
                 for bel in self.grid[row][col].bels.keys():
                     if bel.startswith('BANK'):
-                        res.update({ bel[4:] : (row, col) })
+                        res.update({ int(bel[4:]) : (row, col) })
         return res
 
     # make reverse logicinfo tables on demand
@@ -479,7 +472,10 @@ def fse_osc(device, fse, ttyp):
     bel.portmap = {}
     return osc
 
-def set_banks(fse, db):
+def set_banks(fse, dat, db):
+    simplified_io_rows = set()
+
+    # find bank tiles
     for row in range(db.rows):
         for col in range(db.cols):
             ttyp = db.grid[row][col].ttyp
@@ -487,6 +483,48 @@ def set_banks(fse, db):
                 if 'BANK' in db.longval[ttyp]:
                     for rd in db.longval[ttyp]['BANK']:
                         db.grid[row][col].bels.setdefault(f"BANK{rd[0]}", Bel())
+                if 'IOBC' in  db.longval[ttyp]:
+                    simplified_io_rows.add(row)
+
+    # assign IO to the banks
+    for col in range(1, db.cols):
+        bank = dat.compat_dict['Bank']['TA'][col]
+        if bank != -1:
+            db.pin_bank[f'IOT{col}A'] = bank
+        bank = dat.compat_dict['Bank']['TB'][col]
+        if bank != -1:
+            db.pin_bank[f'IOT{col}B'] = bank
+        bank = dat.compat_dict['Bank']['BA'][col]
+        if bank != -1:
+            db.pin_bank[f'IOB{col}A'] = bank
+        bank = dat.compat_dict['Bank']['BB'][col]
+        if bank != -1:
+            db.pin_bank[f'IOB{col}B'] = bank
+
+    for col in range(1, db.rows):
+        bank = dat.compat_dict['Bank']['LA'][col]
+        if bank != -1:
+            db.pin_bank[f'IOL{col}A'] = bank
+        bank = dat.compat_dict['Bank']['LB'][col]
+        if bank != -1:
+            db.pin_bank[f'IOL{col}B'] = bank
+        bank = dat.compat_dict['Bank']['RA'][col]
+        if bank != -1:
+            db.pin_bank[f'IOR{col}A'] = bank
+        bank = dat.compat_dict['Bank']['RB'][col]
+        if bank != -1:
+            db.pin_bank[f'IOR{col}B'] = bank
+
+    # simplified IO banks.
+    if simplified_io_rows:
+        if len(simplified_io_rows) != 1:
+            raise Exception(f"Have {simplified_io_rows} rows of the simplified rows, only one row is supported.")
+        row = list(simplified_io_rows)[0]
+        for side in "LR":
+            for idx, name in enumerate("ABCDEFGHIJ"):
+                bank = dat.compat_dict['Bank'][f'SpecIO{side}'][idx]
+                if bank >= 0:
+                    db.pin_bank[f'IO{side}{row + 1}{name}'] = bank
 
 _known_logic_tables = {
             8:  'DCS',
@@ -573,6 +611,19 @@ _known_tables = {
            115: '5A_PCLK_ENABLE_28',
            116: '5A_PCLK_ENABLE_29',
         }
+
+# alternate pin function codes
+# It is compiled as follows: the dat file contains a table that assigns a specific configuration code to a pin.
+# for example 'TA': [0, 0, 0, 0, 0, 0, 0, 64, 65, 134, 105, 107, 71, 66, 130,
+# 132, 0, 0, 0, 0, 0, 0], Next, we use the IDE pinout file, where these same
+# functions are stored as
+# strings. This gives us most of the code-to-string mappings.
+# The problem is that not all I/Os are assigned to pins on a specific package
+# and therefore do not have strings. This can be solved by cross-comparing
+# different chips and manually adding the missing mappings.
+_pin_cfg = { }
+def dat_fill_pin_cfgs():
+    return
 
 def fse_fill_logic_tables(dev, fse, device):
     # logicinfo
@@ -3359,7 +3410,7 @@ _gw5_fuse_cell_offset = {
             },
         'left': {
             57: (0, 0), 74: (1, 0), 243: (0, 0), 244: (1, 0), 257: (0, 0), 258: (0, 0),
-            272: (0, 0), 384: (1, 0),
+            272: (0, 0), 384: (1, 0), 412: (1, 0),
             },
         'right': {
             54: (0, 0), 220: (0, 0), 245: (0, 0), 246: (1, 0), 260: (0, 0), 385: (1, 0),
@@ -3368,59 +3419,85 @@ _gw5_fuse_cell_offset = {
 }
 
 def fill_GW5A_io_bels(dev):
-    def fix_iobb(off):
-        # for now fix B bel only
-        if 'IOBB' in main_cell.bels:
-            print(f'GW5 IO bels col:{col} {ttyp} -> {main_cell.ttyp}')
-            main_cell.bels['IOBB'].fuse_cell_offset = off
-        else:
-            print(f'GW5 IO bels col:{col} skip {ttyp} -> {main_cell.ttyp}: no IOBB bel')
+    bels_to_remove = []
+    def fix_iobb():
+        # already fixed
+        if 'IOBB' not in rc.bels:
+            return
+        if 'IOBA' not in main_cell.bels:
+            raise Exception(f"Type {rc.ttyp}. No IOBA bel in main cell, offset {off}.")
+        # rare case - like IOR3AB are not diff pair
+        is_diff = True
+        if 'IOBA' in rc.bels:
+            is_diff = False
+        print(f'GW5 IO bels col:{col} {ttyp} -> {main_cell.ttyp}')
+        main_cell.bels['IOBB'] = copy.deepcopy(rc.bels['IOBB'])
+        main_cell.bels['IOBB'].is_diff = is_diff
+        main_cell.bels['IOBB'].is_diff_p = False
+        main_cell.bels['IOBB'].is_true_lvds = main_cell.bels['IOBA'].is_true_lvds
+        main_cell.bels['IOBB'].fuse_cell_offset = off
+        bels_to_remove.append(rc.bels)
 
     # top
     for col, rc in enumerate(dev.grid[0]):
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['top']:
-            continue
+            if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
+                raise Exception(f"IO bel with type {ttyp} is not in the top list.")
+            else:
+                continue
 
         off = _gw5_fuse_cell_offset['top'][ttyp]
         if off != (0, 0):
             main_cell = dev.grid[0][col - off[1]]
-            fix_iobb(off)
+            fix_iobb()
 
     # bottom
     for col, rc in enumerate(dev.grid[dev.rows - 1]):
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['bottom']:
-            continue
+            if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
+                raise Exception(f"IO bel with type {ttyp} is not in the bottom list.")
+            else:
+                continue
 
         off = _gw5_fuse_cell_offset['bottom'][ttyp]
         if off != (0, 0):
             main_cell = dev.grid[dev.rows - 1][col - off[1]]
-            fix_iobb(off)
+            fix_iobb()
 
     # left
-    for row in range(dev.rows):
+    for row in range(1, dev.rows - 1):
         rc = dev.grid[row][0]
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['left']:
-            continue
+            if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
+                raise Exception(f"IO bel with type {ttyp} is not in the left list.")
+            else:
+                continue
 
         off = _gw5_fuse_cell_offset['left'][ttyp]
         if off != (0, 0):
             main_cell = dev.grid[row - off[0]][0]
-            fix_iobb(off)
+            fix_iobb()
 
     # right
-    for row in range(dev.rows):
+    for row in range(1, dev.rows - 1):
         rc = dev.grid[row][dev.cols - 1]
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['right']:
-            continue
+            if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
+                raise Exception(f"IO bel with type {ttyp} is not in the right list.")
+            else:
+                continue
 
         off = _gw5_fuse_cell_offset['right'][ttyp]
         if off != (0, 0):
             main_cell = dev.grid[row - off[0]][dev.cols - 1]
-            fix_iobb(off)
+            fix_iobb()
+
+    for bels in bels_to_remove:
+        bels.pop('IOBB', None)
 
 # Some IOs in 25A have pins that differ from most others. These pins are not
 # described in the tables and were discovered by tracking why IOs located in
@@ -3430,28 +3507,30 @@ _gw5_25a_io = {
         (0, 91, 'B')  : { 'I': 'SEL1', 'OE': 'SEL2', 'O': 'Q5'} ,     # TDI
         (2, 91, 'A')  : { 'I': 'A0', 'OE': 'A1', 'O': 'Q3'} ,         # TMS
         (2, 91, 'B')  : { 'I': 'B0', 'OE': 'B1', 'O': 'Q4'} ,         # TDO
-        (3, 91, 'A')  : {} ,         #  skip
-        (3, 91, 'B')  : {} ,         #  skip
+        (3, 91, 'A')  : {} ,         # skip
+        (3, 91, 'B')  : {} ,         # skip
         (36, 1, 'A')  : { 'I': 'C0', 'OE': 'C1', 'O': 'F2'} ,         # RECONFIG_N
         (36, 63, 'A') : { 'I': 'SEL0', 'OE': 'SEL1', 'O': 'F7'} ,     # DONE
 }
 def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
     pin = belname[-1]
-    if (row, col, pin) in _gw5_25a_io:
-        if (row, col) == (3, 91):
+    if device in {'GW5A-25A'}:
+        if (row, col, pin) in _gw5_25a_io:
+            if (row, col) == (3, 91): # (2, 91) and (3, 91) => IOR3AB
+                return
+            for port_wire in _gw5_25a_io[row, col, pin].items():
+                port, wire = port_wire
+                if (row, col, pin) in {(0, 91, 'B'), (2, 91, 'A'), (2, 91, 'B')}:
+                    nodename = add_node(dev, f'X{col}Y{row}/IOB{pin}_{port}', f"IO_{port[0]}", row + 1, col, wire)
+                    nodename = add_node(dev, nodename, f"IO_{port[0]}", row, col, f'IOB{pin}_{wire}')
+                    bel.portmap[port] = f'IOB{pin}_{wire}'
+                else:
+                    bel.portmap[port] = wire
+            # XXX
+            adcen = 'CE1'
+            bel.portmap['ADCEN'] = adcen
             return
-        for port_wire in _gw5_25a_io[row, col, pin].items():
-            port, wire = port_wire
-            if (row, col, pin) in {(0, 91, 'B'), (2, 91, 'A'), (2, 91, 'B')}:
-                nodename = add_node(dev, f'X{col}Y{row}/IOB{pin}_{port}', f"IO_{port[0]}", row + 1, col, wire)
-                nodename = add_node(dev, nodename, f"IO_{port[0]}", row, col, f'IOB{pin}_{wire}')
-                bel.portmap[port] = f'IOB{pin}_{wire}'
-            else:
-                bel.portmap[port] = wire
-        # XXX
-        adcen = 'CE1'
-        bel.portmap['ADCEN'] = adcen
-    elif pin == 'A' or not bel.fuse_cell_offset:
+    if pin == 'A' or not bel.fuse_cell_offset:
         inp = wnames.wirenames[dat.portmap[f'Iobuf{pin}Out']]
         bel.portmap['O'] = inp
         out = wnames.wirenames[dat.portmap[f'Iobuf{pin}In']]
@@ -4555,16 +4634,14 @@ def loc2pin_name(db, row, col):
     return f"IO{side}{idx}"
 
 def loc2bank(db, row, col):
-    """ returns bank index '0'...'n'
+    """ returns bank index 0...n
     """
-    bank =  db.corners.get((row, col))
-    if bank == None:
-        name = loc2pin_name(db, row, col)
-        nameA = name + 'A'
-        if nameA in db.pin_bank:
-            bank = db.pin_bank[nameA]
-        else:
-            bank = db.pin_bank[name + 'B']
+    name = loc2pin_name(db, row, col)
+    nameA = name + 'A'
+    if nameA in db.pin_bank:
+        bank = db.pin_bank[nameA]
+    else:
+        bank = db.pin_bank[name + 'B']
     return bank
 
 def fse_wire_delays(db, dev):
