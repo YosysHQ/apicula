@@ -142,9 +142,9 @@ class Device:
     segments: Dict[Tuple[int, int, int], Dict[str, Any]] = field(default_factory=dict)
     # GW5A renames the DCS inputs from CLK to CLKIN
     dcs_prefix: str = field(default = "CLK")
-    # pin configurations. { 'IOR3B' : {'MODE0', 'CCLK'}}  (example, not real)
+    # io configurations. { 'IOR3B' : {'MODE0', 'CCLK'}}  (example, not real)
     # store alternative pin configurations that may not be present in a specific package.
-    cfg: Dict[str, Set[str]] = field(default_factory=dict)
+    io_cfg: Dict[str, Set[str]] = field(default_factory=dict)
 
     @property
     def rows(self):
@@ -621,8 +621,93 @@ _known_tables = {
 # The problem is that not all I/Os are assigned to pins on a specific package
 # and therefore do not have strings. This can be solved by cross-comparing
 # different chips and manually adding the missing mappings.
-_pin_cfg = { }
-def dat_fill_pin_cfgs():
+_io_cfg = {
+      0: [],
+     66: ['JTAGSEL_N'],
+     69: ['RECONFIG_N'],
+     70: ['READY'],
+     71: ['DONE'],
+     73: ['LPLL_T_FB'],
+     74: ['LPLL_C_FB'],
+     76: ['LPLL_C_IN'],
+     77: ['RPLL_T_FB'],
+     78: ['RPLL_C_FB'],
+     80: ['RPLL_C_IN'],
+     83: ['LPLL1_T_FB'],
+     84: ['LPLL1_C_FB'],
+     95: ['RPLL1_T_FB'],
+     96: ['RPLL1_C_FB'],
+     97: ['RPLL2_T_IN'],
+     98: ['RPLL2_C_IN'],
+    105: ['GCLKT_0'],
+    106: ['GCLKC_0'],
+    107: ['GCLKT_1'],
+    108: ['GCLKC_1'],
+    109: ['GCLKT_2'],
+    110: ['GCLKC_2'],
+    115: ['GCLKT_5'],
+    116: ['GCLKC_5'],
+    118: ['GCLKC_6'],
+    119: ['GCLKT_7'],
+    120: ['GCLKC_7'],
+    121: ['GCLKT_8'],
+    122: ['GCLKC_8'],
+    130: ['MODE0'],
+    131: ['MODE1'],
+    132: ['MODE2'],
+    133: ['SCLK'],
+    138: ['DOUT'],
+    139: ['DIN', 'CLKHOLD_N'],
+    140: ['DOUT', 'WE_N'],
+    142: ['FASTRD_N', 'D3'],
+    147: ['SSPI_CS_N', 'D0'],
+    149: ['SI', 'D2'],
+    151: ['SO', 'D1'],
+    161: ['LVENN'],
+    221: ['D10'],
+    222: ['D11'],
+    223: ['D12'],
+    217: ['D06'],
+    247: ['PUDC_B'],
+    270: ['CFG_MCKTEST'],
+    332: ['GCLKT_6B'],
+    333: ['GCLKC_6B'],
+    335: ['GCLKT_9A', 'D13', 'BPLL_T_IN1'],
+    336: ['GCLKC_9A', 'EMCCLK'],
+    339: ['GCLKT_10A', 'D14'],
+    340: ['GCLKC_10A', 'D15', 'BPLL_C_FB0'],
+    343: ['GCLKT_11A'],
+    344: ['GCLKC_11A'],
+    355: ['RPLL0_T_FB1'],
+    356: ['RPLL0_T_IN1'],
+    357: ['RPLL0_C_FB0'],
+    367: ['ADCINCLK'],
+    368: ['ADCOTEST'],
+}
+def dat_fill_io_cfgs(db, dat, pindesc):
+    pkg_pins = { p[0]: p[1] for p in pindesc.values() }
+    for row, rd in enumerate(db.grid):
+        for col, rc in enumerate(rd):
+            for name, bel in rc.bels.items():
+                if name.startswith('IOB'):
+                    iob_idx = name[-1]
+                    io_name = loc2pin_name(db, row, col) + iob_idx
+                    side = io_name[2]
+                    package_cfg = pkg_pins.get(io_name, None)
+                    if package_cfg:
+                        db.io_cfg[io_name] = package_cfg
+                    if bel.simplified_iob:
+                        cfg_code = dat.compat_dict['SpecCfg'][f'IO{side}'][ord(iob_idx) - ord('A')]
+                    else:
+                        if side in 'TB':
+                            idx = col + 1
+                        else:
+                            idx = row + 1
+                        cfg_code = dat.compat_dict['Cfg'][side + iob_idx][idx]
+                        if cfg_code in _io_cfg:
+                            db.io_cfg[io_name] = _io_cfg[cfg_code]
+                    if (bool(package_cfg) ^ bool(cfg_code)) and cfg_code in _io_cfg:
+                        db.io_cfg[io_name] = _io_cfg[cfg_code]
     return
 
 def fse_fill_logic_tables(dev, fse, device):

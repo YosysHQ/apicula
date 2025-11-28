@@ -219,15 +219,19 @@ def fse_iob(fse, db, diff_cap_info, locations):
             continue
         # for ttyp, tiles in pin_locations.items():
         # crieate all IO bels
+        bel_cnt = 0
         for idx, fuse_table_n in {'A':23, 'B':24, 'C':40, 'D':41, 'E':42, 'F':43, 'G':44, 'H':45, 'I':46, 'J':47}.items():
             if fuse_table_n in fse[ttyp]['longval']:
+                bel_cnt += 1
                 iob_bels.setdefault(ttyp, {}).setdefault(f'IOB{idx}', chipdb.Bel())
+        if bel_cnt > 2:
+            for bel in iob_bels[ttyp].values():
+                bel.simplified_iob = True
     for ttyp, bels in iob_bels.items():
         first_cell = True
         for row, col in locations[ttyp]:
             if first_cell:
                 for bel_name, bel in bels.items():
-                    bel.is_simplified = len(iob_bels) > 2
                     name = rc2tbrl(db, row + 1, col + 1, bel_name[-1])
                     if name in diff_cap_info.keys():
                         is_diff, is_true_lvds, is_positive, adc_bus = diff_cap_info[name]
@@ -365,6 +369,7 @@ if __name__ == "__main__":
     fse_iob(fse, db, diff_cap_info, locations);
     if chipdb.is_GW5_family(device):
         chipdb.fill_GW5A_io_bels(db)
+    chipdb.dat_fill_io_cfgs(db, dat, db.pinout[params['device']][params['package']])
 
     pad_locs = pindef.get_pll_pads_locs(params['device'], params['package'])
     chipdb.pll_pads(db, device, pad_locs)
