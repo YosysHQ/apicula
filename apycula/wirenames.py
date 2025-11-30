@@ -39,9 +39,6 @@ wirenames_pre5a.update({n: f"LWSPINEB1R{n - 1041}" for n in range(1041, 1049)})
 
 wirenames_pre5a.update({n: f"UNK{n}" for n in range(1049, 1241)})
 
-wirenames_pre5a.update({n: f"5A{n}" for n in range(545, 553)}) # GW5A-25A need these
-wirenames_pre5a.update({n: f"5A{n}" for n in range(556, 564)}) # GW5A-25A need these
-
 wirenumbers_pre5a = {v: k for k, v in wirenames_pre5a.items()}
 
 clknames_pre5a = {}
@@ -237,6 +234,8 @@ wirenames_5a25a.update({n: f"UNK{n}" for n in range(1049, 1241)})
 wirenames_5a25a.update({n: f"5A{n}" for n in range(545, 553)}) # GW5A-25A need these
 wirenames_5a25a.update({n: f"5A{n}" for n in range(556, 564)}) # GW5A-25A need these
 
+wirenames_5a25a.update({n: f"5A{n}" for n in range(1241, 2041)}) # GW5AST-138C need these
+
 wirenumbers_5a25a = {v: k for k, v in wirenames_5a25a.items()}
 
 clknames_5a25a = {}
@@ -309,6 +308,8 @@ clknames_5a25a.update({n: f"UNK{n}" for n in range(278, 281)})
 
 clknames_5a25a.update({291: "GT00", 292: "GT10"})
 
+clknames_5a25a.update({n: f"UNK{n}" for n in range(309, 335)}) # GW5AST-138C need these
+
 clknames_5a25a.update({
     501: 'MPLL4CLKOUT0', 502: 'MPLL4CLKOUT1', 503: 'MPLL4CLKOUT2', 504: 'MPLL4CLKOUT3',
     505: 'MPLL4CLKOUT4', 506: 'MPLL4CLKOUT5', 507: 'MPLL4CLKOUT6', 508: 'MPLL4CLKFBOUT',
@@ -351,6 +352,17 @@ clknames_5a25a.update({n: f"LWSPINEB1R{n - 1041}" for n in range(1041, 1049)})
 
 clknames_5a25a.update({n: f"UNK{n}" for n in range(1049, 1225)})
 
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1273, 1289)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1353, 1369)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1433, 1449)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1513, 1529)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1593, 1609)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1673, 1689)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1753, 1769)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1833, 1849)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1913, 1929)}) # GW5AST-138C need these
+clknames_5a25a.update({n: f"UNK{n}" for n in range(1993, 2009)}) # GW5AST-138C need these
+
 clknumbers_5a25a = {v: k for k, v in clknames_5a25a.items()}
 
 # hclk
@@ -391,7 +403,7 @@ hclknumbers = None
 
 def select_wires(device):
     global wirenames, clknames, hclknames, wirenumbers, clknumbers, hclknumbers
-    if device in {'GW5A-25A'}:
+    if device in {'GW5A-25A', 'GW5AST-138C'}:
         wirenames   = wirenames_5a25a
         wirenumbers = wirenumbers_5a25a
         clknames    = clknames_5a25a

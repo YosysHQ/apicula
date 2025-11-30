@@ -267,6 +267,10 @@ iob_attrvals = {
             'UNKNOWN254':       254,
             'GW5_ADC_IN':       255,
 
+            # 5A
+            'UNKNOWN263':       263,
+            'UNKNOWN266':       266,
+
             'UKNOWN_310':       310,
         }
 

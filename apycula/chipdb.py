@@ -622,7 +622,6 @@ _known_tables = {
 # and therefore do not have strings. This can be solved by cross-comparing
 # different chips and manually adding the missing mappings.
 _io_cfg = {
-      0: [],
      66: ['JTAGSEL_N'],
      69: ['RECONFIG_N'],
      70: ['READY'],
@@ -694,6 +693,7 @@ def dat_fill_io_cfgs(db, dat, pindesc):
                     io_name = loc2pin_name(db, row, col) + iob_idx
                     side = io_name[2]
                     package_cfg = pkg_pins.get(io_name, None)
+                    cfg_code = 0
                     if package_cfg:
                         db.io_cfg[io_name] = package_cfg
                     if bel.simplified_iob:
@@ -704,10 +704,12 @@ def dat_fill_io_cfgs(db, dat, pindesc):
                         else:
                             idx = row + 1
                         cfg_code = dat.compat_dict['Cfg'][side + iob_idx][idx]
-                        if cfg_code in _io_cfg:
-                            db.io_cfg[io_name] = _io_cfg[cfg_code]
                     if (bool(package_cfg) ^ bool(cfg_code)) and cfg_code in _io_cfg:
+                        #print(io_name, package_cfg, bool(package_cfg), bool(cfg_code))
+                        #print(package_cfg, _io_cfg[cfg_code])
                         db.io_cfg[io_name] = _io_cfg[cfg_code]
+                    #if io_name in db.io_cfg:
+                    #    print(db.io_cfg[io_name])
     return
 
 def fse_fill_logic_tables(dev, fse, device):
@@ -2644,6 +2646,8 @@ def fse_create_logic2clk(dev, device, dat: Datfile):
             dev.extra_func.setdefault((row, col), {}).setdefault('clock_gates', []).append(wnames.wirenames[wire_idx])
 
 def fse_create_osc(dev, device, fse):
+    if device in {'GW5AST-138C'}:
+        return
     skip_nodes = False
     for row, rd in enumerate(dev.grid):
         for col, rc in enumerate(rd):
@@ -3155,12 +3159,13 @@ def from_fse(device, fse, dat: Datfile):
         if 5 in fse[ttyp]['shortval']:
             tile.bels = fse_luts(fse, ttyp, device)
         elif 51 in fse[ttyp]['shortval']:
-            tile.bels = fse_osc(device, fse, ttyp)
+            if device not in {'GW5AST-138C'}:
+                tile.bels = fse_osc(device, fse, ttyp)
         elif ttyp in bram_ttypes:
             tile.bels = fse_bram(fse)
-        elif ttyp in bram_aux_ttypes and device not in {'GW5A-25A'}:
+        elif ttyp in bram_aux_ttypes and device not in {'GW5A-25A', 'GW5AST-138C'}:
             tile.bels = fse_bram(fse, True)
-        elif ttyp in dsp_ttypes and device not in {'GW5A-25A'}:
+        elif ttyp in dsp_ttypes and device not in {'GW5A-25A', 'GW5AST-138C'}:
             tile.bels = fse_dsp(fse)
         elif ttyp in dsp_aux_ttypes:
             tile.bels = fse_dsp(fse, True)
@@ -3181,6 +3186,10 @@ def from_fse(device, fse, dat: Datfile):
         dev.tile_types['P'] = set()
         dev.tile_types['M'] = set()
         # XXX
+        dev.tile_types['D'] = set()
+    if device in {'GW5AST-138C'}:
+        dev.tile_types['P'] = set()
+        dev.tile_types['B'] = set()
         dev.tile_types['D'] = set()
 
     # GW5 series have DFF6 and DFF7, so leave Q6 and Q7 as is
@@ -3276,7 +3285,7 @@ def add_attr_val(dev, logic_table, attrs, attr, val):
         attrs.add(attrval)
 
 def get_pins(device):
-    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A"}:
+    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A", "GW5AST-138C"}:
         raise Exception(f"unsupported device {device}")
     pkgs = pindef.all_packages(device)
     res = {}
@@ -3360,7 +3369,7 @@ def json_pinout(device):
             "GW2A-18C": pins,
             "GW2AR-18C": pins_r
         }, res_bank_pins)
-    elif device =="GW5A-25A": # Fix me
+    elif device =="GW5A-25A":
         pkgs, pins, bank_pins = get_pins("GW5A-25A")
         res = {}
         res.update(pkgs)
@@ -3368,6 +3377,15 @@ def json_pinout(device):
         res_bank_pins.update(bank_pins)
         return (res, {
             "GW5A-25A": pins,
+        }, res_bank_pins)
+    elif device =="GW5AST-138C":
+        pkgs, pins, bank_pins = get_pins("GW5AST-138C")
+        res = {}
+        res.update(pkgs)
+        res_bank_pins = {}
+        res_bank_pins.update(bank_pins)
+        return (res, {
+            "GW5AST-138C": pins,
         }, res_bank_pins)
     else:
         raise Exception("unsupported device")
@@ -3443,7 +3461,7 @@ def need_create_multiple_nodes(device, name):
         return True
     if name == "BSRAM" or name.startswith("MULT") or name.startswith("PADD") or name.startswith("ALU54D"):
         return True
-    if name.startswith('IOB') and device in {'GW5A-25A'}:
+    if name.startswith('IOB') and device in {'GW5A-25A', 'GW5AST-138C'}:
         return True
     return False
 
@@ -3489,17 +3507,19 @@ _gw5_fuse_cell_offset = {
             466: (0, 0)
             },
         'bottom': {
-             48: (0, 0), 49: (0, 1), 247: (0, 0), 248: (0, 1), 251: (0, 1), 263: (0, 0),
-             274: (0, 1), 393: (0, 0), 394: (0, 0), 396: (0, 0), 397: (0, 0), 405: (0, 1),
-             407: (0, 0), 436: (0, 1), 437: (0,0), 438: (0, 1), 439: (0, 0),
-            },
+            48: (0, 0), 49: (0, 1), 63: (0, 0), 247: (0, 0), 248: (0, 1), 249: (0, 0), 250: (0, 1),
+            251: (0, 1), 263: (0, 0), 274: (0, 1), 378: (0, 1), 380: (0, 1), 393: (0, 0),
+            394: (0, 0), 396: (0, 0), 397: (0, 0), 405: (0, 1), 407: (0, 0), 436: (0, 1),
+            437: (0,0), 438: (0, 1), 439: (0, 0), },
         'left': {
-            57: (0, 0), 74: (1, 0), 243: (0, 0), 244: (1, 0), 257: (0, 0), 258: (0, 0),
-            272: (0, 0), 384: (1, 0), 412: (1, 0),
+            57: (0, 0), 64: (0, 0), 74: (1, 0), 86: (0, 0), 229: (0, 0), 231: (0, 0),
+            243: (0, 0), 244: (1, 0), 257: (0, 0), 258: (0, 0), 272: (0, 0), 384: (1, 0),
+            412: (1, 0),
             },
         'right': {
-            54: (0, 0), 220: (0, 0), 245: (0, 0), 246: (1, 0), 260: (0, 0), 385: (1, 0),
-            391: (0, 0), 392: (0, 0), 399: (0, 0), 401: (0, 0), 419: (1, 0)
+            54: (0, 0), 65: (0, 0), 87: (0, 0), 220: (0, 0), 230: (0, 0), 232: (0, 0),
+            245: (0, 0), 246: (1, 0), 260: (0, 0), 385: (1, 0), 391: (0, 0), 392: (0, 0),
+            399: (0, 0), 401: (0, 0), 419: (1, 0)
             }
 }
 
@@ -3524,7 +3544,8 @@ def fill_GW5A_io_bels(dev):
         bels_to_remove.append(rc.bels)
 
     # top
-    for col, rc in enumerate(dev.grid[0]):
+    row = 0
+    for col, rc in enumerate(dev.grid[row]):
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['top']:
             if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
@@ -3538,7 +3559,8 @@ def fill_GW5A_io_bels(dev):
             fix_iobb()
 
     # bottom
-    for col, rc in enumerate(dev.grid[dev.rows - 1]):
+    row = dev.rows - 1
+    for col, rc in enumerate(dev.grid[row]):
         ttyp = rc.ttyp
         if ttyp not in _gw5_fuse_cell_offset['bottom']:
             if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
