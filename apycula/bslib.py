@@ -119,6 +119,10 @@ def read_bitstream(fname):
                         padding = 3
                         compress_padding = 43
                         is5ASeries = True
+                    elif ba == b'\x06\x00\x00\x00\x00\x01\x08\x1b':   # GW5AST-138C
+                        padding = 3
+                        compress_padding = 43
+                        is5ASeries = True
                     else:
                         raise ValueError("Unsupported device", ba)
                 preamble = max(0, preamble-1)

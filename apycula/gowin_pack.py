@@ -3525,17 +3525,17 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                             continue
                         in_bank_attrs[k] = val
                 fuse_row, fuse_col = (row, col)
-                if device not in {'GW5A-25A'}:
+                if device not in {'GW5A-25A', 'GW5AST-138C'}:
                     bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
                 else:
-                    #print(row, col, f'mode:{mode_for_attrs}, idx:{iob_idx}')
+                    #print(row, col, f'mode:{mode_for_attrs}, idx:{iob_idx}, {atr} = {iob_attrs}')
                     if mode_for_attrs in {'OBUF', 'IOBUF'}:
-                        iob_attrs.update({147}) # IOB_UNKNOWN51=TRIMUX
+                        add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids['IOB_UNKNOWN51'], attrids.iob_attrvals['TRIMUX'])
                     elif mode_for_attrs == 'IBUF':
                         if 'HCLK' in iob.flags:
-                            iob_attrs.update({190}) # IOB_UNKNOWN67=263
+                            add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids['IOB_UNKNOWN67'], attrids.iob_attrvals['UNKNOWN263'])
                         elif 'HCLK_PAIR' in iob.flags:
-                            iob_attrs.update({192}) # IOB_UNKNOWN67=266
+                            add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids['IOB_UNKNOWN67'], attrids.iob_attrvals['UNKNOWN266'])
                     # fuses may be in another cell
                     fuse_ttyp = tiledata.ttyp
                     off = tiledata.bels[f'IOB{iob_idx}'].fuse_cell_offset
@@ -3992,12 +3992,12 @@ def main():
     if pil_available and args.png:
         bslib.display(args.png, main_map)
 
-    if device in {'GW5A-25A'}:
+    if device in {'GW5A-25A', 'GW5AST-138C'}:
         main_map = bitmatrix.transpose(main_map)
 
     header_footer(db, main_map, args.compress)
 
-    if device in {'GW5A-25A'} and gw5a_bsrams:
+    if device in {'GW5A-25A', 'GW5AST-138C'} and gw5a_bsrams:
         # In the series preceding GW5A, the data for initialising BSRAM was
         # specified as one huge array describing all BSRAM primitives at once.
         # As a result, this array was unloaded immediately after the main grid
