@@ -20,7 +20,7 @@ setuptools.setup(
     install_requires=[
         'crc',
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.9',
     package_data={
         'apycula': ['*.pickle']
     },
