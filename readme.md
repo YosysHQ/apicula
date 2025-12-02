@@ -8,7 +8,7 @@ Project Apicula uses a combination of fuzzing and parsing of the vendor data fil
 
 ## Getting Started
 
-Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr-himbaechel](https://github.com/YosysHQ/nextpnr#gowin), [openFPGALoader](https://github.com/trabucayre/openFPGALoader), and Python 3.8 or higher. [Yowasp](http://yowasp.org/) versions of Yosys and Nextpnr are also supported.
+Install the latest git [yosys](https://github.com/yosyshq/yosys#setup), [nextpnr-himbaechel](https://github.com/YosysHQ/nextpnr#gowin), [openFPGALoader](https://github.com/trabucayre/openFPGALoader), and Python 3.9 or higher. [Yowasp](http://yowasp.org/) versions of Yosys and Nextpnr are also supported.
 
 Currently supported boards are
  * Trenz TEC0117: GW1NR-UV9QN881C6/I5
