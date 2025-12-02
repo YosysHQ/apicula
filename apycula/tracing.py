@@ -3,7 +3,7 @@ import re
 import string
 from typing import Iterable, TypeAlias
 from collections import defaultdict, deque
-from apycula.chipdb import Device
+from apycula.chipdb import Device, rc2tbrl, rc2tbrl_0
 from apycula.gowin_unpack import parse_tile_, tbrl2rc
 import random
 # from apycula.tiled_fuzzer import rc2tbrl
@@ -11,19 +11,6 @@ import random
 #Node Type
 Node: TypeAlias = tuple[int, int, str]
 
-
-def rc2tbrl(db, row, col, num):
-    edge = 'T'
-    idx = col
-    if row == db.rows:
-        edge = 'B'
-    elif col == 1:
-        edge = 'L'
-        idx = row
-    elif col == db.cols:
-        edge = 'R'
-        idx = row
-    return f"IO{edge}{idx}{num}"
 
 def parse_intertile_wire(wire:str):
     # {direction}{length}{number}{segment}
@@ -72,7 +59,7 @@ def source_intertile_wire(db:Device, node:Node):
     Args:
         db (Device):
         loc (tuple (x:int, y:int)): coordinates of the tile the node of interest is from
-        node: An intertile wire 
+        node: An intertile wire
     Returns:
         source_node (Node): The source Node of an intertile wire
     """
@@ -95,7 +82,7 @@ def source_intertile_wire(db:Device, node:Node):
         return None
     reverse_dir = uturnlut[wire[0]]
     vecs = { 'N': (-1,0), 'S': (1,0), 'W': (0,-1), 'E': (0,1) }[reverse_dir]
-    
+
     trow = row + vecs[0] * int(segment)
     tcol = col + vecs[1] * int(segment)
 
@@ -116,7 +103,7 @@ def __normalize_pin(db, pin):
 
 
 def next_intertile_wires(db:Device, node:Node):
-    
+
     """
     Returns the intertile wires that have `node` as their source
     Args:
@@ -136,16 +123,16 @@ def next_intertile_wires(db:Device, node:Node):
     if wire[:2]=="SN":
         inter_wires = [uturn(db, (row+disp, col, f'{dir}1{wire[2]}1'))
                         for (disp, dir) in [(-1,"N"), (1, "S")]]
-        
+
     elif wire[:2]=="EW":
         inter_wires = [uturn(db, (row, col+disp, f'{dir}1{wire[2]}1'))
                         for (disp, dir) in [(1,"E"), (-1, "W")]]
-        
+
     elif (this_wire:=parse_intertile_wire(wire)):
         direction, length, number, segment = this_wire
         disp_r, disp_c = { 'N': (-1,0), 'S': (1,0), 'W': (0,-1), 'E': (0,1) }[direction]
         next_hops = {1: [1], 2:[1,2], 8:[4,8]}[int(length)]
-        inter_wires = [uturn(db, (row+disp_r*hop, col+disp_c*hop, f'{direction}{length}{number}{hop}')) 
+        inter_wires = [uturn(db, (row+disp_r*hop, col+disp_c*hop, f'{direction}{length}{number}{hop}'))
                     for hop in next_hops]
     return inter_wires
 
@@ -157,12 +144,12 @@ def get_input_path_dict(tile_dict:dict[Node, Node], db:Device, source:Node|str, 
     Args:
         tile_dict (dict): Dictionary of tiles (output of tile_bitmap) .
         db (Device): Device object representing the FPGA or chip.
-        source(Node|str): Node to start trace from. The TBRL format may be used to specify IO Nodes 
+        source(Node|str): Node to start trace from. The TBRL format may be used to specify IO Nodes
         through_bel (tuple, optional): BEL types to trace through. Defaults to ('lut', 'ff'), the only ones implemented for now.
 
     Returns:
         dict: A dictionary of dest<-src connections where the keys are destinations.
-              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel), 
+              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel),
               the input wires are separated by a "#". dest and src are always strings
     """
 
@@ -178,8 +165,8 @@ def get_input_path_dict(tile_dict:dict[Node, Node], db:Device, source:Node|str, 
     tile_wires = defaultdict(list)
     tile_wires[sloc].append(snode) #wires in this tile we are interested in
     seen = set()
-    
-    
+
+
     while next_tile:
         tile_loc = next_tile.pop()
         srow, scol = tile_loc
@@ -190,9 +177,9 @@ def get_input_path_dict(tile_dict:dict[Node, Node], db:Device, source:Node|str, 
 
         _, all_tile_wires, _ = parse_tile_(db, srow, scol, tile_dict[(srow,scol)])
         wire_dict = defaultdict(list)
-        for dest_wire, src_wire in all_tile_wires.items(): 
+        for dest_wire, src_wire in all_tile_wires.items():
             wire_dict[src_wire].append(dest_wire)
-        
+
         # Trace the input of an IOB to its output
         for iob in ("IOBA", "IOBB"):
             if iob in tile_bels:
@@ -201,7 +188,7 @@ def get_input_path_dict(tile_dict:dict[Node, Node], db:Device, source:Node|str, 
                 wire_dict[input_node].append(output_node)
 
         wire_deque = deque(tile_wires[tile_loc]) #copy wires of interest
-        tile_wires[tile_loc].clear() # reset the list of wires we are interested in       
+        tile_wires[tile_loc].clear() # reset the list of wires we are interested in
 
         while wire_deque:
             curr_wire = wire_deque.pop()
@@ -229,7 +216,7 @@ def get_input_path_dict(tile_dict:dict[Node, Node], db:Device, source:Node|str, 
                 ff_output = f'Q{dest_wire[-1]}'
                 path_dict[(*tile_loc, ff_output)] = full_node_id
                 wire_deque.append(ff_output)
-            
+
             #Trace through intertile wires. No support for other aliases yet
             for itrow, itcol, inter_wire in next_intertile_wires(db,full_node_id):
                 loc = (itrow, itcol)
@@ -237,12 +224,12 @@ def get_input_path_dict(tile_dict:dict[Node, Node], db:Device, source:Node|str, 
                 tile_wires[loc].append(inter_wire)
                 path_dict[(*loc,inter_wire)] = full_node_id
 
-            # Regular search stuff 
+            # Regular search stuff
             for dest_wire in wire_dict[curr_wire]:
                 wire_id = (*tile_loc, dest_wire)
                 wire_deque.appendleft(dest_wire)
                 path_dict[wire_id] = full_node_id
-                
+
     return path_dict
 
 
@@ -258,7 +245,7 @@ def get_output_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel
 
     Returns:
         path_dict: A dictionary of dest<-src connections where the keys are destinations.
-              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel), 
+              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel),
               the input wires are separated by a "#". dest and src are always strings
     """
 
@@ -273,7 +260,7 @@ def get_output_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel
 
     LUT_OUT_REGEX = r'F([0-7])'
     FF_OUT_REGEX = r'Q([0-7])'
-    
+
     seen = set()
 
     while source_tiles:
@@ -296,12 +283,12 @@ def get_output_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel
         while wire_deque:
             curr_wire = wire_deque.pop()
             full_curr_id = (*tile_loc, curr_wire)
-            if full_curr_id in seen: 
+            if full_curr_id in seen:
                 continue
             seen.add(full_curr_id)
             next_wire = wire_dict.get(curr_wire)
-        
-            if next_wire:   
+
+            if next_wire:
                 wire_deque.append(next_wire)
                 path_dict[full_curr_id] = (*tile_loc, next_wire)
 
@@ -327,7 +314,7 @@ def get_output_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel
                 if (it_node) not in seen:
                     source_tiles.append((it_row,it_col))
                     tile_wires[(it_row, it_col)].append(it_wire)
-         
+
     return path_dict
 
 def get_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel=('lut', 'ff')) -> dict:
@@ -341,7 +328,7 @@ def get_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel=('lut'
 
     Returns:
         path_dict: A dictionary of dest<-src connections where the keys are destinations.
-              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel), 
+              In cases where there are multiple conceptual inputs to the same destination (like tracing from the output to input of a bel),
               the input wires are separated by a "#". dest and src are always strings
     """
     input_path_dict = get_input_path_dict(tile_dict, db, source, through_bel)
@@ -354,7 +341,7 @@ def io_node_to_tbrl(db, node:Node):
     row, col, wire = node
     for bel_type, bel in db.grid[row][col].bels.items():
         if bel_type.startswith("IOB") and wire in bel.portmap.values():
-            tbrl_name = rc2tbrl(db, row, col, bel_type[-1])
+            tbrl_name = rc2tbrl_0(db, row, col, bel_type[-1])
             return tbrl_name
 
 def get_io_nodes(db:Device):
@@ -367,7 +354,7 @@ def get_io_nodes(db:Device):
                 if bel_type.startswith("IOB"):
                     bel_input = bel.portmap["I"]
                     nodes.append ((row, col, bel_input))
-    
+
     for col in range(cols):
         for row in (0, rows-1):
             bels = db.grid[row][col].bels
@@ -375,7 +362,7 @@ def get_io_nodes(db:Device):
                 if bel_type.startswith("IOB"):
                     bel_input = bel.portmap["I"]
                     nodes.append ((row, col, bel_input))
-    
+
     return nodes
 
 # Connected by default in tiles (src -> list[destinations]). No longer in tiledata from V1.9.9
@@ -412,16 +399,16 @@ def assess_path(path:list[Node]):
     Returns:
         float: The ratio of default-connected wires to total wires in the path.
     """
-    qual = 0 
+    qual = 0
 
     if len(path) < 2:
         return qual
-    
+
     for i in range(len(path)-1):
         (srow, scol, snode), (drow, dcol, dnode) =  path[i], path[i+1]
         if srow==drow and scol==dcol and dnode in default_pips.get(snode, {}):
             qual += 1
-    
+
     return (len(path) - qual)/len(path)
 
 def enumerate_paths(path_dict:dict, sources:set[Node|str], dests:set[Node|str])->Iterable[Node]:
@@ -452,7 +439,7 @@ def enumerate_paths(path_dict:dict, sources:set[Node|str], dests:set[Node|str])-
             if curr_node in sources or wire in ['VSS', 'VCC']:
                 path.append(curr_node)
                 yield list(path[::-1])
-            
+
             #Assumption that there is never a '#' in a wirename, which holds so far...
             elif "#" in wire:
                 alts = wire.split("#")
@@ -489,7 +476,7 @@ def get_paths(path_dict:dict, sources:set[Node|str], dests:set[Node|str], sort:b
     paths = []
     for path in enumerate_paths(path_dict, sources, dests):
         paths.append(path)
-    
+
     if sort:
         paths.sort(key = lambda x: (x[0], x[-1], assess_path(x)))
 
@@ -502,7 +489,7 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
 
     Parameters:
         plot (dict): A dictionary where keys represent group labels and values are lists of `Node` objects.
-                     Each group of nodes will be marked with a distinct ASCII character. 
+                     Each group of nodes will be marked with a distinct ASCII character.
                      Note: Avoid using `[all]` as a key in the plot dictionary.
         rows (int, optional): The number of rows in the grid. If not provided, it will be inferred from the data.
         cols (int, optional): The number of columns in the grid. If not provided, it will be inferred from the data.
@@ -517,7 +504,7 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
         import matplotlib.pyplot as plt
     except:
         raise ModuleNotFoundError ("Kindly install `matplotlib` to call this function")
-    
+
     if checkbox:
         # matplotlib.use('Qt5Agg')
         from matplotlib.widgets import CheckButtons
@@ -529,7 +516,7 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
     plt.imshow(grid, cmap=cmap, origin='upper', extent=[0, cols, 0, rows])
     plt.tick_params(labeltop=True, labelright=True, labelsize=10)
     plt.grid(which='both', color='black', linestyle='-', linewidth=1)
-    
+
     x_ticks = list(range(0, cols+1))
     plt.xticks(x_ticks, rotation=90, fontsize=8, fontweight='light', fontfamily='monospace')
 
@@ -561,13 +548,13 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
         legend = legend_opts[l_idx%len(legend_opts)]
         legend_dict[str(k)] = [*legend, f"({legend[0]}) {path[0]} -> {path[-1]} //{k}"] #plot_character, plot_color, plot_label
         l_idx += 1
- 
+
     legend_entries = [
-        plt.Line2D([0], [0], color=color, markerfacecolor=color, marker='o', linestyle='', 
+        plt.Line2D([0], [0], color=color, markerfacecolor=color, marker='o', linestyle='',
                    markeredgecolor='black', markersize=10, label=path_label)
         for k, (plot_char, color, path_label) in legend_dict.items()
     ]
-    
+
     text_dict = defaultdict(list)
     for k, path in plot.items():
         base_plot_char, color, label = legend_dict[str(k)]
@@ -583,9 +570,9 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
                 plot_char = plot_char + "^" #Start tile marker
             elif loc == end_loc:
                 plot_char = plot_char + "$" #Final tile marker
-            
+
             i, j = loc
-            this_text = ax.text(j + 0.5, rows - i - 0.5, plot_char, ha='center', va='center', color=color, 
+            this_text = ax.text(j + 0.5, rows - i - 0.5, plot_char, ha='center', va='center', color=color,
                                 fontweight='bold', fontsize=8, visible=True)
             text_dict[k].append((loc, this_text)) # We store the texts so we can easily toggle visibility later on
 
@@ -598,7 +585,7 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
         check.eventson = False
         if to_toggle is None:
             return
- 
+
         if to_toggle != ALL_TAG:
             _, key = to_toggle.split("//")
             text_objs = text_dict[key]
@@ -616,7 +603,7 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
             for text_list in text_dict.values():
                 for text_loc, text_obj in text_list:
                     text_obj.set_visible(not visibility) #Toggle visibiility of characters
-            
+
             if visibility:
                 check.clear() #Clear all checkboxes
                 showing.clear()
@@ -624,7 +611,7 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
                 for i in range(len(_showing)):
                     check.set_active(i, True) #Activate all checkboxes
                 showing.update(_showing)
-        
+
         # Keep the state of the 'ALL' checkbox consistent
         if len(showing) < len(_showing):
             check.set_active(0, False)
@@ -644,7 +631,7 @@ def visualize_grid(plot:dict[str, list[Node]], rows, cols, show=False, save_name
         rax.set_frame_on(False)
         check = CheckButtons(rax, check_labels, [True] * len(check_labels))
         check.on_clicked(check_callback)
-    elif not (show or checkbox): 
+    elif not (show or checkbox):
         plt.legend(
             handles=legend_entries,
             loc='center left',  # Legend location

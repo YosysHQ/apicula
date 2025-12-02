@@ -145,6 +145,13 @@ class Device:
     # io configurations. { 'IOR3B' : {'MODE0', 'CCLK'}}  (example, not real)
     # store alternative pin configurations that may not be present in a specific package.
     io_cfg: Dict[str, Set[str]] = field(default_factory=dict)
+    # Gowin has a way of specifying pin locations in a .CST file as a side
+    # index, for example, IOR12A, which means pin 12 on the right side of the
+    # chip.
+    # We support this mechanism, but it has a peculiarity with corner tiles — let's
+    # say tile (0, 0) is both IOT1 and IOL1. Here we specify how to interpret the
+    # corners.
+    corner_tiles_io: Dict[Tuple[int, int], str] = field(default_factory=dict)
 
     @property
     def rows(self):
@@ -185,6 +192,23 @@ class Device:
 
 def is_GW5_family(device):
     return device in {'GW5A-25A', 'GW5AST-138C'}
+
+def set_corners_io(db, device):
+    if device in {'GW5A-25A'}:
+        db.corner_tiles_io[0, 0]                     = 'T'
+        db.corner_tiles_io[db.rows - 1, 0]           = 'B'
+        db.corner_tiles_io[0, db.cols - 1]           = 'R'
+        db.corner_tiles_io[db.rows - 1, db.cols - 1] = 'R'
+    elif device in {'GW5AST-138C'}:
+        db.corner_tiles_io[0, 0]                     = 'L'
+        db.corner_tiles_io[db.rows - 1, 0]           = 'L'
+        db.corner_tiles_io[0, db.cols - 1]           = 'R'
+        db.corner_tiles_io[db.rows - 1, db.cols - 1] = 'R'
+    else:
+        db.corner_tiles_io[0, 0]                     = 'T'
+        db.corner_tiles_io[db.rows - 1, 0]           = 'B'
+        db.corner_tiles_io[0, db.cols - 1]           = 'T'
+        db.corner_tiles_io[db.rows - 1, db.cols - 1] = 'B'
 
 
 # XXX GW1N-4 and GW1NS-4 have next data in dat.portmap['CmuxIns']:
@@ -487,7 +511,7 @@ def set_banks(fse, dat, db):
                     simplified_io_rows.add(row)
 
     # assign IO to the banks
-    for col in range(1, db.cols):
+    for col in range(1, db.cols + 1):
         bank = dat.compat_dict['Bank']['TA'][col]
         if bank != -1:
             db.pin_bank[f'IOT{col}A'] = bank
@@ -501,7 +525,7 @@ def set_banks(fse, dat, db):
         if bank != -1:
             db.pin_bank[f'IOB{col}B'] = bank
 
-    for col in range(1, db.rows):
+    for col in range(1, db.rows + 1):
         bank = dat.compat_dict['Bank']['LA'][col]
         if bank != -1:
             db.pin_bank[f'IOL{col}A'] = bank
@@ -668,7 +692,11 @@ _io_cfg = {
     223: ['D12'],
     217: ['D06'],
     247: ['PUDC_B'],
-    270: ['CFG_MCKTEST'],
+    262: ['PU'],
+    263: ['INITDLY0'],
+    264: ['INITDLY1'],
+    267: ['ADCINCK1'],
+    270: ['MCKTEST'],
     332: ['GCLKT_6B'],
     333: ['GCLKC_6B'],
     335: ['GCLKT_9A', 'D13', 'BPLL_T_IN1'],
@@ -683,7 +711,11 @@ _io_cfg = {
     367: ['ADCINCLK'],
     368: ['ADCOTEST'],
 }
-def dat_fill_io_cfgs(db, dat, pindesc):
+def dat_fill_io_cfgs(db, dat, device, pindesc):
+    cfg_dict = dat.compat_dict['Cfg']
+    if device in {'GW5AST-138C'}:
+        cfg_dict = dat.compat_dict['Cfg5']
+
     pkg_pins = { p[0]: p[1] for p in pindesc.values() }
     for row, rd in enumerate(db.grid):
         for col, rc in enumerate(rd):
@@ -691,6 +723,7 @@ def dat_fill_io_cfgs(db, dat, pindesc):
                 if name.startswith('IOB'):
                     iob_idx = name[-1]
                     io_name = loc2pin_name(db, row, col) + iob_idx
+                    db.io_cfg[io_name] = []
                     side = io_name[2]
                     package_cfg = pkg_pins.get(io_name, None)
                     cfg_code = 0
@@ -703,13 +736,15 @@ def dat_fill_io_cfgs(db, dat, pindesc):
                             idx = col + 1
                         else:
                             idx = row + 1
-                        cfg_code = dat.compat_dict['Cfg'][side + iob_idx][idx]
-                    if (bool(package_cfg) ^ bool(cfg_code)) and cfg_code in _io_cfg:
-                        #print(io_name, package_cfg, bool(package_cfg), bool(cfg_code))
-                        #print(package_cfg, _io_cfg[cfg_code])
-                        db.io_cfg[io_name] = _io_cfg[cfg_code]
-                    #if io_name in db.io_cfg:
-                    #    print(db.io_cfg[io_name])
+                        cfg_code = cfg_dict[side + iob_idx][idx]
+                    if (bool(package_cfg) ^ bool(cfg_code)):
+                        if cfg_code in _io_cfg:
+                            #print(io_name, package_cfg, bool(package_cfg), bool(cfg_code), cfg_code)
+                            #print(package_cfg, _io_cfg[cfg_code])
+                            db.io_cfg[io_name] = _io_cfg[cfg_code]
+                        elif cfg_code:
+                            raise Exception(f"unknown pin configuration {cfg_code} at {io_name}")
+                    #print(io_name, db.io_cfg[io_name])
     return
 
 def fse_fill_logic_tables(dev, fse, device):
@@ -4723,22 +4758,31 @@ def wire2global(row, col, db, wire):
     #name = diaglut.get(direction+num, direction+num)
     return f"R{rootrow}C{rootcol}_{direction}{num}"
 
+# row and col is zero-based
+def rc2tbrl_0(db, row, col, num = ''):
+    edge = db.corner_tiles_io.get((row, col), None)
+    if not edge:
+        if row == 0:
+            edge = 'T'
+        elif row == db.rows - 1:
+            edge = 'B'
+        elif col == 0:
+            edge = 'L'
+        elif col == db.cols - 1:
+            edge = 'R'
+    if edge in "TB":
+        idx = col + 1
+    else:
+        idx = row + 1
+    return f"IO{edge}{idx}{num}"
+
+def rc2tbrl(db, row, col, num = ''):
+    return rc2tbrl_0(db, row - 1, col - 1, num)
+
 def loc2pin_name(db, row, col):
     """ returns name like "IOB3" without [A,B,C...]
     """
-    if row == 0:
-        side = 'T'
-        idx = col + 1
-    elif row == db.rows - 1:
-        side = 'B'
-        idx =  col + 1
-    elif col == 0:
-        side = 'L'
-        idx =  row + 1
-    else:
-        side = 'R'
-        idx = row + 1
-    return f"IO{side}{idx}"
+    return rc2tbrl_0(db, row, col)
 
 def loc2bank(db, row, col):
     """ returns bank index 0...n

@@ -107,20 +107,6 @@ def tbrl2rc(fse, side, num):
         col = len(fse['header']['grid'][61][0])-1
     return (row, col)
 
-def rc2tbrl(db, row, col, num):
-    idx = col
-    if row == 1:
-        edge = 'T'
-    elif row == db.rows:
-        edge = 'B'
-    elif col == 1:
-        edge = 'L'
-        idx = row
-    elif col == db.cols:
-        edge = 'R'
-        idx = row
-    return f"IO{edge}{idx}{num}"
-
 # Read the packer vendor log to identify problem with primitives/attributes
 # returns dictionary {(primitive name, error code) : [full error text]}
 _err_parser = re.compile(r"(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
@@ -211,6 +197,7 @@ def run_pnr(mod, constr, config):
 
 _tbrlre = re.compile(r"IO([TBRL])(\d+)")
 def fse_iob(fse, db, diff_cap_info, locations):
+    chipdb.set_corners_io(db, device)
     iob_bels = {}
     is_true_lvds = False
     is_positive = False
@@ -232,7 +219,7 @@ def fse_iob(fse, db, diff_cap_info, locations):
         for row, col in locations[ttyp]:
             if first_cell:
                 for bel_name, bel in bels.items():
-                    name = rc2tbrl(db, row + 1, col + 1, bel_name[-1])
+                    name = chipdb.rc2tbrl_0(db, row, col, bel_name[-1])
                     if name in diff_cap_info.keys():
                         is_diff, is_true_lvds, is_positive, adc_bus = diff_cap_info[name]
                         bel.is_diff = is_diff
@@ -370,7 +357,7 @@ if __name__ == "__main__":
     fse_iob(fse, db, diff_cap_info, locations);
     if chipdb.is_GW5_family(device):
         chipdb.fill_GW5A_io_bels(db)
-    chipdb.dat_fill_io_cfgs(db, dat, db.pinout[params['device']][params['package']])
+    chipdb.dat_fill_io_cfgs(db, dat, device, db.pinout[params['device']][params['package']])
 
     pad_locs = pindef.get_pll_pads_locs(params['device'], params['package'])
     chipdb.pll_pads(db, device, pad_locs)

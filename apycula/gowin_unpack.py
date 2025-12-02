@@ -468,7 +468,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             io_tile = tile
             io_ttyp = tiledata.ttyp
 
-            if idx == 'B' and _device == 'GW5A-25A' and tiledata.bels[name].fuse_cell_offset:
+            if idx == 'B' and tiledata.bels[name].fuse_cell_offset:
                 io_row += tiledata.bels[name].fuse_cell_offset[0]
                 io_col += tiledata.bels[name].fuse_cell_offset[1]
                 io_tiledata = db.grid[io_row][io_col]
@@ -478,7 +478,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             if idx == 'B' and 'IOBB' not in db.longval[io_ttyp]:
                 continue
             attrvals = parse_attrvals(io_tile, db.rev_logicinfo('IOB'), db.longval[io_ttyp][f'IOB{idx}'], attrids.iob_attrids, "IOB")
-            #print(name, io_row, io_col, attrvals)
+            #print(name, io_row, io_col, sorted(attrvals.items()))
             try: # we can ask for invalid pin here because the IOBs share some stuff
                 bank = chipdb.loc2bank(db, io_row, io_col)
             except KeyError:

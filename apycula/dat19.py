@@ -1,4 +1,3 @@
-from __future__ import annotations
 import sys
 import os
 from pathlib import Path
@@ -41,6 +40,7 @@ class Datfile:
         elif partType == 2:  # 5 Series
             self.gw5aStuff = self.read_5Astuff()
             self.compat_dict.update(self.read_something())
+            self.compat_dict.update(self.read_something5A())
         elif partType == 4:
             raise Exception(f"PartType {partType} is not supported")
 
@@ -587,8 +587,9 @@ class Datfile:
         RSTable5ATOffset = 0x7b4a8
         ret = {
             "Dqs": {},
-            "Cfg": {},
+            "Cfg5": {},
         }
+        """
         ret["Dqs"]["TA"]        = self.read_arr16_at(200, RSTable5ATOffset + 0x9a10, 4)
         ret["Dqs"]["TB"]        = self.read_arr16_at(200, RSTable5ATOffset + 0x9cc8, 0xc)
         ret["Dqs"]["BA"]        = self.read_arr16_at(200, RSTable5ATOffset + 0x9ad8, 4)
@@ -602,15 +603,16 @@ class Datfile:
         ret["Dqs"]["RightIO"]   = self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fa0, 0)
         ret["Dqs"]["TopIO"]     = self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fb0, 0xc)
         ret["Dqs"]["BottomIO"]  = self.read_arr16_at(0x16, RSTable5ATOffset + 0x9fc8, 8)
+        """
 
-        ret["Cfg"]["TA"]        = self.read_arr32_at(200, RSTable5ATOffset, 0)
-        ret["Cfg"]["BA"]        = self.read_arr32_at(200, RSTable5ATOffset + 200, 0)
-        ret["Cfg"]["LA"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 400, 0)
-        ret["Cfg"]["RA"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 224, 8)
-        ret["Cfg"]["TB"]        = self.read_arr32_at(200, RSTable5ATOffset + 700, 0)
-        ret["Cfg"]["BB"]        = self.read_arr32_at(200, RSTable5ATOffset + 900, 0)
-        ret["Cfg"]["LB"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 0x44c, 0)
-        ret["Cfg"]["RB"]        = self.read_arr32_at(0x96, RSTable5ATOffset + 0x4e0, 8)
+        ret["Cfg5"]["TA"]        = self.read_arr32_at(200, 0,    RSTable5ATOffset)
+        ret["Cfg5"]["BA"]        = self.read_arr32_at(200, 200,  RSTable5ATOffset)
+        ret["Cfg5"]["LA"]        = self.read_arr32_at(150, 400,  RSTable5ATOffset)
+        ret["Cfg5"]["RA"]        = self.read_arr32_at(150, 550,  RSTable5ATOffset)
+        ret["Cfg5"]["TB"]        = self.read_arr32_at(200, 700,  RSTable5ATOffset)
+        ret["Cfg5"]["BB"]        = self.read_arr32_at(200, 900,  RSTable5ATOffset)
+        ret["Cfg5"]["LB"]        = self.read_arr32_at(150, 1100, RSTable5ATOffset)
+        ret["Cfg5"]["RB"]        = self.read_arr32_at(150, 1250, RSTable5ATOffset)
 
         return ret
 
