@@ -66,6 +66,20 @@ def iob_is_connected_to_HCLK_GCLK(connections):
                     return True
     return False
 
+# row, col - zero based
+def rc2tbrl(db, row, col, num):
+    edge = 'T'
+    idx = col
+    if row == db.rows:
+        edge = 'B'
+    elif col == 1:
+        edge = 'L'
+        idx = row
+    elif col == db.cols:
+        edge = 'R'
+        idx = row
+    return f"IO{edge}{idx}{num}"
+
 _verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
 def sanitize_name(name):
     retname = name
@@ -2819,14 +2833,11 @@ def get_iostd_alias(iostd):
             break
     return iostd
 
-# For each bank, remember the Bels used, mark whether Outs were among them and the standard.
+# For each bank, remember the IO_TYPE and used bels
 class BankDesc:
-    def __init__(self, iostd, inputs_only, bels_tiles, true_lvds_drive):
+    def __init__(self, iostd, bels):
         self.iostd = iostd
-        self.inputs_only = inputs_only
-        self.bels_tiles = bels_tiles
-        self.true_lvds_drive = true_lvds_drive
-
+        self.bels = bels
 _banks = {}
 
 # IO encode in two passes: the first collect the IO attributes and place them
@@ -2845,7 +2856,7 @@ _default_iostd = {
         'ELVDS_IBUF': 'LVCMOS33D', 'ELVDS_OBUF': 'LVCMOS33D', 'ELVDS_TBUF': 'LVCMOS33D',
         'ELVDS_IOBUF': 'LVCMOS33D',
         }
-_vcc_ios = {'LVCMOS12': '1.2', 'LVCMOS15': '1.5', 'LVCMOS18': '1.8', 'LVCMOS25': '2.5',
+_vcc_ios = {'LVCMOS10': '1.0', 'LVCMOS12': '1.2', 'LVCMOS15': '1.5', 'LVCMOS18': '1.8', 'LVCMOS25': '2.5',
         'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3', 'MIPI': '1.2',
         'SSTL15': '1.5', 'SSTL18_I': '1.8', 'SSTL18_II': '1.8', 'SSTL25_I': '2.5', 'SSTL25_II': '2.5', 'SSTL33_I': '3.3', 'SSTL33_II': '3.3',
         'SSTL15D': '1.5', 'SSTL18D_I': '1.8', 'SSTL18D_II': '1.8', 'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3'}
@@ -2991,6 +3002,23 @@ def check_adc_io(db, io_loc):
 
     adc = adc_iolocs.setdefault((row, col), {})
     adc['bus'] = adc_bus
+
+# Returns the required values for PULLMODE, PADDI, TO, and ODMUX_1
+# for an unused pin with the specified configuration.
+_no_pullup_cfgs = { f'D{x:02}' for x in range(8, 32)}
+_no_pullup_cfgs.update({'INITDLY0', 'INITDLY1'})
+def get_pullup_io(cfg):
+    pullup_io = {'PADDI': 'PADDI', 'PULLMODE': 'UP'}
+    if 'TDO' in cfg or 'DOUT' in cfg:
+        pullup_io = {'TO': 'INV', 'ODMUX_1': '1', 'PULLMODE': 'UP'}
+    elif 'RDWR' in cfg or 'RDWR_B' in cfg or 'PUDC_B' in cfg:
+        pullup_io = {'PADDI': 'PADDI', 'PULLMODE': 'DOWN'}
+    else:
+        for cf in cfg:
+            if cf in _no_pullup_cfgs:
+                pullup_io = {'PADDI': 'PADDI', 'PULLMODE': 'NONE'}
+                break
+    return pullup_io
 
 def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
     global adc_ios
@@ -3164,7 +3192,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             pinless_io = False
             try:
                 bank = chipdb.loc2bank(db, row - 1, col - 1)
-                iostd = _banks.setdefault(bank, BankDesc(None, True, [], None)).iostd
+                iostd = _banks.setdefault(bank, BankDesc(None, set())).iostd
             except KeyError:
                 if not args.allow_pinless_io:
                     raise Exception(f"IO{edge}{idx}{num} is not allowed for a given package")
@@ -3229,7 +3257,10 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             ram_attrs.update({'CLKMUX_1': 'UNKNOWN'})
             ram_attrs.update({'CLKMUX_CLK': 'SIG'})
         elif typ ==  'IOLOGIC':
-            #print(row, col, cellname)
+            #print('IOLOGIC', num, row, col, cellname)
+            #bank = chipdb.loc2bank(db, row - 1, col - 1)
+            #_banks.setdefault.add(bank, BankDesc(None, set())).bels.add(rc2tbrl(db, row - 1, col - 1, num))
+
             iologic_attrs = set_iologic_attrs(db, parms, attrs)
             bits = set()
             table_type = f'IOLOGIC{num}'
@@ -3420,6 +3451,8 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
         if 'BANK_VCCIO' not in in_bank_attrs:
             in_bank_attrs['BANK_VCCIO'] = _vcc_ios[iostd]
 
+        _banks[bank].iostd = iostd
+
         # set io bits
         for name, iob in ios.items():
             row, col, idx = iob.pos
@@ -3579,6 +3612,79 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
     #    for io, bl in v.items():
     #        print(k, io, vars(bl))
 
+    # Loop over all pins and set fuses for unused ones
+    partno = pnr['modules']['top']['settings'].get('packer.partno', '')
+    #pinout = db.pinout[db.packages[partno][1]][db.packages[partno][0]]
+    for bel, cfg in db.io_cfg.items():
+        attrs = {}
+        bank = db.pin_bank.get(bel, None)
+        if bank in _banks:
+            # skip used
+            if bel in _banks[bank].bels:
+                continue
+            io_std = _banks[bank].iostd
+        else:
+            if device not in {'GW5A-25A', 'GW5AST-138C'}:
+                io_std = 'LVCMOS18'
+            else:
+                io_std = 'LVCMOS33'
+        attrs.update({'IO_TYPE': io_std, 'BANK_VCCIO': _vcc_ios[io_std]})
+
+        if device in {'GW5A-25A', 'GW5AST-138C'}:
+            attrs.update({'OPENDRAIN': 'OFF'})
+            drive = '8'
+            if io_std == 'LVCMOS10':
+                drive = '4'
+            attrs.update({'DRIVE': drive, 'DRIVE_LEVEL': drive})
+            pullup_and_iomode = get_pullup_io(cfg)
+            attrs.update(pullup_and_iomode)
+
+        side = bel[2]
+        num = bel[3:-1]
+        iob_idx = bel[-1]
+        if side == 'T':
+            row = 0
+            col = int(num) - 1
+        elif side == 'B':
+            row = db.rows - 1
+            col = int(num) - 1
+        elif side == 'L':
+            row = int(num) - 1
+            col = 0
+        elif side == 'R':
+            row = int(num) - 1
+            col = db.cols - 1
+
+        tiledata = db.grid[row][col]
+        if f'IOB{iob_idx}' not in tiledata.bels:
+            continue
+
+        iob_attrs = set()
+        print(row, col, iob_idx, sorted(attrs.items()))
+        for k, val in attrs.items():
+            add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
+        fuse_row, fuse_col = (row, col)
+
+        if device not in {'GW5A-25A', 'GW5AST-138C'}:
+            bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
+        else:
+            # fuses may be in another cell
+            fuse_ttyp = tiledata.ttyp
+            off = tiledata.bels[f'IOB{iob_idx}'].fuse_cell_offset
+            if off:
+                fuse_row += off[0]
+                fuse_col += off[1]
+                fuse_ttyp = db.grid[fuse_row][fuse_col].ttyp
+            # IOR3 A and B are actually A only in different cells
+            if (row, col, iob_idx) == (2, 91, 'B'):
+                iob_idx = 'A'
+            elif (row, col) == (3, 91):
+                continue
+            bits = get_longval_fuses(db, fuse_ttyp, iob_attrs, f'IOB{iob_idx}')
+
+        tile = tilemap[(fuse_row, fuse_col)]
+        for row_, col_ in bits:
+            tile[row_][col_] = 1
 
 # hclk interbank requires to set some non-route fuses
 def do_hclk_banks(db, row, col, src, dest):
