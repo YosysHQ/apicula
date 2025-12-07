@@ -352,7 +352,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
     for name, bel in tiledata.bels.items():
         if name.startswith("ADC"):
             attrvals = parse_attrvals(tile, db.rev_logicinfo('ADC'), db.shortval[tiledata.ttyp]['ADC'], attrids.adc_attrids, "ADC")
-            print(row, col, name, tiledata.ttyp, attrvals)
+            #print(row, col, name, tiledata.ttyp, attrvals)
         if name.startswith("RPLL"):
             idx = _pll_cells.setdefault(get_pll_A(db, row, col, name[4]), len(_pll_cells))
             modes = { f'DEVICE="{_device}"' }

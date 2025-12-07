@@ -3570,7 +3570,7 @@ def fill_GW5A_io_bels(dev):
         is_diff = True
         if 'IOBA' in rc.bels:
             is_diff = False
-        print(f'GW5 IO bels col:{col} {ttyp} -> {main_cell.ttyp}')
+        #print(f'GW5 IO bels col:{col} {ttyp} -> {main_cell.ttyp}')
         main_cell.bels['IOBB'] = copy.deepcopy(rc.bels['IOBB'])
         main_cell.bels['IOBB'].is_diff = is_diff
         main_cell.bels['IOBB'].is_diff_p = False
@@ -3769,7 +3769,7 @@ def dat_portmap(dat, dev, device):
                 elif name.startswith('PADD9'):
                     mac = int(name[-2])
                     idx = int(name[-1])
-                    print("DSP_I: row:", row, "col:", col, "name:", name, "mac:", mac, "idx:", idx)
+                    #print("DSP_I: row:", row, "col:", col, "name:", name, "mac:", mac, "idx:", idx)
                     column = mac * 2 + (idx // 2)
 
                     for i in range(12):
