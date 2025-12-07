@@ -56,10 +56,10 @@ iob_attrids = {
         'MIPI_IBUF_DRIVE':       48,
         'MIPI_IBUF_DRIVE_LEVEL': 49,
 
-        'IOB_GW5_PULL_50':       50,
+        'PULL_STRENGTH':         50,
         'IOB_UNKNOWN51':         51,
         'IOB_UNKNOWN52':         52,
-        'IOB_UNKNOWN55':         55,
+        'DIFF_RESISTOR_VALUE':   55,
         'IOB_UNKNOWN56':         56,
         'IOB_UNKNOWN57':         57,
         'IOB_UNKNOWN58':         58,
@@ -260,6 +260,10 @@ iob_attrvals = {
             'LVCMOS33OD12':     161,
             'LVCMOS25OD12':     162,
             'LVCMOS18OD12':     163,
+            # pull strength
+            'MEDIUM':           186,
+            'WEAK':             187,
+            'STRONG':           188,
             # voltage
             '1.0':              193,
             # 5A ADC

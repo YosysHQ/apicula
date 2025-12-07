@@ -2876,6 +2876,7 @@ _init_io_attrs = {
                  'SINGLERESISTOR': 'OFF', 'BANK_VCCIO': '1.8', 'LVDS_OUT': 'OFF', 'DDR_DYNTERM': 'NA',
                  'TO': 'INV', 'PERSISTENT': 'OFF', 'ODMUX': 'TRIMUX', 'PADDI': 'PADDI', 'OPENDRAIN': 'OFF'},
         }
+
 _refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE', 'OPEN_DRAIN': 'OPENDRAIN'}
 def refine_io_attrs(attr):
     return _refine_attrs.get(attr, attr)
@@ -3446,7 +3447,10 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     raise Exception(f"Different IO standard for bank {bank}: {fst} sets {iostd}, {snd} sets {iob.attrs['IO_TYPE']}.")
 
         if not vccio:
-            iostd = 'LVCMOS12'
+            if device not in {'GW5A-25A', 'GW5AST-138C'}:
+                iostd = 'LVCMOS12'
+            else:
+                iostd = 'LVCMOS33'
 
         if 'BANK_VCCIO' not in in_bank_attrs:
             in_bank_attrs['BANK_VCCIO'] = _vcc_ios[iostd]
@@ -3552,7 +3556,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     else:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
                         if k == 'LVDS_OUT' and val not in {'ENABLE', 'ON'}:
-                            if device not in {'GW5A-25A'}:
+                            if device not in {'GW5A-25A', 'GW5AST-138C'}:
                                 continue
                         if k == 'IO_TYPE' and k in in_bank_attrs and in_bank_attrs[k].startswith('LVDS'):
                             continue
@@ -3598,7 +3602,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             if k not in attrids.iob_attrids:
                 print(f'XXX BANK: add {k} key handle')
             else:
-                if k in {'BANK_VCCIO', 'IO_TYPE', 'LVDS_OUT', 'DRIVE', 'OPENDRAIN'}:
+                if k in {'BANK_VCCIO', 'IO_TYPE', 'LVDS_OUT', 'DRIVE', 'OPENDRAIN', 'PULL_STRENGTH'}:
                     add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
 
         bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, 'BANK', bank)
@@ -3618,16 +3622,39 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
     for bel, cfg in db.io_cfg.items():
         attrs = {}
         bank = db.pin_bank.get(bel, None)
+        if bank == None:
+            if cfg:
+                raise Exception(f"Pin {bel} with alt configurstions {cfg} has no bank.")
+            continue
         if bank in _banks:
             # skip used
             if bel in _banks[bank].bels:
                 continue
-            io_std = _banks[bank].iostd
         else:
             if device not in {'GW5A-25A', 'GW5AST-138C'}:
                 io_std = 'LVCMOS18'
             else:
                 io_std = 'LVCMOS33'
+            _banks.setdefault(bank, BankDesc(None, set())).iostd = io_std
+            # unused bank bits
+            brow, bcol = db.bank_tiles[bank]
+            tiledata = db.grid[brow][bcol]
+
+            bank_attrs = set()
+            for k, val in in_bank_attrs.items():
+                if k not in attrids.iob_attrids:
+                    print(f'XXX BANK: add {k} key handle')
+                else:
+                    add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids['BANK_VCCIO'], attrids.iob_attrvals[_vcc_ios[io_std]])
+
+            bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, 'BANK', bank)
+            bits.update(get_bank_io_fuses(db, tiledata.ttyp, bank_attrs))
+
+            btile = tilemap[(brow, bcol)]
+            for row, col in bits:
+                btile[row][col] = 1
+
+        io_std = _banks[bank].iostd
         attrs.update({'IO_TYPE': io_std, 'BANK_VCCIO': _vcc_ios[io_std]})
 
         if device in {'GW5A-25A', 'GW5AST-138C'}:
@@ -3660,7 +3687,6 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             continue
 
         iob_attrs = set()
-        print(row, col, iob_idx, sorted(attrs.items()))
         for k, val in attrs.items():
             add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
         fuse_row, fuse_col = (row, col)
@@ -3917,7 +3943,7 @@ def set_adc_iobuf_fuses(db, tilemap):
         attrs['DDR_DYNTERM'] = 'NA'
         attrs['IO_BANK'] = 'NA'
         attrs['PADDI'] = 'PADDI'
-        attrs['IOB_GW5_PULL_50'] = 'NONE'
+        attrs['PULL_STRENGTH'] = 'NONE'
         attrs['IOB_GW5_VCCX_64'] = '3.3'
 
         io_attrs = set()
@@ -3952,7 +3978,7 @@ def set_adc_iobuf_fuses(db, tilemap):
         attrs['DDR_DYNTERM'] = 'NA'
         attrs['IO_BANK'] = 'NA'
         attrs['PADDI'] = 'PADDI'
-        attrs['IOB_GW5_PULL_50'] = 'NONE'
+        attrs['PULL_STRENGTH'] = 'NONE'
         attrs['IOB_GW5_VCCX_64'] = '3.3'
 
         io_attrs = set()
@@ -4042,6 +4068,15 @@ def main():
             db = pickle.load(f)
 
     wnames.select_wires(device)
+
+    # add default io attrs for GW5
+    if device in {'GW5A-25A', 'GW5AST-138C'}:
+        _init_io_attrs['IBUF'].update({'PULL_STRENGTH': 'MEDIUM'})
+        _init_io_attrs['OBUF'].update({'PULL_STRENGTH': 'MEDIUM'})
+        _init_io_attrs['TBUF'].update({'PULL_STRENGTH': 'MEDIUM'})
+        _init_io_attrs['IOBUF'].update({'PULL_STRENGTH': 'MEDIUM'})
+        _default_iostd.update({'IBUF': 'LVCMOS33', 'OBUF': 'LVCMOS33', 'TBUF': 'LVCMOS33', 'IOBUF': 'LVCMOS33',})
+
     if not args.sspi_as_gpio and device in {'GW5A-25A'}:
         # must be always on
         print('Warning. For GW5A-25A SSPI must be set as GPIO.')
