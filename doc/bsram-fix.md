@@ -60,6 +60,17 @@ When more dynamic bits are involved in `BLKSEL[2:0]`, higher order LUTs are used
 
 For Tangnano9k and Tangnano20k with data width of 32 or 36 bits, no additional manipulations were noticed, but for now we will add a decoder in these cases for simplicity.
 
+### TangPrimer25k
+
+SDPB/SDPX9B in TangPrimer25k with a width of 32/36 bits are divided into two primitives, each of which serves 16/18 bits.
+
+#### 32/36 bits - 32/36 bits
+
+This is the simplest case, when the widths of ports A and B are equal. In this case, almost all signals are connected in parallel between the two primitives, with the exception of the write mask and the ADA4 address line, which is used to write the most significant bytes to the next address. This is not necessary when reading, since all 32/36 bits are read in any case.
+
+![SDP9B 32 - 32 bits](fig/gw5-bsram-sdp-32-32.png)
+
+
 # TODO
   - Explore DPB, SDPB and pROM
 
