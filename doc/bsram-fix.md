@@ -70,6 +70,15 @@ This is the simplest case, when the widths of ports A and B are equal. In this c
 
 ![SDP9B 32 - 32 bits](fig/gw5-bsram-sdp-32-32.png)
 
+#### 32/36 bits - < 32 bits
+
+The case where port B has a small width is more interesting. We still write 16/18 bits to two primitives, but we can no longer read as easily because we need to take 16/18 bits from one primitive or the other depending on the address.
+
+Therefore, we add a LUT to each DOx output, which selects which primitive output to use depending on the state of the ADB4 address bit.
+
+But there is a problem: these LUTs are very fast, and the memory has a delay of at least one clock cycle. To accurately simulate a single large memory primitive, we add a DFF1 delay register, which delays the ADB4 signal.
+
+![SDP9B 32 - < 32 bits](fig/gw5-bsram-sdp-32-16.png)
 
 # TODO
   - Explore DPB, SDPB and pROM
