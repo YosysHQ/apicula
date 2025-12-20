@@ -80,7 +80,7 @@ But there is a problem: these LUTs are very fast, and the memory has a delay of 
 
 ![SDP9B 32 - < 32 bits](fig/gw5-bsram-sdp-32-16.png)
 
-If the output register was used (`READMODE=1/b1`), we need to delay the switching of primitives for one more clock cycle and also take into account the OCE input. To do this, we add DFF3. 
+If the output register was used (`READMODE=1'b1`), we need to delay the switching of primitives for one more clock cycle and also take into account the OCE input. To do this, we add DFF3. 
 
 ![SDP9B 32 - < 32 bits Output REG](fig/gw5-bsram-sdp-32-16-oreg.png)
 
