@@ -84,6 +84,10 @@ If the output register was used (`READMODE=1'b1`), we need to delay the switchin
 
 ![SDP9B 32 - < 32 bits Output REG](fig/gw5-bsram-sdp-32-16-oreg.png)
 
+Another complication arises if at least one of the BLKSEB inputs is not constant—in this case, we add a decoder `LUT 55`, whose `INIT` parameter is equal to `16 * (1 << BLK_SEL_1)`.
+
+![SDP9B 32 - < 32 bits Output REG BLKSEL](fig/gw5-bsram-sdp-32-16-oreg-blksel.png)
+
 # TODO
   - Explore DPB, SDPB and pROM
 
