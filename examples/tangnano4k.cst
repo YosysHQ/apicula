@@ -1,4 +1,4 @@
-/ these are the HDMI pins!
+// these are the HDMI pins!
 IO_LOC  "led[0]" 39;
 IO_PORT "led[0]" IO_TYPE=LVCMOS33;
 IO_LOC  "led[1]" 40;
