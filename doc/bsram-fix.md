@@ -60,6 +60,34 @@ When more dynamic bits are involved in `BLKSEL[2:0]`, higher order LUTs are used
 
 For Tangnano9k and Tangnano20k with data width of 32 or 36 bits, no additional manipulations were noticed, but for now we will add a decoder in these cases for simplicity.
 
+### TangPrimer25k
+
+SDPB/SDPX9B in TangPrimer25k with a width of 32/36 bits are divided into two primitives, each of which serves 16/18 bits.
+
+#### 32/36 bits - 32/36 bits
+
+This is the simplest case, when the widths of ports A and B are equal. In this case, almost all signals are connected in parallel between the two primitives, with the exception of the write mask and the ADA4 address line, which is used to write the most significant bytes to the next address. This is not necessary when reading, since all 32/36 bits are read in any case.
+
+![SDP9B 32 - 32 bits](fig/gw5-bsram-sdp-32-32.png)
+
+#### 32/36 bits - < 32 bits
+
+The case where port B has a small width is more interesting. We still write 16/18 bits to two primitives, but we can no longer read as easily because we need to take 16/18 bits from one primitive or the other depending on the address.
+
+Therefore, we add a LUT to each DOx output, which selects which primitive output to use depending on the state of the ADB4 address bit.
+
+But there is a problem: these LUTs are very fast, and the memory has a delay of at least one clock cycle. To accurately simulate a single large memory primitive, we add a DFF1 delay register, which delays the ADB4 signal.
+
+![SDP9B 32 - < 32 bits](fig/gw5-bsram-sdp-32-16.png)
+
+If the output register was used (`READMODE=1'b1`), we need to delay the switching of primitives for one more clock cycle and also take into account the OCE input. To do this, we add DFF3. 
+
+![SDP9B 32 - < 32 bits Output REG](fig/gw5-bsram-sdp-32-16-oreg.png)
+
+Another complication arises if at least one of the BLKSEB inputs is not constant—in this case, we add a decoder `LUT 55`, whose `INIT` parameter is equal to `16 * (1 << BLK_SEL_1)`.
+
+![SDP9B 32 - < 32 bits Output REG BLKSEL](fig/gw5-bsram-sdp-32-16-oreg-blksel.png)
+
 # TODO
   - Explore DPB, SDPB and pROM
 
