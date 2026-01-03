@@ -389,7 +389,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             attrvals = parse_attrvals(tile, db.rev_logicinfo('BSRAM'), db.shortval[tiledata.ttyp]['BSRAM_SP'], attrids.bsram_attrids, "BSRAM")
             if not attrvals:
                 continue
-            #print(row, col, name, idx, tiledata.ttyp, attrvals)
+            print(row, col, name, idx, tiledata.ttyp, attrvals)
             bels[f'{name}{idx}'] = {}
             continue
         if name.startswith("ALU54D"):

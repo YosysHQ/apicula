@@ -869,14 +869,14 @@ bsram_attrids = {
         'ROMA_DATA_WIDTH':  56,
         'ROMB_DATA_WIDTH':  57,
         'ROM_DATA_WIDTH':   58,
-        'ROM_PORTA_BEHB':   59,
-        'ROM_PORTA_BELB':   60,
+        'ROMA_BEHB':        59,
+        'ROMA_BELB':        60,
         'ROMA_REGMODE':     61,
         'ROMB_REGMODE':     62,
-        'PORTB_BELB':       63,
-        'PORTA_MODE':       64,
-        'PORTB_MODE':       65,
-        'PORTB_BEHB':       66
+        'ROMB_BELB':        63,
+        'ROMA_MODE':        64,
+        'ROMB_MODE':        65,
+        'ROMB_BEHB':        66
     }
 
 bsram_attrvals = {
@@ -894,7 +894,8 @@ bsram_attrvals = {
         'WT':               11,
         'OUTREG':           12,
         'DISABLE':          13,
-        'RESET':            14
+        'RESET':            14,
+        'NORMAL':           15,
     }
 
 # slice

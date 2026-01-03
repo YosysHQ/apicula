@@ -42,6 +42,9 @@ def is_gnd_net(wire):
 def is_vcc_net(wire):
     return wire in _vcc_net
 
+def is_const_net(wire):
+    return is_gnd_net(wire) or is_vcc_net(wire)
+
 def is_connected(wire, connections):
     return len(connections[wire]) != 0
 
@@ -1100,32 +1103,122 @@ def set_dcs_attrs(db, spine, attrs):
         add_attr_val(db, 'DCS', fin_attrs, attrids.dcs_attrids[attr], val)
     return fin_attrs
 
+# Byte enable. No optimization for now
+def sp_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs):
+    bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+    bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+    bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+    bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+
+def sp_16_18_byte_enable(typ, cell, bsram_attrs):
+    constant_byte_enable = is_const_net(cell['connections']['AD0'][0]) and is_const_net(cell['connections']['AD1'][0])
+    if constant_byte_enable:
+        bsram_attrs[f'{typ}A_BEHB'] = 'ENABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'ENABLE'
+    else:
+        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+    bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+    bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+
+def sp_32_36_byte_enable(typ, cell, bsram_attrs):
+    constant_byte_enable = is_const_net(cell['connections']['AD0'][0]) and is_const_net(cell['connections']['AD1'][0]) \
+                           and is_const_net(cell['connections']['AD2'][0]) and is_const_net(cell['connections']['AD3'][0])
+    if constant_byte_enable:
+        bsram_attrs[f'{typ}A_BEHB'] = 'ENABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'ENABLE'
+        bsram_attrs[f'{typ}B_BEHB'] = 'ENABLE'
+        bsram_attrs[f'{typ}B_BELB'] = 'ENABLE'
+    else:
+        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+        bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+
+def sdp_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs):
+    sp_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs)
+
+def sdp_16_18_byte_enable(typ, cell, bsram_attrs):
+    constant_byte_enable = is_const_net(cell['connections']['ADA0'][0]) and is_const_net(cell['connections']['ADA1'][0])
+    if constant_byte_enable:
+        bsram_attrs[f'{typ}A_BEHB'] = 'ENABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'ENABLE'
+    else:
+        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+    bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+    bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+
+def sdp_32_36_byte_enable(typ, cell, bsram_attrs):
+    constant_byte_enable = is_const_net(cell['connections']['ADA0'][0]) and is_const_net(cell['connections']['ADA1'][0]) \
+                           and is_const_net(cell['connections']['ADA2'][0]) and is_const_net(cell['connections']['ADA3'][0])
+    if constant_byte_enable:
+        bsram_attrs[f'{typ}A_BEHB'] = 'ENABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'ENABLE'
+        bsram_attrs[f'{typ}B_BEHB'] = 'ENABLE'
+        bsram_attrs[f'{typ}B_BELB'] = 'ENABLE'
+    else:
+        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+        bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+
+def dpa_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs):
+    bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+    bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+
+def dpa_16_18_byte_enable(typ, cell, bsram_attrs):
+    constant_byte_enable = is_const_net(cell['connections']['ADA0'][0]) and is_const_net(cell['connections']['ADA1'][0])
+    if constant_byte_enable:
+        bsram_attrs[f'{typ}A_BEHB'] = 'ENABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'ENABLE'
+    else:
+        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+
+def dpb_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs):
+    bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+    bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+
+def dpb_16_18_byte_enable(typ, cell, bsram_attrs):
+    constant_byte_enable = is_const_net(cell['connections']['ADB0'][0]) and is_const_net(cell['connections']['ADB1'][0])
+    if constant_byte_enable:
+        bsram_attrs[f'{typ}B_BEHB'] = 'ENABLE'
+        bsram_attrs[f'{typ}B_BELB'] = 'ENABLE'
+    else:
+        bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+
 _bsram_bit_widths = { 1: '1', 2: '2', 4: '4', 8: '9', 9: '9', 16: '16', 18: '16', 32: 'X36', 36: 'X36'}
-def set_bsram_attrs(db, typ, params):
+def set_bsram_attrs(db, cell, typ, params):
     bsram_attrs = {}
     bsram_attrs['MODE'] = 'ENABLE'
     bsram_attrs['GSR'] = 'DISABLE'
 
     attrs_upper(params)
+
     # We bring it into line with what is observed in the Gowin images - in the
     # ROM, port A has a signal CE = VCC and inversion is turned on on this pin.
     # We will provide VCC in nextpnr, and enable the inversion here.
     if typ == 'ROM':
         bsram_attrs['CEMUX_CEA'] = 'INV'
+        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+        bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
+        bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
 
     for parm, val in params.items():
         if parm == 'BIT_WIDTH':
             val = int(val, 2)
             if val in _bsram_bit_widths:
                 if typ not in {'ROM'}:
-                    if val in {16, 18}: # XXX no dynamic byte enable
-                        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
-                        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
-                    elif val in {32, 36}: # XXX no dynamic byte enable
-                        bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
-                        bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
-                        bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
-                        bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+                    if val in {16, 18}:
+                        sp_16_18_byte_enable(typ, cell, bsram_attrs)
+                    elif val in {32, 36}:
+                        sp_32_36_byte_enable(typ, cell, bsram_attrs)
+                    else:
+                        sp_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs)
+
                 if val not in {32, 36}:
                     bsram_attrs[f'{typ}A_DATA_WIDTH'] = _bsram_bit_widths[val]
                     bsram_attrs[f'{typ}B_DATA_WIDTH'] = _bsram_bit_widths[val]
@@ -1141,9 +1234,25 @@ def set_bsram_attrs(db, typ, params):
                     bsram_attrs[f'{typ}A_DATA_WIDTH'] = _bsram_bit_widths[val]
                 else:
                     bsram_attrs['DBLWA'] = _bsram_bit_widths[val]
-                if val in {16, 18, 32, 36}: # XXX no dynamic byte enable
-                    bsram_attrs[f'{typ}A_BEHB'] = 'DISABLE'
-                    bsram_attrs[f'{typ}A_BELB'] = 'DISABLE'
+                    if val in {16, 18}:
+                        if typ == 'SDP':
+                            sdp_16_18_byte_enable(typ, cell, bsram_attrs)
+                        elif typ =='DP':
+                            dpa_16_18_byte_enable(typ, cell, bsram_attrs)
+                        else:
+                            raise Exception(f"BIT_WIDTH_0 for BSRAM type {typ} isn't supported")
+                    elif val in {32, 36}:
+                        if typ == 'SDP':
+                            sdp_32_36_byte_enable(typ, cell, bsram_attrs)
+                        else:
+                            raise Exception(f"BIT_WIDTH_0={val} for BSRAM type {typ} isn't supported")
+                    else:
+                        if typ == 'SDP':
+                            sdp_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs)
+                        elif typ =='DP':
+                            dpa_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs)
+                        else:
+                            raise Exception(f"BIT_WIDTH_0 for BSRAM type {typ} isn't supported")
             else:
                 raise Exception(f"BSRAM width of {val} isn't supported for now")
         elif parm == 'BIT_WIDTH_1':
@@ -1153,9 +1262,19 @@ def set_bsram_attrs(db, typ, params):
                     bsram_attrs[f'{typ}B_DATA_WIDTH'] = _bsram_bit_widths[val]
                 else:
                     bsram_attrs['DBLWB'] = _bsram_bit_widths[val]
-                if val in {16, 18, 32, 36}: # XXX no dynamic byte enable
-                    bsram_attrs[f'{typ}B_BEHB'] = 'DISABLE'
-                    bsram_attrs[f'{typ}B_BELB'] = 'DISABLE'
+                    if val in {16, 18}:
+                        if typ =='DP':
+                            dpb_16_18_byte_enable(typ, cell, bsram_attrs)
+                        elif typ != 'SDP':
+                            raise Exception(f"BIT_WIDTH_1 for BSRAM type {typ} isn't supported")
+                    elif val in {32, 36}:
+                        if typ != 'SDP':
+                            raise Exception(f"BIT_WIDTH_1={val} for BSRAM type {typ} isn't supported")
+                    else:
+                        if typ =='DP':
+                            dpb_1_2_4_8_9_byte_enable(typ, cell, bsram_attrs)
+                        elif typ != 'SDP':
+                            raise Exception(f"BIT_WIDTH_1 for BSRAM type {typ} isn't supported")
             else:
                 raise Exception(f"BSRAM width of {val} isn't supported for now")
         elif parm == 'BLK_SEL':
@@ -1213,6 +1332,7 @@ def set_bsram_attrs(db, typ, params):
         if isinstance(val, str):
             val = attrids.bsram_attrvals[val]
         add_attr_val(db, 'BSRAM', fin_attrs, attrids.bsram_attrids[attr], val)
+
     return fin_attrs
 
 # MULTALU18X18
@@ -3275,7 +3395,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                 bisect.insort(gw5a_bsrams, (col - 1, row - 1, typ, parms, attrs))
             else:
                 store_bsram_init_val(db, row - 1, col -1, typ, parms, attrs)
-            bsram_attrs = set_bsram_attrs(db, typ, parms)
+            bsram_attrs = set_bsram_attrs(db, cell, typ, parms)
             bsrambits = get_shortval_fuses(db, tiledata.ttyp, bsram_attrs, f'BSRAM_{typ}')
             #print(f'({row - 1}, {col - 1}) attrs:{bsram_attrs}, bits:{bsrambits}')
             for brow, bcol in bsrambits:
@@ -4022,6 +4142,8 @@ def main():
     global device
     global pnr
     global bsram_init_map
+    global _gnd_net
+    global _vcc_net
 
     pil_available = True
     try:
@@ -4082,7 +4204,7 @@ def main():
         print('Warning. For GW5A-25A SSPI must be set as GPIO.')
         args.sspi_as_gpio = True
 
-    const_nets = {'GND': '$PACKER_GND', 'VCC': '$PACKER_GND'}
+    const_nets = {'GND': '$PACKER_GND', 'VCC': '$PACKER_VCC'}
 
     _gnd_net = pnr['modules']['top']['netnames'].get(const_nets['GND'], {'bits': []})['bits']
     _vcc_net = pnr['modules']['top']['netnames'].get(const_nets['VCC'], {'bits': []})['bits']

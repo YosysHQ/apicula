@@ -328,10 +328,10 @@ emcu-%-tangnano4k.fs: emcu-%-tangnano4k.json
 	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --vopt cst=tangnano4k.cst
 
 %-tangnano4k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=2 -D RISCV_MEM_16K -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
+	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=2 -D RISCV_MEM_16K -p "read_verilog $^; synth_gowin -nolutram -nowidelut -json $@ ${YOSYS_FLAGS}"
 
 %-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh %-pll-vr.v
-	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -nolutram -json $@ ${YOSYS_FLAGS}"
 	
 
 # ============================================================
