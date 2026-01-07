@@ -261,7 +261,18 @@ def unpad(fuses, pad=-1):
     except ValueError:
         return fuses
 
-def fse_pips(fse, ttyp, device, table=2, wn=wnames.wirenames):
+# known tables in fse[ttyp]['wire']
+_wire_tables = {
+        'GENERAL'          :  2,
+        'ALONE_NODE_6'     :  6,
+        'CLOCK_MUX'        : 38,
+        'ALONE_NODE'       : 69,
+        'CLOCK_MUX_TOP'    : 90,
+        'CLOCK_MUX_BOTTOM' : 91,
+        }
+
+
+def fse_pips(fse, ttyp, device, table=_wire_tables['GENERAL'], wn=wnames.wirenames):
     pips = {}
     if table in fse[ttyp]['wire']:
         for srcid, destid, *fuses in fse[ttyp]['wire'][table]:
@@ -303,7 +314,7 @@ def create_vcc_pips(dev, tiles):
                         srcs_fuse[0].discard('Q7')
                         tile.alonenode[dest][idx] = (srcs_fuse[0] | {'VCC'}, srcs_fuse[1])
 
-def fse_alonenode(fse, ttyp, device, table = 6):
+def fse_alonenode(fse, ttyp, device, table = _wire_tables['ALONE_NODE_6']):
     pips = {}
     if 'alonenode' in fse[ttyp].keys():
         if table in fse[ttyp]['alonenode']:
@@ -3191,9 +3202,9 @@ def from_fse(device, fse, dat: Datfile):
         w = fse[ttyp]['width']
         h = fse[ttyp]['height']
         tile = Tile(w, h, ttyp)
-        tile.pips = fse_pips(fse, ttyp, device, 2, wnames.wirenames)
-        tile.clock_pips = fse_pips(fse, ttyp, device, 38, wnames.clknames)
-        tile.alonenode = fse_alonenode(fse, ttyp, device, 69)
+        tile.pips = fse_pips(fse, ttyp, device, _wire_tables['GENERAL'], wnames.wirenames)
+        tile.clock_pips = fse_pips(fse, ttyp, device, _wire_tables['CLOCK_MUX'], wnames.clknames)
+        tile.alonenode = fse_alonenode(fse, ttyp, device, _wire_tables['ALONE_NODE'])
         tile.alonenode_6 = fse_alonenode(fse, ttyp, device, 6)
         if 5 in fse[ttyp]['shortval']:
             tile.bels = fse_luts(fse, ttyp, device)
