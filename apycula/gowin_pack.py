@@ -1335,6 +1335,13 @@ def set_bsram_attrs(db, cell, typ, params):
 
     return fin_attrs
 
+
+# set parameters to zero
+def set_dsp_regs_0(parms, names):
+    for name in names:
+        if not name in parms:
+            parms[name] = "0"
+
 # MULTALU18X18
 _ABLH = [('A', 'L'), ('A', 'H'), ('B', 'L'), ('B', 'H')]
 _01LH = [(0, 'L'), (1, 'H')]
@@ -1409,6 +1416,8 @@ def set_multalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
     else:
         dsp_attrs['OPCD_0'] = "1"
         dsp_attrs['OPCD_3'] = "1"
+
+    set_dsp_regs_0(params, {'AREG', 'BREG', 'CREG', 'DREG', 'DSIGN_REG', 'ASIGN_REG', 'BSIGN_REG', 'PIPE_REG', 'OUT_REG'})
 
     for parm, val in params.items():
         if parm == 'AREG':
@@ -1675,6 +1684,9 @@ def set_multaddalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
     dsp_attrs['IRBSHFEN_0'] = "1"
     dsp_attrs['IRBSHFEN_1'] = "1"
 
+    set_dsp_regs_0(params, {'A0REG', 'A1REG', 'B0REG', 'B1REG', 'CREG', 'PIPE0_REG', 'PIPE1_REG', 'OUT_REG',
+                           'ASIGN0_REG', 'ASIGN1_REG', 'ACCLOAD_REG0', 'ACCLOAD_REG1', 'BSIGN0_REG', 'BSIGN1_REG',
+                           'SOA_REG'})
     for parm, val in params.items():
         if parm in {'A0REG', 'A1REG'}:
             k = int(parm[1], 2)
@@ -1887,6 +1899,8 @@ def set_multalu36x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
             dsp_attrs['OPCDDYN_6'] = "ENABLE"
             dsp_attrs['OR2CASCADE_EN'] = "ENABLE"
 
+    set_dsp_regs_0(params, {'AREG', 'BREG', 'CREG', 'PIPE_REG', 'OUT_REG', 'ASIGN_REG', 'BSIGN_REG', 'ACCLOAD_REG0',
+                           'ACCLOAD_REG1'})
     for parm, val in params.items():
         if parm == 'AREG':
             if val == '0':
@@ -2082,6 +2096,7 @@ def set_alu54d_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
     if int(attrs['RESET'], 2):
         reset_val = f"RSTIN{int(attrs['RESET'], 2)}"
 
+    set_dsp_regs_0(params, {'AREG', 'BREG', 'OUT_REG', 'ACCLOAD_REG'})
     for parm, val in params.items():
         if parm == 'ALUD_MODE':
             ival = int(val, 2)
@@ -2255,6 +2270,7 @@ def set_padd9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, 
 
     dsp_attrs[f'OR2CIB_EN{pair_idx}L_{pair_idx * 2}'] = "ENABLE"
 
+    set_dsp_regs_0(params, {'AREG', 'BREG'})
     for parm, val in params.items():
         if parm == 'AREG':
             if val == '0':
@@ -2407,6 +2423,7 @@ def set_mult9x9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd
         dsp_attrs[f'BIRMUX1_{pair_idx * 2}'] = "ENABLE"
         dsp_attrs[f'BIRMUX1_{pair_idx * 2 + 1}'] = "ENABLE"
 
+    set_dsp_regs_0(params, {'AREG', 'BREG', 'OUT_REG', 'PIPE_REG', 'ASIGN_REG', 'BSIGN_REG', 'SOA_REG'})
     for parm, val in params.items():
         if parm == 'AREG':
             if val == '0':
@@ -2615,6 +2632,7 @@ def set_dsp_mult36x36_attrs(db, typ, params, attrs):
     attrs['NET_ASEL'] = 'GND'
     attrs['NET_BSEL'] = 'GND'
 
+    set_dsp_regs_0(params, {'AREG', 'BREG', 'ASIGN_REG', 'BSIGN_REG'})
     # macro 0
     dsp_attrs = {}
     params['MULTALU36X18_MODE'] = "1"  # ACC/0 + A*B
