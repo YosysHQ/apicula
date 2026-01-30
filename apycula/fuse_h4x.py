@@ -18,12 +18,12 @@ def readFse(f, device):
     print("check", rint(f, 4))
     tiles = {}
     ttyp = rint(f, 4)
-    print(f"tile type:{ttyp}/{hex(ttyp)}")
+    #print(f"tile type:{ttyp}/{hex(ttyp)}")
     tiles['header'] = readOneFile(f, ttyp, device)
     while True:
         ttyp = rint(f, 4)
         if ttyp == 0x9a1d85: break
-        print(f"tile type:{ttyp}/{hex(ttyp)}")
+        #print(f"tile type:{ttyp}/{hex(ttyp)}")
         tiles[ttyp] = readOneFile(f, ttyp, device)
     return tiles
 
@@ -35,7 +35,7 @@ def readOneFile(f, tileType, device):
     tmap = {"height": rint(f, 4),
             "width": rint(f, 4)}
     tables = rint(f, 4)
-    print("height: ", tmap["height"], "width: ", tmap["width"], "tables:", tables)
+    #print("height: ", tmap["height"], "width: ", tmap["width"], "tables:", tables)
 
     #v1 = 0x1b8
     #v2 = 3
@@ -56,7 +56,7 @@ def readOneFile(f, tileType, device):
     for i in range(tables):
         typ = rint(f, 4)
         size = rint(f, 4)
-        print(hex(f.tell()), " Table type", typ, "/", hex(typ), "of size", size)
+        #print(hex(f.tell()), " Table type", typ, "/", hex(typ), "of size", size)
         if typ == 61:
             size2 = rint(f, 4)
             typn = "grid"
@@ -413,7 +413,7 @@ def scan_tables(d, tiletyp, fuses):
             for row in table:
                 row_fuses = fuses.intersection(row)
                 if row_fuses:
-                    print(f"fuses {row_fuses} found in {tname}({ttyp}): {row}")
+                    #print(f"fuses {row_fuses} found in {tname}({ttyp}): {row}")
                     res.append(row)
     return res
 

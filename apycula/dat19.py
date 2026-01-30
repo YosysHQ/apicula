@@ -330,8 +330,8 @@ class Datfile:
         ret["Ae350SocOuts"]         = self.read_scaledGrid16(0x206, 3, 3, RSTable5ATOffset + 0x8bb0, 10)
 
 
-        ret["CMuxTopInNodes"]       = self.read_scaledGrid16(0xbd, 0x54, 0x54, RSTable5ATOffset + 0x13fc4, 0)
-        ret["CMuxBotInNodes"]       = self.read_scaledGrid16(0xbd, 0x54, 0x54, RSTable5ATOffset + 0x1bbcc, 0)
+        ret["CMuxTopInNodes"]       = self.read_scaledGrid16(0xbd, 0x54, 0x54 * 2, 1, RSTable5ATOffset + 0x14af4)
+        ret["CMuxBotInNodes"]       = self.read_scaledGrid16(0xbd, 0x54, 0x54 * 2, 1, RSTable5ATOffset + 0x1c6fc)
         ret["CMuxTopIns"]           = self.read_scaledGrid16i(0xbd, 3, 6, 1, RSTable5ATOffset + 0x24304)
         ret["CMuxBotIns"]           = self.read_scaledGrid16i(0xbd, 3, 6, 1, RSTable5ATOffset + 0x24772)
 
