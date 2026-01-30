@@ -1307,7 +1307,10 @@ cfg_attrids = {
         'I2C_AS_GPIO':      20,
         'JTAG_EN':          21,
         'POR':              24, # power on reset
-        'CPU_AS_GPIO':      28,
+        'CPU_AS_GPIO_25':   28, # GW5A-25A
+        'CPU_AS_GPIO_0':    34, # GW5AST-138C
+        'CPU_AS_GPIO_1':    35, # GW5AST-138C
+        'CPU_AS_GPIO_2':    37,
     }
 
 cfg_attrvals = {

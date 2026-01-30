@@ -60,7 +60,7 @@ class Tile:
     # [‘wire’][2] table, this is not the case in the new IDE.
     # {dst: [({src}, {bits})]}
     alonenode: Dict[str, List[Tuple[Set[str], Set[Coord]]]] = field(default_factory=dict)
-    # for now as nextpnr is still counting on this field
+    # Clocks
     clock_pips: Dict[str, Dict[str, Set[Coord]]] = field(default_factory=dict)
     # fuses to disable the long wire columns. This is the table 'alonenode[6]' in the vendor file
     # {dst: [({src}, {bits})]}
@@ -152,6 +152,13 @@ class Device:
     # say tile (0, 0) is both IOT1 and IOL1. Here we specify how to interpret the
     # corners.
     corner_tiles_io: Dict[Tuple[int, int], str] = field(default_factory=dict)
+    # GW5AST-138C has an interesting mechanism for clock spines - to use some
+    # of them, it is not enough to set the fuses, you also need to supply VCC
+    # or GND to some kind of MUX. This can only be done in nextpnr, so we pass
+    # a list of spines and MUX inputs, as well as which network to connect to (1/0).
+    # { 'top'/'bottom' : { spine : [(row, col, wire, 1/0), (row, col, wire, 1/0)...]}}
+    spine_select_wires: Dict[str, Dict[str, List[Tuple[int, int, str, int]]]] = field(default_factory=dict)
+    last_top_row: int = field(default=0)
 
     @property
     def rows(self):
@@ -210,6 +217,9 @@ def set_corners_io(db, device):
         db.corner_tiles_io[0, db.cols - 1]           = 'T'
         db.corner_tiles_io[db.rows - 1, db.cols - 1] = 'B'
 
+
+# This is clock bridge in GW5AST-138C
+bridge_tile_types_138 = {80, 81, 82, 83, 84, 85}
 
 # XXX GW1N-4 and GW1NS-4 have next data in dat.portmap['CmuxIns']:
 # 62 [11, 1, 126]
@@ -285,6 +295,91 @@ def fse_pips(fse, ttyp, device, table=_wire_tables['GENERAL'], wn=wnames.wirenam
             pips.setdefault(dest, {})[src] = fuses
 
     return pips
+
+# GW5AST-138C have not one but three tables for clock fuses
+# We will try to combine them all into one
+def fse_clock_pips_138(fse, ttyp, device):
+    clock_MUX_tables = [_wire_tables['CLOCK_MUX_TOP'], _wire_tables['CLOCK_MUX_BOTTOM']]
+
+    # It is unclear why, but not all outputs of the central bridge work when
+    # connected to the backbone halves. We leave only those that have proven to
+    # be functional.
+    def is_allowed_spine_input(src, dest):
+        top = src[11:].startswith('TOP')
+        spine_idx = int(dest[5:]) % 8
+        return src[-1] == { True: "02136574", False: "30214657"}[top][spine_idx]
+
+    pips = {}
+    for half in range(2):
+        table = clock_MUX_tables[half]
+        if table in fse[ttyp]['wire']:
+            for srcid, destid, *fuses in fse[ttyp]['wire'][table]:
+                fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
+                if srcid < 0:
+                    fuses = set()
+                    srcid = -srcid
+                src = wnames.clknames[srcid]
+                dest = wnames.clknames[destid]
+                # XXX skip 6 and 7 for now
+                if srcid in range(wnames.clknumbers['P16A'], wnames.clknumbers['P47D'] + 1):
+                    continue
+                # XXX skip longwires
+                if srcid in range(164, 237):
+                    continue
+                # XXX ignore unknown wires
+                if srcid in range(105, 129):
+                    continue
+                if srcid in range(253, 269):
+                    continue
+
+                # 277 as source is VCC
+                if srcid == 277:
+                    src = 'VCC'
+                # Spines as sources can only have a GT00 (291) and GT10 (292) as sinks
+                if src.startswith('SPINE'):
+                    if destid not in {291, 292}:
+                        raise Exception(f"Spine is connected to wire {destid}. Only 291 or 292 are allowed.")
+                    dest = {291: 'GT00', 292: 'GT10'}[destid]
+
+                # spines as dest can only have Bridge as source
+                if dest.startswith('SPINE'):
+                    if ttyp not in bridge_tile_types_138:
+                        if not src.startswith('CBRIDGEOUT') or not is_allowed_spine_input(src, dest):
+                            continue
+                    else:
+                        # bridge spines may get signal from logic->gates and these gates must have suffix
+                        if srcid not in range(139, 163):
+                            continue
+                        src = mk_clock_wname(device, src, half)
+
+                pips.setdefault(dest, {})[src] = fuses
+
+    if _wire_tables['CLOCK_MUX'] in fse[ttyp]['wire']:
+        for srcid, destid, *fuses in fse[ttyp]['wire'][_wire_tables['CLOCK_MUX']]:
+            fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
+            if srcid < 0:
+                fuses = set()
+                srcid = -srcid
+            src = wnames.clknames[srcid]
+            dest = wnames.clknames[destid]
+            # XXX skip 6 and 7 for now
+            if srcid in range(wnames.clknumbers['P16A'], wnames.clknumbers['P47D'] + 1):
+                continue
+            # XXX skip longwires
+            if srcid in range(164, 237):
+                continue
+            # XXX ignore unknown wires
+            if srcid in range(105, 129):
+                continue
+            if srcid in range(253, 269):
+                continue
+
+            # 277 as source is VCC
+            if srcid == 277:
+                src = 'VCC'
+            pips.setdefault(dest, {})[src] = fuses
+    return pips
+
 
 # use sources from alonenode to find missing source->sink pairs in pips
 def create_default_pips(tiles):
@@ -392,7 +487,7 @@ def fse_luts(fse, ttyp, device):
     # main fuse: enable two ALUs in the slice
     # shortval(25/26/27) [1, 0, fuses]
     for cls, fuse_idx in enumerate([25, 26, 27, 28]):
-        if fuse_idx == 28 and device not in {'GW5A-25A'}:
+        if fuse_idx == 28 and device not in {'GW5A-25A', 'GW5AST-138C'}:
             continue
         data = fse[ttyp]['shortval'][fuse_idx]
         for i in range(2):
@@ -455,7 +550,7 @@ def fse_luts(fse, ttyp, device):
 
     # main fuse: enable shadow SRAM in the slice
     # shortval(28) [2, 0, fuses]
-    #XXX no SRAM for GW5A for now
+    #XXX no SRAM for GW5A-25A for now
     if device not in {'GW5A-25A'} and 28 in fse[ttyp]['shortval']:
         for i in range(6):
             bel = luts.setdefault(f"DFF{i}", Bel())
@@ -645,6 +740,16 @@ _known_tables = {
            114: '5A_PCLK_ENABLE_27',
            115: '5A_PCLK_ENABLE_28',
            116: '5A_PCLK_ENABLE_29',
+        }
+
+# known tables in fse[ttyp]['wire']
+wire_tables = {
+        'GENERAL'          :  2,
+        'ALONE_NODE_6'     :  6,
+        'CLOCK_MUX'        : 38,
+        'ALONE_NODE'       : 69,
+        'CLOCK_MUX_TOP'    : 90,
+        'CLOCK_MUX_BOTTOM' : 91,
         }
 
 # alternate pin function codes
@@ -2028,9 +2133,27 @@ _clock_data = {
         'GW5A-25A': { 'tap_start': [[2, 1, 0, 3], [0, 3, 2, 1]], 'quads': {(10, 0, 19, 1, 0), (28, 19, 37, 2, 3)}},
         }
 
+def mk_clock_wname(device, base_name, half = 0):
+    if device in {'GW5AST-138C'}:
+        return f"{base_name}_{['TOP', 'BOT'][half]}"
+    else:
+        return base_name
+
 def get_clock_ins(device, dat: Datfile):
     if device in {'GW5A-25A'}:
         return {} # In this series, there is no way to directly use the GCLK pins bypassing HCLK.
+    elif device in {'GW5AST-138C'}:
+        # return 2 dictionaries: for top and for bottom halves
+
+        return [{
+                (i, dat.gw5aStuff['CMuxTopIns'][i - 80][0] - 1, dat.gw5aStuff['CMuxTopIns'][i - 80][1] - 1,
+                    dat.gw5aStuff['CMuxTopIns'][i - 80][2])
+                  for i in range(wnames.clknumbers['PCLKT0'], wnames.clknumbers['PCLKR1'] + 1)
+                }, {
+                (i, dat.gw5aStuff['CMuxBotIns'][i - 80][0] - 1, dat.gw5aStuff['CMuxBotIns'][i - 80][1] - 1,
+                    dat.gw5aStuff['CMuxBotIns'][i - 80][2])
+                  for i in range(wnames.clknumbers['PCLKT0'], wnames.clknumbers['PCLKR1'] + 1)
+                }]
     # pre 5a
     return {
             (i, dat.cmux_ins[i - 80][0] - 1, dat.cmux_ins[i - 80][1] - 1, dat.cmux_ins[i - 80][2])
@@ -2038,6 +2161,13 @@ def get_clock_ins(device, dat: Datfile):
             }
 
 def fse_create_clocks(dev, device, dat: Datfile, fse):
+    # The 138 chip has a more complex clock system than other chips. To
+    # facilitate experimentation with it, we will separate the creation of the
+    # clock into a separate function.
+    if device in {'GW5AST-138C'}:
+        fse_create_5a138_clocks(dev, device, dat, fse)
+        return
+
     if device not in _clock_data:
         print(f"No clocks for {device} for now.")
         return
@@ -2270,6 +2400,187 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
                 else:
                     dcs[f'selforce'] = 'D3'
                     dcs['clksel'] = ['D2', 'A3', 'B3', 'C3']
+
+# As can be seen from the diagram in ‘UG306-1.0.6E_Arora V Clock User
+# Guide.pdf’, the clock wires are divided into upper and lower halves.
+# Experiments have shown that these halves are not organised into a 2x2 matrix
+# as one might assume, but are instead stretched out as 1x4, meaning that the
+# entire diagram can be represented as follows:
+#                +------------------+-------------+-------------+------------------+
+# Upper half     |  Top West West   |  Top West   |  Top East   |  Top East East   |
+#                +------------------+-------------+-------------+------------------+
+# Botom half     | Bottom West West | Bottom West | Bottom East | Bottom East East |
+#                +------------------+-------------+-------------+------------------+
+#
+# Each ‘quadrant’ (let's call them that) has not one row for spinal wires, but
+# three (!). We were unable to find suitable row numbers for spinal wires in
+# the IDE tables, so we determined them by placing DFF in different parts of
+# the quadrant - fortunately, these rows are the same for all four quadrants of
+# each half because these quadrants are arranged horizontally.
+#
+#                  +- Y10 ------------------------------------------
+#                  |
+#    Top  Spine ---+- Y28 ------------------------------------------
+#                  |
+#                  +- Y46 ------------------------------------------
+#
+#
+#                  +- Y64 ------------------------------------------
+#                  |
+#  Bottom Spine ---+- Y82 ------------------------------------------
+#                  |
+#                  +- Y100 -----------------------------------------
+#
+#
+# The bridge between the two halves stands apart.
+# For simplicity, at the initial stage, we will organise the clocks as follows:
+#  - the halves receive a signal only from the bridge, i.e. the sources will only be
+#    CBRIDGEOUT_TOP and CBRIDGEOUT_BOTTOM (these wires are present in
+#    both halves)
+#  - the bridge only accepts signals from the logic->clock gates. Until the PLL
+#    appears, this will not worsen the situation in any way - in Tangmega138k,
+#    the external generator is soldered to ordinary non-specialised IO anyway, so
+#    the gates will be used regardless.
+#  - the possibility of directly connecting logic->clock gates to half spines
+#    is temporarily disabled.
+def fse_create_5a138_clocks(dev, device, dat: Datfile, fse):
+    def mk_wname(wire, half):
+        return mk_clock_wname(device, wire, half)
+
+    def spine_to_bridgeout(spine):
+        idx = wnames.clknumbers[spine]
+        if idx >= wnames.clknumbers['SPINE16']:
+            half = 'BOTTOM'
+            idx -= wnames.clknumbers['SPINE16']
+        else:
+            half = 'TOP'
+            idx -= wnames.clknumbers['SPINE8']
+        return half, idx
+
+    # top half, bottom half and bridge tile types
+    spine_rows = [ [10, 28, 46], [64, 82, 100] ]
+    quad_cols = [range(37, 90), range(0, 37), range(91, 145), range(145, 182)]
+
+    # Tap columns are classic with an interesting feature - the alternation of
+    # columns is not interrupted when moving from WestWest to West or from East
+    # to EastEast. There is only a break in the central column.
+    clock_data = {'tap_start': [[2, 1, 0, 3], [3, 2, 1, 0]],
+                  # (half, quad_index, row_range, spine_row)
+                  'quads': {  (0, 1, range(0, 19),   spine_rows[0][0]),
+                              (0, 1, range(19, 37),  spine_rows[0][1]),
+                              (0, 1, range(37, 55),  spine_rows[0][2]),
+                              (1, 1, range(55, 73),  spine_rows[1][0]),
+                              (1, 1, range(73, 91),  spine_rows[1][1]),
+                              (1, 1, range(91, 109), spine_rows[1][2]),
+
+                              (0, 0, range(0, 19),   spine_rows[0][0]),
+                              (0, 0, range(19, 37),  spine_rows[0][1]),
+                              (0, 0, range(37, 55),  spine_rows[0][2]),
+                              (1, 0, range(55, 73),  spine_rows[1][0]),
+                              (1, 0, range(73, 91),  spine_rows[1][1]),
+                              (1, 0, range(91, 109), spine_rows[1][2]),
+
+                              (0, 2, range(0, 19),   spine_rows[0][0]),
+                              (0, 2, range(19, 37),  spine_rows[0][1]),
+                              (0, 2, range(37, 55),  spine_rows[0][2]),
+                              (1, 2, range(55, 73),  spine_rows[1][0]),
+                              (1, 2, range(73, 91),  spine_rows[1][1]),
+                              (1, 2, range(91, 109), spine_rows[1][2]),
+
+                              (0, 3, range(0, 19),   spine_rows[0][0]),
+                              (0, 3, range(19, 37),  spine_rows[0][1]),
+                              (0, 3, range(37, 55),  spine_rows[0][2]),
+                              (1, 3, range(55, 73),  spine_rows[1][0]),
+                              (1, 3, range(73, 91),  spine_rows[1][1]),
+                              (1, 3, range(91, 109), spine_rows[1][2]),
+                        }
+                  }
+    center_col = dat.grid.center_x - 1
+    center_row = dat.grid.center_y
+    row_range = [range(center_row), range(center_row, dev.rows)]
+
+    # create each half of the clock wires
+    for half in range(2):
+        clk_desc = get_clock_ins(device, dat)[half]
+        print(f"Create clock wires. Half:{half}")
+        #for clk_idx, row, col, wire_idx in clk_desc:
+        #    add_node(dev, mk_wname(wnames.clknames[clk_idx], half), "GLOBAL_CLK", row, col, wnames.wirenames[wire_idx])
+        #    add_buf_bel(dev, row, col, wnames.wirenames[wire_idx])
+        #    #print(clk_idx, row, col, wire_idx, mk_wname(wnames.clknames[clk_idx], half))
+
+        for row in row_range[half]:
+            rd = dev.grid[row]
+            for col, rc in enumerate(rd):
+                for dest, srcs in rc.clock_pips.items():
+                    for src in srcs.keys():
+                        if src.startswith('SPINE') and not dest.startswith('GT'):
+                            add_node(dev, src, "GLOBAL_CLK", row, col, src)
+                    if dest.startswith('SPINE'):
+                        # spines in clock bridge cells may only lead to bridge outs
+                        if rc.ttyp in bridge_tile_types_138:
+                            top_bottom, idx = spine_to_bridgeout(dest)
+                            bridge_out_node = f'CBRIDGEOUT_{top_bottom}{idx}'
+                            print(row, col, dev.grid[row][col].ttyp, dest, 'BRIDGE', bridge_out_node)
+                            add_node(dev, bridge_out_node, "GLOBAL_CLK", row, col, dest)
+                        else:
+                            print(row, col, dev.grid[row][col].ttyp, dest)
+                            add_node(dev, mk_wname(dest, half), "GLOBAL_CLK", row, col, dest)
+                        for src in { wire for wire in srcs.keys() if wire not in {'VCC', 'VSS'}}:
+                            if src.startswith('PLL'):
+                                add_node(dev, mk_wname(src, half), "PLL_O", row, col, src)
+                            else:
+                                if rc.ttyp in bridge_tile_types_138:
+                                    add_node(dev, src, "GLOBAL_CLK", row, col, src)
+                                else:
+                                    if src.startswith('CBRIDGEOUT'):
+                                        add_node(dev, src, "GLOBAL_CLK", row, col, src)
+                                    else:
+                                        add_node(dev, mk_wname(src, half), "GLOBAL_CLK", row, col, src)
+                                print("  << in ", row, col, dev.grid[row][col].ttyp, mk_wname(src, half))
+
+    # GBx0 <- GBOx
+    taps = {}
+    for spine_pair in range(4): # GB00/GB40, GB10/GB50, GB20/GB60, GB30/GB70
+        tap_start = clock_data['tap_start'][0]
+        tap_col = tap_start[spine_pair]
+        last_col = center_col
+        for col in range(dev.cols):
+            if col == center_col + 1:
+                tap_start = clock_data['tap_start'][1]
+                tap_col = tap_start[spine_pair] + col
+                last_col = dev.cols -1
+            if (col > tap_col + 2) and (tap_col + 4 < last_col):
+                tap_col += 4
+            taps.setdefault(spine_pair, {}).setdefault(tap_col, set()).add(col)
+    for row in range(dev.rows):
+        for spine_pair, tap_desc in taps.items():
+            for tap_col, cols in tap_desc.items():
+                node0_name = f'X{tap_col}Y{row}/GBO0'
+                dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, tap_col, 'GBO0'))
+                node1_name = f'X{tap_col}Y{row}/GBO1'
+                dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, tap_col, 'GBO1'))
+                for col in cols:
+                    dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, col, f'GB{spine_pair}0'))
+                    dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, col, f'GB{spine_pair + 4}0'))
+
+    # GTx0 <- center row GTx0
+    for half, quad_index, row_range, spine_row in clock_data['quads']:
+        for spine_pair, tap_desc in taps.items():
+            for tap_col, cols in tap_desc.items():
+                for col in quad_cols[quad_index]:
+                    node0_name = f'X{col}Y{spine_row}/GT00'
+                    dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((spine_row, col, 'GT00'))
+                    node1_name = f'X{col}Y{spine_row}/GT10'
+                    dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((spine_row, col, 'GT10'))
+                    for row in row_range:
+                        if row == spine_row:
+                            if col == tap_col:
+                                spine = quad_index * 8 + spine_pair
+                                dev.nodes.setdefault(mk_wname(f'SPINE{spine}', half), ("GLOBAL_CLK", set()))[1].add((row, col, f'SPINE{spine}'))
+                                dev.nodes.setdefault(mk_wname(f'SPINE{spine + 4}', half), ("GLOBAL_CLK", set()))[1].add((row, col, f'SPINE{spine + 4}'))
+                        else:
+                            dev.nodes.setdefault(node0_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT00'))
+                            dev.nodes.setdefault(node1_name, ("GLOBAL_CLK", set()))[1].add((row, col, 'GT10'))
 
 # Segmented wires are those that run along each column of the chip and have
 # taps in each row about 4 cells wide. The height of the segment wires varies
@@ -2673,27 +2984,45 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
 # we create Himbaechel nodes.
 def get_logic_clock_ins(device, dat: Datfile):
     if device in {'GW5A-25A'}:
-        return {
+        return [{
                     (i, dat.gw5aStuff['CMuxTopIns'][i - 80][0] - 1,
                         dat.gw5aStuff['CMuxTopIns'][i - 80][1] - 1,
                         dat.gw5aStuff['CMuxTopIns'][i - 80][2])
                     for i in range(wnames.clknumbers['TRBDCLK0'], wnames.clknumbers['TRMDCLK1'] + 1)
-                }
+                }]
+    elif device in {'GW5AST-138C'}:
+        return [{}, {(160, 108, 91, 125)}] # XXX for now only one gate: BRMDCLK1
+        """
+        return [{
+                    (i, dat.gw5aStuff['CMuxTopIns'][i - 80][0] - 1,
+                        dat.gw5aStuff['CMuxTopIns'][i - 80][1] - 1,
+                        dat.gw5aStuff['CMuxTopIns'][i - 80][2])
+                    for i in range(wnames.clknumbers['TRBDCLK0'], wnames.clknumbers['TRMDCLK1'] + 1)
+                }, {
+                    (i, dat.gw5aStuff['CMuxBotIns'][i - 80][0] - 1,
+                        dat.gw5aStuff['CMuxBotIns'][i - 80][1] - 1,
+                        dat.gw5aStuff['CMuxBotIns'][i - 80][2])
+                    for i in range(wnames.clknumbers['TRBDCLK0'], wnames.clknumbers['TRMDCLK1'] + 1)
+                }]
+        """
     # pre 5a
-    return {
+    return [{
                 (i, dat.cmux_ins[i - 80][0] - 1,
                     dat.cmux_ins[i - 80][1] - 1,
                     dat.cmux_ins[i - 80][2])
                 for i in range(wnames.clknumbers['TRBDCLK0'], wnames.clknumbers['TRMDCLK1'] + 1)
-            }
+            }]
 
 def fse_create_logic2clk(dev, device, dat: Datfile):
-    for clkwire_idx, row, col, wire_idx in get_logic_clock_ins(device, dat):
-        if row != -2:
-            add_node(dev, wnames.clknames[clkwire_idx], "GLOBAL_CLK", row, col, wnames.wirenames[wire_idx])
-            add_buf_bel(dev, row, col, wnames.wirenames[wire_idx])
-            # Make list of the clock gates for nextpnr
-            dev.extra_func.setdefault((row, col), {}).setdefault('clock_gates', []).append(wnames.wirenames[wire_idx])
+    for half, clk_desc in enumerate(get_logic_clock_ins(device, dat)):
+        print(f"Create logic to clock gates. Half:{half}")
+        for clkwire_idx, row, col, wire_idx in clk_desc:
+            if row != -2:
+                add_node(dev, mk_clock_wname(device, wnames.clknames[clkwire_idx], half), "GLOBAL_CLK", row, col, wnames.wirenames[wire_idx])
+                print(clkwire_idx, row, col, wire_idx, mk_clock_wname(device, wnames.clknames[clkwire_idx], half))
+                add_buf_bel(dev, row, col, wnames.wirenames[wire_idx])
+                # Make list of the clock gates for nextpnr
+                dev.extra_func.setdefault((row, col), {}).setdefault('clock_gates', []).append(wnames.wirenames[wire_idx])
 
 def fse_create_osc(dev, device, fse):
     if device in {'GW5AST-138C'}:
@@ -2731,6 +3060,27 @@ def fse_create_osc(dev, device, fse):
                             if a_wire in srcs:
                                 add_node(dev, dest, "GLOBAL_CLK", a_row, a_col, dest)
                 skip_nodes = True
+
+def fse_create_spine_select_wires(dev, device):
+    dev.spine_select_wires = {}
+    if device in {'GW5AST-138C'}:
+        dev.last_top_row = 54
+        top = dev.spine_select_wires.setdefault('top', {})
+        top['SPINE17'] = [(27, 93, 'CLK1', 1)]
+        top['SPINE18'] = [(27, 93, 'CLK0', 1), (27, 93, 'CLK2', 1)]
+        top['SPINE19'] = [(27, 94, 'CLK0', 1), (27, 94, 'CLK1', 1)]
+        top['SPINE20'] = [(27, 93, 'A7', 1), (27, 93, 'A6', 1)]
+        top['SPINE21'] = [(27, 94, 'A6', 1), (27, 94, 'CLK2', 1)]
+        top['SPINE23'] = [(27, 92, 'A7', 1), (27, 92, 'A6', 1)]
+        bottom = dev.spine_select_wires.setdefault('bottom', {})
+        bottom['SPINE17'] = [(81, 93, 'CLK1', 1)]
+        bottom['SPINE18'] = [(81, 93, 'CLK0', 1), (81, 93, 'CLK2', 1)]
+        bottom['SPINE19'] = [(81, 94, 'CLK0', 1), (81, 94, 'CLK1', 1)]
+        bottom['SPINE20'] = [(81, 93, 'A7', 1), (81, 93, 'A6', 1)]
+        bottom['SPINE21'] = [(81, 94, 'A6', 1), (81, 94, 'CLK2', 1)]
+        bottom['SPINE23'] = [(81, 92, 'A7', 1), (81, 92, 'A6', 1)]
+    else:
+        dev.last_top_row = dev.rows - 1
 
 def fse_create_gsr(dev, device):
     # Since, in the general case, there are several cells that have a
@@ -2895,11 +3245,14 @@ def make_port(dev, row, col, r, c, wire, bel_name, port, wire_type, pins):
     pins[port] = bel.portmap[port]
 
 def fse_create_pincfg(dev, device, dat):
-    if device not in {'GW5A-25A'}:
+    if device not in {'GW5A-25A', 'GW5AST-138C'}:
         return
     # place the bel where a change in routing has been experimentally observed
     # when the I2C pin function is disabled/enabled
-    row, col = (9, 88)
+    if device in {'GW5A-25A'}:
+        row, col = (9, 88)
+    elif device in {'GW5AST-138C'}:
+        row, col = (108, 166)
     dev.extra_func.setdefault((row, col), {}).update({'pincfg': {}})
     extra_func = dev.extra_func[(row, col)]['pincfg']
 
@@ -2907,10 +3260,12 @@ def fse_create_pincfg(dev, device, dat):
     inputs = [('SSPI', 1), ('UNK0_VCC', 0), ('UNK1_VCC', 2), ('UNK2_VCC', 3), ('UNK3_VCC', 4), ('UNK4_VCC', 5), ]
     for port, idx in inputs:
         r, c, wire = dat.gw5aStuff['CibFabricNode'][idx]
-        make_port(dev, row, col, r, c, wire, 'PINCFG', port, 'PINCFG_IN', ins)
+        if r != 65535:
+            make_port(dev, row, col, r, c, wire, 'PINCFG', port, 'PINCFG_IN', ins)
 
-    # special input (not in the DAT file)
-    make_port(dev, row, col, 10, 89, 17, 'PINCFG', 'I2C', 'PINCFG_IN', ins)
+    if device in {'GW5A-25A'}:
+        # special input (not in the DAT file)
+        make_port(dev, row, col, 10, 89, 17, 'PINCFG', 'I2C', 'PINCFG_IN', ins)
 
 def fse_create_emcu(dev, device, dat):
     # Mentions of the NS-2 series are excluded from the latest Gowin
@@ -3178,10 +3533,16 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_CLKDIV_HCLK")
     if device in {'GW5A-25A'}:
         dev.chip_flags.append("HAS_PINCFG")
+        dev.chip_flags.append("HAS_I2CCFG")
         dev.chip_flags.append("HAS_DFF67")
         dev.chip_flags.append("HAS_CIN_MUX")
         dev.chip_flags.append("NEED_BSRAM_RESET_FIX")
         dev.chip_flags.append("NEED_SDP_FIX")
+    if device in {'GW5AST-138C'}:
+        dev.chip_flags.append("HAS_PINCFG")
+        dev.chip_flags.append("HAS_DFF67")
+        dev.chip_flags.append("HAS_CIN_MUX")
+        dev.chip_flags.append("NEED_CFGPINS_INVERSION")
 
     if device in {'GW5A-25A'}:
         dev.dcs_prefix = "CLKIN"
@@ -3203,9 +3564,12 @@ def from_fse(device, fse, dat: Datfile):
         h = fse[ttyp]['height']
         tile = Tile(w, h, ttyp)
         tile.pips = fse_pips(fse, ttyp, device, _wire_tables['GENERAL'], wnames.wirenames)
-        tile.clock_pips = fse_pips(fse, ttyp, device, _wire_tables['CLOCK_MUX'], wnames.clknames)
+        if device in {'GW5AST-138C'}:
+            tile.clock_pips = fse_clock_pips_138(fse, ttyp, device)
+        else:
+            tile.clock_pips = fse_pips(fse, ttyp, device, _wire_tables['CLOCK_MUX'], wnames.clknames)
         tile.alonenode = fse_alonenode(fse, ttyp, device, _wire_tables['ALONE_NODE'])
-        tile.alonenode_6 = fse_alonenode(fse, ttyp, device, 6)
+        tile.alonenode_6 = fse_alonenode(fse, ttyp, device, _wire_tables['ALONE_NODE_6'])
         if 5 in fse[ttyp]['shortval']:
             tile.bels = fse_luts(fse, ttyp, device)
         elif 51 in fse[ttyp]['shortval']:
@@ -3227,6 +3591,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_fill_logic_tables(dev, fse, device)
     dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
     fse_create_clocks(dev, device, dat, fse)
+    fse_create_spine_select_wires(dev, device)
     fse_create_pll_clock_aliases(dev, device)
     fse_create_bottom_io(dev, device)
     fse_create_tile_types(dev, device, dat)
@@ -3243,7 +3608,7 @@ def from_fse(device, fse, dat: Datfile):
         dev.tile_types['D'] = set()
 
     # GW5 series have DFF6 and DFF7, so leave Q6 and Q7 as is
-    if device not in {'GW5A-25A'}:
+    if device not in {'GW5A-25A', 'GW5AST-138C'}:
         create_vcc_pips(dev, tiles)
     create_default_pips(tiles)
 
@@ -4897,12 +5262,23 @@ def fse_wire_delays(db, dev):
     #    db.wire_delay[wnames.clknames[i]] = "TAP_BRANCH_PCLK" # XXX
     for i in range(32):
         db.wire_delay[wnames.clknames[i]] = "SPINE_TAP_PCLK"
+        db.wire_delay[mk_clock_wname(dev, wnames.clknames[i], 0)] = "SPINE_TAP_PCLK"
+        db.wire_delay[mk_clock_wname(dev, wnames.clknames[i], 1)] = "SPINE_TAP_PCLK"
     for i in range(81, 105): # clock inputs (PLL outs)
         db.wire_delay[wnames.clknames[i]] = "CENT_SPINE_PCLK"
+        db.wire_delay[mk_clock_wname(dev, wnames.clknames[i], 0)] = "CENT_SPINE_PCLK"
+        db.wire_delay[mk_clock_wname(dev, wnames.clknames[i], 1)] = "CENT_SPINE_PCLK"
     for i in range(121, 129): # clock inputs (pins)
         db.wire_delay[wnames.clknames[i]] = "CENT_SPINE_PCLK"
     for i in range(129, 153): # clock inputs (logic->clock)
         db.wire_delay[wnames.clknames[i]] = "CENT_SPINE_PCLK"
+        db.wire_delay[mk_clock_wname(dev, wnames.clknames[i], 0)] = "CENT_SPINE_PCLK"
+        db.wire_delay[mk_clock_wname(dev, wnames.clknames[i], 1)] = "CENT_SPINE_PCLK"
+    if dev in {'GW5AST-138C'}:
+        for i in range(153, 163): # clock inputs (logic->clock)
+            db.wire_delay[wnames.clknames[i]] = "CENT_SPINE_PCLK"
+            db.wire_delay[mk_clock_wname(dev, wnames.clknames[i], 0)] = "CENT_SPINE_PCLK"
+            db.wire_delay[mk_clock_wname(dev, wnames.clknames[i], 1)] = "CENT_SPINE_PCLK"
     for i in range(1000, 1002): # HCLK bridge muxes
         db.wire_delay[wnames.clknames[i]] = "HclkHbrgMux"
     for i in range(1002, 1010): # HCLK

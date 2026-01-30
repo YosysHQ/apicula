@@ -3865,6 +3865,8 @@ def do_hclk_banks(db, row, col, src, dest):
 def route(db, tilemap, pips):
     # The mux for clock wires can be "spread" across several cells. Here we determine whether pip is such a candidate.
     def is_clock_pip(src, dest):
+        if src[8:].startswith('_BOT') or src[8:].startswith('_TOP'):
+            return True
         if src not in wnames.clknumbers:
             return False
         if dest not in wnames.clknumbers:
@@ -3872,6 +3874,9 @@ def route(db, tilemap, pips):
         if device in {'GW5A-25A'}:
             return wnames.clknumbers[src] < wnames.clknumbers['UNK212'] \
                     or wnames.clknumbers[src] in range(wnames.clknumbers['MPLL4CLKOUT0'], wnames.clknumbers['UNK569'] + 1)
+        if device in {'GW5AST-138C'}:
+            return wnames.clknumbers[src] < wnames.clknumbers['UNK269'] \
+                    or wnames.clknumbers[src] >= wnames.clknumbers['UNK309']
         # XXX for future
         return wnames.clknumbers[src] < wnames.clknumbers['P10A']
 
@@ -3879,35 +3884,62 @@ def route(db, tilemap, pips):
                         # are to allow the use of a particular spine, so we check each cell for
                         # potential fuses.
 
-    def set_clock_fuses(row, col, src, dest):
+    if device in {'GW5AST-138C'}:
+        clock_bridge_ttypes = range(80, 86) # XXX clock mux bridge cells
+        clock_bridge_cols = {col for col in range(db.cols) for row in range(db.rows) if db.grid[row][col].ttyp in clock_bridge_ttypes}
+        clock_bridge_rows = {54}
+
+    def set_clock_fuses(row_, col_, src, dest):
         # SPINE->{GT00, GT10} must be set in the cell only
         if dest in {'GT00', 'GT10'}:
-            bits = db.grid[row - 1][col - 1].clock_pips[dest][src]
-            tile = tilemap[(row - 1, col - 1)]
+            bits = db.grid[row_ - 1][col_ - 1].clock_pips[dest][src]
+            tile = tilemap[(row_ - 1, col_ - 1)]
             for brow, bcol in bits:
                 tile[brow][bcol] = 1
             return
 
+        # we need to separate top and bottom halves of the 138k clocks
+        # area - top, bottom or clock bridge - 'T', 'B', 'C'
+        area = 'T'
+        allowed_rows = range(db.rows)
+        allowed_cols = range(db.cols)
+        if device in {'GW5AST-138C'}:
+            allowed_rows = range(55) # GW5AST-138C
+
+            if row_ - 1 not in allowed_rows:
+                allowed_rows = range(allowed_rows.stop, db.rows)
+                area = 'B'
+            elif db.grid[row_ - 1][col_ - 1].ttyp in clock_bridge_ttypes:
+                allowed_rows = clock_bridge_rows
+                allowed_cols = clock_bridge_cols
+                area = 'C'
+
         spine_enable_table = None
-        if dest.startswith('SPINE') and dest not in used_spines:
-            used_spines.update({dest})
+
+        if dest.startswith('SPINE') and (area, dest) not in used_spines:
+            used_spines.update({(area, dest)})
             spine_enable_table = f'5A_PCLK_ENABLE_{wnames.clknumbers[dest]:02}'
 
-        for row, rd in enumerate(db.grid):
-            for col, rc in enumerate(rd):
-                bits = set()
-                if dest in rc.clock_pips:
-                    if src in rc.clock_pips[dest]:
-                        bits = rc.clock_pips[dest][src]
-                if spine_enable_table in db.shortval[rc.ttyp] and (1, 0) in db.shortval[rc.ttyp][spine_enable_table]:
-                    bits.update(db.shortval[rc.ttyp][spine_enable_table][(1, 0)]) # XXX find the meaning
-                if bits:
-                    tile = tilemap[(row, col)]
-                    for brow, bcol in bits:
-                        tile[brow][bcol] = 1
+            for row, rd in enumerate(db.grid):
+                if row in allowed_rows:
+                    for col, rc in enumerate(rd):
+                        if col in allowed_cols:
+                            if device in {'GW5AST-138C'} and area == 'T' and row in clock_bridge_rows and col in clock_bridge_cols:
+                                continue
+                        bits = set()
+                        if dest in rc.clock_pips:
+                            if src in rc.clock_pips[dest]:
+                                bits = rc.clock_pips[dest][src]
+                        if spine_enable_table in db.shortval[rc.ttyp] and (1, 0) in db.shortval[rc.ttyp][spine_enable_table]:
+                            bits.update(db.shortval[rc.ttyp][spine_enable_table][(1, 0)]) # XXX move to attrs?
+                            print(f"Enable spine {dest} <- {src} ({row_}, {col_}) by {spine_enable_table} at ({row}, {col})")
+                        if bits:
+                            tile = tilemap[(row, col)]
+                            for brow, bcol in bits:
+                                tile[brow][bcol] = 1
 
     for row, col, src, dest in pips:
-        if device in {'GW5A-25A'} and is_clock_pip(src, dest):
+        if device in {'GW5A-25A', 'GW5AST-138C'} and is_clock_pip(src, dest):
             set_clock_fuses(row, col, src, dest)
             continue
 
@@ -3963,15 +3995,17 @@ def gsr(db, tilemap, args):
 
     cfg_attrs = set()
     cfg_function = 'F0'
-    if device in {'GW5A-25A'}:
+    cfg_done_function = 'F0'
+    if device in {'GW5A-25A', 'GW5AST-138C'}:
         cfg_function = 'F1'
+        cfg_done_function = 'F3'
     for k, val in {'GSR': 'USED', 'GOE': cfg_function}.items():
         if k not in attrids.cfg_attrids:
             print(f'XXX CFG GSR: add {k} key handle')
         else:
             add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids[k], attrids.cfg_attrvals[val])
     add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['GSR'], attrids.cfg_attrvals[cfg_function])
-    add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['DONE'], attrids.cfg_attrvals[cfg_function])
+    add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['DONE'], attrids.cfg_attrvals[cfg_done_function])
     add_attr_val(db, 'CFG', cfg_attrs, attrids.cfg_attrids['GWD'], attrids.cfg_attrvals[cfg_function])
 
     # The configuration fuses are described in the ['shortval'][60] table, global set/reset is
@@ -4003,7 +4037,8 @@ def gsr(db, tilemap, args):
 def dualmode_pins(db, tilemap, args):
     pin_flags = {'JTAG_AS_GPIO': 'UNKNOWN', 'SSPI_AS_GPIO': 'UNKNOWN', 'MSPI_AS_GPIO': 'UNKNOWN',
             'DONE_AS_GPIO': 'UNKNOWN', 'RECONFIG_AS_GPIO': 'UNKNOWN', 'READY_AS_GPIO': 'UNKNOWN',
-                 'CPU_AS_GPIO': 'UNKNOWN', 'I2C_AS_GPIO': 'UNKNOWN'}
+                 'CPU_AS_GPIO_25': 'UNKNOWN', 'CPU_AS_GPIO_0': 'UNKNOWN', 'CPU_AS_GPIO_1': 'UNKNOWN',
+                 'I2C_AS_GPIO': 'UNKNOWN'}
     if args.jtag_as_gpio:
         pin_flags['JTAG_AS_GPIO'] = 'YES'
     if args.sspi_as_gpio:
@@ -4017,7 +4052,11 @@ def dualmode_pins(db, tilemap, args):
     if args.reconfign_as_gpio:
         pin_flags['RECONFIG_AS_GPIO'] = 'YES'
     if args.cpu_as_gpio:
-        pin_flags['CPU_AS_GPIO'] = 'YES'
+        if device in {'GW5A-25A'}:
+            pin_flags['CPU_AS_GPIO_25'] = 'YES'
+        elif device in {'GW5AST-138C'}:
+            pin_flags['CPU_AS_GPIO_0'] = 'YES'
+            pin_flags['CPU_AS_GPIO_1'] = 'YES'
     if args.i2c_as_gpio:
         pin_flags['I2C_AS_GPIO'] = 'YES'
 
