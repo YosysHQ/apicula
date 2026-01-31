@@ -183,7 +183,7 @@ jobs:
     - name: Build gw5ast-138c chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5A-25A.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5AST-138C.pickle
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
