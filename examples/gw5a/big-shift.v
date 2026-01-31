@@ -1,8 +1,8 @@
 `default_nettype none
-`define LEDS_NR 24
 
-module top(input wire clk, input wire reset, output wire [23:0]led);
+module top(input wire clk, input wire reset, output wire [`LEDS_NR - 1:0]led);
 wire tick_hz;
+wire rst = `INV_BTN ^ reset;
 
 localparam HZ_PRESC = 6_000_000,
 		HZ_SIZE = $clog2(HZ_PRESC);
@@ -23,7 +23,7 @@ reg [`LEDS_NR-1:0] ctr_q;
 wire [`LEDS_NR-1:0] ctr_d;
 
 always @(posedge clk) begin
-	if (reset) begin
+	if (rst) begin
 		ctr_q <= 'd1;
 	end else if (tick_hz) begin
 		ctr_q <= ctr_d;
