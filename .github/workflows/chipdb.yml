@@ -176,9 +176,27 @@ jobs:
       with:
           name: gw5a-25a-stage
           path: GW5A-25A*
+  gw5ast138c:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build gw5ast-138c chipdb
+      run: |
+        docker pull ${{ env.APICULA_IMAGE }}
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5AST-138C.pickle
+    - name: Archive artifact
+      uses: actions/upload-artifact@v4
+      with:
+          name: gw5ast-138c-chipdb
+          path: apycula/GW5AST-138C.pickle
+    - name: Archive stage artifact
+      uses: actions/upload-artifact@v4
+      with:
+          name: gw5ast-138c-stage
+          path: GW5AST-138C*
   pypi:
     runs-on: ubuntu-latest
-    needs: [gw1n1, gw1nz1, gw1n9, gw1n9c, gw1n4, gw1ns4, gw2a18, gw2a18c, gw5a25a]
+    needs: [gw1n1, gw1nz1, gw1n9, gw1n9c, gw1n4, gw1ns4, gw2a18, gw2a18c, gw5a25a, gw5ast138c]
     steps:
     - uses: actions/checkout@v4
     - name: Download gw1n-1 chipdb
@@ -225,6 +243,11 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: gw5a-25a-chipdb
+        path: apycula
+    - name: Download gw5ast-138c chipdb
+      uses: actions/download-artifact@v4
+      with:
+        name: gw5ast-138c-chipdb
         path: apycula
     - name: Set up Python
       uses: actions/setup-python@v5
