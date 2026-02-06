@@ -1,19 +1,16 @@
 import sys
 import os
 import re
-import pickle
 import bisect
-import gzip
 import itertools
 import math
 import json
 import argparse
 import importlib.resources
 from collections import namedtuple
-from contextlib import closing
 from apycula import codegen
 from apycula import chipdb
-from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses, get_bank_io_fuses, get_long_fuses
+from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses, get_bank_io_fuses, get_long_fuses, load_chipdb
 from apycula import attrids
 from apycula import bslib
 from apycula import bitmatrix
@@ -4242,9 +4239,8 @@ def main():
         num = m.group(4)
         device = f"{series}{mods}-{num}"
 
-    with importlib.resources.path('apycula', f'{device}.pickle') as path:
-        with closing(gzip.open(path, 'rb')) as f:
-            db = pickle.load(f)
+    with importlib.resources.path('apycula', f'{device}.msgpack.gz') as path:
+        db = load_chipdb(path)
 
     wnames.select_wires(device)
 

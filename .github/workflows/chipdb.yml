@@ -21,12 +21,12 @@ jobs:
     - name: Build gw1n-1 chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-1.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-1.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw1n-1-chipdb
-          path: apycula/GW1N-1.pickle
+          path: apycula/GW1N-1.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -39,12 +39,12 @@ jobs:
     - name: Build gw1nz-1 chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1NZ-1.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1NZ-1.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw1nz-1-chipdb
-          path: apycula/GW1NZ-1.pickle
+          path: apycula/GW1NZ-1.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -57,12 +57,12 @@ jobs:
     - name: Build gw1n-9 chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-9.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-9.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw1n-9-chipdb
-          path: apycula/GW1N-9.pickle
+          path: apycula/GW1N-9.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -75,12 +75,12 @@ jobs:
     - name: Build gw1n-9c chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-9C.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-9C.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw1n-9c-chipdb
-          path: apycula/GW1N-9C.pickle
+          path: apycula/GW1N-9C.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -93,12 +93,12 @@ jobs:
     - name: Build gw1n-4 chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-4.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-4.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw1n-4-chipdb
-          path: apycula/GW1N-4.pickle
+          path: apycula/GW1N-4.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -111,12 +111,12 @@ jobs:
     - name: Build gw1ns-4 chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1NS-4.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1NS-4.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw1ns-4-chipdb
-          path: apycula/GW1NS-4.pickle
+          path: apycula/GW1NS-4.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -129,12 +129,12 @@ jobs:
     - name: Build gw2a-18 chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW2A-18.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW2A-18.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw2a-18-chipdb
-          path: apycula/GW2A-18.pickle
+          path: apycula/GW2A-18.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -147,12 +147,12 @@ jobs:
     - name: Build gw2a-18c chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW2A-18C.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW2A-18C.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw2a-18c-chipdb
-          path: apycula/GW2A-18C.pickle
+          path: apycula/GW2A-18C.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -165,12 +165,12 @@ jobs:
     - name: Build gw5a-25a chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5A-25A.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5A-25A.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw5a-25a-chipdb
-          path: apycula/GW5A-25A.pickle
+          path: apycula/GW5A-25A.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -183,12 +183,12 @@ jobs:
     - name: Build gw5ast-138c chipdb
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5AST-138C.pickle
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5AST-138C.msgpack.gz
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
           name: gw5ast-138c-chipdb
-          path: apycula/GW5AST-138C.pickle
+          path: apycula/GW5AST-138C.msgpack.gz
     - name: Archive stage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -277,7 +277,7 @@ jobs:
     - name: Pack release data
       if: startsWith(github.ref, 'refs/heads/master')
       run: |
-        tar cvfz linux-x64-gowin-data.tgz apycula/*.pickle
+        tar cvfz linux-x64-gowin-data.tgz apycula/*.msgpack.gz
     - name: Upload to oss-cad-suite
       uses: ncipollo/release-action@v1
       if: hashFiles('linux-x64-gowin-data.tgz') != ''

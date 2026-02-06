@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Union, Any
+from typing import Dict, List, Optional, Set, Tuple, Union, Any
 from itertools import chain
 import re
 import copy
+import gzip
 from functools import reduce
 from collections import namedtuple
 from apycula.dat19 import Datfile
@@ -10,6 +11,7 @@ import apycula.fuse_h4x as fuse
 from apycula import wirenames as wnames
 from apycula import pindef
 from apycula import bitmatrix
+import msgspec
 
 # the character that marks the I/O attributes that come from the nextpnr
 mode_attr_sep = '&'
@@ -33,9 +35,9 @@ class Bel:
     is_diff_p:    bool = field(default = False)
     # there can be only one mode, modes are exclusive
     modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
-    portmap: Dict[str, str] = field(default_factory=dict)
+    portmap: Dict[str, Union[str, List[Union[str, List[str]]]]] = field(default_factory=dict)
     # where to set the fuses for the bel
-    fuse_cell_offset: Coord = field(default_factory=tuple)
+    fuse_cell_offset: Optional[Coord] = None
 
     @property
     def mode_bits(self):
@@ -72,7 +74,7 @@ class Tile:
 class Device:
     # a grid of tiles
     grid: List[List[Tile]] = field(default_factory=list)
-    timing: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
+    timing: Dict[str, Dict[str, Dict[str, Union[List[float], int]]]] = field(default_factory=dict)
     # {wine_name: type_name}
     wire_delay: Dict[str, str] = field(default_factory=dict)
     packages: Dict[str, Tuple[str, str, str]] = field(default_factory=dict)
@@ -83,7 +85,7 @@ class Device:
     pin_bank: Dict[str, int] = field(default_factory = dict)
     cmd_hdr: List[bytearray] = field(default_factory=list)
     cmd_ftr: List[bytearray] = field(default_factory=list)
-    template: List[List[int]] = None
+    template: Optional[List[List[int]]] = None
     # allowable values of bel attributes
     # {table_name: {(attr_id, attr_value): code}}
     logicinfo: Dict[str, Dict[Tuple[int, int], int]] = field(default_factory=dict)
@@ -100,8 +102,8 @@ class Device:
     longval: Dict[int, Dict[str, Dict[Tuple[int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int], Set[Coord]]]] = field(default_factory=dict)
     # constant fuses
     # we will use the list in case it turns out that order is important.
-    # {ttype: [bits, bits]}
-    const: Dict[int, List[int]] = field(default_factory=dict)
+    # {ttype: [(row, col), ...]}
+    const: Dict[int, List[Coord]] = field(default_factory=dict)
     # for Himbaechel arch
     # nodes - always connected wires {node_name: (wire_type, {(row, col, wire_name)})}
     nodes: Dict[str, Tuple[str, Set[Tuple[int, int, str]]]] = field(default_factory = dict)
@@ -196,6 +198,34 @@ class Device:
             for attrval, code in self.logicinfo[name].items():
                 table[code] = attrval
         return self.rev_li[name]
+
+
+def save_chipdb(db: Device, path: str) -> None:
+    """Save a Device database to a compressed MessagePack file.
+
+    Args:
+        db: The Device object to serialize
+        path: Output file path (should end with .msgpack.gz)
+    """
+    data = msgspec.msgpack.encode(db)
+    with gzip.open(path, 'wb') as f:
+        f.write(data)
+
+
+def load_chipdb(path: str) -> Device:
+    """Load a Device database from a compressed MessagePack file.
+
+    Args:
+        path: Input file path (.msgpack.gz)
+
+    Returns:
+        The deserialized Device object
+    """
+    with gzip.open(path, 'rb') as f:
+        data = f.read()
+
+    return msgspec.msgpack.decode(data, type=Device)
+
 
 def is_GW5_family(device):
     return device in {'GW5A-25A', 'GW5AST-138C'}

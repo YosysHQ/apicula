@@ -23,6 +23,7 @@ from apycula import wirenames as wnames
 from apycula import dat19
 from apycula import tm_h4x
 from apycula import chipdb
+from apycula.chipdb import save_chipdb
 from apycula import attrids
 
 gowinhome = os.getenv("GOWINHOME")
@@ -386,6 +387,5 @@ if __name__ == "__main__":
         raise Exception(f"No GSR for {device}")
 
 
-    #TODO proper serialization format
-    with open(f"{device}_stage1.pickle", 'wb') as f:
-        pickle.dump(db, f)
+    # Save stage1 output
+    save_chipdb(db, f"{device}_stage1.msgpack.gz")

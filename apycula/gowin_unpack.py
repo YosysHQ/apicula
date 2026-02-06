@@ -3,13 +3,11 @@ import os
 import re
 import random
 from itertools import chain, count
-import pickle
-import gzip
 import argparse
 import importlib.resources
-from contextlib import closing
 from apycula import codegen
 from apycula import chipdb
+from apycula.chipdb import load_chipdb
 from apycula import attrids
 from apycula.bslib import read_bitstream, display
 
@@ -1249,9 +1247,8 @@ def main():
         luts = m.group(3)
         _device = f"GW1N{mods}-{luts}"
 
-    with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
-        with closing(gzip.open(path, 'rb')) as f:
-            db = pickle.load(f)
+    with importlib.resources.path('apycula', f'{args.device}.msgpack.gz') as path:
+        db = load_chipdb(path)
 
     global _pinout
     _pinout = db.pinout[_device][_packages[_device]]
