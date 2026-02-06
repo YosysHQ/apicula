@@ -14,7 +14,7 @@ def find_pins(db, pnr:codegen.Pnr, trace_args):
         iob, pin_name, pin_idx, direction = args
         iob_type = "IOB" + iob[-1]
         fuzz_io_row, fuzz_io_col, bel_idx = gowin_unpack.tbrl2rc(db, iob)
-        fuzz_io_node = db.grid[fuzz_io_row][fuzz_io_col].bels[iob_type].portmap["O"]
+        fuzz_io_node = db[fuzz_io_row, fuzz_io_col].bels[iob_type].portmap["O"]
         trace_starts.append((fuzz_io_row, fuzz_io_col, fuzz_io_node))
 
     dests = [x for x in tracing.get_io_nodes(db) if x not in trace_starts]
