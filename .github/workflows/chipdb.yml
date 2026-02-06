@@ -316,7 +316,7 @@ jobs:
         pip install dist/*.whl
         # pip install apycula
         git clone https://github.com/YosysHQ/yosys.git
-        git clone https://github.com/YosysHQ/nextpnr.git
+        git clone https://github.com/pepijndevos/nextpnr.git
         sudo apt-get update
         sudo apt-get install build-essential clang bison flex \
           libreadline-dev gawk tcl-dev libffi-dev git libfl-dev \
@@ -331,7 +331,7 @@ jobs:
         make -j$(nproc)
         sudo make install
         cd ../nextpnr
-        git checkout ${{ matrix.nextpnr }}
+        git checkout msgspec-serialization
         git submodule update --init --recursive
         mkdir -p build
         cd build
