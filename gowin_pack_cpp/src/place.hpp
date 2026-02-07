@@ -23,6 +23,7 @@ struct BelInfo {
     std::map<std::string, std::string> parameters;
     std::map<std::string, std::string> attributes;
     std::string name;
+    const Cell* cell = nullptr;  // Pointer to original cell for connection info
 };
 
 // Extract BELs from netlist
@@ -45,8 +46,20 @@ void place_bsram(const Device& db, const BelInfo& bel, Tilemap& tilemap, const s
 void place_dsp(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
 void place_iologic(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
 void place_osc(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
+void place_bufs(const Device& db, const BelInfo& bel, Tilemap& tilemap);
+void place_ram16sdp(const Device& db, const BelInfo& bel, Tilemap& tilemap);
+void place_clkdiv(const Device& db, const BelInfo& bel, Tilemap& tilemap);
+void place_dcs(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
+void place_dqce(const Device& db, const BelInfo& bel, Tilemap& tilemap);
+void place_dhcen(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 
 // Apply accumulated slice fuses (called at end of place_cells)
 void set_slice_fuses(const Device& db, Tilemap& tilemap);
+
+// Helper: set fuses in a tile bitmap from a set of coordinates
+void set_fuses_in_tile(TileBitmap& tile, const std::set<Coord>& fuses);
+
+// Helper: clear fuses in a tile bitmap from a set of coordinates
+void clear_fuses_in_tile(TileBitmap& tile, const std::set<Coord>& fuses);
 
 } // namespace apycula

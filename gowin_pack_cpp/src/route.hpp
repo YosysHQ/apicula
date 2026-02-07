@@ -31,6 +31,14 @@ void route_nets(
     Tilemap& tilemap,
     const std::string& device);
 
+// Isolate segments that need disconnection via alonenode_6 fuses.
+// Parses the "SEG_WIRES_TO_ISOLATE" net attribute and sets the
+// corresponding isolation fuse bits.
+void isolate_segments(
+    const Device& db,
+    const Netlist& netlist,
+    Tilemap& tilemap);
+
 // Set clock fuses for GW5A series
 void set_clock_fuses(
     const Device& db,

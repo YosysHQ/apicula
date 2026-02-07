@@ -156,6 +156,34 @@ struct pack<std::optional<T>> {
     }
 };
 
+// Deserialize msgpack BIN or ARRAY -> std::vector<uint8_t>
+// Python's msgspec serializes bytes/bytearray as BIN, but msgpack-c's default
+// std::vector<uint8_t> adaptor only handles ARRAY.  This specialization handles
+// both formats.
+template<>
+struct convert<std::vector<uint8_t>> {
+    msgpack::object const& operator()(msgpack::object const& o, std::vector<uint8_t>& v) const {
+        if (o.type == msgpack::type::BIN) {
+            v.assign(
+                reinterpret_cast<const uint8_t*>(o.via.bin.ptr),
+                reinterpret_cast<const uint8_t*>(o.via.bin.ptr) + o.via.bin.size);
+        } else if (o.type == msgpack::type::ARRAY) {
+            v.resize(o.via.array.size);
+            for (size_t i = 0; i < o.via.array.size; ++i) {
+                v[i] = static_cast<uint8_t>(o.via.array.ptr[i].as<uint64_t>());
+            }
+        } else if (o.type == msgpack::type::STR) {
+            // Some fields may be stored as strings
+            v.assign(
+                reinterpret_cast<const uint8_t*>(o.via.str.ptr),
+                reinterpret_cast<const uint8_t*>(o.via.str.ptr) + o.via.str.size);
+        } else {
+            throw msgpack::type_error();
+        }
+        return o;
+    }
+};
+
 } // namespace adaptor
 } // MSGPACK_API_VERSION_NAMESPACE
 } // namespace msgpack

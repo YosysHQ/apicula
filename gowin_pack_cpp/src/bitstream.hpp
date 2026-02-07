@@ -26,14 +26,31 @@ struct Bitstream {
     std::map<int, TileBitmap> extra_slots;
 };
 
+// Pack arguments - configuration flags passed through the tool chain.
+// Mirrors the argparse flags from the Python gowin_pack.py.
+struct PackArgs {
+    std::string device;
+    bool compress = false;
+    bool jtag_as_gpio = false;
+    bool sspi_as_gpio = false;
+    bool mspi_as_gpio = false;
+    bool ready_as_gpio = false;
+    bool done_as_gpio = false;
+    bool reconfign_as_gpio = false;
+    bool cpu_as_gpio = false;
+    bool i2c_as_gpio = false;
+};
+
 // Create empty tilemap from device
 Tilemap create_tilemap(const Device& db);
 
 // Convert tilemap to fuse bitmap
 std::vector<std::vector<uint8_t>> tilemap_to_bitmap(const Device& db, const Tilemap& tilemap);
 
-// Generate bitstream from device database and netlist
-Bitstream generate_bitstream(Device& db, const Netlist& netlist, const std::string& device, bool compress);
+// Generate bitstream from device database and netlist.
+// The PackArgs struct carries device name, compression flag, and dual-mode
+// pin GPIO flags so that GSR and dual-mode pin fuses can be set.
+Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs& args);
 
 // Write bitstream to file (.fs format)
 void write_bitstream(const std::string& path, const Bitstream& bs);
@@ -53,11 +70,26 @@ std::vector<std::vector<uint8_t>> fliplr(const std::vector<std::vector<uint8_t>>
 std::vector<std::vector<uint8_t>> flipud(const std::vector<std::vector<uint8_t>>& m);
 std::vector<std::vector<uint8_t>> transpose(const std::vector<std::vector<uint8_t>>& m);
 std::vector<std::vector<uint8_t>> packbits(const std::vector<std::vector<uint8_t>>& m);
+std::vector<uint8_t> packbits_flat(const std::vector<std::vector<uint8_t>>& m);
 std::vector<std::vector<uint8_t>> zeros(size_t rows, size_t cols);
 std::vector<std::vector<uint8_t>> ones(size_t rows, size_t cols);
 std::vector<std::vector<uint8_t>> hstack(const std::vector<std::vector<uint8_t>>& a,
                                           const std::vector<std::vector<uint8_t>>& b);
 std::vector<std::vector<uint8_t>> vstack(const std::vector<std::vector<uint8_t>>& a,
                                           const std::vector<std::vector<uint8_t>>& b);
+
+// Isolate segments that nextpnr has marked for isolation.
+// Parses SEG_WIRES_TO_ISOLATE net attributes and sets the corresponding
+// alonenode_6 fuses in the tilemap.
+void isolate_segments(const Netlist& netlist, const Device& db, Tilemap& tilemap);
+
+// Set Global Set/Reset (GSR) fuses in the tilemap.
+// Configures the GSR mode and related CFG fuses for the target device.
+void set_gsr_fuses(const Device& db, Tilemap& tilemap, const PackArgs& args);
+
+// Set dual-mode pin fuses in the tilemap.
+// Handles JTAG_AS_GPIO, SSPI_AS_GPIO, MSPI_AS_GPIO, etc. based on
+// the flags in PackArgs.
+void set_dualmode_pin_fuses(const Device& db, Tilemap& tilemap, const PackArgs& args);
 
 } // namespace apycula
