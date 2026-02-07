@@ -617,10 +617,10 @@ void place_iob(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
     in_iob_attrs["IO_TYPE"] = iostd;
 
     // Apply user attributes from the cell
-    // Mode attribute separator is '@' in nextpnr himbaechel
+    // Mode attribute separator is '&' in nextpnr himbaechel
     for (const auto& [flag, val] : bel.attributes) {
-        // Attributes from nextpnr come as "@IO_TYPE=LVCMOS33" etc.
-        if (!flag.empty() && flag[0] == '@') {
+        // Attributes from nextpnr come as "&IO_TYPE=LVCMOS33" etc.
+        if (!flag.empty() && flag[0] == '&') {
             size_t eq_pos = flag.find('=');
             if (eq_pos != std::string::npos) {
                 std::string attr_name = flag.substr(1, eq_pos - 1);
@@ -708,6 +708,276 @@ void place_iob(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
     // Set fuses in tile
     auto& tile = tilemap[{fuse_row, fuse_col}];
     set_fuses_in_tile(tile, fuses);
+}
+
+// ============================================================================
+// set_iob_default_fuses - Set default IO fuses for all IOB pins
+// Matches Python gowin_pack.py lines 3758-3849 (unused IOB loop)
+// and lines 3732-3749 (bank-level fuses)
+// ============================================================================
+
+// Helper: convert 0-indexed (row, col) + idx to pin name like "IOT2A"
+static std::string rc_to_pin_name(const Device& db, int64_t row, int64_t col, const std::string& idx) {
+    std::string side;
+    auto corner_it = db.corner_tiles_io.find({row, col});
+    if (corner_it != db.corner_tiles_io.end()) {
+        side = corner_it->second;
+    } else if (row == 0) {
+        side = "T";
+    } else if (row == static_cast<int64_t>(db.rows()) - 1) {
+        side = "B";
+    } else if (col == 0) {
+        side = "L";
+    } else if (col == static_cast<int64_t>(db.cols()) - 1) {
+        side = "R";
+    } else {
+        return "";
+    }
+
+    int64_t num;
+    if (side == "T" || side == "B") {
+        num = col + 1;
+    } else {
+        num = row + 1;
+    }
+    return "IO" + side + std::to_string(num) + idx;
+}
+
+void set_iob_default_fuses(
+    const Device& db,
+    const Netlist& netlist,
+    Tilemap& tilemap,
+    const std::string& device)
+{
+    using namespace attrids;
+
+    bool is_gw5 = (device == "GW5A-25A" || device == "GW5AST-138C");
+
+    // Step 1: Determine used banks and their IO standards from placed IOBs
+    struct BankInfo {
+        std::string iostd;
+        std::set<std::string> used_bels;
+    };
+    std::map<int64_t, BankInfo> banks;
+
+    auto bels = get_bels(netlist);
+    for (const auto& bel : bels) {
+        if (bel.type != "IBUF" && bel.type != "OBUF" &&
+            bel.type != "TBUF" && bel.type != "IOBUF")
+            continue;
+
+        int64_t row = bel.row - 1;
+        int64_t col = bel.col - 1;
+        std::string pin_name = rc_to_pin_name(db, row, col, bel.num);
+        if (pin_name.empty()) continue;
+
+        auto bank_it = db.pin_bank.find(pin_name);
+        if (bank_it == db.pin_bank.end()) continue;
+        int64_t bank = bank_it->second;
+
+        auto& bi = banks[bank];
+        bi.used_bels.insert(pin_name);
+
+        // Determine IO standard from attributes
+        std::string iostd = "LVCMOS18";
+        for (const auto& [flag, val] : bel.attributes) {
+            if (!flag.empty() && flag[0] == '&') {
+                size_t eq_pos = flag.find('=');
+                if (eq_pos != std::string::npos) {
+                    std::string attr_name = flag.substr(1, eq_pos - 1);
+                    if (attr_name == "IO_TYPE") {
+                        iostd = get_iostd_alias(flag.substr(eq_pos + 1));
+                    }
+                }
+            }
+        }
+        for (const auto& [k, v] : bel.parameters) {
+            if (k == "IO_TYPE") {
+                iostd = get_iostd_alias(v);
+            }
+        }
+
+        // Output IOBs determine bank IO standard
+        if (bel.type == "OBUF" || bel.type == "IOBUF" || bel.type == "TBUF") {
+            if (bi.iostd.empty()) {
+                bi.iostd = iostd;
+            }
+        }
+    }
+
+    // For banks with IOBs but no output IOBs setting IO standard, use default
+    for (auto& [bank, bi] : banks) {
+        if (bi.iostd.empty()) {
+            bi.iostd = is_gw5 ? "LVCMOS33" : "LVCMOS12";
+        }
+    }
+
+
+    // Step 2: Set bank-level fuses for used banks
+    auto bt = db.bank_tiles();
+    for (const auto& [bank, bi] : banks) {
+        auto bt_it = bt.find(bank);
+        if (bt_it == bt.end()) continue;
+        auto [brow, bcol] = bt_it->second;
+        const auto& tiledata = db.get_tile(brow, bcol);
+
+        std::set<int64_t> bank_attrs;
+        auto vcc_it = vcc_ios.find(bi.iostd);
+        if (vcc_it != vcc_ios.end()) {
+            add_attr_val(db, "IOB", bank_attrs,
+                         iob_attrids.at("BANK_VCCIO"),
+                         iob_attrvals.at(vcc_it->second));
+        }
+        auto iostd_val_it = iob_attrvals.find(bi.iostd);
+        if (iostd_val_it != iob_attrvals.end()) {
+            auto io_type_id_it = iob_attrids.find("IO_TYPE");
+            if (io_type_id_it != iob_attrids.end()) {
+                add_attr_val(db, "IOB", bank_attrs,
+                             io_type_id_it->second, iostd_val_it->second);
+            }
+        }
+
+        auto bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, "BANK", bank);
+        // get_bank_io_fuses: try IOBA, fallback to IOBB
+        auto io_bits = get_longval_fuses(db, tiledata.ttyp, bank_attrs, "IOBA");
+        if (io_bits.empty()) {
+            io_bits = get_longval_fuses(db, tiledata.ttyp, bank_attrs, "IOBB");
+        }
+        bits.insert(io_bits.begin(), io_bits.end());
+
+        auto& btile = tilemap[{brow, bcol}];
+        set_fuses_in_tile(btile, bits);
+    }
+
+    // Step 3: Set per-pin default fuses for ALL IOB pins
+    for (const auto& [bel_name, cfg] : db.io_cfg) {
+        auto pbank_it = db.pin_bank.find(bel_name);
+        if (pbank_it == db.pin_bank.end()) {
+            if (!cfg.empty()) {
+                std::cerr << "Warning: Pin " << bel_name
+                          << " has config but no bank" << std::endl;
+            }
+            continue;
+        }
+        int64_t bank = pbank_it->second;
+
+        // Determine IO standard for this bank
+        std::string io_std;
+        auto bi_it = banks.find(bank);
+        if (bi_it != banks.end()) {
+            io_std = bi_it->second.iostd;
+        } else {
+            // Unused bank - default IO standard
+            io_std = is_gw5 ? "LVCMOS33" : "LVCMOS18";
+            banks[bank].iostd = io_std;
+
+            // Set bank-level fuses for this unused bank
+            auto bt_it = bt.find(bank);
+            if (bt_it != bt.end()) {
+                auto [brow, bcol] = bt_it->second;
+                const auto& tiledata = db.get_tile(brow, bcol);
+
+                std::set<int64_t> bank_attrs;
+                auto vcc_it = vcc_ios.find(io_std);
+                if (vcc_it != vcc_ios.end()) {
+                    add_attr_val(db, "IOB", bank_attrs,
+                                 iob_attrids.at("BANK_VCCIO"),
+                                 iob_attrvals.at(vcc_it->second));
+                }
+
+                auto bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, "BANK", bank);
+                auto io_bits = get_longval_fuses(db, tiledata.ttyp, bank_attrs, "IOBA");
+                if (io_bits.empty()) {
+                    io_bits = get_longval_fuses(db, tiledata.ttyp, bank_attrs, "IOBB");
+                }
+                bits.insert(io_bits.begin(), io_bits.end());
+
+                auto& btile = tilemap[{brow, bcol}];
+                set_fuses_in_tile(btile, bits);
+            }
+        }
+
+        // Parse pin name: IO{side}{num}{idx}
+        if (bel_name.size() < 4) continue;
+        char side = bel_name[2];
+        std::string num_str = bel_name.substr(3, bel_name.size() - 4);
+        std::string iob_idx(1, bel_name.back());
+
+        int num;
+        try {
+            num = std::stoi(num_str);
+        } catch (...) {
+            continue;
+        }
+
+        int64_t row, col;
+        if (side == 'T') {
+            row = 0;
+            col = num - 1;
+        } else if (side == 'B') {
+            row = static_cast<int64_t>(db.rows()) - 1;
+            col = num - 1;
+        } else if (side == 'L') {
+            row = num - 1;
+            col = 0;
+        } else if (side == 'R') {
+            row = num - 1;
+            col = static_cast<int64_t>(db.cols()) - 1;
+        } else {
+            continue;
+        }
+
+        if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
+            col < 0 || col >= static_cast<int64_t>(db.cols()))
+            continue;
+
+        const auto& tiledata = db.get_tile(row, col);
+        if (tiledata.bels.find("IOB" + iob_idx) == tiledata.bels.end())
+            continue;
+
+        // Build attrs: IO_TYPE + BANK_VCCIO
+        std::set<int64_t> iob_attrs;
+        auto io_type_attr_it = iob_attrids.find("IO_TYPE");
+        auto io_type_val_it = iob_attrvals.find(io_std);
+        if (io_type_attr_it != iob_attrids.end() && io_type_val_it != iob_attrvals.end()) {
+            add_attr_val(db, "IOB", iob_attrs,
+                         io_type_attr_it->second, io_type_val_it->second);
+        }
+        auto vcc_it = vcc_ios.find(io_std);
+        if (vcc_it != vcc_ios.end()) {
+            auto vccio_attr_it = iob_attrids.find("BANK_VCCIO");
+            auto vccio_val_it = iob_attrvals.find(vcc_it->second);
+            if (vccio_attr_it != iob_attrids.end() && vccio_val_it != iob_attrvals.end()) {
+                add_attr_val(db, "IOB", iob_attrs,
+                             vccio_attr_it->second, vccio_val_it->second);
+            }
+        }
+
+        // GW5A devices may need fuse_cell_offset
+        if (!is_gw5) {
+            auto bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, "IOB" + iob_idx);
+            auto& tile = tilemap[{row, col}];
+            set_fuses_in_tile(tile, bits);
+        } else {
+            int64_t fuse_row = row, fuse_col = col;
+            int64_t fuse_ttyp = tiledata.ttyp;
+            auto iob_bel_it = tiledata.bels.find("IOB" + iob_idx);
+            if (iob_bel_it != tiledata.bels.end() && iob_bel_it->second.fuse_cell_offset) {
+                fuse_row += iob_bel_it->second.fuse_cell_offset->first;
+                fuse_col += iob_bel_it->second.fuse_cell_offset->second;
+                fuse_ttyp = db.get_ttyp(fuse_row, fuse_col);
+            }
+            // GW5A special cases
+            if (row == 2 && col == 91 && iob_idx == "B") {
+                iob_idx = "A";
+            } else if (row == 3 && col == 91) {
+                continue;
+            }
+            auto bits = get_longval_fuses(db, fuse_ttyp, iob_attrs, "IOB" + iob_idx);
+            auto& tile = tilemap[{fuse_row, fuse_col}];
+            set_fuses_in_tile(tile, bits);
+        }
+    }
 }
 
 // ============================================================================
