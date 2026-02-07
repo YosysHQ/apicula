@@ -21,3 +21,4 @@ generic/blinky.posp
 generic/blinky.vm
 .vscode
 gowin_pack_cpp/build/
+!gowin_pack_cpp/**

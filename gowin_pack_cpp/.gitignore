@@ -1,8 +1,1 @@
-# Override parent gitignore patterns for C++ source files
-!*.cpp
-!*.c
-!*.txt
-!*.json
-
-# Ignore build directory
 build/
