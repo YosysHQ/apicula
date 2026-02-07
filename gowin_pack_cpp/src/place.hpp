@@ -55,6 +55,13 @@ void place_dcs(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
 void place_dqce(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 void place_dhcen(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 
+// Set default IO fuses for all IOB pins (used and unused) and bank-level fuses
+void set_iob_default_fuses(
+    const Device& db,
+    const Netlist& netlist,
+    Tilemap& tilemap,
+    const std::string& device);
+
 // Apply accumulated slice fuses (called at end of place_cells)
 void set_slice_fuses(const Device& db, Tilemap& tilemap);
 

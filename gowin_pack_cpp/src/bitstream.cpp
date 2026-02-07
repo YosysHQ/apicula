@@ -674,6 +674,11 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     place_cells(db, netlist, tilemap, device, pip_bels);
 
     // -----------------------------------------------------------------------
+    // Step 5b: Set default IOB and bank fuses for all pins (used and unused)
+    // -----------------------------------------------------------------------
+    set_iob_default_fuses(db, netlist, tilemap, device);
+
+    // -----------------------------------------------------------------------
     // Step 6: Set dual-mode pin fuses
     // -----------------------------------------------------------------------
     set_dualmode_pin_fuses(db, tilemap, args);
