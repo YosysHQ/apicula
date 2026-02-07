@@ -20,5 +20,5 @@ generic/blinky.png
 generic/blinky.posp
 generic/blinky.vm
 .vscode
-gowin_pack_cpp/build/
 !gowin_pack_cpp/**
+gowin_pack_cpp/build/
