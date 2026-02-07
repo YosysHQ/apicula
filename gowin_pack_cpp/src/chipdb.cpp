@@ -29,7 +29,11 @@ std::string find_chipdb(const std::string& device) {
         }
     }
 
-    throw std::runtime_error("Could not find chipdb for device: " + device);
+    std::string msg = "Could not find chipdb for device: " + device + "\nSearched paths:\n";
+    for (const auto& path : paths) {
+        msg += "  " + path + "\n";
+    }
+    throw std::runtime_error(msg);
 }
 
 // Decompress gzip data

@@ -368,11 +368,18 @@ jobs:
         for f in *-unpacked.v; do
           yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
         done
+    - name: Download chipdb files
+      uses: actions/download-artifact@v4
+      with:
+        pattern: '*-chipdb'
+        path: chipdb
+        merge-multiple: true
     - name: Repack with C++ gowin_pack
       env:
         GOWIN_PACK: ${{ github.workspace }}/gowin_pack_cpp/build/gowin_pack
+        APYCULA_CHIPDB_DIR: ${{ github.workspace }}/chipdb
       run: |
-        export APYCULA_CHIPDB_DIR=$(python -c "import apycula; import os; print(os.path.dirname(apycula.__file__))")
+        ls "$APYCULA_CHIPDB_DIR"
         cd examples
         rm -f *.fs
         make -j$(nproc) GOWIN_PACK=$GOWIN_PACK all
