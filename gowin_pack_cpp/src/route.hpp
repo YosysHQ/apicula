@@ -9,9 +9,10 @@
 
 namespace apycula {
 
-// Forward declaration
+// Forward declarations
 using TileBitmap = std::vector<std::vector<uint8_t>>;
 using Tilemap = std::map<Coord, TileBitmap>;
+struct BelInfo;  // defined in place.hpp
 
 // PIP information extracted from netlist
 struct Pip {
@@ -21,11 +22,13 @@ struct Pip {
     std::string dest;
 };
 
-// Extract PIPs from netlist
-std::vector<Pip> get_pips(const Netlist& netlist);
+// Extract PIPs from netlist.
+// Also populates pip_bels with pass-through LUT BelInfos for XD wires.
+std::vector<Pip> get_pips(const Netlist& netlist, std::vector<BelInfo>& pip_bels);
 
-// Route all nets and set fuses in tile bitmaps
-void route_nets(
+// Route all nets and set fuses in tile bitmaps.
+// Returns pass-through LUT BelInfos that must be fed into placement.
+std::vector<BelInfo> route_nets(
     const Device& db,
     const Netlist& netlist,
     Tilemap& tilemap,

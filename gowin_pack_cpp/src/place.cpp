@@ -164,12 +164,15 @@ void place_cells(
     const Device& db,
     const Netlist& netlist,
     Tilemap& tilemap,
-    const std::string& device) {
+    const std::string& device,
+    const std::vector<BelInfo>& extra_bels) {
 
     // Clear slice attributes for fresh run
     slice_attrvals.clear();
 
     auto bels = get_bels(netlist);
+    // Append pass-through LUTs from routing
+    bels.insert(bels.end(), extra_bels.begin(), extra_bels.end());
 
     for (const auto& bel : bels) {
         if (bel.type == "LUT4" || bel.type == "LUT1" || bel.type == "LUT2" || bel.type == "LUT3") {

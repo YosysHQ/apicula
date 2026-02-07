@@ -29,12 +29,14 @@ struct BelInfo {
 // Extract BELs from netlist
 std::vector<BelInfo> get_bels(const Netlist& netlist);
 
-// Place all cells and set fuses in tile bitmaps
+// Place all cells and set fuses in tile bitmaps.
+// extra_bels are additional BelInfos (e.g. pass-through LUTs from routing).
 void place_cells(
     const Device& db,
     const Netlist& netlist,
     Tilemap& tilemap,
-    const std::string& device);
+    const std::string& device,
+    const std::vector<BelInfo>& extra_bels = {});
 
 // Placement functions for specific BEL types
 void place_lut(const Device& db, const BelInfo& bel, Tilemap& tilemap);

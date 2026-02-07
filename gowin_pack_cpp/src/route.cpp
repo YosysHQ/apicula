@@ -1,5 +1,6 @@
 // route.cpp - Routing implementation
 #include "route.hpp"
+#include "place.hpp"
 #include <regex>
 #include <iostream>
 #include <sstream>
@@ -7,7 +8,15 @@
 
 namespace apycula {
 
-std::vector<Pip> get_pips(const Netlist& netlist) {
+// Map LUT input letter to pass-through INIT value
+static const std::map<char, std::string> passthrough_init = {
+    {'A', "1010101010101010"},
+    {'B', "1100110011001100"},
+    {'C', "1111000011110000"},
+    {'D', "1111111100000000"},
+};
+
+std::vector<Pip> get_pips(const Netlist& netlist, std::vector<BelInfo>& pip_bels) {
     std::vector<Pip> pips;
     std::regex pip_re(R"(X(\d+)Y(\d+)/([\w_]+)/([\w_]+))");
 
@@ -41,11 +50,47 @@ std::vector<Pip> get_pips(const Netlist& netlist) {
                     // Regex groups: X(col_val) Y(row_val) / wire1 / wire2
                     // Following Python: col = X_val + 1, row = Y_val + 1
                     // dest = wire1 (group 3), src = wire2 (group 4)
+                    int64_t x_val = std::stoll(match[1].str());
+                    int64_t y_val = std::stoll(match[2].str());
+                    std::string dest = match[3].str();
+                    std::string src = match[4].str();
+
+                    // XD - input of the DFF: needs special handling
+                    // Note: in get_pips, match[3] is called "src" in Python
+                    // (which becomes "dest" in route_nets consumer). We use
+                    // C++ naming that matches route_nets: dest=match[3], src=match[4].
+                    // Python checks its "src" (=our dest) for XD prefix.
+                    if (dest.size() >= 2 && dest[0] == 'X' && dest[1] == 'D') {
+                        if (src.size() >= 1 && src[0] == 'F') {
+                            // XD -> F: skip entirely
+                            count++;
+                            continue;
+                        }
+                        // Pass-through LUT: src (Python's "dest") is like "A5", "B3"
+                        // src[0] is the LUT input letter, src[1] is the slice number
+                        char lut_input = src[0];
+                        std::string slice_num(1, src[1]);
+                        auto init_it = passthrough_init.find(lut_input);
+                        if (init_it != passthrough_init.end()) {
+                            BelInfo bel;
+                            bel.type = "LUT4";
+                            bel.col = x_val + 1;
+                            bel.row = y_val + 1;
+                            bel.num = slice_num;
+                            bel.parameters["INIT"] = init_it->second;
+                            bel.name = "$PACKER_PASS_LUT_" + std::to_string(pip_bels.size());
+                            bel.cell = nullptr;
+                            pip_bels.push_back(std::move(bel));
+                        }
+                        count++;
+                        continue;
+                    }
+
                     Pip pip;
-                    pip.col = std::stoll(match[1].str()) + 1;
-                    pip.row = std::stoll(match[2].str()) + 1;
-                    pip.dest = match[3].str();
-                    pip.src = match[4].str();
+                    pip.col = x_val + 1;
+                    pip.row = y_val + 1;
+                    pip.dest = dest;
+                    pip.src = src;
                     pips.push_back(pip);
                 } else if (segment.find("DUMMY") == std::string::npos) {
                     std::cerr << "Invalid pip: " << segment << std::endl;
@@ -120,13 +165,14 @@ void isolate_segments(
     }
 }
 
-void route_nets(
+std::vector<BelInfo> route_nets(
     const Device& db,
     const Netlist& netlist,
     Tilemap& tilemap,
     const std::string& device) {
 
-    auto pips = get_pips(netlist);
+    std::vector<BelInfo> pip_bels;
+    auto pips = get_pips(netlist, pip_bels);
 
     for (const auto& pip : pips) {
         // PIPs use 1-indexed coordinates; convert to 0-indexed for tile access
@@ -217,6 +263,8 @@ void route_nets(
 
     // Isolate segments after PIP routing
     isolate_segments(db, netlist, tilemap);
+
+    return pip_bels;
 }
 
 void set_clock_fuses(

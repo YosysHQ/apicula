@@ -654,9 +654,9 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     auto tilemap = create_tilemap(db);
 
     // -----------------------------------------------------------------------
-    // Step 2: Route nets
+    // Step 2: Route nets (also generates pass-through LUT BELs for XD wires)
     // -----------------------------------------------------------------------
-    route_nets(db, netlist, tilemap, device);
+    auto pip_bels = route_nets(db, netlist, tilemap, device);
 
     // -----------------------------------------------------------------------
     // Step 3: Isolate segments
@@ -669,9 +669,9 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     set_gsr_fuses(db, tilemap, args);
 
     // -----------------------------------------------------------------------
-    // Step 5: Place cells
+    // Step 5: Place cells (including pass-through LUTs from routing)
     // -----------------------------------------------------------------------
-    place_cells(db, netlist, tilemap, device);
+    place_cells(db, netlist, tilemap, device, pip_bels);
 
     // -----------------------------------------------------------------------
     // Step 6: Set dual-mode pin fuses
