@@ -311,10 +311,9 @@ jobs:
       id: pysetup
       with:
         python-version: '3.9'
-    - name: Install and build
+    - name: Install dependencies
       run: |
         pip install dist/*.whl
-        # pip install apycula
         git clone https://github.com/YosysHQ/yosys.git
         git clone https://github.com/pepijndevos/nextpnr.git
         sudo apt-get update
@@ -324,24 +323,39 @@ jobs:
           libboost-python-dev libboost-filesystem-dev zlib1g-dev \
           libboost-thread-dev libboost-program-options-dev libboost-iostreams-dev libboost-dev \
           libeigen3-dev
+    - name: Build yosys
+      run: |
         cd yosys
         git checkout ${{ matrix.yosys }}
         git submodule update --init --recursive
         make config-gcc
         make -j$(nproc)
         sudo make install
-        cd ../nextpnr
+    - name: Build nextpnr
+      run: |
+        cd nextpnr
         git checkout msgspec-serialization
         git submodule update --init --recursive
-        mkdir -p build
-        cd build
+        mkdir -p build && cd build
         cmake .. -DBUILD_PYTHON=OFF -DARCH="himbaechel" -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
         make -j$(nproc)
         sudo make install
-        cd ../../examples
+    - name: Build C++ gowin_pack
+      run: |
+        cd gowin_pack_cpp
+        mkdir -p build && cd build
+        cmake ..
+        make -j$(nproc)
+    - name: Run examples with Python gowin_pack
+      run: |
+        cd examples
         make -j$(nproc) all
         cd gw5a
         make -j$(nproc) all
+    - name: Checksum Python bitstreams
+      run: |
+        (cd examples && md5sum *.fs | sort > /tmp/python-checksums.txt)
+        (cd examples/gw5a && md5sum *.fs | sort > /tmp/python-gw5a-checksums.txt)
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
@@ -354,3 +368,23 @@ jobs:
         for f in *-unpacked.v; do
           yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
         done
+    - name: Repack with C++ gowin_pack
+      env:
+        GOWIN_PACK: ${{ github.workspace }}/gowin_pack_cpp/build/gowin_pack
+      run: |
+        export APYCULA_CHIPDB_DIR=$(python -c "import apycula; import os; print(os.path.dirname(apycula.__file__))")
+        cd examples
+        rm -f *.fs
+        make -j$(nproc) GOWIN_PACK=$GOWIN_PACK all
+        cd gw5a
+        rm -f *.fs
+        make -j$(nproc) GOWIN_PACK=$GOWIN_PACK all
+    - name: Compare bitstreams
+      run: |
+        (cd examples && md5sum *.fs | sort > /tmp/cpp-checksums.txt)
+        (cd examples/gw5a && md5sum *.fs | sort > /tmp/cpp-gw5a-checksums.txt)
+        echo "=== Comparing main examples ==="
+        diff /tmp/python-checksums.txt /tmp/cpp-checksums.txt
+        echo "=== Comparing gw5a examples ==="
+        diff /tmp/python-gw5a-checksums.txt /tmp/cpp-gw5a-checksums.txt
+        echo "All bitstreams match!"

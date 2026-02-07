@@ -1,5 +1,6 @@
 YOSYS ?= yosys
 NEXTPNR ?= nextpnr-himbaechel
+GOWIN_PACK ?= gowin_pack
 YOSYS_FLAGS = -setundef
 
 .DEFAULT_GOAL := all
@@ -231,11 +232,12 @@ clean:
 	rm -f *.json *.fs *-unpacked.v
 	
 .PHONY: unpacked clean
+.SECONDARY:
 
 # ============================================================
 # Tangnano20k
 %-tangnano20k.fs: %-tangnano20k.json
-	gowin_pack -c -d GW2A-18C -o $@ $<
+	$(GOWIN_PACK) -c -d GW2A-18C -o $@ $<
 
 %-tangnano20k.json: %-tangnano20k-synth.json tangnano20k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=tangnano20k.cst
@@ -258,7 +260,7 @@ dvi-example-tangnano20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chan
 # ============================================================
 # TangPrimer20k
 %-primer20k.fs: %-primer20k.json
-	gowin_pack -c -d GW2A-18 -o $@ $<
+	$(GOWIN_PACK) -c -d GW2A-18 -o $@ $<
 
 %-primer20k.json: %-primer20k-synth.json primer20k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW2A-LV18PG256C8/I7 --vopt family=GW2A-18 --vopt cst=primer20k.cst
@@ -281,7 +283,7 @@ dvi-example-primer20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channe
 # ============================================================
 # Tangnano (GW1N-1)
 %-tangnano.fs: %-tangnano.json
-	gowin_pack -c -d GW1N-1 -o $@ $^
+	$(GOWIN_PACK) -c -d GW1N-1 -o $@ $^
 
 %-tangnano.json: %-tangnano-synth.json tangnano.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1N-LV1QN48C6/I5 --vopt cst=tangnano.cst
@@ -298,7 +300,7 @@ bsram-%-tangnano-synth.json: pll/GW1N-1-dyn.vh io565.vh display-480x272.v %-imag
 # ============================================================
 # Tangnano1k (GW1NZ-1)
 %-tangnano1k.fs: %-tangnano1k.json
-	gowin_pack -c -d GW1NZ-1 -o $@ $^
+	$(GOWIN_PACK) -c -d GW1NZ-1 -o $@ $^
 
 %-tangnano1k.json: %-tangnano1k-synth.json tangnano1k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NZ-LV1QN48C6/I5 --vopt cst=tangnano1k.cst
@@ -307,7 +309,7 @@ bsram-%-tangnano-synth.json: pll/GW1N-1-dyn.vh io565.vh display-480x272.v %-imag
 	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D NUM_HCLK=4 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
 
 pll-nanolcd-tangnano1k.fs: pll-nanolcd-tangnano1k.json
-	gowin_pack -c -d GW1NZ-1 --sspi_as_gpio --mspi_as_gpio -o $@ $^
+	$(GOWIN_PACK) -c -d GW1NZ-1 --sspi_as_gpio --mspi_as_gpio -o $@ $^
 
 pll-nanolcd-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -noalu -json $@ ${YOSYS_FLAGS}"
@@ -318,11 +320,11 @@ bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh io565.vh display-480x272.v %-i
 # ============================================================
 # Tangnano4k (GW1NS-4)
 %-tangnano4k.fs: %-tangnano4k.json
-	gowin_pack -c -d GW1NS-4 --mspi_as_gpio -o $@ $^
+	$(GOWIN_PACK) -c -d GW1NS-4 --mspi_as_gpio -o $@ $^
 
 # XXX fix compression with emcu
 emcu-%-tangnano4k.fs: emcu-%-tangnano4k.json
-	gowin_pack -d GW1NS-4 --mspi_as_gpio -o $@ $^
+	$(GOWIN_PACK) -d GW1NS-4 --mspi_as_gpio -o $@ $^
 
 %-tangnano4k.json: %-tangnano4k-synth.json tangnano4k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --vopt cst=tangnano4k.cst
@@ -337,7 +339,7 @@ emcu-%-tangnano4k.fs: emcu-%-tangnano4k.json
 # ============================================================
 # Tangnano9k (GW1N-9C)
 %-tangnano9k.fs: %-tangnano9k.json
-	gowin_pack -c -d GW1N-9C -o $@ $^
+	$(GOWIN_PACK) -c -d GW1N-9C -o $@ $^
 
 %-tangnano9k.json: %-tangnano9k-synth.json tangnano9k.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=tangnano9k.cst
@@ -349,7 +351,7 @@ pll-nanolcd-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh pll-nanolcd/TOP.v pll-nano
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
 
 pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
-	gowin_pack -c -d GW1N-9C --sspi_as_gpio --mspi_as_gpio -o $@ $^
+	$(GOWIN_PACK) -c -d GW1N-9C --sspi_as_gpio --mspi_as_gpio -o $@ $^
 
 bsram-%-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
@@ -360,7 +362,7 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chann
 # ============================================================
 # szfpga miniboard (GW1N-9)
 %-miniszfpga.fs: %-miniszfpga.json
-	gowin_pack -c -d GW1N-9 -o $@ $<
+	$(GOWIN_PACK) -c -d GW1N-9 -o $@ $<
  
 %-miniszfpga.json: %-miniszfpga-synth.json miniszfpga.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1N-LV9QN48C6/I5 --vopt family=GW1N-9 --vopt cst=miniszfpga.cst
@@ -377,7 +379,7 @@ bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh io565.vh display-480x272.v %-im
 # ============================================================
 # szfpga (GW1N-9)
 %-szfpga.fs: %-szfpga.json
-	gowin_pack -c -d GW1N-9 -o $@ $<
+	$(GOWIN_PACK) -c -d GW1N-9 -o $@ $<
  
 %-szfpga.json: %-szfpga-synth.json szfpga.cst
 	$(NEXTPNR) --seed=3 --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --vopt family=GW1N-9 --vopt cst=szfpga.cst
@@ -394,7 +396,7 @@ bsram-%-szfpga-synth.json: pll/GW1N-9-dyn.vh io565.vh display-480x272.v %-image-
 # ============================================================
 # tec0117 (GW1N-9)
 %-tec0117.fs: %-tec0117.json
-	gowin_pack -c -d GW1N-9 -o $@ $<
+	$(GOWIN_PACK) -c -d GW1N-9 -o $@ $<
 
 %-tec0117.json: %-tec0117-synth.json tec0117.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --vopt family=GW1N-9 --vopt cst=tec0117.cst
@@ -408,7 +410,7 @@ blinky-pll-tec0117-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 # ============================================================
 # runber (GW1N-4)
 %-runber.fs: %-runber.json
-	gowin_pack -c -d GW1N-4 -o $@ $<
+	$(GOWIN_PACK) -c -d GW1N-4 -o $@ $<
 
 %-runber.json: %-runber-synth.json runber.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1N-UV4LQ144C6/I5 --vopt cst=runber.cst
