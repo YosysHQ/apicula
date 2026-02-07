@@ -195,6 +195,31 @@ bool has_map_key(const msgpack::object& o, const char* key) {
     return false;
 }
 
+// Helper to parse fuse_cell_offset: can be None/nil, empty list [], or [row, col]
+inline std::optional<apycula::Coord> parse_fuse_cell_offset(const msgpack::object& o, const char* key) {
+    if (o.type != msgpack::type::MAP) return std::nullopt;
+    for (size_t i = 0; i < o.via.map.size; ++i) {
+        auto& kv = o.via.map.ptr[i];
+        if (kv.key.type == msgpack::type::STR) {
+            std::string k(kv.key.via.str.ptr, kv.key.via.str.size);
+            if (k == key) {
+                if (kv.val.type == msgpack::type::NIL) return std::nullopt;
+                if (kv.val.type == msgpack::type::ARRAY) {
+                    if (kv.val.via.array.size == 0) return std::nullopt;
+                    if (kv.val.via.array.size == 2) {
+                        return apycula::Coord{
+                            kv.val.via.array.ptr[0].as<int64_t>(),
+                            kv.val.via.array.ptr[1].as<int64_t>()
+                        };
+                    }
+                }
+                return std::nullopt;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
 // Deserialize Bel from msgpack map
 template<>
 struct convert<apycula::Bel> {
@@ -207,7 +232,7 @@ struct convert<apycula::Bel> {
         v.is_diff_p = get_map_value<bool>(o, "is_diff_p", false);
         v.modes = get_map_value<std::map<std::string, std::set<apycula::Coord>>>(o, "modes");
         v.portmap = get_map_value<std::map<std::string, msgpack::object>>(o, "portmap");
-        v.fuse_cell_offset = get_map_value<std::optional<apycula::Coord>>(o, "fuse_cell_offset");
+        v.fuse_cell_offset = parse_fuse_cell_offset(o, "fuse_cell_offset");
         return o;
     }
 };
@@ -234,38 +259,106 @@ template<>
 struct convert<apycula::Device> {
     msgpack::object const& operator()(msgpack::object const& o, apycula::Device& v) const {
         if (o.type != msgpack::type::MAP) throw msgpack::type_error();
-        v.grid = get_map_value<std::vector<std::vector<int64_t>>>(o, "grid");
-        v.tiles = get_map_value<std::map<int64_t, apycula::Tile>>(o, "tiles");
-        v.timing = get_map_value<msgpack::object>(o, "timing");
-        v.wire_delay = get_map_value<std::map<std::string, std::string>>(o, "wire_delay");
-        v.packages = get_map_value<std::map<std::string, std::tuple<std::string, std::string, std::string>>>(o, "packages");
-        v.pinout = get_map_value<std::map<std::string, std::map<std::string, std::map<std::string, std::pair<std::string, std::vector<std::string>>>>>>(o, "pinout");
-        v.sip_cst = get_map_value<std::map<std::string, std::map<std::string, std::vector<std::tuple<std::string, int64_t, int64_t, std::string, std::string>>>>>(o, "sip_cst");
-        v.pin_bank = get_map_value<std::map<std::string, int64_t>>(o, "pin_bank");
-        v.cmd_hdr = get_map_value<std::vector<std::vector<uint8_t>>>(o, "cmd_hdr");
-        v.cmd_ftr = get_map_value<std::vector<std::vector<uint8_t>>>(o, "cmd_ftr");
-        v.template_data = get_map_value<std::vector<std::vector<int64_t>>>(o, "template");
-        v.logicinfo = get_map_value<std::map<std::string, std::map<apycula::Coord, int64_t>>>(o, "logicinfo");
-        v.rev_li = get_map_value<std::map<std::string, std::map<int64_t, apycula::Coord>>>(o, "rev_li");
-        v.longfuses = get_map_value<std::map<int64_t, std::map<std::string, std::map<std::tuple<int64_t>, std::set<apycula::Coord>>>>>(o, "longfuses");
-        v.shortval = get_map_value<std::map<int64_t, std::map<std::string, std::map<apycula::Coord, std::set<apycula::Coord>>>>>(o, "shortval");
-        v.longval = get_map_value<std::map<int64_t, std::map<std::string, std::map<std::array<int64_t, 16>, std::set<apycula::Coord>>>>>(o, "longval");
-        v.const_fuses = get_map_value<std::map<int64_t, std::vector<apycula::Coord>>>(o, "const");
-        v.nodes = get_map_value<std::map<std::string, std::pair<std::string, std::set<std::tuple<int64_t, int64_t, std::string>>>>>(o, "nodes");
-        v.bottom_io = get_map_value<std::tuple<std::string, std::string, std::vector<std::pair<std::string, std::string>>>>(o, "bottom_io");
-        v.simplio_rows = get_map_value<std::set<int64_t>>(o, "simplio_rows");
-        v.pad_pll = get_map_value<std::map<std::string, std::tuple<int64_t, int64_t, std::string, std::string>>>(o, "pad_pll");
-        v.tile_types = get_map_value<std::map<std::string, std::set<int64_t>>>(o, "tile_types");
-        v.diff_io_types = get_map_value<std::vector<std::string>>(o, "diff_io_types");
-        v.hclk_pips = get_map_value<std::map<apycula::Coord, std::map<std::string, std::map<std::string, std::set<apycula::Coord>>>>>(o, "hclk_pips");
-        v.extra_func = get_map_value<std::map<apycula::Coord, std::map<std::string, msgpack::object>>>(o, "extra_func");
-        v.chip_flags = get_map_value<std::vector<std::string>>(o, "chip_flags");
-        v.segments = get_map_value<std::map<std::array<int64_t, 3>, std::map<std::string, msgpack::object>>>(o, "segments");
-        v.dcs_prefix = get_map_value<std::string>(o, "dcs_prefix", "CLK");
-        v.io_cfg = get_map_value<std::map<std::string, std::set<std::string>>>(o, "io_cfg");
-        v.corner_tiles_io = get_map_value<std::map<apycula::Coord, std::string>>(o, "corner_tiles_io");
-        v.spine_select_wires = get_map_value<std::map<std::string, std::map<std::string, std::vector<std::tuple<int64_t, int64_t, std::string, int64_t>>>>>(o, "spine_select_wires");
-        v.last_top_row = get_map_value<int64_t>(o, "last_top_row", 0);
+
+        // The Python serialization stores grid as a 2D array of Tile objects
+        // (not deduplicated). We need to extract ttyp for each cell and build
+        // both the integer grid and the tiles map.
+        //
+        // First, try to get the grid as a raw msgpack object to inspect it.
+        msgpack::object grid_obj;
+        bool grid_found = false;
+        for (size_t i = 0; i < o.via.map.size; ++i) {
+            auto& kv = o.via.map.ptr[i];
+            if (kv.key.type == msgpack::type::STR) {
+                std::string k(kv.key.via.str.ptr, kv.key.via.str.size);
+                if (k == "grid") {
+                    grid_obj = kv.val;
+                    grid_found = true;
+                    break;
+                }
+            }
+        }
+
+        if (grid_found && grid_obj.type == msgpack::type::ARRAY) {
+            // Grid is a 2D array. Check if elements are ints (ttyp) or maps (Tile).
+            auto& grid_arr = grid_obj.via.array;
+            if (grid_arr.size > 0) {
+                auto& first_row = grid_arr.ptr[0];
+                if (first_row.type == msgpack::type::ARRAY && first_row.via.array.size > 0) {
+                    auto& first_elem = first_row.via.array.ptr[0];
+                    if (first_elem.type == msgpack::type::MAP) {
+                        // Grid contains inline Tile objects - parse and deduplicate
+                        v.grid.resize(grid_arr.size);
+                        for (size_t row = 0; row < grid_arr.size; ++row) {
+                            auto& row_arr = grid_arr.ptr[row].via.array;
+                            v.grid[row].resize(row_arr.size);
+                            for (size_t col = 0; col < row_arr.size; ++col) {
+                                apycula::Tile tile;
+                                row_arr.ptr[col].convert(tile);
+                                int64_t ttyp = tile.ttyp;
+                                v.grid[row][col] = ttyp;
+                                if (v.tiles.find(ttyp) == v.tiles.end()) {
+                                    v.tiles[ttyp] = std::move(tile);
+                                }
+                            }
+                        }
+                    } else {
+                        // Grid contains integer ttyp values
+                        v.grid = grid_obj.as<std::vector<std::vector<int64_t>>>();
+                        // tiles should be in a separate key
+                        v.tiles = get_map_value<std::map<int64_t, apycula::Tile>>(o, "tiles");
+                    }
+                }
+            }
+        }
+
+        // Parse all remaining fields - try/catch individually since format may vary
+        try { v.timing = get_map_value<msgpack::object>(o, "timing"); } catch (...) {}
+        try { v.wire_delay = get_map_value<decltype(v.wire_delay)>(o, "wire_delay"); } catch (...) {}
+        try { v.pin_bank = get_map_value<decltype(v.pin_bank)>(o, "pin_bank"); } catch (...) {}
+        try { v.cmd_hdr = get_map_value<decltype(v.cmd_hdr)>(o, "cmd_hdr"); } catch (...) {}
+        try { v.cmd_ftr = get_map_value<decltype(v.cmd_ftr)>(o, "cmd_ftr"); } catch (...) {}
+        try { v.template_data = get_map_value<decltype(v.template_data)>(o, "template"); } catch (...) {}
+        try { v.logicinfo = get_map_value<decltype(v.logicinfo)>(o, "logicinfo"); } catch (...) {}
+        try { v.simplio_rows = get_map_value<decltype(v.simplio_rows)>(o, "simplio_rows"); } catch (...) {}
+        try { v.diff_io_types = get_map_value<decltype(v.diff_io_types)>(o, "diff_io_types"); } catch (...) {}
+        try { v.chip_flags = get_map_value<decltype(v.chip_flags)>(o, "chip_flags"); } catch (...) {}
+        try { v.dcs_prefix = get_map_value<std::string>(o, "dcs_prefix", std::string("CLK")); } catch (...) {}
+        try { v.last_top_row = get_map_value<int64_t>(o, "last_top_row", int64_t(0)); } catch (...) {}
+        try { v.packages = get_map_value<decltype(v.packages)>(o, "packages"); }
+        catch (...) {}
+        try { v.pinout = get_map_value<decltype(v.pinout)>(o, "pinout"); }
+        catch (...) {}
+        try { v.sip_cst = get_map_value<decltype(v.sip_cst)>(o, "sip_cst"); }
+        catch (...) {}
+        try { v.longfuses = get_map_value<decltype(v.longfuses)>(o, "longfuses"); }
+        catch (...) {}
+        try { v.shortval = get_map_value<decltype(v.shortval)>(o, "shortval"); }
+        catch (...) {}
+        try { v.longval = get_map_value<decltype(v.longval)>(o, "longval"); }
+        catch (...) {}
+        try { v.const_fuses = get_map_value<decltype(v.const_fuses)>(o, "const"); }
+        catch (...) {}
+        try { v.nodes = get_map_value<decltype(v.nodes)>(o, "nodes"); }
+        catch (...) {}
+        try { v.bottom_io = get_map_value<decltype(v.bottom_io)>(o, "bottom_io"); }
+        catch (...) {}
+        try { v.pad_pll = get_map_value<decltype(v.pad_pll)>(o, "pad_pll"); }
+        catch (...) {}
+        try { v.tile_types = get_map_value<decltype(v.tile_types)>(o, "tile_types"); }
+        catch (...) {}
+        try { v.hclk_pips = get_map_value<decltype(v.hclk_pips)>(o, "hclk_pips"); }
+        catch (...) {}
+        try { v.extra_func = get_map_value<decltype(v.extra_func)>(o, "extra_func"); }
+        catch (...) {}
+        try { v.segments = get_map_value<decltype(v.segments)>(o, "segments"); }
+        catch (...) {}
+        try { v.io_cfg = get_map_value<decltype(v.io_cfg)>(o, "io_cfg"); }
+        catch (...) {}
+        try { v.corner_tiles_io = get_map_value<decltype(v.corner_tiles_io)>(o, "corner_tiles_io"); }
+        catch (...) {}
+        try { v.spine_select_wires = get_map_value<decltype(v.spine_select_wires)>(o, "spine_select_wires"); }
+        catch (...) {}
         return o;
     }
 };

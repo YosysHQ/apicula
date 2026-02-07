@@ -79,7 +79,18 @@ int main(int argc, char** argv) {
 
         // Generate bitstream
         std::cout << "Generating bitstream..." << std::endl;
-        auto bitstream = apycula::generate_bitstream(db, netlist, device, compress);
+        apycula::PackArgs pack_args;
+        pack_args.device = device;
+        pack_args.compress = compress;
+        pack_args.jtag_as_gpio = jtag_as_gpio;
+        pack_args.sspi_as_gpio = sspi_as_gpio;
+        pack_args.mspi_as_gpio = mspi_as_gpio;
+        pack_args.ready_as_gpio = ready_as_gpio;
+        pack_args.done_as_gpio = done_as_gpio;
+        pack_args.reconfign_as_gpio = reconfign_as_gpio;
+        pack_args.cpu_as_gpio = cpu_as_gpio;
+        pack_args.i2c_as_gpio = i2c_as_gpio;
+        auto bitstream = apycula::generate_bitstream(db, netlist, pack_args);
 
         // Write output
         std::cout << "Writing output to " << output_file << "..." << std::endl;

@@ -75,38 +75,16 @@ Device load_chipdb(const std::string& path) {
         std::istreambuf_iterator<char>());
     file.close();
 
-    std::cerr << "  Read " << compressed.size() << " compressed bytes" << std::endl;
-
     // Decompress
     auto data = decompress_gzip(compressed);
-    std::cerr << "  Decompressed to " << data.size() << " bytes" << std::endl;
 
     // Deserialize with msgpack
-    std::cerr << "  Unpacking msgpack..." << std::endl;
     msgpack::object_handle oh = msgpack::unpack(
         reinterpret_cast<const char*>(data.data()), data.size());
     msgpack::object obj = oh.get();
 
-    std::cerr << "  Converting to Device..." << std::endl;
     Device device;
-    try {
-        obj.convert(device);
-    } catch (const std::exception& e) {
-        std::cerr << "  Convert failed: " << e.what() << std::endl;
-        std::cerr << "  Object type: " << static_cast<int>(obj.type) << std::endl;
-        if (obj.type == msgpack::type::MAP) {
-            std::cerr << "  Map size: " << obj.via.map.size << std::endl;
-            for (size_t i = 0; i < std::min<size_t>(5, obj.via.map.size); ++i) {
-                auto& kv = obj.via.map.ptr[i];
-                if (kv.key.type == msgpack::type::STR) {
-                    std::string k(kv.key.via.str.ptr, kv.key.via.str.size);
-                    std::cerr << "    Key: " << k << " (type " << static_cast<int>(kv.val.type) << ")" << std::endl;
-                }
-            }
-        }
-        throw;
-    }
-    std::cerr << "  Loaded device: " << device.rows() << "x" << device.cols() << std::endl;
+    obj.convert(device);
     return device;
 }
 
