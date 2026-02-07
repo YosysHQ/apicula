@@ -15,6 +15,7 @@ env
 *.pickle
 *.msgpack.gz
 __pycache__
+.eggs/
 generic/blinky.fasm
 generic/blinky.png
 generic/blinky.posp
