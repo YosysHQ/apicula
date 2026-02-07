@@ -13,9 +13,12 @@
 impl
 env
 *.pickle
+*.msgpack.gz
 __pycache__
 generic/blinky.fasm
 generic/blinky.png
 generic/blinky.posp
 generic/blinky.vm
 .vscode
+!gowin_pack_cpp/**
+gowin_pack_cpp/build/

@@ -3,13 +3,11 @@ import os
 import re
 import random
 from itertools import chain, count
-import pickle
-import gzip
 import argparse
 import importlib.resources
-from contextlib import closing
 from apycula import codegen
 from apycula import chipdb
+from apycula.chipdb import load_chipdb
 from apycula import attrids
 from apycula.bslib import read_bitstream, display
 
@@ -306,7 +304,7 @@ _bsram_cells = {}
 def get_bsram_main_cell(db, row, col, typ):
     if typ[-4:] == '_AUX':
         col -= 1
-        if 'BSRAM_AUX' in db.grid[row][col].bels:
+        if 'BSRAM_AUX' in db[row, col].bels:
             col -= 1
     return row, col
 
@@ -331,7 +329,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
     # TLVDS takes two BUF bels, so skip the B bels.
     skip_bels = set()
     #print((row, col))
-    tiledata = db.grid[row][col]
+    tiledata = db[row, col]
     #if 'HCLK' in db.shortval[tiledata.ttyp].keys():
     #    attrvals =parse_attrvals(tile, db.logicinfo['HCLK'], db.shortval[tiledata.ttyp]['HCLK'], attrids.hclk_attrids)
     #    if attrvals:
@@ -471,7 +469,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             if idx == 'B' and tiledata.bels[name].fuse_cell_offset:
                 io_row += tiledata.bels[name].fuse_cell_offset[0]
                 io_col += tiledata.bels[name].fuse_cell_offset[1]
-                io_tiledata = db.grid[io_row][io_col]
+                io_tiledata = db[io_row, io_col]
                 io_tile = bm[io_row, io_col]
                 io_ttyp = io_tiledata.ttyp
             # XXX
@@ -789,7 +787,7 @@ def find_pll_in_pin(db, pll):
     if not locs:
         raise Exception(f"No [RL]PLL_T_IN pin in the current package")
     row, col, bel_idx = tbrl2rc(db, locs[0])
-    wire = db.grid[row][col].bels[f'IOB{bel_idx}'].portmap['O']
+    wire = db[row, col].bels[f'IOB{bel_idx}'].portmap['O']
     pll.portmap['CLKIN'] = f'R{row + 1}C{col + 1}_{wire}'
 
 def modify_pll_inputs(db, pll):
@@ -934,7 +932,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             iol.params.update(iol_params)
             iol_oser = iol_mode in {'ODDR', 'ODDRC', 'OSER4', 'OVIDEO', 'OSER8', 'OSER10', 'OSER16'}
 
-            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+            portmap = db[dbrow, dbcol].bels[bel].portmap
             for port, wname in iologic_ports_by_type(iol_mode, portmap):
                 if iol_oser:
                     if port in {'Q', 'Q0', 'Q1'}:
@@ -981,7 +979,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             for paramval in flags:
                 param, _, val = paramval.partition('=')
                 pll.params[param] = val
-            portmap = db.grid[dbrow][dbcol].bels[bel[:5]].portmap
+            portmap = db[dbrow, dbcol].bels[bel[:5]].portmap
             for port, wname in portmap.items():
                 pll.portmap[port] = f"R{row}C{col}_{wname}"
         elif typ.startswith("PLLVR"):
@@ -990,7 +988,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             for paramval in flags:
                 param, _, val = paramval.partition('=')
                 pll.params[param] = val
-            portmap = db.grid[dbrow][dbcol].bels[bel[:-1]].portmap
+            portmap = db[dbrow, dbcol].bels[bel[:-1]].portmap
             for port, wname in portmap.items():
                 pll.portmap[port] = f"R{row}C{col}_{wname}"
         elif typ.startswith("BSRAM"):
@@ -1003,7 +1001,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             for paramval in flags:
                 param, _, val = paramval.partition('=')
                 pll.params[param] = val
-            portmap = db.grid[dbrow][dbcol].bels[bel_name].portmap
+            portmap = db[dbrow, dbcol].bels[bel_name].portmap
             for port, wname in portmap.items():
                 pll.portmap[port] = f"R{row}C{col}_{wname}"
         elif typ == "ALU":
@@ -1068,7 +1066,7 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             for paramval in flags:
                 param, _, val = paramval.partition('=')
                 osc.params[param] = val
-            portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+            portmap = db[dbrow, dbcol].bels[bel].portmap
             for port, wname in portmap.items():
                 osc.portmap[port] = f"R{row}C{col}_{wname}"
             mod.wires.update(osc.portmap.values())
@@ -1105,26 +1103,26 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             flags.remove(kind)
             if kind == 'MIPI_IBUF':
                 portmap = {}
-                portmap['I'] = db.grid[dbrow][dbcol].bels["IOBA"].portmap['I']
-                portmap['IB'] = db.grid[dbrow][dbcol].bels["IOBB"].portmap['I']
-                portmap['OEN'] = db.grid[dbrow][dbcol].bels["IOBA"].portmap['OE']
-                portmap['OENB'] = db.grid[dbrow][dbcol].bels["IOBB"].portmap['OE']
-                portmap['OH'] = db.grid[dbrow][dbcol].bels["IOBA"].portmap['O']
-                portmap['OB'] = db.grid[dbrow][dbcol].bels["IOBB"].portmap['O']
-                portmap['HSREN'] = db.grid[dbrow][dbcol].bels["IOLOGICB"].portmap['SETN']
-                portmap['OL'] = db.grid[dbrow][dbcol + 1].bels["IOBA"].portmap['O']
+                portmap['I'] = db[dbrow, dbcol].bels["IOBA"].portmap['I']
+                portmap['IB'] = db[dbrow, dbcol].bels["IOBB"].portmap['I']
+                portmap['OEN'] = db[dbrow, dbcol].bels["IOBA"].portmap['OE']
+                portmap['OENB'] = db[dbrow, dbcol].bels["IOBB"].portmap['OE']
+                portmap['OH'] = db[dbrow, dbcol].bels["IOBA"].portmap['O']
+                portmap['OB'] = db[dbrow, dbcol].bels["IOBB"].portmap['O']
+                portmap['HSREN'] = db[dbrow, dbcol].bels["IOLOGICB"].portmap['SETN']
+                portmap['OL'] = db[dbrow, dbcol + 1].bels["IOBA"].portmap['O']
             elif kind == 'MIPI_OBUF':
                 portmap = {}
-                portmap['I'] = db.grid[dbrow][dbcol].bels["IOBA"].portmap['I']
-                portmap['IB'] = db.grid[dbrow][dbcol].bels["IOBB"].portmap['I']
-                portmap['IL'] = db.grid[dbrow][dbcol].bels["IOBA"].portmap['I']
-                portmap['MODESEL'] = db.grid[dbrow][dbcol].bels["IOBA"].portmap['OE']
+                portmap['I'] = db[dbrow, dbcol].bels["IOBA"].portmap['I']
+                portmap['IB'] = db[dbrow, dbcol].bels["IOBB"].portmap['I']
+                portmap['IL'] = db[dbrow, dbcol].bels["IOBA"].portmap['I']
+                portmap['MODESEL'] = db[dbrow, dbcol].bels["IOBA"].portmap['OE']
             elif kind == 'I3C_IOBUF':
-                portmap = db.grid[dbrow][dbcol].bels[bel].portmap.copy()
+                portmap = db[dbrow, dbcol].bels[bel].portmap.copy()
                 portmap['MODESEL'] = portmap['OE']
                 portmap.pop('OE', None)
             else:
-                portmap = db.grid[dbrow][dbcol].bels[bel].portmap
+                portmap = db[dbrow, dbcol].bels[bel].portmap
             name = f"R{row}C{col}_{kind}_{idx}"
             wires = set(iobmap[kind]['wires'])
             ports = set(chain.from_iterable(iobmap[kind].values())) - wires
@@ -1249,9 +1247,8 @@ def main():
         luts = m.group(3)
         _device = f"GW1N{mods}-{luts}"
 
-    with importlib.resources.path('apycula', f'{args.device}.pickle') as path:
-        with closing(gzip.open(path, 'rb')) as f:
-            db = pickle.load(f)
+    with importlib.resources.path('apycula', f'{args.device}.msgpack.gz') as path:
+        db = load_chipdb(path)
 
     global _pinout
     _pinout = db.pinout[_device][_packages[_device]]

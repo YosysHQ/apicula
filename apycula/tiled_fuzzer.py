@@ -23,6 +23,7 @@ from apycula import wirenames as wnames
 from apycula import dat19
 from apycula import tm_h4x
 from apycula import chipdb
+from apycula.chipdb import save_chipdb
 from apycula import attrids
 
 gowinhome = os.getenv("GOWINHOME")
@@ -228,7 +229,7 @@ def fse_iob(fse, db, diff_cap_info, locations):
                         first_cell = False
 
                     #print(f"type:{ttyp} [{row}][{col}], {name}, diff:{bel.is_diff}, true lvds:{bel.is_true_lvds}, p:{bel.is_diff_p}")
-            db.grid[row][col].bels.update(iob_bels[ttyp])
+            db[row, col].bels.update(iob_bels[ttyp])
 
     # adc bus
     for pin, desc in diff_cap_info.items():
@@ -241,9 +242,9 @@ def fse_iob(fse, db, diff_cap_info, locations):
 
     if device in {'GW5A-25A'}:
         # fix IOR3AB
-        db.grid[2][db.cols - 1].bels['IOBA'].is_diff = False
-        db.grid[2][db.cols - 1].bels['IOBA'].is_true_lvds = False
-        db.grid[2][db.cols - 1].bels['IOBB'] = copy.deepcopy(db.grid[2][db.cols - 1].bels['IOBA'])
+        db[2, db.cols - 1].bels['IOBA'].is_diff = False
+        db[2, db.cols - 1].bels['IOBA'].is_true_lvds = False
+        db[2, db.cols - 1].bels['IOBB'] = copy.deepcopy(db[2, db.cols - 1].bels['IOBA'])
 
 # generate bitstream footer
 def gen_ftr():
@@ -369,23 +370,22 @@ if __name__ == "__main__":
     # XXX GW1NR-9 has interesting IOBA pins on the bottom side
     if device == 'GW1N-9' :
         loc = locations[52][0]
-        bel = db.grid[loc[0]][loc[1]].bels['IOBA']
+        bel = db[loc[0], loc[1]].bels['IOBA']
         bel.portmap['GW9_ALWAYS_LOW0'] = wnames.wirenames[dat.portmap['IologicAIn'][40]]
         bel.portmap['GW9_ALWAYS_LOW1'] = wnames.wirenames[dat.portmap['IologicAIn'][42]]
 
     # GSR
     if device in {'GW2A-18', 'GW2A-18C'}:
-        db.grid[27][50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+        db[27, 50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     elif device in {'GW5A-25A'}:
-        db.grid[27][88].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'LSR0';
+        db[27, 88].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'LSR0';
     elif device in {'GW5AST-138C'}:
-        db.grid[108][165].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'D7';
+        db[108, 165].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'D7';
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
-        db.grid[0][0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+        db[0, 0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
     else:
         raise Exception(f"No GSR for {device}")
 
 
-    #TODO proper serialization format
-    with open(f"{device}_stage1.pickle", 'wb') as f:
-        pickle.dump(db, f)
+    # Save stage1 output
+    save_chipdb(db, f"{device}_stage1.msgpack.gz")
