@@ -1,6 +1,7 @@
 YOSYS ?= yosys
 YOSYS_FLAGS = -setundef
 NEXTPNR ?= nextpnr-himbaechel
+GOWIN_PACK ?= gowin_pack
 DEBUG = -v --debug
 DEBUG =
 
@@ -20,11 +21,12 @@ clean:
 	rm -f *.json *.fs *-unpacked.v
 	
 .PHONY: unpacked clean
+.SECONDARY:
 
 # ============================================================
 # TangPrimer25k
 %-primer25k.fs: %-primer25k.json
-	gowin_pack --sspi_as_gpio --cpu_as_gpio -d GW5A-25A -o $@ $<
+	$(GOWIN_PACK) --sspi_as_gpio --cpu_as_gpio -d GW5A-25A -o $@ $<
 
 %-primer25k.json: %-primer25k-synth.json primer25k.cst
 	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt sspi_as_gpio
@@ -56,7 +58,7 @@ attosoc-primer25k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 # ============================================================
 # TangMega138k
 %-tangmega138k.fs: %-tangmega138k.json
-	gowin_pack --cpu_as_gpio -d GW5AST-138C -o $@ $<
+	$(GOWIN_PACK) --cpu_as_gpio -d GW5AST-138C -o $@ $<
 
 %-tangmega138k.json: %-tangmega138k-synth.json tangmega138k.cst
 	$(NEXTPNR) $(DEBUG) --json $< --write $@ --device GW5AST-LV138PG484AC1/I0 --vopt cst=tangmega138k.cst
