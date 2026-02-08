@@ -555,6 +555,57 @@ static void set_footer_checksum(std::vector<std::vector<uint8_t>>& footer,
 }
 
 // ---------------------------------------------------------------------------
+// RLE compression helpers (matching Python bslib.py)
+// ---------------------------------------------------------------------------
+
+// Replace all occurrences of old_seq with new_seq in data (like Python bytes.replace)
+static std::vector<uint8_t> bytes_replace(
+    const std::vector<uint8_t>& data,
+    const std::vector<uint8_t>& old_seq,
+    const std::vector<uint8_t>& new_seq)
+{
+    if (old_seq.empty()) return data;
+    std::vector<uint8_t> result;
+    result.reserve(data.size());
+    size_t i = 0;
+    while (i < data.size()) {
+        if (i + old_seq.size() <= data.size() &&
+            std::equal(old_seq.begin(), old_seq.end(), data.begin() + i)) {
+            result.insert(result.end(), new_seq.begin(), new_seq.end());
+            i += old_seq.size();
+        } else {
+            result.push_back(data[i]);
+            ++i;
+        }
+    }
+    return result;
+}
+
+// Compress a single line using RLE keys (matching Python compressLine)
+static std::vector<uint8_t> compressLine(
+    const std::vector<uint8_t>& line,
+    uint8_t key8Z, uint8_t key4Z, uint8_t key2Z)
+{
+    std::vector<uint8_t> zeros8(8, 0), zeros4(4, 0), zeros2(2, 0);
+    std::vector<uint8_t> rep8{key8Z}, rep4{key4Z}, rep2{key2Z};
+
+    std::vector<uint8_t> result;
+    for (size_t i = 0; i < line.size(); i += 8) {
+        size_t end = std::min(i + 8, line.size());
+        std::vector<uint8_t> chunk(line.begin() + i, line.begin() + end);
+        chunk = bytes_replace(chunk, zeros8, rep8);
+        if (key4Z) {
+            chunk = bytes_replace(chunk, zeros4, rep4);
+            if (key2Z) {
+                chunk = bytes_replace(chunk, zeros2, rep2);
+            }
+        }
+        result.insert(result.end(), chunk.begin(), chunk.end());
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
 // Frame generation with per-frame CRC
 // ---------------------------------------------------------------------------
 // Matches the Python bslib.py write_bitstream():
@@ -573,7 +624,7 @@ static void set_footer_checksum(std::vector<std::vector<uint8_t>>& footer,
 
 static std::vector<std::vector<uint8_t>> generate_frames(
     const std::vector<std::vector<uint8_t>>& main_map,
-    const std::vector<std::vector<uint8_t>>& header,
+    std::vector<std::vector<uint8_t>>& header,  // mutable: compression updates header
     bool compress)
 {
     // Step 1: flip left-right
@@ -587,6 +638,13 @@ static std::vector<std::vector<uint8_t>> generate_frames(
     size_t padded_width = static_cast<size_t>(
         std::ceil(static_cast<double>(ncols) / align) * align);
     size_t padlen = padded_width - ncols;
+    // Extra padding bytes beyond 8-bit alignment (stripped when no compression keys)
+    size_t no_compress_pad_bytes = 0;
+    if (compress) {
+        size_t align8_width = static_cast<size_t>(
+            std::ceil(static_cast<double>(ncols) / 8) * 8);
+        no_compress_pad_bytes = (padlen - (align8_width - ncols)) / 8;
+    }
 
     if (padlen > 0) {
         auto pad = ones(nrows, padlen);
@@ -596,8 +654,58 @@ static std::vector<std::vector<uint8_t>> generate_frames(
     // Step 3: pack per row
     auto packed = packbits(bitmap);
 
-    // Step 4: build CRC buffer and generate frames
+    // Step 4: compression - find unused bytes and update header
+    bool has_compress_keys = false;
+    uint8_t key8Z = 0, key4Z = 0, key2Z = 0;
+    if (compress) {
+        // Build byte histogram across all packed data
+        std::array<int, 256> histogram = {};
+        for (const auto& row : packed) {
+            for (uint8_t b : row) histogram[b]++;
+        }
+        std::vector<uint8_t> unused;
+        for (int i = 0; i < 256; i++) {
+            if (histogram[i] == 0) unused.push_back(static_cast<uint8_t>(i));
+        }
+
+        if (!unused.empty()) {
+            has_compress_keys = true;
+            key8Z = unused[0];
+            key4Z = unused.size() > 1 ? unused[1] : 0;
+            key2Z = unused.size() > 2 ? unused[2] : 0;
+
+            // Update header line 0x10 (index 4) with compression enable bit
+            if (header.size() > 4 && header[4].size() >= 8) {
+                uint64_t hdr10 = 0;
+                for (int i = 0; i < 8; i++)
+                    hdr10 = (hdr10 << 8) | header[4][i];
+                hdr10 |= (1ULL << 13);
+                for (int i = 7; i >= 0; i--) {
+                    header[4][i] = static_cast<uint8_t>(hdr10 & 0xFF);
+                    hdr10 >>= 8;
+                }
+            }
+
+            // Update header line 0x51 (index 5) with compression keys
+            if (header.size() > 5 && header[5].size() >= 8) {
+                uint64_t hdr51 = 0;
+                for (int i = 0; i < 8; i++)
+                    hdr51 = (hdr51 << 8) | header[5][i];
+                hdr51 &= ~0xFFFFFFULL;
+                hdr51 |= (static_cast<uint64_t>(key8Z) << 16) |
+                          (static_cast<uint64_t>(key4Z) << 8) |
+                          static_cast<uint64_t>(key2Z);
+                for (int i = 7; i >= 0; i--) {
+                    header[5][i] = static_cast<uint8_t>(hdr51 & 0xFF);
+                    hdr51 >>= 8;
+                }
+            }
+        }
+    }
+
+    // Step 5: build CRC buffer and generate frames
     // Accumulate header bytes (skip preamble and SPI address lines).
+    // NOTE: CRC is calculated using the UPDATED header (with compression keys).
     std::vector<uint8_t> crcdat;
     {
         int preamble = 3;
@@ -611,15 +719,21 @@ static std::vector<std::vector<uint8_t>> generate_frames(
 
     std::vector<std::vector<uint8_t>> frames;
     frames.reserve(packed.size());
-    for (const auto& row_bytes : packed) {
-        // Extend CRC buffer with frame data
+    for (auto& row_bytes : packed) {
+        // Compress the line (or strip extra padding if no keys available)
+        if (compress) {
+            if (has_compress_keys) {
+                row_bytes = compressLine(row_bytes, key8Z, key4Z, key2Z);
+            } else {
+                // No unused bytes for compression keys - strip extra padding
+                row_bytes = std::vector<uint8_t>(
+                    row_bytes.begin() + no_compress_pad_bytes, row_bytes.end());
+            }
+        }
+
+        // CRC is computed on the (possibly compressed) frame data
         crcdat.insert(crcdat.end(), row_bytes.begin(), row_bytes.end());
-
-        // Compute CRC-16/ARC over the accumulated buffer
         uint16_t crc = crc16_arc(crcdat);
-
-        // Reset CRC buffer to 6 bytes of 0xFF (the padding that follows
-        // this frame in the bitstream).
         crcdat.assign(6, 0xFF);
 
         // Build the frame: data + CRC(2 bytes, little-endian) + padding(6x 0xFF)
