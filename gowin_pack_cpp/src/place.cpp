@@ -483,9 +483,11 @@ void place_alu(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
 // IOB constants and helpers
 // ============================================================================
 
-// Default IO standard by mode
+// Default IO standard by mode (Python _default_iostd)
 static const std::map<std::string, std::string> default_iostd = {
     {"IBUF", "LVCMOS18"}, {"OBUF", "LVCMOS18"}, {"TBUF", "LVCMOS18"}, {"IOBUF", "LVCMOS18"},
+    {"TLVDS_IBUF", "LVDS25"}, {"TLVDS_OBUF", "LVDS25"}, {"TLVDS_TBUF", "LVDS25"}, {"TLVDS_IOBUF", "LVDS25"},
+    {"ELVDS_IBUF", "LVCMOS33D"}, {"ELVDS_OBUF", "LVCMOS33D"}, {"ELVDS_TBUF", "LVCMOS33D"}, {"ELVDS_IOBUF", "LVCMOS33D"},
 };
 
 // VCC by IO standard
@@ -565,149 +567,11 @@ static std::string get_iostd_alias(const std::string& iostd) {
 // Uses longval tables for fuse lookup
 // ============================================================================
 void place_iob(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device) {
-    using namespace attrids;
-
-    int64_t row = bel.row - 1;
-    int64_t col = bel.col - 1;
-
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
-
-    const auto& tiledata = db.get_tile(row, col);
-
-    // Determine IOB mode from cell type
-    std::string mode = bel.type;  // IBUF, OBUF, TBUF, IOBUF
-
-    // Determine IOB index (A or B) from bel num
-    std::string iob_idx = bel.num;
-    if (iob_idx.empty()) iob_idx = "A";
-
-    // Check that this IOB exists in the tile
-    std::string iob_bel_name = "IOB" + iob_idx;
-    if (tiledata.bels.find(iob_bel_name) == tiledata.bels.end()) {
-        std::cerr << "Warning: IOB " << iob_bel_name << " not found in tile at ("
-                  << row << "," << col << ")" << std::endl;
-        return;
-    }
-
-    // Build IOB attributes starting from defaults for this mode
-    auto init_it = init_io_attrs.find(mode);
-    if (init_it == init_io_attrs.end()) {
-        std::cerr << "Warning: Unknown IOB mode " << mode << std::endl;
-        return;
-    }
-    std::map<std::string, std::string> in_iob_attrs = init_it->second;
-
-    // Determine IO standard
-    std::string iostd;
-    auto iostd_default_it = default_iostd.find(mode);
-    if (iostd_default_it != default_iostd.end()) {
-        iostd = iostd_default_it->second;
-    } else {
-        iostd = "LVCMOS18";
-    }
-
-    // For GW5A-25A, default IO standard is LVCMOS33
-    if (device == "GW5A-25A" || device == "GW5AST-138C") {
-        iostd = "LVCMOS33";
-    }
-
-    in_iob_attrs["IO_TYPE"] = iostd;
-
-    // Apply user attributes from the cell
-    // Mode attribute separator is '&' in nextpnr himbaechel
-    for (const auto& [flag, val] : bel.attributes) {
-        // Attributes from nextpnr come as "&IO_TYPE=LVCMOS33" etc.
-        if (!flag.empty() && flag[0] == '&') {
-            size_t eq_pos = flag.find('=');
-            if (eq_pos != std::string::npos) {
-                std::string attr_name = flag.substr(1, eq_pos - 1);
-                std::string attr_val = flag.substr(eq_pos + 1);
-                attr_name = refine_io_attr_name(attr_name);
-                if (attr_name == "IO_TYPE") {
-                    iostd = get_iostd_alias(attr_val);
-                    attr_val = iostd;
-                }
-                in_iob_attrs[attr_name] = attr_val;
-            }
-        }
-    }
-
-    // Also check for direct attributes (from himbaechel)
-    for (const auto& [k, v] : bel.parameters) {
-        std::string rk = refine_io_attr_name(k);
-        if (rk == "IO_TYPE") {
-            iostd = get_iostd_alias(v);
-            in_iob_attrs["IO_TYPE"] = iostd;
-        } else if (rk == "SLEWRATE" || rk == "PULLMODE" || rk == "DRIVE" ||
-                   rk == "OPENDRAIN" || rk == "HYSTERESIS" || rk == "CLAMP" ||
-                   rk == "DIFFRESISTOR" || rk == "SINGLERESISTOR" || rk == "VREF" ||
-                   rk == "DDR_DYNTERM") {
-            in_iob_attrs[rk] = v;
-        }
-    }
-
-    // Handle OEN (output enable) connections for TBUF/IOBUF
-    if (mode != "IBUF") {
-        // Check for TRIMUX_PADDT attribute from nextpnr
-        auto trimux_it = bel.parameters.find("TRIMUX_PADDT");
-        if (trimux_it != bel.parameters.end()) {
-            in_iob_attrs["TRIMUX_PADDT"] = trimux_it->second;
-        }
-        auto to_it = bel.parameters.find("TO");
-        if (to_it != bel.parameters.end()) {
-            in_iob_attrs["TO"] = to_it->second;
-        }
-    }
-
-    // Set BANK_VCCIO based on IO standard
-    auto vcc_it = vcc_ios.find(iostd);
-    if (vcc_it != vcc_ios.end()) {
-        in_iob_attrs["BANK_VCCIO"] = vcc_it->second;
-    }
-
-    // Build the fuse attribute set
-    std::set<int64_t> iob_attrs_set;
-    for (const auto& [k, val] : in_iob_attrs) {
-        auto attr_it = iob_attrids.find(k);
-        if (attr_it == iob_attrids.end()) {
-            // Skip unknown attributes silently
-            continue;
-        }
-        auto val_it = iob_attrvals.find(val);
-        if (val_it == iob_attrvals.end()) {
-            // Skip unknown values silently
-            continue;
-        }
-        add_attr_val(db, "IOB", iob_attrs_set, attr_it->second, val_it->second);
-    }
-
-    // Handle fuse_cell_offset for GW5A devices
-    int64_t fuse_row = row;
-    int64_t fuse_col = col;
-    int64_t fuse_ttyp = tiledata.ttyp;
-
-    if (device == "GW5A-25A" || device == "GW5AST-138C") {
-        auto iob_bel_it = tiledata.bels.find(iob_bel_name);
-        if (iob_bel_it != tiledata.bels.end() && iob_bel_it->second.fuse_cell_offset) {
-            fuse_row += iob_bel_it->second.fuse_cell_offset->first;
-            fuse_col += iob_bel_it->second.fuse_cell_offset->second;
-            fuse_ttyp = db.get_ttyp(fuse_row, fuse_col);
-        }
-        // GW5A special: add TRIMUX attribute for output modes
-        if (mode == "OBUF" || mode == "IOBUF") {
-            add_attr_val(db, "IOB", iob_attrs_set, iob_attrids.at("IOB_UNKNOWN51"), iob_attrvals.at("TRIMUX"));
-        }
-    }
-
-    // Look up fuses from longval table
-    std::set<Coord> fuses = get_longval_fuses(db, fuse_ttyp, iob_attrs_set, "IOB" + iob_idx);
-
-    // Set fuses in tile
-    auto& tile = tilemap[{fuse_row, fuse_col}];
-    set_fuses_in_tile(tile, fuses);
+    // IOB fuses are now set entirely by set_iob_default_fuses, which runs
+    // after bank determination. This ensures correct BANK_VCCIO is used
+    // (from the bank, not the individual IOB's IO_TYPE).
+    // See set_iob_default_fuses Step 2b for used IOB processing.
+    (void)db; (void)bel; (void)tilemap; (void)device;
 }
 
 // ============================================================================
@@ -754,9 +618,21 @@ void set_iob_default_fuses(
     bool is_gw5 = (device == "GW5A-25A" || device == "GW5AST-138C");
 
     // Step 1: Determine used banks and their IO standards from placed IOBs
+    // Also collect full bel info for each used IOB for processing in Step 2b
+    struct UsedIOBInfo {
+        int64_t row, col;
+        std::string iob_idx;
+        std::string mode;
+        std::map<std::string, std::string> user_attrs;  // parsed from &attrs
+        std::map<std::string, std::string> params;       // NET_OEN, etc.
+    };
     struct BankInfo {
         std::string iostd;
         std::set<std::string> used_bels;
+        // Accumulated bank-level attributes from IOBs (matches Python in_bank_attrs)
+        std::map<std::string, std::string> in_bank_attrs;
+        // Used IOB info for Step 2b processing
+        std::vector<UsedIOBInfo> used_iobs;
     };
     std::map<int64_t, BankInfo> banks;
 
@@ -768,7 +644,24 @@ void set_iob_default_fuses(
 
         int64_t row = bel.row - 1;
         int64_t col = bel.col - 1;
-        std::string pin_name = rc_to_pin_name(db, row, col, bel.num);
+        std::string iob_idx = bel.num;
+        if (iob_idx.empty()) iob_idx = "A";
+
+        // Check for DIFF pair handling (Python lines 3298-3307)
+        auto diff_it = bel.parameters.find("DIFF");
+        std::string diff_type;
+        if (diff_it != bel.parameters.end()) {
+            // Skip negative pin for LVDS
+            if (diff_it->second == "N") {
+                continue;
+            }
+            auto dt_it = bel.parameters.find("DIFF_TYPE");
+            if (dt_it != bel.parameters.end()) {
+                diff_type = dt_it->second;
+            }
+        }
+
+        std::string pin_name = rc_to_pin_name(db, row, col, iob_idx);
         if (pin_name.empty()) continue;
 
         auto bank_it = db.pin_bank.find(pin_name);
@@ -777,32 +670,99 @@ void set_iob_default_fuses(
 
         auto& bi = banks[bank];
         bi.used_bels.insert(pin_name);
+        // For DIFF pairs (P pin), also mark the B pin as used
+        if (!diff_type.empty()) {
+            std::string b_pin = rc_to_pin_name(db, row, col, "B");
+            if (!b_pin.empty()) {
+                bi.used_bels.insert(b_pin);
+            }
+        }
 
-        // Determine IO standard from attributes
+        // Parse user attributes from &attr=val format
         std::string iostd = "LVCMOS18";
+        std::map<std::string, std::string> user_attrs;
         for (const auto& [flag, val] : bel.attributes) {
             if (!flag.empty() && flag[0] == '&') {
                 size_t eq_pos = flag.find('=');
                 if (eq_pos != std::string::npos) {
                     std::string attr_name = flag.substr(1, eq_pos - 1);
+                    std::string attr_val = flag.substr(eq_pos + 1);
+                    attr_name = refine_io_attr_name(attr_name);
                     if (attr_name == "IO_TYPE") {
-                        iostd = get_iostd_alias(flag.substr(eq_pos + 1));
+                        iostd = get_iostd_alias(attr_val);
+                        attr_val = iostd;
                     }
+                    user_attrs[attr_name] = attr_val;
                 }
             }
         }
+        // Also check direct parameters
         for (const auto& [k, v] : bel.parameters) {
-            if (k == "IO_TYPE") {
+            std::string rk = refine_io_attr_name(k);
+            if (rk == "IO_TYPE") {
                 iostd = get_iostd_alias(v);
+                user_attrs["IO_TYPE"] = iostd;
+            } else if (rk == "SLEWRATE" || rk == "PULLMODE" || rk == "DRIVE" ||
+                       rk == "OPENDRAIN" || rk == "HYSTERESIS" || rk == "CLAMP" ||
+                       rk == "DIFFRESISTOR" || rk == "SINGLERESISTOR" || rk == "VREF" ||
+                       rk == "DDR_DYNTERM" || rk == "PULL_STRENGTH") {
+                user_attrs[rk] = v;
             }
         }
 
-        // Output IOBs determine bank IO standard
-        if (bel.type == "OBUF" || bel.type == "IOBUF" || bel.type == "TBUF") {
-            if (bi.iostd.empty()) {
-                bi.iostd = iostd;
+        // Store full IOB info for Step 2b
+        UsedIOBInfo iob_info;
+        iob_info.row = row;
+        iob_info.col = col;
+        iob_info.iob_idx = iob_idx;
+        // For DIFF pairs, use DIFF_TYPE as mode (Python line 3307)
+        iob_info.mode = diff_type.empty() ? bel.type : diff_type;
+        // Update iostd to mode-specific default if no explicit IO_TYPE was set
+        // (Python line 3348: iostd = _default_iostd[mode])
+        if (user_attrs.find("IO_TYPE") == user_attrs.end()) {
+            auto def_it = default_iostd.find(iob_info.mode);
+            if (def_it != default_iostd.end()) {
+                iostd = def_it->second;
             }
         }
+        // Always set IO_TYPE in user_attrs (Python line 3360: io_desc.attrs['IO_TYPE'] = iostd)
+        user_attrs["IO_TYPE"] = iostd;
+        iob_info.user_attrs = user_attrs;
+        // Store NET_* parameters for OEN handling
+        for (const auto& [k, v] : bel.parameters) {
+            if (k.substr(0, 4) == "NET_") {
+                iob_info.params[k] = v;
+            }
+        }
+
+        // Output IOBs determine bank IO standard and contribute bank attrs
+        // NOTE: Must be done BEFORE std::move(iob_info) below
+        // Python lines 3568: mode must be in {OBUF, IOBUF, TLVDS_OBUF, TLVDS_IOBUF,
+        //   TLVDS_TBUF, ELVDS_OBUF, ELVDS_IOBUF} (note: ELVDS_TBUF is NOT in the list)
+        {
+            static const std::set<std::string> output_modes = {
+                "OBUF", "IOBUF", "TLVDS_OBUF", "TLVDS_IOBUF",
+                "TLVDS_TBUF", "ELVDS_OBUF", "ELVDS_IOBUF"
+            };
+            if (output_modes.count(iob_info.mode)) {
+                // ELVDS_OBUF/ELVDS_IOBUF force BANK_VCCIO to 1.2
+                if (iob_info.mode == "ELVDS_OBUF" || iob_info.mode == "ELVDS_IOBUF") {
+                    bi.in_bank_attrs["BANK_VCCIO"] = "1.2";
+                }
+                if (bi.iostd.empty()) {
+                    std::string io_type_for_bank = iostd;
+                    if (!io_type_for_bank.empty() && io_type_for_bank.find("LVDS") != 0) {
+                        bi.iostd = io_type_for_bank;
+                    }
+                }
+                // Accumulate bank-level attributes from IOBs
+                for (const auto& [k, v] : user_attrs) {
+                    bi.in_bank_attrs[k] = v;
+                }
+            }
+        }
+
+        bi.used_iobs.push_back(std::move(iob_info));
     }
 
     // For banks with IOBs but no output IOBs setting IO standard, use default
@@ -810,10 +770,204 @@ void set_iob_default_fuses(
         if (bi.iostd.empty()) {
             bi.iostd = is_gw5 ? "LVCMOS33" : "LVCMOS12";
         }
+        // Ensure BANK_VCCIO and IO_TYPE are in in_bank_attrs (matching Python)
+        if (bi.in_bank_attrs.find("BANK_VCCIO") == bi.in_bank_attrs.end()) {
+            auto vcc_it = vcc_ios.find(bi.iostd);
+            if (vcc_it != vcc_ios.end()) {
+                bi.in_bank_attrs["BANK_VCCIO"] = vcc_it->second;
+            }
+        }
+        if (bi.in_bank_attrs.find("IO_TYPE") == bi.in_bank_attrs.end()) {
+            bi.in_bank_attrs["IO_TYPE"] = bi.iostd;
+        }
     }
 
 
-    // Step 2: Set bank-level fuses for used banks
+    // Step 2b: Set fuses for USED IOBs with full attributes + bank VCCIO
+    // NOTE: This must run BEFORE bank fuse generation (Step 2c below) because
+    // Python accumulates in_bank_attrs during IOB processing, then generates
+    // bank fuses afterward.
+    // Matches Python gowin_pack.py lines 3596-3730 (second IOB pass)
+    for (auto& [bank, bi] : banks) {
+        for (const auto& iob : bi.used_iobs) {
+            const std::string& mode = iob.mode;
+            bool is_tlvds = mode.substr(0, 6) == "TLVDS_";
+            bool is_elvds = mode.substr(0, 6) == "ELVDS_";
+            bool is_lvds = is_tlvds || is_elvds;
+
+            // Determine base mode for init_io_attrs lookup (Python lines 3601-3604)
+            std::string mode_for_attrs = mode;
+            std::map<std::string, std::string> lvds_attrs;
+            if (is_lvds) {
+                mode_for_attrs = mode.substr(6);  // strip TLVDS_/ELVDS_ prefix
+                lvds_attrs = {{"HYSTERESIS", "NA"}, {"PULLMODE", "NONE"}, {"OPENDRAIN", "OFF"}};
+            }
+
+            // Build IOB attributes from init_io_attrs for the base mode
+            auto init_it = init_io_attrs.find(mode_for_attrs);
+            if (init_it == init_io_attrs.end()) continue;
+            std::map<std::string, std::string> in_iob_attrs = init_it->second;
+            // Apply LVDS overrides
+            for (const auto& [lk, lv] : lvds_attrs) {
+                in_iob_attrs[lk] = lv;
+            }
+
+            // Handle OEN connections (Python lines 3611-3621)
+            static const std::set<std::string> non_ibuf_modes = {
+                "OBUF", "IOBUF", "TBUF",
+                "TLVDS_OBUF", "TLVDS_IOBUF", "TLVDS_TBUF",
+                "ELVDS_OBUF", "ELVDS_IOBUF", "ELVDS_TBUF"
+            };
+            if (non_ibuf_modes.count(mode)) {
+                auto oen_it = iob.params.find("NET_OEN");
+                if (oen_it != iob.params.end() && !oen_it->second.empty()) {
+                    const std::string& oen_val = oen_it->second;
+                    if (oen_val == "GND") {
+                        in_iob_attrs["TRIMUX_PADDT"] = "SIG";
+                    } else if (oen_val == "VCC") {
+                        in_iob_attrs["ODMUX_1"] = "0";
+                    } else if (oen_val != "NET") {
+                        in_iob_attrs["TRIMUX_PADDT"] = "SIG";
+                        in_iob_attrs["TO"] = "SIG";
+                    }
+                } else {
+                    in_iob_attrs["ODMUX_1"] = "1";
+                }
+            }
+
+            // Apply user attributes (Python lines 3624-3627)
+            for (const auto& [k, val] : iob.user_attrs) {
+                in_iob_attrs[k] = val;
+            }
+
+            // Set BANK_VCCIO from bank (Python line 3627)
+            auto bank_vccio_it = bi.in_bank_attrs.find("BANK_VCCIO");
+            if (bank_vccio_it != bi.in_bank_attrs.end()) {
+                in_iob_attrs["BANK_VCCIO"] = bank_vccio_it->second;
+            }
+
+            // TLVDS output buffer overrides (Python lines 3631-3633)
+            if (mode == "TLVDS_OBUF" || mode == "TLVDS_TBUF" || mode == "TLVDS_IOBUF") {
+                in_iob_attrs["LVDS_OUT"] = "ON";
+                in_iob_attrs["ODMUX_1"] = "UNKNOWN";
+                in_iob_attrs["ODMUX"] = "TRIMUX";
+                in_iob_attrs["SLEWRATE"] = "FAST";
+                in_iob_attrs["PERSISTENT"] = "OFF";
+                in_iob_attrs["DRIVE"] = "0";
+                in_iob_attrs["DIFFRESISTOR"] = "OFF";
+            }
+            // ELVDS output buffer overrides (Python lines 3634-3637)
+            else if (mode == "ELVDS_OBUF" || mode == "ELVDS_TBUF" || mode == "ELVDS_IOBUF") {
+                in_iob_attrs["ODMUX_1"] = "UNKNOWN";
+                in_iob_attrs["ODMUX"] = "TRIMUX";
+                in_iob_attrs["PERSISTENT"] = "OFF";
+                in_iob_attrs["DIFFRESISTOR"] = "OFF";
+                in_iob_attrs["IO_TYPE"] = get_iostd_alias(in_iob_attrs["IO_TYPE"]);
+            }
+            // TLVDS/ELVDS input buffer overrides (Python lines 3638-3640)
+            if (mode == "TLVDS_IBUF" || mode == "ELVDS_IBUF") {
+                in_iob_attrs["ODMUX_1"] = "UNKNOWN";
+                in_iob_attrs.erase("BANK_VCCIO");
+            }
+
+            // Device-specific special cases (Python lines 3658-3663)
+            if (device == "GW1N-1") {
+                if (iob.row == 5 && mode_for_attrs == "OBUF") {
+                    in_iob_attrs["TO"] = "UNKNOWN";
+                }
+            }
+            // LVDS drive handling (Python lines 3661-3663)
+            // NOTE: Python's `mode` variable here is stale from the first pass
+            // (holds the mode of the LAST IOB cell processed, usually "IBUF" for clk).
+            // So mode[1:].startswith('LVDS') is almost always False, making this
+            // effectively dead code. We skip it to match Python's actual behavior.
+
+            // Build B-pin attributes for LVDS pairs (Python lines 3664-3685)
+            std::map<std::string, std::string> in_iob_b_attrs;
+            if (mode == "TLVDS_OBUF" || mode == "TLVDS_TBUF" || mode == "TLVDS_IOBUF") {
+                in_iob_b_attrs = in_iob_attrs;
+            } else if (mode == "TLVDS_IBUF" || mode == "ELVDS_IBUF") {
+                in_iob_b_attrs = in_iob_attrs;
+                if (mode == "ELVDS_IBUF") {
+                    in_iob_attrs["PULLMODE"] = "UP";
+                    in_iob_b_attrs["PULLMODE"] = "NONE";
+                }
+                in_iob_b_attrs["IO_TYPE"] = in_iob_attrs.count("IO_TYPE") ? in_iob_attrs["IO_TYPE"] : "UNKNOWN";
+                in_iob_b_attrs["DIFFRESISTOR"] = in_iob_attrs.count("DIFFRESISTOR") ? in_iob_attrs["DIFFRESISTOR"] : "OFF";
+            } else if (mode == "ELVDS_OBUF" || mode == "ELVDS_TBUF" || mode == "ELVDS_IOBUF") {
+                if (mode == "ELVDS_IOBUF") {
+                    in_iob_attrs["PULLMODE"] = "UP";
+                }
+                in_iob_b_attrs = in_iob_attrs;
+            }
+
+            // Look up and set fuses for both A and B pins
+            if (iob.row < 0 || iob.row >= static_cast<int64_t>(db.rows()) ||
+                iob.col < 0 || iob.col >= static_cast<int64_t>(db.cols()))
+                continue;
+            const auto& tiledata = db.get_tile(iob.row, iob.col);
+
+            // Process both (idx, in_iob_attrs) and possibly ('B', in_iob_b_attrs)
+            // Python line 3687: for iob_idx, atr in [(idx, in_iob_attrs), ('B', in_iob_b_attrs)]:
+            std::vector<std::pair<std::string, std::map<std::string, std::string>*>> iob_pairs;
+            iob_pairs.push_back({iob.iob_idx, &in_iob_attrs});
+            if (!in_iob_b_attrs.empty()) {
+                iob_pairs.push_back({"B", &in_iob_b_attrs});
+            }
+
+            for (auto& [cur_idx, atr_ptr] : iob_pairs) {
+                auto& atr = *atr_ptr;
+
+                std::set<int64_t> iob_attrs_set;
+                for (const auto& [k, val] : atr) {
+                    auto attr_it = iob_attrids.find(k);
+                    if (attr_it == iob_attrids.end()) continue;
+                    auto val_it = iob_attrvals.find(val);
+                    if (val_it == iob_attrvals.end()) continue;
+                    add_attr_val(db, "IOB", iob_attrs_set, attr_it->second, val_it->second);
+                    // Update in_bank_attrs (Python lines 3694-3699)
+                    if (k == "LVDS_OUT" && val != "ENABLE" && val != "ON") {
+                        if (!is_gw5) continue;
+                    }
+                    if (k == "IO_TYPE" && bi.in_bank_attrs.count("IO_TYPE") &&
+                        bi.in_bank_attrs["IO_TYPE"].find("LVDS") == 0) {
+                        continue;
+                    }
+                    bi.in_bank_attrs[k] = val;
+                }
+
+                int64_t fuse_row = iob.row;
+                int64_t fuse_col = iob.col;
+                int64_t fuse_ttyp = tiledata.ttyp;
+
+                if (is_gw5) {
+                    std::string iob_bel_name = "IOB" + cur_idx;
+                    auto iob_bel_it = tiledata.bels.find(iob_bel_name);
+                    if (iob_bel_it != tiledata.bels.end() && iob_bel_it->second.fuse_cell_offset) {
+                        fuse_row += iob_bel_it->second.fuse_cell_offset->first;
+                        fuse_col += iob_bel_it->second.fuse_cell_offset->second;
+                        fuse_ttyp = db.get_ttyp(fuse_row, fuse_col);
+                    }
+                    if (mode_for_attrs == "OBUF" || mode_for_attrs == "IOBUF") {
+                        add_attr_val(db, "IOB", iob_attrs_set,
+                                     iob_attrids.at("IOB_UNKNOWN51"), iob_attrvals.at("TRIMUX"));
+                    }
+                }
+
+                std::set<Coord> fuses = get_longval_fuses(db, fuse_ttyp, iob_attrs_set,
+                                                           "IOB" + cur_idx);
+                auto& tile = tilemap[{fuse_row, fuse_col}];
+                set_fuses_in_tile(tile, fuses);
+            } // end for iob_pairs
+        }
+    }
+
+    // Step 2c: Set bank-level fuses for used banks
+    // This runs AFTER Step 2b so that in_bank_attrs has all accumulated IOB attrs
+    // Python filters in_bank_attrs to this whitelist for bank fuse generation
+    static const std::set<std::string> bank_attr_whitelist = {
+        "BANK_VCCIO", "IO_TYPE", "LVDS_OUT", "DRIVE", "OPENDRAIN", "PULL_STRENGTH"
+    };
     auto bt = db.bank_tiles();
     for (const auto& [bank, bi] : banks) {
         auto bt_it = bt.find(bank);
@@ -822,18 +976,12 @@ void set_iob_default_fuses(
         const auto& tiledata = db.get_tile(brow, bcol);
 
         std::set<int64_t> bank_attrs;
-        auto vcc_it = vcc_ios.find(bi.iostd);
-        if (vcc_it != vcc_ios.end()) {
-            add_attr_val(db, "IOB", bank_attrs,
-                         iob_attrids.at("BANK_VCCIO"),
-                         iob_attrvals.at(vcc_it->second));
-        }
-        auto iostd_val_it = iob_attrvals.find(bi.iostd);
-        if (iostd_val_it != iob_attrvals.end()) {
-            auto io_type_id_it = iob_attrids.find("IO_TYPE");
-            if (io_type_id_it != iob_attrids.end()) {
-                add_attr_val(db, "IOB", bank_attrs,
-                             io_type_id_it->second, iostd_val_it->second);
+        for (const auto& [k, val] : bi.in_bank_attrs) {
+            if (bank_attr_whitelist.find(k) == bank_attr_whitelist.end()) continue;
+            auto attr_it = iob_attrids.find(k);
+            auto val_it = iob_attrvals.find(val);
+            if (attr_it != iob_attrids.end() && val_it != iob_attrvals.end()) {
+                add_attr_val(db, "IOB", bank_attrs, attr_it->second, val_it->second);
             }
         }
 
@@ -849,7 +997,8 @@ void set_iob_default_fuses(
         set_fuses_in_tile(btile, bits);
     }
 
-    // Step 3: Set per-pin default fuses for ALL IOB pins
+    // Step 3: Set per-pin default fuses for UNUSED IOB pins only
+    // (Used IOBs are handled in Step 2b above)
     for (const auto& [bel_name, cfg] : db.io_cfg) {
         auto pbank_it = db.pin_bank.find(bel_name);
         if (pbank_it == db.pin_bank.end()) {
@@ -861,9 +1010,14 @@ void set_iob_default_fuses(
         }
         int64_t bank = pbank_it->second;
 
+        // Skip used IOB pins (they were handled by place_iob)
+        auto bi_it = banks.find(bank);
+        if (bi_it != banks.end() && bi_it->second.used_bels.count(bel_name)) {
+            continue;
+        }
+
         // Determine IO standard for this bank
         std::string io_std;
-        auto bi_it = banks.find(bank);
         if (bi_it != banks.end()) {
             io_std = bi_it->second.iostd;
         } else {
@@ -1153,6 +1307,12 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
         std::string ua = to_upper(attr);
         std::string uv = to_upper(val);
 
+        // Generic handler: if this attr is already a default string attr, override it.
+        // Python: "if attr in pll_attrs: pll_attrs[attr] = val"
+        if (pll_str_attrs.count(ua)) {
+            pll_str_attrs[ua] = uv;
+        }
+
         if (ua == "FCLKIN") {
             try { fclkin = std::stod(val); } catch (...) {}
             continue;
@@ -1186,28 +1346,33 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
             pll_int_attrs["SDIV"] = parse_binary(val);
             continue;
         }
+        // Note: Python's attrs_upper() uppercases values BEFORE this loop runs,
+        // but then compares against lowercase "true". Since "TRUE" != "true",
+        // these bypass/dynamic checks effectively NEVER trigger in Python.
+        // We match Python's (buggy) behavior by comparing the uppercased value
+        // against lowercase "true", which always fails.
         if (ua == "DYN_IDIV_SEL") {
-            if (uv == "TRUE") pll_str_attrs["IDIVSEL"] = "DYN";
+            if (uv == "true") pll_str_attrs["IDIVSEL"] = "DYN";
             continue;
         }
         if (ua == "DYN_FBDIV_SEL") {
-            if (uv == "TRUE") pll_str_attrs["FDIVSEL"] = "DYN";
+            if (uv == "true") pll_str_attrs["FDIVSEL"] = "DYN";
             continue;
         }
         if (ua == "DYN_ODIV_SEL") {
-            if (uv == "TRUE") pll_str_attrs["ODIVSEL"] = "DYN";
+            if (uv == "true") pll_str_attrs["ODIVSEL"] = "DYN";
             continue;
         }
         if (ua == "CLKOUT_BYPASS") {
-            if (uv == "TRUE") pll_str_attrs["BYPCK"] = "BYPASS";
+            if (uv == "true") pll_str_attrs["BYPCK"] = "BYPASS";
             continue;
         }
         if (ua == "CLKOUTP_BYPASS") {
-            if (uv == "TRUE") pll_str_attrs["BYPCKPS"] = "BYPASS";
+            if (uv == "true") pll_str_attrs["BYPCKPS"] = "BYPASS";
             continue;
         }
         if (ua == "CLKOUTD_BYPASS") {
-            if (uv == "TRUE") pll_str_attrs["BYPCKDIV"] = "BYPASS";
+            if (uv == "true") pll_str_attrs["BYPCKDIV"] = "BYPASS";
             continue;
         }
         if (ua == "CLKOUTD_SRC") {
@@ -1350,16 +1515,34 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
         add_attr_val(db, "PLL", fin_attrs, attr_it->second, val);
     }
 
-    // Get fuses
-    std::set<Coord> fuses;
-    auto ttyp_sv = db.shortval.find(ttyp);
-    if (ttyp_sv != db.shortval.end() && ttyp_sv->second.find("PLL") != ttyp_sv->second.end()) {
-        fuses = get_shortval_fuses(db, ttyp, fin_attrs, "PLL");
-    }
-
-    // Set fuses
+    // Get fuses for main PLL tile
+    std::set<Coord> fuses = get_shortval_fuses(db, ttyp, fin_attrs, "PLL");
     auto& tile = tilemap[{row, col}];
     set_fuses_in_tile(tile, fuses);
+
+    // rPLL occupies adjacent tiles (RPLLB). For GW1N-1/GW1NZ-1/GW1N-4: 1 extra tile at col+1.
+    // For GW1N-9/GW1N-9C/GW2A-18/GW2A-18C: 3 extra tiles.
+    int num_extra = 0;
+    int dir = 1;
+    if (pll_type == "RPLL") {
+        if (device == "GW1N-9C" || device == "GW1N-9" ||
+            device == "GW2A-18" || device == "GW2A-18C") {
+            num_extra = 3;
+            if (col > 28) dir = -1;
+        } else if (device == "GW1N-1" || device == "GW1NZ-1" || device == "GW1N-4") {
+            num_extra = 1;
+        }
+    }
+    for (int off = 1; off <= num_extra; ++off) {
+        int64_t ecol = col + dir * off;
+        if (ecol >= 0 && ecol < static_cast<int64_t>(db.cols())) {
+            int64_t ettyp = db.get_ttyp(row, ecol);
+            std::set<Coord> efuses = get_shortval_fuses(db, ettyp, fin_attrs, "PLL");
+            if (!efuses.empty()) {
+                set_fuses_in_tile(tilemap[{row, ecol}], efuses);
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -1834,7 +2017,9 @@ static void iologic_mod_attrs(std::map<std::string, std::string>& attrs) {
     // TXCLK_POL -> TSHX
     auto txclk_it = attrs.find("TXCLK_POL");
     if (txclk_it != attrs.end()) {
-        if (txclk_it->second == "0") {
+        // Python: int(attrs['TXCLK_POL']) == 0
+        // Value may be "0" or a binary string like "00000000000000000000000000000000"
+        if (parse_binary(txclk_it->second) == 0) {
             attrs["TSHX"] = "SIG";
         } else {
             attrs["TSHX"] = "INV";
@@ -2241,21 +2426,45 @@ void place_clkdiv(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
     const auto& tiledata = db.get_tile(row, col);
     int64_t ttyp = tiledata.ttyp;
 
-    // Build HCLK attributes from parameters
-    std::set<int64_t> hclk_attrs;
+    // Extract hclk_idx and section_idx from bel.num
+    // Pattern: _HCLK{0,1}_SECT{0,1}
+    std::regex hclk_re(R"(^_HCLK([01])_SECT([01])$)");
+    std::smatch m;
+    if (!std::regex_match(bel.num, m, hclk_re)) {
+        std::cerr << "Unknown HCLK Bel/HCLK Section: " << bel.type << bel.num << std::endl;
+        return;
+    }
+    std::string hclk_idx = m[1].str();
+    std::string section_idx = m[2].str();
 
-    for (const auto& [param, val] : bel.parameters) {
-        auto attr_it = hclk_attrids.find(param);
+    // Get DIV_MODE from parameters (default "2")
+    std::string div_mode = "2";
+    auto dm_it = bel.parameters.find("DIV_MODE");
+    if (dm_it != bel.parameters.end()) {
+        div_mode = dm_it->second;
+    }
+
+    // Build transformed HCLK attributes matching Python's set_hclk_attrs
+    std::map<std::string, std::string> attrs;
+
+    if (bel.type.find("CLKDIV2") != std::string::npos) {
+        // CLKDIV2: BK{section_idx}MUX{hclk_idx}_OUTSEL = DIV2
+        attrs["BK" + section_idx + "MUX" + hclk_idx + "_OUTSEL"] = "DIV2";
+    } else {
+        // CLKDIV: HCLKDIV{hclk_idx}_DIV = DIV_MODE
+        attrs["HCLKDIV" + hclk_idx + "_DIV"] = div_mode;
+        if (section_idx == "1") {
+            attrs["HCLKDCS" + hclk_idx + "_SEL"] = "HCLKBK" + section_idx + hclk_idx;
+        }
+    }
+
+    // Convert to fuse attribute set
+    std::set<int64_t> hclk_attrs;
+    for (const auto& [attr, val] : attrs) {
+        auto attr_it = hclk_attrids.find(attr);
         if (attr_it == hclk_attrids.end()) continue;
         auto val_it = hclk_attrvals.find(val);
-        if (val_it == hclk_attrvals.end()) {
-            // Try integer value
-            try {
-                int64_t ival = parse_binary(val);
-                add_attr_val(db, "HCLK", hclk_attrs, attr_it->second, ival);
-            } catch (...) {}
-            continue;
-        }
+        if (val_it == hclk_attrvals.end()) continue;
         add_attr_val(db, "HCLK", hclk_attrs, attr_it->second, val_it->second);
     }
 
@@ -2352,18 +2561,87 @@ void place_dqce(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
 // DHCEN controls HCLK fuses
 // ============================================================================
 void place_dhcen(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
-    (void)db;
-    (void)tilemap;
+    using namespace attrids;
 
     // Check if DHCEN_USED attribute is set
     if (bel.attributes.find("DHCEN_USED") == bel.attributes.end()) {
         return;
     }
 
-    // DHCEN itself is just a control wire - the actual fuses are set
-    // via HCLK configuration. The Python code looks up the corresponding
-    // HCLK wire and sets its fuses. For now, this is handled as part of
-    // the routing/HCLK configuration.
+    // DHCEN is a control wire - it doesn't have its own fuse, but HCLK
+    // tiles along one edge need fuses set to enable the clock enable.
+    // Look up the pip info from extra_func.
+    int64_t ef_row = bel.row - 1;  // extra_func uses 0-based from BEL XY
+    int64_t ef_col = bel.col - 1;
+
+    auto ef_it = db.extra_func.find({ef_row, ef_col});
+    if (ef_it == db.extra_func.end()) return;
+
+    auto dhcen_it = ef_it->second.find("dhcen");
+    if (dhcen_it == ef_it->second.end()) return;
+
+    // Parse bel.num to get the DHCEN index
+    int dhcen_idx = 0;
+    try { dhcen_idx = std::stoi(bel.num); } catch (...) { return; }
+
+    // dhcen is a list; get element at dhcen_idx
+    const auto& dhcen_obj = dhcen_it->second;
+    if (dhcen_obj.type != msgpack::type::ARRAY) return;
+    if (static_cast<int>(dhcen_obj.via.array.size) <= dhcen_idx) return;
+
+    const auto& entry = dhcen_obj.via.array.ptr[dhcen_idx];
+    if (entry.type != msgpack::type::MAP) return;
+
+    // Get pip: [location, wire, src, side]
+    using msgpack::adaptor::get_map_value;
+    auto pip = get_map_value<std::vector<std::string>>(entry, "pip");
+    if (pip.size() < 4) return;
+
+    std::string wire = pip[1];
+    std::string side = pip[3];
+
+    // Map wire name to HCLK attribute
+    static const std::map<std::string, std::pair<std::string, std::string>> wire2attr_val = {
+        {"HCLK_IN0",       {"HSB0MUX0_HSTOP", "HCLKCIBSTOP0"}},
+        {"HCLK_IN1",       {"HSB1MUX0_HSTOP", "HCLKCIBSTOP2"}},
+        {"HCLK_IN2",       {"HSB0MUX1_HSTOP", "HCLKCIBSTOP1"}},
+        {"HCLK_IN3",       {"HSB1MUX1_HSTOP", "HCLKCIBSTOP3"}},
+        {"HCLK_BANK_OUT0", {"BRGMUX0_BRGSTOP", "BRGCIBSTOP0"}},
+        {"HCLK_BANK_OUT1", {"BRGMUX1_BRGSTOP", "BRGCIBSTOP1"}},
+    };
+
+    auto w2a_it = wire2attr_val.find(wire);
+    if (w2a_it == wire2attr_val.end()) return;
+
+    const auto& [attr_name, attr_val_name] = w2a_it->second;
+    auto attr_id_it = hclk_attrids.find(attr_name);
+    if (attr_id_it == hclk_attrids.end()) return;
+    auto val_id_it = hclk_attrvals.find(attr_val_name);
+    if (val_id_it == hclk_attrvals.end()) return;
+
+    std::set<int64_t> fin_attrs;
+    add_attr_val(db, "HCLK", fin_attrs, attr_id_it->second, val_id_it->second);
+
+    // Set fuses along the edge specified by side
+    if (side == "T" || side == "B") {
+        int64_t row = (side == "T") ? 0 : static_cast<int64_t>(db.rows()) - 1;
+        for (int64_t col = 0; col < static_cast<int64_t>(db.cols()); ++col) {
+            int64_t ttyp = db.get_ttyp(row, col);
+            std::set<Coord> fuses = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK");
+            if (!fuses.empty()) {
+                set_fuses_in_tile(tilemap[{row, col}], fuses);
+            }
+        }
+    } else {
+        int64_t col = (side == "L") ? 0 : static_cast<int64_t>(db.cols()) - 1;
+        for (int64_t row = 0; row < static_cast<int64_t>(db.rows()); ++row) {
+            int64_t ttyp = db.get_ttyp(row, col);
+            std::set<Coord> fuses = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK");
+            if (!fuses.empty()) {
+                set_fuses_in_tile(tilemap[{row, col}], fuses);
+            }
+        }
+    }
 }
 
 // ============================================================================
