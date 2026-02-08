@@ -1,6 +1,8 @@
 // route.cpp - Routing implementation
 #include "route.hpp"
 #include "place.hpp"
+#include "fuses.hpp"
+#include "attrids.hpp"
 #include <regex>
 #include <iostream>
 #include <sstream>
@@ -214,7 +216,21 @@ std::vector<BelInfo> route_nets(
                     if (src_it != dest_it->second.end()) {
                         bits = src_it->second;
                         found = true;
-                        // TODO: bits.update(do_hclk_banks(db, row, col, pip.src, pip.dest))
+                        // HCLK interbank fuses
+                        if (pip.dest == "HCLK_BANK_OUT0" || pip.dest == "HCLK_BANK_OUT1") {
+                            char mux_idx = pip.dest.back(); // '0' or '1'
+                            std::string attr_name = std::string("BRGMUX") + mux_idx + "_BRGOUT";
+                            auto attr_it = attrids::hclk_attrids.find(attr_name);
+                            auto val_it = attrids::hclk_attrvals.find("ENABLE");
+                            if (attr_it != attrids::hclk_attrids.end() &&
+                                val_it != attrids::hclk_attrvals.end()) {
+                                std::set<int64_t> fin_attrs;
+                                add_attr_val(db, "HCLK", fin_attrs, attr_it->second, val_it->second);
+                                int64_t ttyp = db.get_ttyp(row, col);
+                                auto hclk_fuses = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK");
+                                bits.insert(hclk_fuses.begin(), hclk_fuses.end());
+                            }
+                        }
                     }
                 }
             }
