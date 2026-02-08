@@ -354,8 +354,8 @@ jobs:
         make -j$(nproc) all
     - name: Checksum Python bitstreams
       run: |
-        (cd examples && md5sum *.fs | sort > /tmp/python-checksums.txt)
-        (cd examples/gw5a && md5sum *.fs | sort > /tmp/python-gw5a-checksums.txt)
+        (cd examples && md5sum *.fs | sort -k2 > /tmp/python-checksums.txt)
+        (cd examples/gw5a && md5sum *.fs | sort -k2 > /tmp/python-gw5a-checksums.txt)
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
@@ -388,10 +388,21 @@ jobs:
         make -j$(nproc) GOWIN_PACK=$GOWIN_PACK all
     - name: Compare bitstreams
       run: |
-        (cd examples && md5sum *.fs | sort > /tmp/cpp-checksums.txt)
-        (cd examples/gw5a && md5sum *.fs | sort > /tmp/cpp-gw5a-checksums.txt)
+        (cd examples && md5sum *.fs | sort -k2 > /tmp/cpp-checksums.txt)
+        (cd examples/gw5a && md5sum *.fs | sort -k2 > /tmp/cpp-gw5a-checksums.txt)
         echo "=== Comparing main examples ==="
-        diff /tmp/python-checksums.txt /tmp/cpp-checksums.txt
+        diff /tmp/python-checksums.txt /tmp/cpp-checksums.txt || true
         echo "=== Comparing gw5a examples ==="
-        diff /tmp/python-gw5a-checksums.txt /tmp/cpp-gw5a-checksums.txt
+        diff /tmp/python-gw5a-checksums.txt /tmp/cpp-gw5a-checksums.txt || true
+        echo "=== Summary ==="
+        MAIN_TOTAL=$(wc -l < /tmp/python-checksums.txt)
+        MAIN_FAIL=$(diff /tmp/python-checksums.txt /tmp/cpp-checksums.txt | grep '^[<>]' | wc -l)
+        MAIN_FAIL=$((MAIN_FAIL / 2))
+        GW5A_TOTAL=$(wc -l < /tmp/python-gw5a-checksums.txt)
+        GW5A_FAIL=$(diff /tmp/python-gw5a-checksums.txt /tmp/cpp-gw5a-checksums.txt | grep '^[<>]' | wc -l)
+        GW5A_FAIL=$((GW5A_FAIL / 2))
+        echo "Main: $((MAIN_TOTAL - MAIN_FAIL))/$MAIN_TOTAL pass, $MAIN_FAIL fail"
+        echo "GW5A: $((GW5A_TOTAL - GW5A_FAIL))/$GW5A_TOTAL pass, $GW5A_FAIL fail"
+        diff -q /tmp/python-checksums.txt /tmp/cpp-checksums.txt
+        diff -q /tmp/python-gw5a-checksums.txt /tmp/cpp-gw5a-checksums.txt
         echo "All bitstreams match!"
