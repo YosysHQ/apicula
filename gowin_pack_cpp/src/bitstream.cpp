@@ -785,7 +785,8 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     // -----------------------------------------------------------------------
     // Step 5: Place cells (including pass-through LUTs from routing)
     // -----------------------------------------------------------------------
-    place_cells(db, netlist, tilemap, device, pip_bels);
+    BsramInitMap bsram_init_map;
+    place_cells(db, netlist, tilemap, device, pip_bels, &bsram_init_map);
 
     // -----------------------------------------------------------------------
     // Step 5b: Set default IOB and bank fuses for all pins (used and unused)
@@ -832,6 +833,13 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     // -----------------------------------------------------------------------
     uint16_t checksum = compute_checksum(main_map);
     set_footer_checksum(bs.footer, checksum, device);
+
+    // -----------------------------------------------------------------------
+    // Step 10b: Append BSRAM init data below main bitmap
+    // -----------------------------------------------------------------------
+    if (!bsram_init_map.empty()) {
+        main_map = vstack(main_map, bsram_init_map);
+    }
 
     // -----------------------------------------------------------------------
     // Step 11: Update frame count in header

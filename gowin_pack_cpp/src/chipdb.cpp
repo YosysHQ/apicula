@@ -83,12 +83,19 @@ Device load_chipdb(const std::string& path) {
     auto data = decompress_gzip(compressed);
 
     // Deserialize with msgpack
-    msgpack::object_handle oh = msgpack::unpack(
-        reinterpret_cast<const char*>(data.data()), data.size());
-    msgpack::object obj = oh.get();
+    // Keep the data buffer alive because msgpack::object string values
+    // may reference the original buffer (not copied into the zone)
+    auto data_ptr = std::make_shared<std::vector<uint8_t>>(std::move(data));
+    auto oh = std::make_shared<msgpack::object_handle>(msgpack::unpack(
+        reinterpret_cast<const char*>(data_ptr->data()), data_ptr->size()));
+    msgpack::object obj = oh->get();
 
     Device device;
     obj.convert(device);
+    // Keep both the msgpack zone and data buffer alive
+    // so raw msgpack::object values (extra_func, segments, timing, portmap) remain valid
+    device.msgpack_handle = oh;
+    device.msgpack_data = data_ptr;
     return device;
 }
 

@@ -5,17 +5,12 @@
 namespace apycula {
 
 // Helper function to check if a table key matches the attrs set
-// Matches Python get_table_fuses logic
+// Matches Python get_table_fuses logic: 0 acts as a sentinel/terminator
 static bool key_matches(const Coord& key, const std::set<int64_t>& attrs) {
     // Check first element of key
     int64_t attrval1 = key.first;
     if (attrval1 == 0) {
-        // No feature needed in first slot
-        // Check second element
-        int64_t attrval2 = key.second;
-        if (attrval2 == 0) return true;
-        if (attrval2 > 0) return attrs.count(attrval2) > 0;
-        if (attrval2 < 0) return attrs.count(std::abs(attrval2)) == 0;
+        // 0 = sentinel, stop checking. Match unconditionally.
         return true;
     }
     if (attrval1 > 0) {
