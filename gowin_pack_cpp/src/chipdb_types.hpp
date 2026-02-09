@@ -66,7 +66,7 @@ struct Device {
 
     // Logic info tables
     std::map<std::string, std::map<Coord, int64_t>> logicinfo;
-    std::map<std::string, std::map<int64_t, Coord>> rev_li;
+    mutable std::map<std::string, std::map<int64_t, Coord>> rev_li;
 
     // Fuse tables
     std::map<int64_t, std::map<std::string, std::map<std::tuple<int64_t>, std::set<Coord>>>> longfuses;
@@ -92,6 +92,11 @@ struct Device {
     std::map<Coord, std::string> corner_tiles_io;
     std::map<std::string, std::map<std::string, std::vector<std::tuple<int64_t, int64_t, std::string, int64_t>>>> spine_select_wires;
     int64_t last_top_row = 0;
+
+    // Msgpack zone and data buffer - keeps raw msgpack::object pointers valid
+    // (used by extra_func, segments, timing, portmap in Bel)
+    std::shared_ptr<msgpack::object_handle> msgpack_handle;
+    std::shared_ptr<std::vector<uint8_t>> msgpack_data;
 
     // Get tile at (row, col) via tile deduplication
     const Tile& get_tile(int64_t row, int64_t col) const {
@@ -144,7 +149,7 @@ struct Device {
     }
 
     // Reverse logicinfo lookup
-    const std::map<int64_t, Coord>& rev_logicinfo(const std::string& name) {
+    const std::map<int64_t, Coord>& rev_logicinfo(const std::string& name) const {
         if (rev_li.find(name) == rev_li.end()) {
             auto& table = rev_li[name];
             for (const auto& [attrval, code] : logicinfo.at(name)) {

@@ -1,6 +1,7 @@
 // place.cpp - BEL placement implementation
 // Based on apycula/gowin_pack.py place_* functions
 #include "place.hpp"
+#include "bitstream.hpp"
 #include "fuses.hpp"
 #include "attrids.hpp"
 #include <regex>
@@ -165,7 +166,8 @@ void place_cells(
     const Netlist& netlist,
     Tilemap& tilemap,
     const std::string& device,
-    const std::vector<BelInfo>& extra_bels) {
+    const std::vector<BelInfo>& extra_bels,
+    BsramInitMap* bsram_init_map) {
 
     // Clear slice attributes for fresh run
     slice_attrvals.clear();
@@ -186,6 +188,11 @@ void place_cells(
         } else if (bel.type == "rPLL" || bel.type == "PLLVR" || bel.type == "PLLA" || bel.type == "RPLLA") {
             place_pll(db, bel, tilemap, device);
         } else if (bel.type == "DP" || bel.type == "SDP" || bel.type == "SP" || bel.type == "ROM") {
+            if (bsram_init_map && device != "GW5A-25A") {
+                store_bsram_init_val(db, bel.row - 1, bel.col - 1, bel.type,
+                                     bel.parameters, bel.attributes, device,
+                                     *bsram_init_map);
+            }
             place_bsram(db, bel, tilemap, device);
         } else if (bel.type.find("MULT") != std::string::npos ||
                    bel.type.find("ALU54") != std::string::npos ||
@@ -200,7 +207,7 @@ void place_cells(
                    bel.type == "IOLOGIC_DUMMY" ||
                    bel.type == "IOLOGICI_EMPTY" ||
                    bel.type == "IOLOGICO_EMPTY") {
-            place_iologic(db, bel, tilemap, device);
+            place_iologic(db, bel, tilemap, device, netlist);
         } else if (bel.type == "OSC" || bel.type == "OSCZ" || bel.type == "OSCF" ||
                    bel.type == "OSCH" || bel.type == "OSCW" || bel.type == "OSCO" ||
                    bel.type == "OSCA") {
@@ -210,7 +217,7 @@ void place_cells(
         } else if (bel.type.find("RAM16SDP") != std::string::npos || bel.type == "RAMW") {
             place_ram16sdp(db, bel, tilemap);
         } else if (bel.type.find("CLKDIV") != std::string::npos) {
-            place_clkdiv(db, bel, tilemap);
+            place_clkdiv(db, bel, tilemap, device);
         } else if (bel.type == "DCS") {
             place_dcs(db, bel, tilemap, device);
         } else if (bel.type == "DQCE") {
@@ -1267,8 +1274,9 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
         pll_int_attrs["ICPSEL"] = 50;
 
         if (pll_type == "PLLVR") {
-            // Determine index: col != 28 -> idx=1, else idx=0
-            int idx = (col != 28) ? 1 : 0;
+            // Determine index: Python uses 1-based col (bel.col)
+            // col != 28 in Python means bel.col != 28
+            int idx = (bel.col != 28) ? 1 : 0;
             std::string vcc_attr = (idx == 0) ? "PLLVCC0" : "PLLVCC1";
             pll_str_attrs[vcc_attr] = "ENABLE";
         }
@@ -1468,6 +1476,29 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
         }
     }
 
+    // Apply defaults for parameters that may not be in the cell params
+    // Python: add_pll_default_attrs merges _default_pll_inattrs before the loop
+    if (pll_type == "RPLL" || pll_type == "PLLVR") {
+        // DYN_SDIV_SEL default: 2  (binary "...010")
+        if (pll_int_attrs.find("SDIV") == pll_int_attrs.end()) {
+            pll_int_attrs["SDIV"] = 2;
+        }
+        // DYN_DA_EN default: FALSE -> compute DUTY from PSDA_SEL + DUTYDA_SEL
+        if (pll_int_attrs.find("DUTY") == pll_int_attrs.end()) {
+            pll_str_attrs["OSDLY"] = "DISABLE";
+            pll_str_attrs["OPDLY"] = "DISABLE";
+            int64_t phase_val = parse_binary(get_param(params, "PSDA_SEL", "0000"));
+            pll_int_attrs["PHASE"] = phase_val;
+            int64_t duty_val = parse_binary(get_param(params, "DUTYDA_SEL", "1000"));
+            if ((phase_val + duty_val) < 16) {
+                duty_val = phase_val + duty_val;
+            } else {
+                duty_val = phase_val + duty_val - 16;
+            }
+            pll_int_attrs["DUTY"] = duty_val;
+        }
+    }
+
     // Calculate pump parameters for non-PLLA types
     if (pll_type != "PLLA") {
         if (device == "GW5A-25A") {
@@ -1520,6 +1551,16 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
     auto& tile = tilemap[{row, col}];
     set_fuses_in_tile(tile, fuses);
 
+    // PLLVR: also write PLL fuses to cfg tile (only for GW1NS-4 / 4C)
+    if (pll_type == "PLLVR") {
+        int64_t cfg_type = 51;
+        int64_t cfg_col = 37;
+        std::set<Coord> cfg_fuses = get_shortval_fuses(db, cfg_type, fin_attrs, "PLL");
+        if (!cfg_fuses.empty()) {
+            set_fuses_in_tile(tilemap[{0, cfg_col}], cfg_fuses);
+        }
+    }
+
     // rPLL occupies adjacent tiles (RPLLB). For GW1N-1/GW1NZ-1/GW1N-4: 1 extra tile at col+1.
     // For GW1N-9/GW1N-9C/GW2A-18/GW2A-18C: 3 extra tiles.
     int num_extra = 0;
@@ -1552,6 +1593,164 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
 static const std::map<int64_t, std::string> bsram_bit_widths = {
     {1, "1"}, {2, "2"}, {4, "4"}, {8, "9"}, {9, "9"}, {16, "16"}, {18, "16"}, {32, "X36"}, {36, "X36"},
 };
+
+// ============================================================================
+// store_bsram_init_val - Store BSRAM init data into global init map
+// Based on apycula/gowin_pack.py store_bsram_init_val()
+// ============================================================================
+void store_bsram_init_val(const Device& db, int64_t row, int64_t col,
+                          const std::string& typ,
+                          const std::map<std::string, std::string>& params,
+                          const std::map<std::string, std::string>& attrs,
+                          const std::string& device,
+                          BsramInitMap& bsram_init_map) {
+    // Skip BSRAM_AUX and cells without INIT_RAM_00
+    if (typ == "BSRAM_AUX" || params.find("INIT_RAM_00") == params.end()) {
+        return;
+    }
+
+    // Get subtype
+    std::string subtype;
+    auto st_it = attrs.find("BSRAM_SUBTYPE");
+    if (st_it != attrs.end()) {
+        subtype = to_upper(st_it->second);
+        // Trim whitespace
+        size_t start = subtype.find_first_not_of(" \t\n\r");
+        size_t end = subtype.find_last_not_of(" \t\n\r");
+        subtype = (start == std::string::npos) ? "" : subtype.substr(start, end - start + 1);
+    }
+
+    bool is_gw5 = (device == "GW5A-25A");
+
+    // Initialize global map if empty
+    if (bsram_init_map.empty()) {
+        size_t init_height = is_gw5 ? 72 : 256;
+        bsram_init_map = zeros(init_height * db.simplio_rows.size(),
+                               static_cast<size_t>(db.width()));
+    }
+
+    // Create local map
+    auto loc_map = is_gw5 ? zeros(256, 72) : zeros(256, 3 * 60);
+
+    // Determine data width per init row
+    int width;
+    if (subtype.empty()) {
+        width = 256;
+    } else if (subtype == "X9") {
+        width = 288;
+    } else {
+        std::cerr << "Warning: BSRAM init for subtype '" << subtype
+                  << "' is not supported" << std::endl;
+        return;
+    }
+
+    // Get reverse logicinfo for BSRAM_INIT
+    const auto& rev_li = db.rev_logicinfo("BSRAM_INIT");
+
+    // Process INIT_RAM_00 through INIT_RAM_3F
+    int addr = -1;
+    for (int init_row = 0; init_row < 0x40; ++init_row) {
+        char row_name_buf[32];
+        snprintf(row_name_buf, sizeof(row_name_buf), "INIT_RAM_%02X", init_row);
+        std::string row_name(row_name_buf);
+
+        auto it = params.find(row_name);
+        if (it == params.end()) {
+            addr += 0x100;
+            continue;
+        }
+
+        const std::string& init_data = it->second;
+
+        // Process bits - inline replication of Python get_bits generator
+        int bit_no = 0;
+        int ptr = -1;
+        while (ptr >= -width) {
+            bool is_parity = (bit_no == 8 || bit_no == 17);
+            char bit_char;
+            bool inc_addr;
+            int current_bit_no = bit_no;
+
+            if (is_parity) {
+                if (width == 288) {
+                    int actual_idx = static_cast<int>(init_data.size()) + ptr;
+                    bit_char = (actual_idx >= 0) ? init_data[actual_idx] : '0';
+                    ptr--;
+                } else {
+                    bit_char = '0';
+                }
+                inc_addr = false;
+            } else {
+                int actual_idx = static_cast<int>(init_data.size()) + ptr;
+                bit_char = (actual_idx >= 0) ? init_data[actual_idx] : '0';
+                ptr--;
+                inc_addr = true;
+            }
+
+            bit_no = (bit_no + 1) % 18;
+
+            // Apply addr increment
+            if (inc_addr) {
+                addr++;
+            }
+
+            if (bit_char == '0') {
+                continue;
+            }
+
+            int logic_line = current_bit_no * 4 + (addr >> 12);
+            auto li_it = rev_li.find(logic_line);
+            if (li_it == rev_li.end()) continue;
+            int bit = static_cast<int>(li_it->second.first) - 1;
+
+            // Quad address remapping
+            int quad;
+            switch (addr & 0x30) {
+                case 0x30: quad = 0xc0; break;
+                case 0x20: quad = 0x40; break;
+                case 0x10: quad = 0x80; break;
+                default:   quad = 0x00; break;
+            }
+            int map_row = quad + ((addr >> 6) & 0x3f);
+            if (map_row >= 0 && map_row < static_cast<int>(loc_map.size()) &&
+                bit >= 0 && bit < static_cast<int>(loc_map[0].size())) {
+                loc_map[map_row][bit] = 1;
+            }
+        }
+    }
+
+    // Place local map into global bsram_init_map
+    int height = is_gw5 ? 72 : 256;
+    if (is_gw5) {
+        loc_map = transpose(loc_map);
+    }
+
+    int y = 0;
+    for (int64_t brow : db.simplio_rows) {
+        if (row == brow) break;
+        y += height;
+    }
+
+    int x = 0;
+    if (!is_gw5) {
+        for (int64_t jdx = 0; jdx < col; ++jdx) {
+            x += static_cast<int>(db.get_tile(0, jdx).width);
+        }
+    }
+
+    loc_map = flipud(loc_map);
+    for (const auto& lrow : loc_map) {
+        int x0 = x;
+        for (uint8_t val : lrow) {
+            if (val && y >= 0 && y < static_cast<int>(bsram_init_map.size()) &&
+                x0 >= 0 && x0 < static_cast<int>(bsram_init_map[0].size())) {
+                bsram_init_map[y][x0] = val;
+            }
+            x0++;
+        }
+        y++;
+    }
+}
 
 // ============================================================================
 // place_bsram - Place a BSRAM BEL
@@ -1860,6 +2059,18 @@ void place_bsram(const Device& db, const BelInfo& bel, Tilemap& tilemap, const s
     // Set fuses
     auto& tile = tilemap[{row, col}];
     set_fuses_in_tile(tile, fuses);
+
+    // Set fuses in adjacent BSRAM AUX tiles (col+1 and col+2)
+    for (int off = 1; off <= 2; ++off) {
+        int64_t aux_col = col + off;
+        if (aux_col < static_cast<int64_t>(db.cols())) {
+            int64_t aux_ttyp = db.get_ttyp(row, aux_col);
+            std::set<Coord> aux_fuses = get_shortval_fuses(db, aux_ttyp, fin_attrs, table_name);
+            if (!aux_fuses.empty()) {
+                set_fuses_in_tile(tilemap[{row, aux_col}], aux_fuses);
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -2055,7 +2266,7 @@ static void iologic_mod_attrs(std::map<std::string, std::string>& attrs) {
 // place_iologic - Place an IOLOGIC BEL
 // Uses shortval table "IOLOGIC{num}"
 // ============================================================================
-void place_iologic(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device) {
+void place_iologic(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device, const Netlist& netlist) {
     using namespace attrids;
     (void)device;
 
@@ -2081,7 +2292,20 @@ void place_iologic(const Device& db, const BelInfo& bel, Tilemap& tilemap, const
     }
 
     // Handle IOLOGIC_DUMMY: get FCLK from MAIN_CELL
-    // (In C++ we just use the attribute if set)
+    if (bel.type == "IOLOGIC_DUMMY") {
+        auto main_cell_it = bel.attributes.find("MAIN_CELL");
+        if (main_cell_it != bel.attributes.end()) {
+            auto cell_it = netlist.cells.find(main_cell_it->second);
+            if (cell_it != netlist.cells.end()) {
+                auto fclk_it = cell_it->second.attributes.find("IOLOGIC_FCLK");
+                if (fclk_it != cell_it->second.attributes.end()) {
+                    if (auto* s = std::get_if<std::string>(&fclk_it->second)) {
+                        iologic_fclk = *s;
+                    }
+                }
+            }
+        }
+    }
 
     // Recode spines for non-simple types
     if (iologic_type != "IDDR" && iologic_type != "IDDRC" &&
@@ -2412,7 +2636,7 @@ void place_ram16sdp(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
 // place_clkdiv - Place a CLKDIV BEL
 // Uses shortval table "HCLK"
 // ============================================================================
-void place_clkdiv(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
+void place_clkdiv(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device) {
     using namespace attrids;
 
     int64_t row = bel.row - 1;
@@ -2472,6 +2696,25 @@ void place_clkdiv(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
 
     auto& tile = tilemap[{row, col}];
     set_fuses_in_tile(tile, fuses);
+
+    // GW1NS-4: CLKDIV has auxiliary tiles that also need HCLK fuses
+    // Python generates CLKDIV_AUX bels at offset columns
+    if (device == "GW1NS-4" && bel.type.find("_AUX") == std::string::npos) {
+        // bel.col is 1-based
+        int64_t aux_col = -1;
+        if (bel.col == 18) {  // 1-based col
+            aux_col = (bel.col + 3) - 1;  // 0-based
+        } else if (bel.col == 17) {
+            aux_col = (bel.col + 1) - 1;  // 0-based
+        }
+        if (aux_col >= 0 && aux_col < static_cast<int64_t>(db.cols())) {
+            int64_t aux_ttyp = db.get_ttyp(row, aux_col);
+            std::set<Coord> aux_fuses = get_shortval_fuses(db, aux_ttyp, hclk_attrs, "HCLK");
+            if (!aux_fuses.empty()) {
+                set_fuses_in_tile(tilemap[{row, aux_col}], aux_fuses);
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -2489,30 +2732,97 @@ void place_dcs(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
     }
 
     // Check if DCS_MODE attribute is set
-    if (bel.attributes.find("DCS_MODE") == bel.attributes.end()) {
+    auto dcs_mode_it = bel.attributes.find("DCS_MODE");
+    if (dcs_mode_it == bel.attributes.end()) {
         return;
     }
 
     const auto& tiledata = db.get_tile(row, col);
     int64_t ttyp = tiledata.ttyp;
 
-    // Build DCS attributes
-    std::set<int64_t> dcs_attrs_set;
-    for (const auto& [attr, val] : bel.attributes) {
-        auto attr_it = dcs_attrids.find(attr);
-        if (attr_it == dcs_attrids.end()) continue;
-        auto val_it = dcs_attrvals.find(val);
-        if (val_it == dcs_attrvals.end()) continue;
-        add_attr_val(db, "DCS", dcs_attrs_set, attr_it->second, val_it->second);
-    }
+    // Spine-to-quadrant mapping: spine -> (quadrant_key, table_idx)
+    static const std::map<std::string, std::pair<std::string, std::string>> spine2quadrant = {
+        {"SPINE6",  {"1", "DCS6"}},
+        {"SPINE7",  {"1", "DCS7"}},
+        {"SPINE14", {"2", "DCS6"}},
+        {"SPINE15", {"2", "DCS7"}},
+        {"SPINE22", {"3", "DCS6"}},
+        {"SPINE23", {"3", "DCS7"}},
+        {"SPINE30", {"4", "DCS6"}},
+        {"SPINE31", {"4", "DCS7"}},
+    };
 
-    // For non-GW5A, use longfuses table
-    if (device != "GW5A-25A") {
-        // The DCS table name depends on the spine quadrant
-        // For simplicity, try with the number-based table
-        std::string dcs_num = bel.num;
-        std::string table_name = db.dcs_prefix + dcs_num;
-        std::set<Coord> fuses = get_long_fuses(db, ttyp, dcs_attrs_set, table_name);
+    // Get spine from extra_func[row, col]['dcs'][num]['clkout']
+    auto ef_it = db.extra_func.find({row, col});
+    if (ef_it == db.extra_func.end()) return;
+
+    auto dcs_it = ef_it->second.find("dcs");
+    if (dcs_it == ef_it->second.end()) return;
+
+    int64_t dcs_idx = 0;
+    try { dcs_idx = std::stoll(bel.num); } catch (...) { return; }
+
+    // dcs is a dict with integer keys (DCS indices), not a list
+    const auto& dcs_obj = dcs_it->second;
+    if (dcs_obj.type != msgpack::type::MAP) return;
+
+    // Find the entry with key == dcs_idx
+    const msgpack::object* entry_ptr = nullptr;
+    for (uint32_t i = 0; i < dcs_obj.via.map.size; ++i) {
+        const auto& kv = dcs_obj.via.map.ptr[i];
+        int64_t key = 0;
+        if (kv.key.type == msgpack::type::POSITIVE_INTEGER) {
+            key = static_cast<int64_t>(kv.key.via.u64);
+        } else if (kv.key.type == msgpack::type::NEGATIVE_INTEGER) {
+            key = kv.key.via.i64;
+        } else {
+            continue;
+        }
+        if (key == dcs_idx) {
+            entry_ptr = &kv.val;
+            break;
+        }
+    }
+    if (!entry_ptr || entry_ptr->type != msgpack::type::MAP) return;
+
+    using msgpack::adaptor::get_map_value;
+    std::string spine = get_map_value<std::string>(*entry_ptr, "clkout");
+
+    auto sq_it = spine2quadrant.find(spine);
+    if (sq_it == spine2quadrant.end()) return;
+
+    const auto& [q, idx] = sq_it->second;
+
+    // Build DCS attributes: map quadrant key to DCS_MODE value
+    std::string dcs_mode = dcs_mode_it->second;
+    // Convert to uppercase
+    for (auto& c : dcs_mode) c = std::toupper(c);
+
+    auto val_it = dcs_attrvals.find(dcs_mode);
+    if (val_it == dcs_attrvals.end()) return;
+
+    auto attr_it = dcs_attrids.find(q);
+    if (attr_it == dcs_attrids.end()) return;
+
+    std::set<int64_t> dcs_attrs_set;
+    add_attr_val(db, "DCS", dcs_attrs_set, attr_it->second, val_it->second);
+
+    if (device == "GW5A-25A") {
+        // GW5A: scan all tiles for matching longfuses table
+        std::string dcs_name = "DCS" + std::to_string(dcs_idx + 6);
+        for (int64_t r = 0; r < static_cast<int64_t>(db.rows()); ++r) {
+            for (int64_t c = 0; c < static_cast<int64_t>(db.cols()); ++c) {
+                int64_t t = db.get_ttyp(r, c);
+                auto ttyp_it = db.longfuses.find(t);
+                if (ttyp_it == db.longfuses.end()) continue;
+                if (ttyp_it->second.find(dcs_name) == ttyp_it->second.end()) continue;
+                auto& tile = tilemap[{r, c}];
+                std::set<Coord> fuses = get_long_fuses(db, t, dcs_attrs_set, idx);
+                set_fuses_in_tile(tile, fuses);
+            }
+        }
+    } else {
+        std::set<Coord> fuses = get_long_fuses(db, ttyp, dcs_attrs_set, idx);
         auto& tile = tilemap[{row, col}];
         set_fuses_in_tile(tile, fuses);
     }
@@ -2571,7 +2881,7 @@ void place_dhcen(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
     // DHCEN is a control wire - it doesn't have its own fuse, but HCLK
     // tiles along one edge need fuses set to enable the clock enable.
     // Look up the pip info from extra_func.
-    int64_t ef_row = bel.row - 1;  // extra_func uses 0-based from BEL XY
+    int64_t ef_row = bel.row - 1;
     int64_t ef_col = bel.col - 1;
 
     auto ef_it = db.extra_func.find({ef_row, ef_col});
