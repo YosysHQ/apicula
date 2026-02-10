@@ -82,4 +82,12 @@ void set_fuses_in_tile(TileBitmap& tile, const std::set<Coord>& fuses);
 // Helper: clear fuses in a tile bitmap from a set of coordinates
 void clear_fuses_in_tile(TileBitmap& tile, const std::set<Coord>& fuses);
 
+// DSP type-specific attribute handlers (bels/dsp.cpp)
+std::set<int64_t> set_dsp_attrs(const Device& db, const std::string& typ,
+    std::map<std::string, std::string>& params, const std::string& num,
+    std::map<std::string, std::string>& attrs);
+
+std::vector<std::set<int64_t>> set_dsp_mult36x36_attrs(const Device& db, const std::string& typ,
+    std::map<std::string, std::string>& params, std::map<std::string, std::string>& attrs);
+
 } // namespace apycula

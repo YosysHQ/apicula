@@ -13,7 +13,7 @@ Netlist parse_netlist(const std::string& path) {
         throw std::runtime_error("Could not open netlist file: " + path);
     }
 
-    nlohmann::json j;
+    nlohmann::ordered_json j;
     file >> j;
 
     Netlist netlist;
@@ -78,6 +78,7 @@ Netlist parse_netlist(const std::string& path) {
                 }
 
                 netlist.cells[name] = std::move(cell);
+                netlist.cell_order.push_back(name);
             }
         }
 
