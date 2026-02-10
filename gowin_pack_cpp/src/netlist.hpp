@@ -32,6 +32,7 @@ struct Net {
 struct Netlist {
     std::string top;
     std::map<std::string, Cell> cells;
+    std::vector<std::string> cell_order;  // preserves JSON insertion order
     std::map<std::string, Net> nets;
     std::map<std::string, std::string> settings;
 };

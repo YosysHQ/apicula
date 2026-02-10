@@ -68,9 +68,12 @@ static int64_t parse_binary(const std::string& s) {
     }
 }
 
-// Check if a net bit index is a constant net (0 or 1 means VCC/GND in nextpnr)
+// GND/VCC net bit indices (populated from netlist $PACKER_GND/$PACKER_VCC)
+static std::set<int> gnd_net_bits;
+static std::set<int> vcc_net_bits;
+
 static bool is_const_net(int bit) {
-    return bit == 0 || bit == 1;
+    return gnd_net_bits.count(bit) || vcc_net_bits.count(bit);
 }
 
 // Get parameter with default
@@ -102,9 +105,12 @@ static std::map<std::tuple<int64_t, int64_t, int64_t>, std::map<std::string, std
 // ============================================================================
 std::vector<BelInfo> get_bels(const Netlist& netlist) {
     std::vector<BelInfo> bels;
-    std::regex bel_re(R"(X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL[A]?|IOLOGIC|CLKDIV2?|BSRAM|DSP|MULT\w+|PADD\d+|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_[IO]BUF|DLLDLY|PINCFG|ADC)(\w*))");
+    std::regex bel_re(R"(X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA|ADC)(\w*))");
 
-    for (const auto& [cellname, cell] : netlist.cells) {
+    for (const auto& cellname : netlist.cell_order) {
+        auto cell_it = netlist.cells.find(cellname);
+        if (cell_it == netlist.cells.end()) continue;
+        const auto& cell = cell_it->second;
         // Skip dummy cells and cells without BEL attribute
         if (cell.type.size() >= 6 && cell.type.substr(0, 6) == "DUMMY_") continue;
         if (cell.type == "OSER16" || cell.type == "IDES16") continue;
@@ -172,6 +178,20 @@ void place_cells(
     // Clear slice attributes for fresh run
     slice_attrvals.clear();
 
+    // Populate GND/VCC net bit sets from netlist (matching Python _gnd_net/_vcc_net)
+    gnd_net_bits.clear();
+    vcc_net_bits.clear();
+    {
+        auto gnd_it = netlist.nets.find("$PACKER_GND");
+        if (gnd_it != netlist.nets.end()) {
+            for (int b : gnd_it->second.bits) gnd_net_bits.insert(b);
+        }
+        auto vcc_it = netlist.nets.find("$PACKER_VCC");
+        if (vcc_it != netlist.nets.end()) {
+            for (int b : vcc_it->second.bits) vcc_net_bits.insert(b);
+        }
+    }
+
     auto bels = get_bels(netlist);
     // Append pass-through LUTs from routing
     bels.insert(bels.end(), extra_bels.begin(), extra_bels.end());
@@ -231,10 +251,36 @@ void place_cells(
                    bel.type.find("EMCU") != std::string::npos ||
                    bel.type.find("MUX2_") != std::string::npos ||
                    bel.type == "MIPI_OBUF" ||
-                   bel.type == "MIPI_IBUF" ||
                    bel.type.find("BUFG") != std::string::npos) {
             // No-op types - skip
             continue;
+        } else if (bel.type == "MIPI_IBUF") {
+            // MIPI_IBUF itself is a no-op, but we need to set AUX fuses on col+1
+            // (Python: extra_mipi_bels + MIPI_IBUF_AUX handling, lines 3225-3232)
+            int64_t aux_row = bel.row - 1;
+            int64_t aux_col = bel.col;  // col+1 in 0-based (bel.col is already 1-based col, so col = bel.col - 1 + 1 = bel.col)
+            if (aux_row >= 0 && aux_row < static_cast<int64_t>(db.rows()) &&
+                aux_col >= 0 && aux_col < static_cast<int64_t>(db.cols())) {
+                const auto& aux_tiledata = db.get_tile(aux_row, aux_col);
+                // Set MIPI AUX fuses for both A and B pins
+                static const std::map<std::string, std::vector<std::pair<std::string, std::string>>> mipi_aux_attrs = {
+                    {"A", {{"IO_TYPE", "LVDS25"}, {"LPRX_A2", "ENABLE"}, {"ODMUX", "TRIMUX"},
+                           {"OPENDRAIN", "OFF"}, {"DIFFRESISTOR", "OFF"}, {"BANK_VCCIO", "2.5"}}},
+                    {"B", {{"IO_TYPE", "LVDS25"}, {"BANK_VCCIO", "2.5"}}}
+                };
+                for (const auto& [iob_idx_aux, attr_pairs] : mipi_aux_attrs) {
+                    std::set<int64_t> iob_attrs_set;
+                    for (const auto& [k, val] : attr_pairs) {
+                        auto attr_it = attrids::iob_attrids.find(k);
+                        if (attr_it == attrids::iob_attrids.end()) continue;
+                        auto val_it = attrids::iob_attrvals.find(val);
+                        if (val_it == attrids::iob_attrvals.end()) continue;
+                        add_attr_val(db, "IOB", iob_attrs_set, attr_it->second, val_it->second);
+                    }
+                    std::set<Coord> fuses = get_longval_fuses(db, aux_tiledata.ttyp, iob_attrs_set, "IOB" + iob_idx_aux);
+                    set_fuses_in_tile(tilemap[{aux_row, aux_col}], fuses);
+                }
+            }
         } else {
             std::cerr << "Warning: unhandled BEL type '" << bel.type << "' for " << bel.name << std::endl;
         }
@@ -654,6 +700,11 @@ void set_iob_default_fuses(
         std::string iob_idx = bel.num;
         if (iob_idx.empty()) iob_idx = "A";
 
+        // Skip B pin for MIPI_IBUF (Python line 3296-3297)
+        if (bel.parameters.count("MIPI_IBUF") && iob_idx == "B") {
+            continue;
+        }
+
         // Check for DIFF pair handling (Python lines 3298-3307)
         auto diff_it = bel.parameters.find("DIFF");
         std::string diff_type;
@@ -734,6 +785,14 @@ void set_iob_default_fuses(
         }
         // Always set IO_TYPE in user_attrs (Python line 3360: io_desc.attrs['IO_TYPE'] = iostd)
         user_attrs["IO_TYPE"] = iostd;
+        // MIPI_OBUF DIFF handling (Python lines 3361-3362)
+        if (bel.parameters.count("DIFF") && bel.parameters.count("MIPI_OBUF")) {
+            user_attrs["MIPI"] = "ENABLE";
+        }
+        // I3C handling (Python lines 3363-3364)
+        if (bel.parameters.count("I3C_IOBUF")) {
+            user_attrs["I3C_IOBUF"] = "ENABLE";
+        }
         iob_info.user_attrs = user_attrs;
         // Store NET_* parameters for OEN handling
         for (const auto& [k, v] : bel.parameters) {
@@ -762,10 +821,8 @@ void set_iob_default_fuses(
                         bi.iostd = io_type_for_bank;
                     }
                 }
-                // Accumulate bank-level attributes from IOBs
-                for (const auto& [k, v] : user_attrs) {
-                    bi.in_bank_attrs[k] = v;
-                }
+                // NOTE: Python does NOT accumulate user_attrs into in_bank_attrs during
+                // the first pass. Bank attrs are accumulated in the second pass (Step 2b).
             }
         }
 
@@ -777,16 +834,14 @@ void set_iob_default_fuses(
         if (bi.iostd.empty()) {
             bi.iostd = is_gw5 ? "LVCMOS33" : "LVCMOS12";
         }
-        // Ensure BANK_VCCIO and IO_TYPE are in in_bank_attrs (matching Python)
+        // Set BANK_VCCIO default if not already set (matching Python line 3591-3592)
         if (bi.in_bank_attrs.find("BANK_VCCIO") == bi.in_bank_attrs.end()) {
             auto vcc_it = vcc_ios.find(bi.iostd);
             if (vcc_it != vcc_ios.end()) {
                 bi.in_bank_attrs["BANK_VCCIO"] = vcc_it->second;
             }
         }
-        if (bi.in_bank_attrs.find("IO_TYPE") == bi.in_bank_attrs.end()) {
-            bi.in_bank_attrs["IO_TYPE"] = bi.iostd;
-        }
+        // NOTE: IO_TYPE is NOT set here - it gets accumulated in Step 2b (second pass)
     }
 
 
@@ -877,6 +932,26 @@ void set_iob_default_fuses(
                 in_iob_attrs.erase("BANK_VCCIO");
             }
 
+            // MIPI IOB handling (Python lines 3641-3647)
+            if (in_iob_attrs.count("IO_TYPE") && in_iob_attrs["IO_TYPE"] == "MIPI") {
+                in_iob_attrs["LPRX_A1"] = "ENABLE";
+                in_iob_attrs.erase("SLEWRATE");
+                in_iob_attrs.erase("BANK_VCCIO");
+                in_iob_attrs["PULLMODE"] = "NONE";
+                in_iob_attrs["LVDS_ON"] = "ENABLE";
+                in_iob_attrs["IOBUF_MIPI_LP"] = "ENABLE";
+            }
+            // I3C IOB handling (Python lines 3648-3655)
+            if (in_iob_attrs.count("I3C_IOBUF")) {
+                in_iob_attrs.erase("I3C_IOBUF");
+                in_iob_attrs["PULLMODE"] = "NONE";
+                in_iob_attrs["OPENDRAIN"] = "OFF";
+                in_iob_attrs["OD"] = "ENABLE";
+                in_iob_attrs["DIFFRESISTOR"] = "NA";
+                in_iob_attrs["SINGLERESISTOR"] = "NA";
+                in_iob_attrs["DRIVE"] = "16";
+            }
+
             // Device-specific special cases (Python lines 3658-3663)
             if (device == "GW1N-1") {
                 if (iob.row == 5 && mode_for_attrs == "OBUF") {
@@ -891,6 +966,15 @@ void set_iob_default_fuses(
 
             // Build B-pin attributes for LVDS pairs (Python lines 3664-3685)
             std::map<std::string, std::string> in_iob_b_attrs;
+            // MIPI: change IO_TYPE to LVDS25 and set B-pin attrs (Python lines 3665-3671)
+            if (in_iob_attrs.count("IO_TYPE") && in_iob_attrs["IO_TYPE"] == "MIPI") {
+                in_iob_attrs["IO_TYPE"] = "LVDS25";
+                in_iob_b_attrs["IO_TYPE"] = "LVDS25";
+                in_iob_b_attrs["PULLMODE"] = "NONE";
+                in_iob_b_attrs["OPENDRAIN"] = "OFF";
+                in_iob_b_attrs["IOBUF_MIPI_LP"] = "ENABLE";
+                in_iob_b_attrs["PERSISTENT"] = "OFF";
+            }
             if (mode == "TLVDS_OBUF" || mode == "TLVDS_TBUF" || mode == "TLVDS_IOBUF") {
                 in_iob_b_attrs = in_iob_attrs;
             } else if (mode == "TLVDS_IBUF" || mode == "ELVDS_IBUF") {
@@ -961,7 +1045,7 @@ void set_iob_default_fuses(
                     }
                 }
 
-                std::set<Coord> fuses = get_longval_fuses(db, fuse_ttyp, iob_attrs_set,
+std::set<Coord> fuses = get_longval_fuses(db, fuse_ttyp, iob_attrs_set,
                                                            "IOB" + cur_idx);
                 auto& tile = tilemap[{fuse_row, fuse_col}];
                 set_fuses_in_tile(tile, fuses);
@@ -1402,7 +1486,10 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
             continue;
         }
         if (ua == "DYN_DA_EN") {
-            if (uv == "TRUE") {
+            // Python bug: attrs_upper() converts 'true' to 'TRUE', then
+            // compares val == 'true' (lowercase), so the true branch is
+            // never reached.  Match that behaviour here.
+            if (false && uv == "TRUE") {
                 pll_str_attrs["DPSEL"] = "DYN";
                 pll_int_attrs["DUTY"] = 0;
                 pll_int_attrs["PHASE"] = 0;
@@ -1868,47 +1955,9 @@ void place_bsram(const Device& db, const BelInfo& bel, Tilemap& tilemap, const s
                     bsram_attrs["DBLWA"] = bw_it->second;
                 }
                 // Byte enable for port A
-                if (val == 16 || val == 18) {
-                    if (typ == "SDP") {
-                        // SDP uses ADA0, ADA1
-                        bool constant_be = true;
-                        if (bel.cell) {
-                            auto ad0 = bel.cell->port_connections.find("ADA0");
-                            auto ad1 = bel.cell->port_connections.find("ADA1");
-                            if (ad0 != bel.cell->port_connections.end() && !ad0->second.empty() &&
-                                ad1 != bel.cell->port_connections.end() && !ad1->second.empty()) {
-                                constant_be = is_const_net(ad0->second[0]) && is_const_net(ad1->second[0]);
-                            }
-                        }
-                        if (constant_be) {
-                            bsram_attrs[typ + "A_BEHB"] = "ENABLE";
-                            bsram_attrs[typ + "A_BELB"] = "ENABLE";
-                        } else {
-                            bsram_attrs[typ + "A_BEHB"] = "DISABLE";
-                            bsram_attrs[typ + "A_BELB"] = "DISABLE";
-                        }
-                        bsram_attrs[typ + "B_BEHB"] = "DISABLE";
-                        bsram_attrs[typ + "B_BELB"] = "DISABLE";
-                    } else if (typ == "DP") {
-                        // DP port A uses ADA0, ADA1
-                        bool constant_be = true;
-                        if (bel.cell) {
-                            auto ad0 = bel.cell->port_connections.find("ADA0");
-                            auto ad1 = bel.cell->port_connections.find("ADA1");
-                            if (ad0 != bel.cell->port_connections.end() && !ad0->second.empty() &&
-                                ad1 != bel.cell->port_connections.end() && !ad1->second.empty()) {
-                                constant_be = is_const_net(ad0->second[0]) && is_const_net(ad1->second[0]);
-                            }
-                        }
-                        if (constant_be) {
-                            bsram_attrs[typ + "A_BEHB"] = "ENABLE";
-                            bsram_attrs[typ + "A_BELB"] = "ENABLE";
-                        } else {
-                            bsram_attrs[typ + "A_BEHB"] = "DISABLE";
-                            bsram_attrs[typ + "A_BELB"] = "DISABLE";
-                        }
-                    }
-                } else if (val == 32 || val == 36) {
+                // Note: In Python, byte_enable dispatch for BIT_WIDTH_0 with val=16/18
+                // is dead code (nested inside else for 32/36). Only SDP with 32/36 is live.
+                if (val == 32 || val == 36) {
                     if (typ == "SDP") {
                         bool constant_be = true;
                         if (bel.cell) {
@@ -1936,17 +1985,6 @@ void place_bsram(const Device& db, const BelInfo& bel, Tilemap& tilemap, const s
                             bsram_attrs[typ + "B_BELB"] = "DISABLE";
                         }
                     }
-                } else {
-                    // 1, 2, 4, 8, 9
-                    if (typ == "SDP") {
-                        bsram_attrs[typ + "A_BEHB"] = "DISABLE";
-                        bsram_attrs[typ + "A_BELB"] = "DISABLE";
-                        bsram_attrs[typ + "B_BEHB"] = "DISABLE";
-                        bsram_attrs[typ + "B_BELB"] = "DISABLE";
-                    } else if (typ == "DP") {
-                        bsram_attrs[typ + "A_BEHB"] = "DISABLE";
-                        bsram_attrs[typ + "A_BELB"] = "DISABLE";
-                    }
                 }
             }
         } else if (uparm == "BIT_WIDTH_1") {
@@ -1958,30 +1996,8 @@ void place_bsram(const Device& db, const BelInfo& bel, Tilemap& tilemap, const s
                 } else {
                     bsram_attrs["DBLWB"] = bw_it->second;
                 }
-                // Byte enable for port B (DP only)
-                if (typ == "DP") {
-                    if (val == 16 || val == 18) {
-                        bool constant_be = true;
-                        if (bel.cell) {
-                            auto ad0 = bel.cell->port_connections.find("ADB0");
-                            auto ad1 = bel.cell->port_connections.find("ADB1");
-                            if (ad0 != bel.cell->port_connections.end() && !ad0->second.empty() &&
-                                ad1 != bel.cell->port_connections.end() && !ad1->second.empty()) {
-                                constant_be = is_const_net(ad0->second[0]) && is_const_net(ad1->second[0]);
-                            }
-                        }
-                        if (constant_be) {
-                            bsram_attrs[typ + "B_BEHB"] = "ENABLE";
-                            bsram_attrs[typ + "B_BELB"] = "ENABLE";
-                        } else {
-                            bsram_attrs[typ + "B_BEHB"] = "DISABLE";
-                            bsram_attrs[typ + "B_BELB"] = "DISABLE";
-                        }
-                    } else {
-                        bsram_attrs[typ + "B_BEHB"] = "DISABLE";
-                        bsram_attrs[typ + "B_BELB"] = "DISABLE";
-                    }
-                }
+                // Note: In Python, byte_enable dispatch for BIT_WIDTH_1 is all
+                // dead code (nested inside else for 32/36). No byte_enable set here.
             }
         } else if (uparm == "BLK_SEL") {
             for (int i = 0; i < 3; ++i) {
@@ -2078,7 +2094,6 @@ void place_bsram(const Device& db, const BelInfo& bel, Tilemap& tilemap, const s
 // Uses shortval table "DSP{mac}"
 // ============================================================================
 void place_dsp(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device) {
-    using namespace attrids;
     (void)device;
 
     int64_t row = bel.row - 1;
@@ -2088,9 +2103,6 @@ void place_dsp(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
         col < 0 || col >= static_cast<int64_t>(db.cols())) {
         return;
     }
-
-    const auto& tiledata = db.get_tile(row, col);
-    int64_t ttyp = tiledata.ttyp;
 
     std::string typ = bel.type;
     std::string num = bel.num;
@@ -2104,89 +2116,53 @@ void place_dsp(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
         }
     }
 
-    // Parse mac and idx from num (format: "XY" where X=mac, Y=idx)
+    // Parse mac from num (format: "XY" where X=mac, Y=idx)
     int mac = 0;
-    int idx = 0;
     if (num.size() >= 2) {
         mac = num[0] - '0';
-        idx = num[1] - '0';
     } else if (num.size() == 1) {
         mac = num[0] - '0';
     }
-    int even_odd = idx & 1;
-    int pair_idx = idx / 2;
 
-    std::map<std::string, std::string> dsp_str_attrs;
-    std::map<std::string, int64_t> dsp_int_attrs;
-
-    // M9MODE_EN for PADD9 and MULT9X9
-    if (typ == "PADD9" || typ == "MULT9X9") {
-        dsp_str_attrs["M9MODE_EN"] = "ENABLE";
-    }
-
-    // For a generic DSP implementation, we process the cell's parameters
-    // and convert them to DSP attribute IDs
     auto params = bel.parameters;
+    auto attrs = bel.attributes;
 
-    // Process common DSP parameters
-    for (const auto& [parm, val] : params) {
-        std::string uparm = to_upper(parm);
-        // Many DSP params map directly to DSP attrids
-        if (dsp_attrids.find(uparm) != dsp_attrids.end()) {
-            // Check if value is a string attr or integer
-            auto sval_it = dsp_attrvals.find(to_upper(val));
-            if (sval_it != dsp_attrvals.end()) {
-                dsp_str_attrs[uparm] = to_upper(val);
-            } else {
-                // Try parsing as integer
-                try {
-                    int64_t ival = parse_binary(val);
-                    dsp_int_attrs[uparm] = ival;
-                } catch (...) {}
+    if (typ != "MULT36X36") {
+        // Normal DSP: single set of attributes, single table
+        std::set<int64_t> fin_attrs = set_dsp_attrs(db, typ, params, num, attrs);
+        std::string table_name = "DSP" + std::to_string(mac);
+
+        // Set fuses in main tile and AUX tiles (col to col+8)
+        for (int off = 0; off <= 8; ++off) {
+            int64_t c = col + off;
+            if (c >= static_cast<int64_t>(db.cols())) break;
+            int64_t ttyp = db.get_ttyp(row, c);
+            auto ttyp_sv = db.shortval.find(ttyp);
+            if (ttyp_sv != db.shortval.end() && ttyp_sv->second.find(table_name) != ttyp_sv->second.end()) {
+                std::set<Coord> fuses = get_shortval_fuses(db, ttyp, fin_attrs, table_name);
+                set_fuses_in_tile(tilemap[{row, c}], fuses);
+            }
+        }
+    } else {
+        // MULT36X36: two macros, two sets of attributes
+        auto fin_attrs_vec = set_dsp_mult36x36_attrs(db, typ, params, attrs);
+
+        // Set fuses in main tile and AUX tiles (col to col+8)
+        for (int off = 0; off <= 8; ++off) {
+            int64_t c = col + off;
+            if (c >= static_cast<int64_t>(db.cols())) break;
+            int64_t ttyp = db.get_ttyp(row, c);
+            auto ttyp_sv = db.shortval.find(ttyp);
+            if (ttyp_sv == db.shortval.end()) continue;
+            for (int m = 0; m < 2; ++m) {
+                std::string table_name = "DSP" + std::to_string(m);
+                if (ttyp_sv->second.find(table_name) != ttyp_sv->second.end()) {
+                    std::set<Coord> fuses = get_shortval_fuses(db, ttyp, fin_attrs_vec[m], table_name);
+                    set_fuses_in_tile(tilemap[{row, c}], fuses);
+                }
             }
         }
     }
-
-    // Also process attributes
-    for (const auto& [attr, val] : bel.attributes) {
-        std::string ua = to_upper(attr);
-        if (dsp_attrids.find(ua) != dsp_attrids.end()) {
-            auto sval_it = dsp_attrvals.find(to_upper(val));
-            if (sval_it != dsp_attrvals.end()) {
-                dsp_str_attrs[ua] = to_upper(val);
-            }
-        }
-    }
-
-    (void)even_odd;
-    (void)pair_idx;
-
-    // Build final attribute set
-    std::set<int64_t> fin_attrs;
-    for (const auto& [attr, val] : dsp_str_attrs) {
-        auto attr_it = dsp_attrids.find(attr);
-        if (attr_it == dsp_attrids.end()) continue;
-        auto val_it = dsp_attrvals.find(val);
-        if (val_it == dsp_attrvals.end()) continue;
-        add_attr_val(db, "DSP", fin_attrs, attr_it->second, val_it->second);
-    }
-    for (const auto& [attr, val] : dsp_int_attrs) {
-        auto attr_it = dsp_attrids.find(attr);
-        if (attr_it == dsp_attrids.end()) continue;
-        add_attr_val(db, "DSP", fin_attrs, attr_it->second, val);
-    }
-
-    // Get fuses - table name is "DSP{mac}" where mac is the second-to-last char of num
-    std::string table_name = "DSP" + std::to_string(mac);
-    auto ttyp_sv = db.shortval.find(ttyp);
-    std::set<Coord> fuses;
-    if (ttyp_sv != db.shortval.end() && ttyp_sv->second.find(table_name) != ttyp_sv->second.end()) {
-        fuses = get_shortval_fuses(db, ttyp, fin_attrs, table_name);
-    }
-
-    // Set fuses
-    auto& tile = tilemap[{row, col}];
-    set_fuses_in_tile(tile, fuses);
 }
 
 // ============================================================================
