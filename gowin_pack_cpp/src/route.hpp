@@ -6,6 +6,7 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <utility>
 
 namespace apycula {
 
@@ -42,14 +43,17 @@ void isolate_segments(
     const Netlist& netlist,
     Tilemap& tilemap);
 
-// Set clock fuses for GW5A series
+// Set clock fuses for GW5A series (full tile scan with spine enable)
+// row_, col_ are 1-indexed pip coordinates
+// used_spines tracks already-enabled spines across calls
 void set_clock_fuses(
     const Device& db,
     Tilemap& tilemap,
-    int64_t row,
-    int64_t col,
+    int64_t row_,
+    int64_t col_,
     const std::string& src,
     const std::string& dest,
-    const std::string& device);
+    const std::string& device,
+    std::set<std::pair<char, std::string>>& used_spines);
 
 } // namespace apycula

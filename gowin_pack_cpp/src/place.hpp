@@ -15,6 +15,20 @@ using TileBitmap = std::vector<std::vector<uint8_t>>;
 using Tilemap = std::map<Coord, TileBitmap>;
 using BsramInitMap = std::vector<std::vector<uint8_t>>;
 
+// GW5A BSRAM position info (collected during placement, processed after)
+struct Gw5aBsramInfo {
+    int64_t col;
+    int64_t row;
+    std::string typ;
+    std::map<std::string, std::string> params;
+    std::map<std::string, std::string> attrs;
+
+    bool operator<(const Gw5aBsramInfo& o) const {
+        if (col != o.col) return col < o.col;
+        return row < o.row;
+    }
+};
+
 // BEL information extracted from netlist
 struct BelInfo {
     std::string type;
@@ -33,13 +47,16 @@ std::vector<BelInfo> get_bels(const Netlist& netlist);
 // Place all cells and set fuses in tile bitmaps.
 // extra_bels are additional BelInfos (e.g. pass-through LUTs from routing).
 // bsram_init_map: if non-null, BSRAM init data is accumulated here.
+// gw5a_bsrams: if non-null, GW5A BSRAM positions are collected here instead
+//              of calling store_bsram_init_val immediately.
 void place_cells(
     const Device& db,
     const Netlist& netlist,
     Tilemap& tilemap,
     const std::string& device,
     const std::vector<BelInfo>& extra_bels = {},
-    BsramInitMap* bsram_init_map = nullptr);
+    BsramInitMap* bsram_init_map = nullptr,
+    std::vector<Gw5aBsramInfo>* gw5a_bsrams = nullptr);
 
 // Placement functions for specific BEL types
 void place_lut(const Device& db, const BelInfo& bel, Tilemap& tilemap);
@@ -69,12 +86,14 @@ void set_iob_default_fuses(
 void set_slice_fuses(const Device& db, Tilemap& tilemap);
 
 // Store BSRAM init data for a single BSRAM cell into the global init map.
+// map_offset: for GW5A-25A, the column-block offset (incremented per unique col)
 void store_bsram_init_val(const Device& db, int64_t row, int64_t col,
                           const std::string& typ,
                           const std::map<std::string, std::string>& params,
                           const std::map<std::string, std::string>& attrs,
                           const std::string& device,
-                          BsramInitMap& bsram_init_map);
+                          BsramInitMap& bsram_init_map,
+                          int map_offset = 0);
 
 // Helper: set fuses in a tile bitmap from a set of coordinates
 void set_fuses_in_tile(TileBitmap& tile, const std::set<Coord>& fuses);

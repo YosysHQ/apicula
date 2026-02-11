@@ -94,7 +94,13 @@ int main(int argc, char** argv) {
 
         // Write output
         std::cout << "Writing output to " << output_file << "..." << std::endl;
-        apycula::write_bitstream(output_file, bitstream);
+        if (!bitstream.gw5a_bsrams.empty()) {
+            apycula::write_bitstream_gw5a(output_file, bitstream,
+                                           bitstream.gw5a_bsram_init_map,
+                                           bitstream.gw5a_bsrams);
+        } else {
+            apycula::write_bitstream(output_file, bitstream);
+        }
 
         std::cout << "Done." << std::endl;
         return 0;
