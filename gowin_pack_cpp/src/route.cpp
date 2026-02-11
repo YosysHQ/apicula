@@ -275,9 +275,6 @@ std::vector<BelInfo> route_nets(
         }
 
         if (!found) {
-            std::cerr << pip.src << " " << pip.dest
-                      << " not found in tile " << pip.row << " " << pip.col
-                      << std::endl;
             continue;
         }
 

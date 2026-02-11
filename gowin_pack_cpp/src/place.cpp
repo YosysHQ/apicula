@@ -72,6 +72,15 @@ static int64_t parse_binary(const std::string& s) {
 static std::set<int> gnd_net_bits;
 static std::set<int> vcc_net_bits;
 
+// ADC IO location tracking (like Python's adc_iolocs global)
+static std::map<Coord, std::string> adc_iolocs;  // (row, col) -> bus string
+
+// Stale mode from place_cells - tracks the last DIFF cell's mode.
+// In Python, the 'mode' variable leaks from the first IOB pass into the second pass
+// because DIFF cells are processed last (pushed to 'later' list). This affects
+// LVDS drive handling at Python line 3661-3663.
+static std::string last_diff_mode;
+
 static bool is_const_net(int bit) {
     return gnd_net_bits.count(bit) || vcc_net_bits.count(bit);
 }
@@ -174,10 +183,13 @@ void place_cells(
     const std::string& device,
     const std::vector<BelInfo>& extra_bels,
     BsramInitMap* bsram_init_map,
-    std::vector<Gw5aBsramInfo>* gw5a_bsrams) {
+    std::vector<Gw5aBsramInfo>* gw5a_bsrams,
+    std::map<int, TileBitmap>* extra_slots) {
 
-    // Clear slice attributes for fresh run
+    // Clear slice attributes, ADC IO locations, and stale mode for fresh run
     slice_attrvals.clear();
+    adc_iolocs.clear();
+    last_diff_mode.clear();
 
     // Populate GND/VCC net bit sets from netlist (matching Python _gnd_net/_vcc_net)
     gnd_net_bits.clear();
@@ -205,6 +217,27 @@ void place_cells(
         } else if (bel.type == "ALU") {
             place_alu(db, bel, tilemap);
         } else if (bel.type == "IBUF" || bel.type == "OBUF" || bel.type == "IOBUF" || bel.type == "TBUF") {
+            // Check for DIFF cells (Python line 3298: if 'DIFF' in parms)
+            auto diff_it = bel.parameters.find("DIFF");
+            if (diff_it != bel.parameters.end()) {
+                // N-pin: skip entirely (Python line 3300-3301)
+                if (diff_it->second == "N") continue;
+                // P-pin: set mode from DIFF_TYPE (Python line 3307)
+                // In Python, DIFF cells are processed last (deferred to 'later' list).
+                // The 'mode' variable persists as the stale mode into Step 2.
+                auto dt_it = bel.parameters.find("DIFF_TYPE");
+                if (dt_it != bel.parameters.end()) {
+                    last_diff_mode = dt_it->second;
+                    // TLVDS_IBUF_ADC: ADC analog input - skip IOB processing
+                    // (Python line 3312-3315)
+                    if (dt_it->second == "TLVDS_IBUF_ADC") {
+                        int64_t io_col = bel.col - 1;
+                        int64_t io_row = bel.row - 1;
+                        adc_iolocs[{io_row, io_col}] = "2";
+                        continue;
+                    }
+                }
+            }
             place_iob(db, bel, tilemap, device);
         } else if (bel.type == "rPLL" || bel.type == "PLLVR" || bel.type == "PLLA" || bel.type == "RPLLA") {
             place_pll(db, bel, tilemap, device);
@@ -258,6 +291,8 @@ void place_cells(
             place_dqce(db, bel, tilemap);
         } else if (bel.type == "DHCEN") {
             place_dhcen(db, bel, tilemap);
+        } else if (bel.type == "ADC") {
+            place_adc(db, bel, tilemap, extra_slots);
         } else if (bel.type == "GSR" ||
                    bel.type == "BANDGAP" ||
                    bel.type == "PINCFG" ||
@@ -727,7 +762,7 @@ void set_iob_default_fuses(
             continue;
         }
 
-        // Check for DIFF pair handling (Python lines 3298-3307)
+        // Check for DIFF pair handling (Python lines 3298-3315)
         auto diff_it = bel.parameters.find("DIFF");
         std::string diff_type;
         if (diff_it != bel.parameters.end()) {
@@ -738,6 +773,11 @@ void set_iob_default_fuses(
             auto dt_it = bel.parameters.find("DIFF_TYPE");
             if (dt_it != bel.parameters.end()) {
                 diff_type = dt_it->second;
+            }
+            // TLVDS_IBUF_ADC: ADC analog input - skip IOB processing entirely
+            // Python line 3312-3315: check_adc_io then continue
+            if (diff_type == "TLVDS_IBUF_ADC") {
+                continue;
             }
         }
 
@@ -799,10 +839,26 @@ void set_iob_default_fuses(
         iob_info.mode = diff_type.empty() ? bel.type : diff_type;
         // Update iostd to mode-specific default if no explicit IO_TYPE was set
         // (Python line 3348: iostd = _default_iostd[mode])
+        // For GW5A, defaults are LVCMOS33 (Python line 4258)
         if (user_attrs.find("IO_TYPE") == user_attrs.end()) {
-            auto def_it = default_iostd.find(iob_info.mode);
-            if (def_it != default_iostd.end()) {
-                iostd = def_it->second;
+            if (is_gw5) {
+                // GW5A overrides all basic modes to LVCMOS33
+                static const std::set<std::string> basic_modes = {
+                    "IBUF", "OBUF", "TBUF", "IOBUF"
+                };
+                if (basic_modes.count(iob_info.mode)) {
+                    iostd = "LVCMOS33";
+                } else {
+                    auto def_it = default_iostd.find(iob_info.mode);
+                    if (def_it != default_iostd.end()) {
+                        iostd = def_it->second;
+                    }
+                }
+            } else {
+                auto def_it = default_iostd.find(iob_info.mode);
+                if (def_it != default_iostd.end()) {
+                    iostd = def_it->second;
+                }
             }
         }
         // Always set IO_TYPE in user_attrs (Python line 3360: io_desc.attrs['IO_TYPE'] = iostd)
@@ -933,6 +989,10 @@ void set_iob_default_fuses(
             auto init_it = init_io_attrs.find(mode_for_attrs);
             if (init_it == init_io_attrs.end()) continue;
             std::map<std::string, std::string> in_iob_attrs = init_it->second;
+            // GW5A: add PULL_STRENGTH=MEDIUM (Python line 4254-4257)
+            if (is_gw5) {
+                in_iob_attrs["PULL_STRENGTH"] = "MEDIUM";
+            }
             // Apply LVDS overrides
             for (const auto& [lk, lv] : lvds_attrs) {
                 in_iob_attrs[lk] = lv;
@@ -1023,10 +1083,17 @@ void set_iob_default_fuses(
                 }
             }
             // LVDS drive handling (Python lines 3661-3663)
-            // NOTE: Python's `mode` variable here is stale from the first pass
-            // (holds the mode of the LAST IOB cell processed, usually "IBUF" for clk).
-            // So mode[1:].startswith('LVDS') is almost always False, making this
-            // effectively dead code. We skip it to match Python's actual behavior.
+            // Python's `mode` variable is stale from the first IOB pass. DIFF cells
+            // are processed last (deferred to 'later' list), so the stale mode is
+            // the DIFF_TYPE of the last P-pin DIFF cell. When mode[1:] starts with
+            // 'LVDS' (e.g. TLVDS_IBUF_ADC -> 'LVDS_IBUF_ADC'), DRIVE is set to
+            // 'UNKNOWN' which prevents it from contributing to bank_attrs.
+            if (device != "GW1N-4" && device != "GW1NS-4" &&
+                last_diff_mode.size() > 1 &&
+                last_diff_mode.substr(1, 4) == "LVDS" &&
+                in_iob_attrs.count("DRIVE") && in_iob_attrs["DRIVE"] != "0") {
+                in_iob_attrs["DRIVE"] = "UNKNOWN";
+            }
 
             // Build B-pin attributes for LVDS pairs (Python lines 3664-3685)
             std::map<std::string, std::string> in_iob_b_attrs;
@@ -1161,8 +1228,7 @@ std::set<Coord> fuses = get_longval_fuses(db, fuse_ttyp, iob_attrs_set,
         set_fuses_in_tile(btile, bits);
     }
 
-    // Step 3: Set per-pin default fuses for UNUSED IOB pins only
-    // (Used IOBs are handled in Step 2b above)
+    // Step 3: Set per-pin default fuses for all IOB pins
     for (const auto& [bel_name, cfg] : db.io_cfg) {
         auto pbank_it = db.pin_bank.find(bel_name);
         if (pbank_it == db.pin_bank.end()) {
@@ -1174,11 +1240,11 @@ std::set<Coord> fuses = get_longval_fuses(db, fuse_ttyp, iob_attrs_set,
         }
         int64_t bank = pbank_it->second;
 
-        // Skip used IOB pins (they were handled by place_iob)
+        // Note: in the Python packer, _banks[bank].bels is never populated
+        // (the .bels.add() line is commented out), so the unused IOB loop
+        // processes ALL pins including used ones, writing default attrs on top.
+        // We match this behavior by NOT skipping used pins.
         auto bi_it = banks.find(bank);
-        if (bi_it != banks.end() && bi_it->second.used_bels.count(bel_name)) {
-            continue;
-        }
 
         // Determine IO standard for this bank
         std::string io_std;
@@ -1268,6 +1334,55 @@ std::set<Coord> fuses = get_longval_fuses(db, fuse_ttyp, iob_attrs_set,
             if (vccio_attr_it != iob_attrids.end() && vccio_val_it != iob_attrvals.end()) {
                 add_attr_val(db, "IOB", iob_attrs,
                              vccio_attr_it->second, vccio_val_it->second);
+            }
+        }
+
+        // GW5A-specific: OPENDRAIN, DRIVE, DRIVE_LEVEL, and pullup/iomode
+        if (is_gw5) {
+            auto add_iob_attr = [&](const std::string& attr_name, const std::string& val_name) {
+                auto a_it = iob_attrids.find(attr_name);
+                auto v_it = iob_attrvals.find(val_name);
+                if (a_it != iob_attrids.end() && v_it != iob_attrvals.end()) {
+                    add_attr_val(db, "IOB", iob_attrs, a_it->second, v_it->second);
+                }
+            };
+
+            add_iob_attr("OPENDRAIN", "OFF");
+            std::string drive = (io_std == "LVCMOS10") ? "4" : "8";
+            add_iob_attr("DRIVE", drive);
+            add_iob_attr("DRIVE_LEVEL", drive);
+
+            // get_pullup_io equivalent: determine PULLMODE and PADDI/TO/ODMUX_1
+            // based on pin configuration
+            static const std::set<std::string> no_pullup_cfgs = {
+                "D08", "D09", "D10", "D11", "D12", "D13", "D14", "D15",
+                "D16", "D17", "D18", "D19", "D20", "D21", "D22", "D23",
+                "D24", "D25", "D26", "D27", "D28", "D29", "D30", "D31",
+                "INITDLY0", "INITDLY1"
+            };
+
+            if (cfg.count("TDO") || cfg.count("DOUT")) {
+                add_iob_attr("TO", "INV");
+                add_iob_attr("ODMUX_1", "1");
+                add_iob_attr("PULLMODE", "UP");
+            } else if (cfg.count("RDWR") || cfg.count("RDWR_B") || cfg.count("PUDC_B")) {
+                add_iob_attr("PADDI", "PADDI");
+                add_iob_attr("PULLMODE", "DOWN");
+            } else {
+                bool has_no_pullup = false;
+                for (const auto& cf : cfg) {
+                    if (no_pullup_cfgs.count(cf)) {
+                        has_no_pullup = true;
+                        break;
+                    }
+                }
+                if (has_no_pullup) {
+                    add_iob_attr("PADDI", "PADDI");
+                    add_iob_attr("PULLMODE", "NONE");
+                } else {
+                    add_iob_attr("PADDI", "PADDI");
+                    add_iob_attr("PULLMODE", "UP");
+                }
             }
         }
 
@@ -3078,6 +3193,320 @@ void set_slice_fuses(const Device& db, Tilemap& tilemap) {
                     }
                 }
             }
+        }
+    }
+}
+
+// ============================================================================
+// set_adc_attrs - Parse ADC parameters and build attribute set
+// Mirrors Python set_adc_attrs (gowin_pack.py lines 615-727)
+// ============================================================================
+static std::set<int64_t> set_adc_attrs(const Device& db,
+                                        const std::map<std::string, std::string>& parms) {
+    // Default ADC attributes (Python _default_adc_attrs)
+    static const std::map<std::string, std::string> default_adc_attrs = {
+        {"CLK_SEL", "0"}, {"DIV_CTL", "0"}, {"PHASE_SEL", "0"}, {"UNK0", "101"},
+        {"ADC_EN_SEL", "0"}, {"IBIAS_CTL", "1000"}, {"UNK1", "1"}, {"UNK2", "10000"},
+        {"CHOP_EN", "1"}, {"GAIN", "100"}, {"CAP_CTL", "0"}, {"BUF_EN", "0"},
+        {"CSR_VSEN_CTRL", "0"}, {"CSR_ADC_MODE", "1"}, {"CSR_SAMPLE_CNT_SEL", "0"},
+        {"CSR_RATE_CHANGE_CTRL", "0"}, {"CSR_FSCAL", "1011011010"}, // bin(730)
+        {"CSR_OFFSET", "10010011100"},  // bin(1180)
+    };
+
+    // Merge defaults with user params (user params take precedence)
+    std::map<std::string, std::string> adc_inattrs;
+    for (const auto& [k, v] : default_adc_attrs) {
+        adc_inattrs[k] = v;
+    }
+    for (const auto& [k, v] : parms) {
+        std::string key = to_upper(k);
+        if (adc_inattrs.count(key) || default_adc_attrs.count(key) == 0) {
+            adc_inattrs[key] = v;
+        }
+    }
+    // Actually, user params always override
+    for (const auto& [k, v] : parms) {
+        std::string key = to_upper(k);
+        adc_inattrs[key] = v;
+    }
+
+    // Parse attributes into (name, value) pairs where value is either int or string enum
+    // We'll use a map of attr -> variant<int64_t, string>
+    struct AttrVal {
+        bool is_string = false;
+        int64_t ival = 0;
+        std::string sval;
+    };
+    std::map<std::string, AttrVal> adc_attrs;
+
+    for (const auto& [attr, vl] : adc_inattrs) {
+        int64_t val = parse_binary(vl);
+
+        // Skip BUF_BK* attrs
+        if (attr.substr(0, 6) == "BUF_BK") continue;
+
+        // Default: store as int
+        AttrVal av;
+        av.ival = val;
+
+        if (attr == "CLK_SEL") {
+            if (val == 1) { av.is_string = true; av.sval = "CLK_CLK"; }
+        } else if (attr == "DIV_CTL") {
+            if (val) av.ival = (1LL << val);
+        } else if (attr == "PHASE_SEL") {
+            if (val) { av.is_string = true; av.sval = "PHASE_180"; }
+        } else if (attr == "ADC_EN_SEL") {
+            if (val == 1) { av.is_string = true; av.sval = "ADC"; }
+        } else if (attr == "UNK0") {
+            if (val == 0) { av.is_string = true; av.sval = "DISABLE"; }
+        } else if (attr == "UNK1") {
+            if (val == 1) { av.is_string = true; av.sval = "OFF"; }
+        } else if (attr == "UNK2") {
+            if (val == 0) { av.is_string = true; av.sval = "DISABLE"; }
+        } else if (attr == "IBIAS_CTL") {
+            if (val == 0) { av.is_string = true; av.sval = "DISABLE"; }
+        } else if (attr == "CHOP_EN") {
+            if (val == 1) { av.is_string = true; av.sval = "ON"; }
+            else { av.is_string = true; av.sval = "UNKNOWN"; }
+        } else if (attr == "GAIN") {
+            if (val == 0) { av.is_string = true; av.sval = "DISABLE"; }
+        } else if (attr == "CAP_CTL") {
+            // keep as int
+        } else if (attr == "BUF_EN") {
+            // Expand into BUF_i_EN entries
+            for (int i = 0; i < 12; i++) {
+                if (val & (1LL << i)) {
+                    AttrVal buf_av;
+                    buf_av.is_string = true;
+                    buf_av.sval = "ON";
+                    adc_attrs["BUF_" + std::to_string(i) + "_EN"] = buf_av;
+                }
+            }
+            continue;  // don't add BUF_EN itself
+        } else if (attr == "CSR_ADC_MODE") {
+            if (val == 1) { av.is_string = true; av.sval = "1"; }
+            else { av.is_string = true; av.sval = "UNKNOWN"; }
+        } else if (attr == "CSR_VSEN_CTRL") {
+            if (val == 4) { av.is_string = true; av.sval = "UNK1"; }
+            else if (val == 7) { av.is_string = true; av.sval = "UNK0"; }
+        } else if (attr == "CSR_SAMPLE_CNT_SEL") {
+            if (val > 4) av.ival = 2048;
+            else av.ival = (1LL << val) * 64;
+        } else if (attr == "CSR_RATE_CHANGE_CTRL") {
+            if (val > 4) av.ival = 80;
+            else av.ival = (1LL << val) * 4;
+        } else if (attr == "CSR_FSCAL") {
+            if (val >= 452 && val <= 840) {
+                AttrVal fscal1;
+                fscal1.ival = val;
+                adc_attrs["CSR_FSCAL1"] = fscal1;
+            }
+            AttrVal fscal0;
+            fscal0.ival = val;
+            adc_attrs["CSR_FSCAL0"] = fscal0;
+            continue;  // don't add CSR_FSCAL itself
+        } else if (attr == "CSR_OFFSET") {
+            if (val == 0) { av.is_string = true; av.sval = "DISABLE"; }
+            else {
+                if (val & (1LL << 11)) val -= (1LL << 12);
+                av.ival = val;
+            }
+        }
+
+        adc_attrs[attr] = av;
+    }
+
+    // Convert to logicinfo codes
+    std::set<int64_t> fin_attrs;
+    for (const auto& [attr, av] : adc_attrs) {
+        auto aid_it = attrids::adc_attrids.find(attr);
+        if (aid_it == attrids::adc_attrids.end()) {
+            continue;
+        }
+
+        int64_t val_code;
+        if (av.is_string) {
+            auto vid_it = attrids::adc_attrvals.find(av.sval);
+            if (vid_it == attrids::adc_attrvals.end()) {
+                continue;
+            }
+            val_code = vid_it->second;
+        } else {
+            val_code = av.ival;
+        }
+        add_attr_val(db, "ADC", fin_attrs, aid_it->second, val_code);
+    }
+
+    return fin_attrs;
+}
+
+// ============================================================================
+// place_adc - Place an ADC BEL
+// Mirrors Python place_cells ADC handling (gowin_pack.py lines 3439-3458)
+// ============================================================================
+void place_adc(const Device& db, const BelInfo& bel, Tilemap& tilemap,
+               std::map<int, TileBitmap>* extra_slots) {
+    int64_t row = bel.row - 1;
+    int64_t col = bel.col - 1;
+
+    // Extract ADC IO locations from attributes
+    for (const auto& [attr, val] : bel.attributes) {
+        if (attr.substr(0, 7) == "ADC_IO_") {
+            // Parse "bus/XcolYrow" format
+            std::regex io_re(R"((\d+)/X(\d+)Y(\d+))");
+            std::smatch m;
+            if (std::regex_match(val, m, io_re)) {
+                std::string bus = m[1].str();
+                int64_t io_col = std::stoll(m[2].str()) + 1;  // 1-indexed
+                int64_t io_row = std::stoll(m[3].str()) + 1;  // 1-indexed
+                // Store in adc_iolocs using 0-indexed coords (like Python)
+                adc_iolocs[{io_row - 1, io_col - 1}] = bus;
+            }
+        }
+    }
+
+    // Get tile at ADC location
+    const auto& tiledata = db.get_tile(row, col);
+    auto& tile = tilemap[{row, col}];
+
+    // Parse ADC attributes
+    auto adc_attrs = set_adc_attrs(db, bel.parameters);
+
+    // Main grid shortval fuses
+    auto sv_it = db.shortval.find(tiledata.ttyp);
+    if (sv_it != db.shortval.end() && sv_it->second.count("ADC")) {
+        auto bits = get_shortval_fuses(db, tiledata.ttyp, adc_attrs, "ADC");
+        set_fuses_in_tile(tile, bits);
+    }
+
+    // Slot shortval fuses (ttyp=1026, 8x6 bitmap)
+    if (extra_slots) {
+        // Get slot_idx from extra_func[row, col]['adc']['slot_idx']
+        auto ef_it = db.extra_func.find({row, col});
+        if (ef_it != db.extra_func.end()) {
+            auto adc_it = ef_it->second.find("adc");
+            if (adc_it != ef_it->second.end()) {
+                using msgpack::adaptor::get_map_value;
+                int64_t slot_idx = get_map_value<int64_t>(adc_it->second, "slot_idx");
+
+                // Create or get 8x6 slot bitmap
+                auto& slot_bitmap = (*extra_slots)[static_cast<int>(slot_idx)];
+                if (slot_bitmap.empty()) {
+                    slot_bitmap = create_tile_bitmap(8, 6);
+                }
+
+                auto slot_bits = get_shortval_fuses(db, 1026, adc_attrs, "ADC");
+                for (const auto& [sr, sc] : slot_bits) {
+                    if (sr >= 0 && sr < 8 && sc >= 0 && sc < 6) {
+                        slot_bitmap[sr][sc] = 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// set_adc_iobuf_fuses - Set IOB fuses for ADC IO pins
+// Mirrors Python set_adc_iobuf_fuses (gowin_pack.py lines 4105-4170)
+// ============================================================================
+void set_adc_iobuf_fuses(const Device& db, Tilemap& tilemap) {
+    for (const auto& [ioloc, bus] : adc_iolocs) {
+        int64_t row = ioloc.first;
+        int64_t col = ioloc.second;
+
+        const auto& tiledata = db.get_tile(row, col);
+
+        // IOBA attributes
+        {
+            std::set<int64_t> io_attrs;
+            // For bus not in "01" (i.e., bus >= "2"), add dynamic ADC attrs
+            if (bus != "0" && bus != "1") {
+                add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_GW5_ADC_DYN_IN"),
+                             attrids::iob_attrvals.at("ENABLE"));
+                add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_UNKNOWN70"),
+                             attrids::iob_attrvals.at("UNKNOWN"));
+                add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_UNKNOWN71"),
+                             attrids::iob_attrvals.at("UNKNOWN"));
+            }
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IO_TYPE"),
+                         attrids::iob_attrvals.at("GW5_ADC_IN"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_GW5_ADC_IN"),
+                         attrids::iob_attrvals.at("ENABLE"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("PULLMODE"),
+                         attrids::iob_attrvals.at("NONE"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("HYSTERESIS"),
+                         attrids::iob_attrvals.at("NONE"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("CLAMP"),
+                         attrids::iob_attrvals.at("OFF"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("OPENDRAIN"),
+                         attrids::iob_attrvals.at("OFF"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("DDR_DYNTERM"),
+                         attrids::iob_attrvals.at("NA"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IO_BANK"),
+                         attrids::iob_attrvals.at("NA"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("PADDI"),
+                         attrids::iob_attrvals.at("PADDI"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("PULL_STRENGTH"),
+                         attrids::iob_attrvals.at("NONE"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_GW5_VCCX_64"),
+                         attrids::iob_attrvals.at("3.3"));
+
+            auto bits = get_longval_fuses(db, tiledata.ttyp, io_attrs, "IOBA");
+            set_fuses_in_tile(tilemap[{row, col}], bits);
+        }
+
+        // IOBB attributes
+        {
+            // Determine fuse location (may have offset for IOBB)
+            int64_t fuse_row = row;
+            int64_t fuse_col = col;
+            auto iobb_it = tiledata.bels.find("IOBB");
+            if (iobb_it != tiledata.bels.end() && iobb_it->second.fuse_cell_offset) {
+                fuse_row += iobb_it->second.fuse_cell_offset->first;
+                fuse_col += iobb_it->second.fuse_cell_offset->second;
+            }
+            const auto& fuse_tiledata = db.get_tile(fuse_row, fuse_col);
+
+            std::set<int64_t> io_attrs;
+            if (bus == "0" || bus == "1") {
+                add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_UNKNOWN60"),
+                             attrids::iob_attrvals.at("ON"));
+                add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_UNKNOWN61"),
+                             attrids::iob_attrvals.at("ON"));
+            } else {
+                add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_GW5_ADC_DYN_IN"),
+                             attrids::iob_attrvals.at("ENABLE"));
+                add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_UNKNOWN70"),
+                             attrids::iob_attrvals.at("UNKNOWN"));
+                add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_UNKNOWN71"),
+                             attrids::iob_attrvals.at("UNKNOWN"));
+            }
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IO_TYPE"),
+                         attrids::iob_attrvals.at("GW5_ADC_IN"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_GW5_ADC_IN"),
+                         attrids::iob_attrvals.at("ENABLE"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("PULLMODE"),
+                         attrids::iob_attrvals.at("NONE"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("HYSTERESIS"),
+                         attrids::iob_attrvals.at("NONE"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("CLAMP"),
+                         attrids::iob_attrvals.at("OFF"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("OPENDRAIN"),
+                         attrids::iob_attrvals.at("OFF"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("DDR_DYNTERM"),
+                         attrids::iob_attrvals.at("NA"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IO_BANK"),
+                         attrids::iob_attrvals.at("NA"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("PADDI"),
+                         attrids::iob_attrvals.at("PADDI"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("PULL_STRENGTH"),
+                         attrids::iob_attrvals.at("NONE"));
+            add_attr_val(db, "IOB", io_attrs, attrids::iob_attrids.at("IOB_GW5_VCCX_64"),
+                         attrids::iob_attrvals.at("3.3"));
+
+            auto bits = get_longval_fuses(db, fuse_tiledata.ttyp, io_attrs, "IOBB");
+            set_fuses_in_tile(tilemap[{fuse_row, fuse_col}], bits);
         }
     }
 }

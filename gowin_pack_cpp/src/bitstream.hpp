@@ -88,11 +88,6 @@ std::vector<std::vector<uint8_t>> hstack(const std::vector<std::vector<uint8_t>>
 std::vector<std::vector<uint8_t>> vstack(const std::vector<std::vector<uint8_t>>& a,
                                           const std::vector<std::vector<uint8_t>>& b);
 
-// Isolate segments that nextpnr has marked for isolation.
-// Parses SEG_WIRES_TO_ISOLATE net attributes and sets the corresponding
-// alonenode_6 fuses in the tilemap.
-void isolate_segments(const Netlist& netlist, const Device& db, Tilemap& tilemap);
-
 // Set Global Set/Reset (GSR) fuses in the tilemap.
 // Configures the GSR mode and related CFG fuses for the target device.
 void set_gsr_fuses(const Device& db, Tilemap& tilemap, const PackArgs& args);

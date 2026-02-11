@@ -56,7 +56,8 @@ void place_cells(
     const std::string& device,
     const std::vector<BelInfo>& extra_bels = {},
     BsramInitMap* bsram_init_map = nullptr,
-    std::vector<Gw5aBsramInfo>* gw5a_bsrams = nullptr);
+    std::vector<Gw5aBsramInfo>* gw5a_bsrams = nullptr,
+    std::map<int, TileBitmap>* extra_slots = nullptr);
 
 // Placement functions for specific BEL types
 void place_lut(const Device& db, const BelInfo& bel, Tilemap& tilemap);
@@ -74,6 +75,8 @@ void place_clkdiv(const Device& db, const BelInfo& bel, Tilemap& tilemap, const 
 void place_dcs(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
 void place_dqce(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 void place_dhcen(const Device& db, const BelInfo& bel, Tilemap& tilemap);
+void place_adc(const Device& db, const BelInfo& bel, Tilemap& tilemap,
+               std::map<int, TileBitmap>* extra_slots);
 
 // Set default IO fuses for all IOB pins (used and unused) and bank-level fuses
 void set_iob_default_fuses(
@@ -81,6 +84,9 @@ void set_iob_default_fuses(
     const Netlist& netlist,
     Tilemap& tilemap,
     const std::string& device);
+
+// Set ADC IOB fuses for ADC IO pins
+void set_adc_iobuf_fuses(const Device& db, Tilemap& tilemap);
 
 // Apply accumulated slice fuses (called at end of place_cells)
 void set_slice_fuses(const Device& db, Tilemap& tilemap);

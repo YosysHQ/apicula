@@ -7,8 +7,8 @@
 
 #include <cmath>
 #include <fstream>
+#include <functional>
 #include <iostream>
-#include <regex>
 #include <stdexcept>
 #include <algorithm>
 
@@ -246,72 +246,6 @@ std::vector<std::vector<uint8_t>> tilemap_to_bitmap(const Device& db, const Tile
         y_offset += first_tile.height;
     }
     return bitmap;
-}
-
-// ---------------------------------------------------------------------------
-// Isolate segments
-// ---------------------------------------------------------------------------
-// Because of default connections, a segment may end up being enabled at both
-// ends.  Nextpnr detects and lists the wires that need to be isolated via the
-// SEG_WIRES_TO_ISOLATE net attribute.  Here we parse that information and
-// disconnect using the alonenode_6 table.
-
-void isolate_segments(const Netlist& netlist, const Device& db, Tilemap& tilemap) {
-    // Pattern: X<col>Y<row>/<wire_name>
-    static const std::regex wire_re(R"(X(\d+)Y(\d+)/([\w]+))");
-
-    for (const auto& [net_name, net] : netlist.nets) {
-        // Look for the SEG_WIRES_TO_ISOLATE attribute
-        auto attr_it = net.attributes.find("SEG_WIRES_TO_ISOLATE");
-        if (attr_it == net.attributes.end()) {
-            continue;
-        }
-
-        // The attribute value is a semicolon-separated list of wire references
-        std::string val;
-        if (auto* s = std::get_if<std::string>(&attr_it->second)) {
-            val = *s;
-        } else {
-            continue;
-        }
-
-        // Split on semicolons
-        size_t pos = 0;
-        while (pos < val.size()) {
-            size_t next = val.find(';', pos);
-            if (next == std::string::npos) next = val.size();
-            std::string wire_ex = val.substr(pos, next - pos);
-            pos = next + 1;
-
-            if (wire_ex.empty()) continue;
-
-            std::smatch match;
-            if (!std::regex_match(wire_ex, match, wire_re)) {
-                throw std::runtime_error("Invalid isolated wire: " + wire_ex);
-            }
-
-            int64_t col = std::stoll(match[1].str());
-            int64_t row = std::stoll(match[2].str());
-            std::string wire = match[3].str();
-
-            const auto& tile = db.get_tile(row, col);
-            auto an_it = tile.alonenode_6.find(wire);
-            if (an_it == tile.alonenode_6.end()) {
-                throw std::runtime_error(
-                    "Wire " + wire + " is not in alonenode_6 fuse table");
-            }
-            if (an_it->second.size() != 1) {
-                throw std::runtime_error(
-                    "Incorrect alonenode_6 fuse table for " + wire);
-            }
-
-            const auto& bits = an_it->second[0].second;  // set<Coord>
-            auto& btile = tilemap[{row, col}];
-            for (const auto& [brow, bcol] : bits) {
-                set_bit(btile, brow, bcol);
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -769,16 +703,12 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
 
     // -----------------------------------------------------------------------
     // Step 2: Route nets (also generates pass-through LUT BELs for XD wires)
+    //         This also calls isolate_segments() internally.
     // -----------------------------------------------------------------------
     auto pip_bels = route_nets(db, netlist, tilemap, device);
 
     // -----------------------------------------------------------------------
-    // Step 3: Isolate segments
-    // -----------------------------------------------------------------------
-    isolate_segments(netlist, db, tilemap);
-
-    // -----------------------------------------------------------------------
-    // Step 4: Set GSR (Global Set/Reset) fuses
+    // Step 3: Set GSR (Global Set/Reset) fuses
     // -----------------------------------------------------------------------
     set_gsr_fuses(db, tilemap, args);
 
@@ -789,12 +719,18 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     std::vector<Gw5aBsramInfo> gw5a_bsrams;
     bool is_gw5_device = (device == "GW5A-25A" || device == "GW5AST-138C");
     place_cells(db, netlist, tilemap, device, pip_bels, &bsram_init_map,
-                is_gw5_device ? &gw5a_bsrams : nullptr);
+                is_gw5_device ? &gw5a_bsrams : nullptr,
+                &bs.extra_slots);
 
     // -----------------------------------------------------------------------
     // Step 5b: Set default IOB and bank fuses for all pins (used and unused)
     // -----------------------------------------------------------------------
     set_iob_default_fuses(db, netlist, tilemap, device);
+
+    // -----------------------------------------------------------------------
+    // Step 5c: Set ADC IOB fuses
+    // -----------------------------------------------------------------------
+    set_adc_iobuf_fuses(db, tilemap);
 
     // -----------------------------------------------------------------------
     // Step 6: Set dual-mode pin fuses
@@ -819,7 +755,7 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     }
 
     // -----------------------------------------------------------------------
-    // Step 8: Convert tilemap to bitmap
+    // Step 7: Convert tilemap to bitmap
     // -----------------------------------------------------------------------
     auto main_map = tilemap_to_bitmap(db, tilemap);
 
@@ -882,6 +818,80 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
 }
 
 // ---------------------------------------------------------------------------
+// Write extra slot bitmaps (ADC, PLL slots)
+// Mirrors Python bslib.py lines 316-359
+// ---------------------------------------------------------------------------
+static void write_extra_slots(std::ofstream& file,
+                               const std::map<int, TileBitmap>& extra_slots,
+                               std::function<void(uint8_t)> write_byte) {
+    auto write_bytes = [&](const std::vector<uint8_t>& bytes) {
+        for (uint8_t b : bytes) {
+            write_byte(b);
+        }
+    };
+
+    // Slot preamble
+    std::vector<uint8_t> crcdat;
+    std::vector<uint8_t> preamble1 = {0x6a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff};
+    crcdat.insert(crcdat.end(), preamble1.begin(), preamble1.end());
+    write_bytes(preamble1);
+    file << '\n';
+
+    std::vector<uint8_t> preamble2 = {0x6d, 0x00, 0x00, 0x00};
+    crcdat.insert(crcdat.end(), preamble2.begin(), preamble2.end());
+    write_bytes(preamble2);
+    // 16 bytes of 0xFF (written to file only, not to crcdat)
+    for (int i = 0; i < 16; i++) write_byte(0xFF);
+    file << '\n';
+
+    for (const auto& [slot_idx, slot_bitmap] : extra_slots) {
+        // Slot header
+        std::vector<uint8_t> hdr = {0x6a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        crcdat.insert(crcdat.end(), hdr.begin(), hdr.end());
+        write_bytes(hdr);
+        uint8_t idx_byte = static_cast<uint8_t>(slot_idx & 0xFF);
+        crcdat.push_back(idx_byte);
+        write_byte(idx_byte);
+        file << '\n';
+
+        // Size command
+        std::vector<uint8_t> size_cmd = {0x6b, 0x80, 0x00};
+        crcdat.insert(crcdat.end(), size_cmd.begin(), size_cmd.end());
+        write_bytes(size_cmd);
+
+        // Compute size: shape[0] * shape[1] / 8
+        size_t nrows = slot_bitmap.size();
+        size_t ncols = nrows > 0 ? slot_bitmap[0].size() : 0;
+        uint8_t size_byte = static_cast<uint8_t>((nrows * ncols) / 8);
+        crcdat.push_back(size_byte);
+        write_byte(size_byte);
+
+        // Transform and pack slot bitmap: transpose -> fliplr -> packbits
+        auto transposed = transpose(slot_bitmap);
+        auto flipped = fliplr(transposed);
+        auto packed = packbits(flipped);
+
+        // Write packed bitmap rows
+        for (const auto& row : packed) {
+            crcdat.insert(crcdat.end(), row.begin(), row.end());
+            write_bytes(row);
+        }
+
+        // CRC
+        uint16_t crc = crc16_arc(crcdat);
+        // Reset crcdat for next slot
+        crcdat.assign(2, 0xFF);
+
+        // Write CRC (little-endian)
+        write_byte(static_cast<uint8_t>(crc & 0xFF));
+        write_byte(static_cast<uint8_t>((crc >> 8) & 0xFF));
+        // 128 ones = 16 bytes of 0xFF
+        for (int i = 0; i < 16; i++) write_byte(0xFF);
+        file << '\n';
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Bitstream file output (.fs format)
 // ---------------------------------------------------------------------------
 
@@ -914,9 +924,22 @@ void write_bitstream(const std::string& path, const Bitstream& bs) {
         file << '\n';
     }
 
-    // Write footer lines
-    for (const auto& line : bs.footer) {
-        for (uint8_t b : line) {
+    // Write end-of-main-grid footer[0]
+    if (!bs.footer.empty()) {
+        for (uint8_t b : bs.footer[0]) {
+            write_byte(b);
+        }
+        file << '\n';
+    }
+
+    // Write extra slots (ADC, PLL slot bitmaps)
+    if (!bs.extra_slots.empty()) {
+        write_extra_slots(file, bs.extra_slots, write_byte);
+    }
+
+    // Write remaining footer lines (footer[1:])
+    for (size_t i = 1; i < bs.footer.size(); ++i) {
+        for (uint8_t b : bs.footer[i]) {
             write_byte(b);
         }
         file << '\n';
