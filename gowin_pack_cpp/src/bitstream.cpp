@@ -821,7 +821,7 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
 // Write extra slot bitmaps (ADC, PLL slots)
 // Mirrors Python bslib.py lines 316-359
 // ---------------------------------------------------------------------------
-static void write_extra_slots(std::ofstream& file,
+static std::vector<uint8_t> write_extra_slots(std::ofstream& file,
                                const std::map<int, TileBitmap>& extra_slots,
                                std::function<void(uint8_t)> write_byte) {
     auto write_bytes = [&](const std::vector<uint8_t>& bytes) {
@@ -889,6 +889,7 @@ static void write_extra_slots(std::ofstream& file,
         for (int i = 0; i < 16; i++) write_byte(0xFF);
         file << '\n';
     }
+    return crcdat;
 }
 
 // ---------------------------------------------------------------------------
@@ -982,6 +983,12 @@ void write_bitstream_gw5a(const std::string& path, const Bitstream& bs,
         file << '\n';
     }
 
+    // Write end-of-main-grid footer[0] (before BSRAM init, matching Python order)
+    if (!bs.footer.empty()) {
+        write_bytes(bs.footer[0]);
+        file << '\n';
+    }
+
     // --- GW5A BSRAM init part ---
     // Count used columns and build block sequences
     int64_t last_col = -1;
@@ -1021,27 +1028,12 @@ void write_bitstream_gw5a(const std::string& path, const Bitstream& bs,
     // Pack bits into bytes
     auto byteInitMap = packbits(bitInitMap);
 
-    // CRC state - start with accumulated header CRC data
+    // Write extra slots (ADC, PLL slot bitmaps) between footer[0] and BSRAM init
+    // In Python (bslib.py lines 316-361): if extra_slots, CRC state carries over;
+    // if no extra_slots, crcdat is reset to empty.
     std::vector<uint8_t> crcdat;
-    // Accumulate header bytes for CRC (skip preamble like in generate_frames)
-    {
-        int preamble = 3;
-        for (const auto& hdr_line : bs.header) {
-            if (preamble <= 0 && !hdr_line.empty() && hdr_line[0] != 0xD2) {
-                crcdat.insert(crcdat.end(), hdr_line.begin(), hdr_line.end());
-            }
-            if (preamble > 0) --preamble;
-        }
-    }
-    // Process frames to update CRC state
-    for (const auto& frame : bs.frames) {
-        // Frame contains data + 2-byte CRC + 6-byte padding
-        // The data portion (excluding CRC and padding) was fed into CRC
-        if (frame.size() > 8) {
-            size_t data_len = frame.size() - 8;
-            crcdat.insert(crcdat.end(), frame.begin(), frame.begin() + data_len);
-            crcdat.assign(6, 0xFF);
-        }
+    if (!bs.extra_slots.empty()) {
+        crcdat = write_extra_slots(file, bs.extra_slots, write_byte);
     }
 
     // Write BSRAM init data blocks
@@ -1106,9 +1098,10 @@ void write_bitstream_gw5a(const std::string& path, const Bitstream& bs,
         file << '\n';
     }
 
-    // Write footer lines
-    for (const auto& line : bs.footer) {
-        write_bytes(line);
+    // Write remaining footer lines (footer[1:], matching Python bslib.py line 366)
+    // footer[0] was already written above before BSRAM init data.
+    for (size_t i = 1; i < bs.footer.size(); ++i) {
+        write_bytes(bs.footer[i]);
         file << '\n';
     }
 }
