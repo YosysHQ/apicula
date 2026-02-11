@@ -23,3 +23,4 @@ generic/blinky.vm
 .vscode
 !gowin_pack_cpp/**
 gowin_pack_cpp/build/
+examples/gw5a/unpack.v
