@@ -240,7 +240,7 @@ void place_cells(
             }
             place_iob(db, bel, tilemap, device);
         } else if (bel.type == "rPLL" || bel.type == "PLLVR" || bel.type == "PLLA" || bel.type == "RPLLA") {
-            place_pll(db, bel, tilemap, device);
+            place_pll(db, bel, tilemap, device, extra_slots);
         } else if (bel.type == "DP" || bel.type == "SDP" || bel.type == "SP" || bel.type == "ROM") {
             if (device == "GW5A-25A" && gw5a_bsrams) {
                 // GW5A-25A: collect BSRAM positions for deferred processing
@@ -1499,7 +1499,8 @@ static std::tuple<int64_t, int64_t, int64_t> calc_pll_pump(double fref, double f
 // place_pll - Place a PLL BEL
 // Uses shortval table "PLL"
 // ============================================================================
-void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device) {
+void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device,
+               std::map<int, TileBitmap>* extra_slots) {
     using namespace attrids;
 
     int64_t row = bel.row - 1;
@@ -1582,6 +1583,111 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
 
     // Get parameters from bel
     auto params = bel.parameters;
+
+    // For PLLA, rename params (prefix with A_) and merge defaults
+    // Python: new_attrs = plla_attr_rename(attrs)
+    //         pll_inattrs = add_pll_default_attrs(new_attrs, _default_plla_inattrs)
+    if (pll_type == "PLLA") {
+        std::map<std::string, std::string> plla_params;
+        // Rename: prefix non-FCLKIN params with 'A_'
+        for (const auto& [k, v] : params) {
+            std::string uk = to_upper(k);
+            if (uk != "FCLKIN") {
+                plla_params["A_" + uk] = v;
+            } else {
+                plla_params[uk] = v;
+            }
+        }
+        // Merge _default_plla_inattrs (only add if not already present)
+        static const std::vector<std::pair<std::string, std::string>> default_plla_inattrs = {
+            {"FCLKIN", "100.00"},
+            {"A_IDIV_SEL", "1"},
+            {"A_FBDIV_SEL", "1"},
+            {"A_ODIV0_SEL", "8"},
+            {"A_ODIV1_SEL", "8"},
+            {"A_ODIV2_SEL", "8"},
+            {"A_ODIV3_SEL", "8"},
+            {"A_ODIV4_SEL", "8"},
+            {"A_ODIV5_SEL", "8"},
+            {"A_ODIV6_SEL", "8"},
+            {"A_MDIV_SEL", "8"},
+            {"A_MDIV_FRAC_SEL", "0"},
+            {"A_ODIV0_FRAC_SEL", "0"},
+            {"A_CLKOUT0_EN", "TRUE"},
+            {"A_CLKOUT1_EN", "TRUE"},
+            {"A_CLKOUT2_EN", "TRUE"},
+            {"A_CLKOUT3_EN", "TRUE"},
+            {"A_CLKOUT4_EN", "TRUE"},
+            {"A_CLKOUT5_EN", "TRUE"},
+            {"A_CLKOUT6_EN", "TRUE"},
+            {"A_CLKFB_SEL", "INTERNAL"},
+            {"A_CLKOUT0_DT_DIR", "1"},
+            {"A_CLKOUT1_DT_DIR", "1"},
+            {"A_CLKOUT2_DT_DIR", "1"},
+            {"A_CLKOUT3_DT_DIR", "1"},
+            {"A_CLKOUT0_DT_STEP", "0"},
+            {"A_CLKOUT1_DT_STEP", "0"},
+            {"A_CLKOUT2_DT_STEP", "0"},
+            {"A_CLKOUT3_DT_STEP", "0"},
+            {"A_CLK0_IN_SEL", "0"},
+            {"A_CLK0_OUT_SEL", "0"},
+            {"A_CLK1_IN_SEL", "0"},
+            {"A_CLK1_OUT_SEL", "0"},
+            {"A_CLK2_IN_SEL", "0"},
+            {"A_CLK2_OUT_SEL", "0"},
+            {"A_CLK3_IN_SEL", "0"},
+            {"A_CLK3_OUT_SEL", "0"},
+            {"A_CLK4_IN_SEL", "0"},
+            {"A_CLK4_OUT_SEL", "0"},
+            {"A_CLK5_IN_SEL", "0"},
+            {"A_CLK5_OUT_SEL", "0"},
+            {"A_CLK6_IN_SEL", "0"},
+            {"A_CLK6_OUT_SEL", "0"},
+            {"A_DYN_DPA_EN", "FALSE"},
+            {"A_CLKOUT0_PE_COARSE", "0"},
+            {"A_CLKOUT0_PE_FINE", "0"},
+            {"A_CLKOUT1_PE_COARSE", "0"},
+            {"A_CLKOUT1_PE_FINE", "0"},
+            {"A_CLKOUT2_PE_COARSE", "0"},
+            {"A_CLKOUT2_PE_FINE", "0"},
+            {"A_CLKOUT3_PE_COARSE", "0"},
+            {"A_CLKOUT3_PE_FINE", "0"},
+            {"A_CLKOUT4_PE_COARSE", "0"},
+            {"A_CLKOUT4_PE_FINE", "0"},
+            {"A_CLKOUT5_PE_COARSE", "0"},
+            {"A_CLKOUT5_PE_FINE", "0"},
+            {"A_CLKOUT6_PE_COARSE", "0"},
+            {"A_CLKOUT6_PE_FINE", "0"},
+            {"A_DYN_PE0_SEL", "FALSE"},
+            {"A_DYN_PE1_SEL", "FALSE"},
+            {"A_DYN_PE2_SEL", "FALSE"},
+            {"A_DYN_PE3_SEL", "FALSE"},
+            {"A_DYN_PE4_SEL", "FALSE"},
+            {"A_DYN_PE5_SEL", "FALSE"},
+            {"A_DYN_PE6_SEL", "FALSE"},
+            {"A_DE0_EN", "FALSE"},
+            {"A_DE1_EN", "FALSE"},
+            {"A_DE2_EN", "FALSE"},
+            {"A_DE3_EN", "FALSE"},
+            {"A_DE4_EN", "FALSE"},
+            {"A_DE5_EN", "FALSE"},
+            {"A_DE6_EN", "FALSE"},
+            {"A_RESET_I_EN", "FALSE"},
+            {"A_RESET_O_EN", "FALSE"},
+            {"A_DYN_ICP_SEL", "FALSE"},
+            {"A_ICP_SEL", "0"},
+            {"A_DYN_LPF_SEL", "FALSE"},
+            {"A_LPF_RES", "0"},
+            {"A_LPF_CAP", "0"},
+            {"A_SSC_EN", "0"},
+        };
+        for (const auto& [k, v] : default_plla_inattrs) {
+            if (plla_params.find(k) == plla_params.end()) {
+                plla_params[k] = v;
+            }
+        }
+        params = std::move(plla_params);
+    }
 
     for (const auto& [attr, val] : params) {
         std::string ua = to_upper(attr);
@@ -1774,28 +1880,27 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
         }
     }
 
-    // Calculate pump parameters for non-PLLA types
-    if (pll_type != "PLLA") {
-        if (device == "GW5A-25A") {
-            double Fpfd = fclkin / idiv;
-            double Fclkfb = Fpfd * fbdiv;
-            double Fvco = Fclkfb * pll_int_attrs["A_MDIV_SEL"];
-            auto [fclkin_idx, icp, r_idx] = calc_pll_pump(Fpfd, Fvco, device);
-            pll_int_attrs["KVCO"] = fclkin_idx / 16;
-            if (Fvco >= 1400.0) {
-                fclkin_idx += 1;
-            }
-            pll_int_attrs["A_ICP_SEL"] = icp;
-            pll_str_attrs["A_LPF_RES_SEL"] = "R" + std::to_string(r_idx);
-            pll_int_attrs["FLDCOUNT"] = fclkin_idx;
-        } else {
-            double fref = fclkin / idiv;
-            double fvco = (odiv * fbdiv * fclkin) / idiv;
-            auto [fclkin_idx, icp, r_idx] = calc_pll_pump(fref, fvco, device);
-            pll_int_attrs["ICPSEL"] = icp;
-            pll_str_attrs["LPR"] = "R" + std::to_string(r_idx);
-            pll_int_attrs["FLDCOUNT"] = fclkin_idx;
+    // Calculate pump parameters
+    // Python: pump calc is device-based, not PLL-type-based (GW5A-25A has PLLA)
+    if (device == "GW5A-25A") {
+        double Fpfd = fclkin / idiv;
+        double Fclkfb = Fpfd * fbdiv;
+        double Fvco = Fclkfb * pll_int_attrs["A_MDIV_SEL"];
+        auto [fclkin_idx, icp, r_idx] = calc_pll_pump(Fpfd, Fvco, device);
+        pll_int_attrs["KVCO"] = fclkin_idx / 16;
+        if (Fvco >= 1400.0) {
+            fclkin_idx += 1;
         }
+        pll_int_attrs["A_ICP_SEL"] = icp;
+        pll_str_attrs["A_LPF_RES_SEL"] = "R" + std::to_string(r_idx);
+        pll_int_attrs["FLDCOUNT"] = fclkin_idx;
+    } else if (pll_type != "PLLA") {
+        double fref = fclkin / idiv;
+        double fvco = (odiv * fbdiv * fclkin) / idiv;
+        auto [fclkin_idx, icp, r_idx] = calc_pll_pump(fref, fvco, device);
+        pll_int_attrs["ICPSEL"] = icp;
+        pll_str_attrs["LPR"] = "R" + std::to_string(r_idx);
+        pll_int_attrs["FLDCOUNT"] = fclkin_idx;
     }
 
     // Build final attribute set
@@ -1821,10 +1926,35 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
         add_attr_val(db, "PLL", fin_attrs, attr_it->second, val);
     }
 
-    // Get fuses for main PLL tile
-    std::set<Coord> fuses = get_shortval_fuses(db, ttyp, fin_attrs, "PLL");
-    auto& tile = tilemap[{row, col}];
-    set_fuses_in_tile(tile, fuses);
+    // For PLLA (GW5A), write PLL fuses to extra slot bitmap (Python lines 3471-3474)
+    if (pll_type == "PLLA" && extra_slots) {
+        std::set<Coord> fuses = get_shortval_fuses(db, 1024, fin_attrs, "PLL");
+        // Get slot_idx from extra_func[row, col]['pll']['slot_idx']
+        auto ef_it = db.extra_func.find({row, col});
+        if (ef_it != db.extra_func.end()) {
+            auto pll_it = ef_it->second.find("pll");
+            if (pll_it != ef_it->second.end()) {
+                using msgpack::adaptor::get_map_value;
+                int64_t slot_idx = get_map_value<int64_t>(pll_it->second, "slot_idx");
+
+                // Create or get 8x35 slot bitmap (Python: bitmatrix.zeros(8, 35))
+                auto& slot_bitmap = (*extra_slots)[static_cast<int>(slot_idx)];
+                if (slot_bitmap.empty()) {
+                    slot_bitmap = create_tile_bitmap(8, 35);
+                }
+                for (const auto& [r, c] : fuses) {
+                    if (r >= 0 && r < 8 && c >= 0 && c < 35) {
+                        slot_bitmap[r][c] = 1;
+                    }
+                }
+            }
+        }
+    } else {
+        // Non-PLLA: write PLL fuses to main tilemap
+        std::set<Coord> fuses = get_shortval_fuses(db, ttyp, fin_attrs, "PLL");
+        auto& tile = tilemap[{row, col}];
+        set_fuses_in_tile(tile, fuses);
+    }
 
     // PLLVR: also write PLL fuses to cfg tile (only for GW1NS-4 / 4C)
     if (pll_type == "PLLVR") {

@@ -64,7 +64,8 @@ void place_lut(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 void place_dff(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 void place_alu(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 void place_iob(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
-void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
+void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device,
+               std::map<int, TileBitmap>* extra_slots = nullptr);
 void place_bsram(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
 void place_dsp(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device);
 void place_iologic(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std::string& device, const Netlist& netlist);
