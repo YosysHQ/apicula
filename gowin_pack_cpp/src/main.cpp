@@ -77,6 +77,12 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        // Auto-force SSPI as GPIO for GW5A-25A (Python gowin_pack.py line 4260-4263)
+        if (!sspi_as_gpio && device == "GW5A-25A") {
+            std::cerr << "Warning. For GW5A-25A SSPI must be set as GPIO." << std::endl;
+            sspi_as_gpio = true;
+        }
+
         // Generate bitstream
         std::cout << "Generating bitstream..." << std::endl;
         apycula::PackArgs pack_args;
