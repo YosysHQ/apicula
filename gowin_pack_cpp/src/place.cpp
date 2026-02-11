@@ -75,12 +75,6 @@ static std::set<int> vcc_net_bits;
 // ADC IO location tracking (like Python's adc_iolocs global)
 static std::map<Coord, std::string> adc_iolocs;  // (row, col) -> bus string
 
-// Stale mode from place_cells - tracks the last DIFF cell's mode.
-// In Python, the 'mode' variable leaks from the first IOB pass into the second pass
-// because DIFF cells are processed last (pushed to 'later' list). This affects
-// LVDS drive handling at Python line 3661-3663.
-static std::string last_diff_mode;
-
 static bool is_const_net(int bit) {
     return gnd_net_bits.count(bit) || vcc_net_bits.count(bit);
 }
@@ -186,10 +180,9 @@ void place_cells(
     std::vector<Gw5aBsramInfo>* gw5a_bsrams,
     std::map<int, TileBitmap>* extra_slots) {
 
-    // Clear slice attributes, ADC IO locations, and stale mode for fresh run
+    // Clear slice attributes and ADC IO locations for fresh run
     slice_attrvals.clear();
     adc_iolocs.clear();
-    last_diff_mode.clear();
 
     // Populate GND/VCC net bit sets from netlist (matching Python _gnd_net/_vcc_net)
     gnd_net_bits.clear();
@@ -222,12 +215,9 @@ void place_cells(
             if (diff_it != bel.parameters.end()) {
                 // N-pin: skip entirely (Python line 3300-3301)
                 if (diff_it->second == "N") continue;
-                // P-pin: set mode from DIFF_TYPE (Python line 3307)
-                // In Python, DIFF cells are processed last (deferred to 'later' list).
-                // The 'mode' variable persists as the stale mode into Step 2.
+                // P-pin: get DIFF_TYPE mode (Python line 3307)
                 auto dt_it = bel.parameters.find("DIFF_TYPE");
                 if (dt_it != bel.parameters.end()) {
-                    last_diff_mode = dt_it->second;
                     // TLVDS_IBUF_ADC: ADC analog input - skip IOB processing
                     // (Python line 3312-3315)
                     if (dt_it->second == "TLVDS_IBUF_ADC") {
@@ -1082,19 +1072,6 @@ void set_iob_default_fuses(
                     in_iob_attrs["TO"] = "UNKNOWN";
                 }
             }
-            // LVDS drive handling (Python lines 3661-3663)
-            // Python's `mode` variable is stale from the first IOB pass. DIFF cells
-            // are processed last (deferred to 'later' list), so the stale mode is
-            // the DIFF_TYPE of the last P-pin DIFF cell. When mode[1:] starts with
-            // 'LVDS' (e.g. TLVDS_IBUF_ADC -> 'LVDS_IBUF_ADC'), DRIVE is set to
-            // 'UNKNOWN' which prevents it from contributing to bank_attrs.
-            if (device != "GW1N-4" && device != "GW1NS-4" &&
-                last_diff_mode.size() > 1 &&
-                last_diff_mode.substr(1, 4) == "LVDS" &&
-                in_iob_attrs.count("DRIVE") && in_iob_attrs["DRIVE"] != "0") {
-                in_iob_attrs["DRIVE"] = "UNKNOWN";
-            }
-
             // Build B-pin attributes for LVDS pairs (Python lines 3664-3685)
             std::map<std::string, std::string> in_iob_b_attrs;
             // MIPI: change IO_TYPE to LVDS25 and set B-pin attrs (Python lines 3665-3671)
