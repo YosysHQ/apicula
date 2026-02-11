@@ -230,8 +230,8 @@ inline int get_clk_number(const std::string& name, const std::string& device) {
 // Matches Python is_clock_pip() in gowin_pack.py
 inline bool is_clock_pip(const std::string& src, const std::string& dest,
                          const std::string& device) {
-    // Check for _BOT/_TOP suffix at position 8
-    if (src.size() > 12 && (src.substr(8, 4) == "_BOT" || src.substr(8, 4) == "_TOP")) {
+    // Check for _BOT/_TOP suffix at position 8 (Python: src[8:].startswith('_BOT'))
+    if (src.size() >= 12 && (src.substr(8, 4) == "_BOT" || src.substr(8, 4) == "_TOP")) {
         return true;
     }
 
