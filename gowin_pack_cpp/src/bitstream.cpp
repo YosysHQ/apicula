@@ -786,7 +786,10 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     // Step 5: Place cells (including pass-through LUTs from routing)
     // -----------------------------------------------------------------------
     BsramInitMap bsram_init_map;
-    place_cells(db, netlist, tilemap, device, pip_bels, &bsram_init_map);
+    std::vector<Gw5aBsramInfo> gw5a_bsrams;
+    bool is_gw5_device = (device == "GW5A-25A" || device == "GW5AST-138C");
+    place_cells(db, netlist, tilemap, device, pip_bels, &bsram_init_map,
+                is_gw5_device ? &gw5a_bsrams : nullptr);
 
     // -----------------------------------------------------------------------
     // Step 5b: Set default IOB and bank fuses for all pins (used and unused)
@@ -835,9 +838,28 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     set_footer_checksum(bs.footer, checksum, device);
 
     // -----------------------------------------------------------------------
-    // Step 10b: Append BSRAM init data below main bitmap
+    // Step 10b: Handle BSRAM init data
     // -----------------------------------------------------------------------
-    if (!bsram_init_map.empty()) {
+    if (is_gw5_device && !gw5a_bsrams.empty()) {
+        // GW5A: deferred BSRAM init processing with map_offset
+        // Process collected BSRAMs sorted by (col, row)
+        int64_t last_col = -1;
+        int map_offset = -1;
+        for (const auto& bsram : gw5a_bsrams) {
+            if (bsram.col != last_col) {
+                last_col = bsram.col;
+                map_offset++;
+            }
+            store_bsram_init_val(db, bsram.row, bsram.col, bsram.typ,
+                                 bsram.params, bsram.attrs, device,
+                                 bsram_init_map, map_offset);
+        }
+        bsram_init_map = transpose(bsram_init_map);
+        // GW5A BSRAM init is written separately via write_bitstream_gw5a,
+        // NOT appended to main_map.
+        bs.gw5a_bsram_init_map = std::move(bsram_init_map);
+        bs.gw5a_bsrams = std::move(gw5a_bsrams);
+    } else if (!bsram_init_map.empty()) {
         main_map = vstack(main_map, bsram_init_map);
     }
 
@@ -897,6 +919,173 @@ void write_bitstream(const std::string& path, const Bitstream& bs) {
         for (uint8_t b : line) {
             write_byte(b);
         }
+        file << '\n';
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GW5A BSRAM init map writing (Python: bslib.py write_gw5_bsram_init_map)
+// ---------------------------------------------------------------------------
+
+void write_bitstream_gw5a(const std::string& path, const Bitstream& bs,
+                          const BsramInitMap& gw5a_bsram_init_map,
+                          const std::vector<Gw5aBsramInfo>& gw5a_bsrams) {
+    std::ofstream file(path);
+    if (!file) {
+        throw std::runtime_error("Could not open output file: " + path);
+    }
+
+    auto write_byte = [&file](uint8_t b) {
+        for (int i = 7; i >= 0; --i) {
+            file << ((b >> i) & 1);
+        }
+    };
+
+    auto write_bytes = [&](const std::vector<uint8_t>& bytes) {
+        for (uint8_t b : bytes) {
+            write_byte(b);
+        }
+    };
+
+    // Write header lines
+    for (const auto& line : bs.header) {
+        write_bytes(line);
+        file << '\n';
+    }
+
+    // Write frame data
+    for (const auto& frame : bs.frames) {
+        write_bytes(frame);
+        file << '\n';
+    }
+
+    // --- GW5A BSRAM init part ---
+    // Count used columns and build block sequences
+    int64_t last_col = -1;
+    int used_blocks = 0;
+    std::map<int, int> block_seq;  // start_col_div3 -> count
+    int last_block_seq = -1;
+
+    for (const auto& bsram : gw5a_bsrams) {
+        if (bsram.col != last_col) {
+            used_blocks++;
+            if (bsram.col - last_col != 3) {
+                // New block sequence when BSRAMs are not contiguous (3 cells apart)
+                int key = static_cast<int>(bsram.col / 3);
+                block_seq.emplace(key, 0);
+                last_block_seq = key;
+            }
+            block_seq[last_block_seq]++;
+            last_col = bsram.col;
+        }
+    }
+
+    // Rearrange init map - cut unused tail blocks
+    int tail = used_blocks * 256;
+    size_t w = gw5a_bsram_init_map.empty() ? 0 : gw5a_bsram_init_map[0].size();
+
+    // Reverse columns (fliplr equivalent for init map)
+    std::vector<std::vector<uint8_t>> bitInitMap;
+    bitInitMap.reserve(tail);
+    for (int i = 0; i < tail && i < static_cast<int>(gw5a_bsram_init_map.size()); ++i) {
+        std::vector<uint8_t> row(w);
+        for (size_t j = 0; j < w; ++j) {
+            row[j] = gw5a_bsram_init_map[i][w - j - 1];
+        }
+        bitInitMap.push_back(std::move(row));
+    }
+
+    // Pack bits into bytes
+    auto byteInitMap = packbits(bitInitMap);
+
+    // CRC state - start with accumulated header CRC data
+    std::vector<uint8_t> crcdat;
+    // Accumulate header bytes for CRC (skip preamble like in generate_frames)
+    {
+        int preamble = 3;
+        for (const auto& hdr_line : bs.header) {
+            if (preamble <= 0 && !hdr_line.empty() && hdr_line[0] != 0xD2) {
+                crcdat.insert(crcdat.end(), hdr_line.begin(), hdr_line.end());
+            }
+            if (preamble > 0) --preamble;
+        }
+    }
+    // Process frames to update CRC state
+    for (const auto& frame : bs.frames) {
+        // Frame contains data + 2-byte CRC + 6-byte padding
+        // The data portion (excluding CRC and padding) was fed into CRC
+        if (frame.size() > 8) {
+            size_t data_len = frame.size() - 8;
+            crcdat.insert(crcdat.end(), frame.begin(), frame.begin() + data_len);
+            crcdat.assign(6, 0xFF);
+        }
+    }
+
+    // Write BSRAM init data blocks
+    int data_first_col = 0;
+    for (const auto& [start, cnt] : block_seq) {
+        // Block start command
+        std::vector<uint8_t> cmd1 = {0x12, 0x00, 0x00, 0x00};
+        crcdat.insert(crcdat.end(), cmd1.begin(), cmd1.end());
+        write_bytes(cmd1);
+        file << '\n';
+
+        // Empty cols command
+        std::vector<uint8_t> cmd2 = {0x70, 0x00, 0x00};
+        crcdat.insert(crcdat.end(), cmd2.begin(), cmd2.end());
+        write_bytes(cmd2);
+        uint8_t start_byte = static_cast<uint8_t>((start + 1) & 0xFF);
+        crcdat.push_back(start_byte);
+        write_byte(start_byte);
+        std::vector<uint8_t> empty_cols(start + 1, 0x00);
+        crcdat.insert(crcdat.end(), empty_cols.begin(), empty_cols.end());
+        write_bytes(empty_cols);
+        file << '\n';
+
+        // Data cols command
+        std::vector<uint8_t> cmd3 = {0x4E, 0x80};
+        crcdat.insert(crcdat.end(), cmd3.begin(), cmd3.end());
+        write_bytes(cmd3);
+        uint8_t cnt_lo = static_cast<uint8_t>(cnt & 0xFF);
+        uint8_t cnt_hi = static_cast<uint8_t>((cnt >> 8) & 0xFF);
+        crcdat.push_back(cnt_lo);
+        write_byte(cnt_lo);
+        crcdat.push_back(cnt_hi);
+        write_byte(cnt_hi);
+        file << '\n';
+
+        // Data rows
+        int end_col = data_first_col + 256 * cnt;
+        for (int row_idx = data_first_col;
+             row_idx < end_col && row_idx < static_cast<int>(byteInitMap.size());
+             ++row_idx) {
+            write_bytes(byteInitMap[row_idx]);
+            crcdat.insert(crcdat.end(), byteInitMap[row_idx].begin(),
+                          byteInitMap[row_idx].end());
+            uint16_t crc = crc16_arc(crcdat);
+            crcdat.assign(6, 0xFF);
+            write_byte(static_cast<uint8_t>(crc & 0xFF));
+            write_byte(static_cast<uint8_t>((crc >> 8) & 0xFF));
+            // 6 bytes of 0xFF padding (48 bits)
+            for (int i = 0; i < 6; ++i) write_byte(0xFF);
+            file << '\n';
+        }
+        data_first_col = end_col;
+
+        // End of block marker
+        std::vector<uint8_t> end_marker(18, 0xFF);
+        crcdat.insert(crcdat.end(), end_marker.begin(), end_marker.end());
+        write_bytes(end_marker);
+        uint16_t crc = crc16_arc(crcdat);
+        crcdat.clear();
+        write_byte(static_cast<uint8_t>(crc & 0xFF));
+        write_byte(static_cast<uint8_t>((crc >> 8) & 0xFF));
+        file << '\n';
+    }
+
+    // Write footer lines
+    for (const auto& line : bs.footer) {
+        write_bytes(line);
         file << '\n';
     }
 }

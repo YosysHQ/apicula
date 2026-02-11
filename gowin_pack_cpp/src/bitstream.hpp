@@ -8,11 +8,13 @@
 
 #include "chipdb_types.hpp"
 #include "netlist.hpp"
+#include "place.hpp"
 
 namespace apycula {
 
 // Tile bitmap: 2D array of bits (row x col)
 using TileBitmap = std::vector<std::vector<uint8_t>>;
+using BsramInitMap = std::vector<std::vector<uint8_t>>;
 
 // Tilemap: (row, col) -> tile bitmap
 using Tilemap = std::map<Coord, TileBitmap>;
@@ -24,6 +26,9 @@ struct Bitstream {
     std::vector<std::vector<uint8_t>> footer;
     bool compressed = false;
     std::map<int, TileBitmap> extra_slots;
+    // GW5A BSRAM init data (written separately, not appended to main bitmap)
+    BsramInitMap gw5a_bsram_init_map;
+    std::vector<Gw5aBsramInfo> gw5a_bsrams;
 };
 
 // Pack arguments - configuration flags passed through the tool chain.
@@ -54,6 +59,11 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
 
 // Write bitstream to file (.fs format)
 void write_bitstream(const std::string& path, const Bitstream& bs);
+
+// Write bitstream with GW5A BSRAM init data (separate block-based format)
+void write_bitstream_gw5a(const std::string& path, const Bitstream& bs,
+                          const BsramInitMap& bsram_init_map,
+                          const std::vector<Gw5aBsramInfo>& gw5a_bsrams);
 
 // CRC-16-Arc calculation
 uint16_t crc16_arc(const uint8_t* data, size_t len);

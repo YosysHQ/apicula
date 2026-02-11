@@ -3,6 +3,7 @@
 #include "place.hpp"
 #include "fuses.hpp"
 #include "attrids.hpp"
+#include "wirenames.hpp"
 #include <regex>
 #include <iostream>
 #include <sstream>
@@ -176,6 +177,11 @@ std::vector<BelInfo> route_nets(
     std::vector<BelInfo> pip_bels;
     auto pips = get_pips(netlist, pip_bels);
 
+    bool is_gw5a = (device == "GW5A-25A" || device == "GW5AST-138C");
+
+    // Track used spines for dedup (shared across all pips)
+    std::set<std::pair<char, std::string>> used_spines;
+
     for (const auto& pip : pips) {
         // PIPs use 1-indexed coordinates; convert to 0-indexed for tile access
         int64_t row = pip.row - 1;
@@ -186,6 +192,13 @@ std::vector<BelInfo> route_nets(
             continue;
         }
 
+        // GW5A clock pips use full-scan set_clock_fuses
+        if (is_gw5a && is_clock_pip(pip.src, pip.dest, device)) {
+            set_clock_fuses(db, tilemap, pip.row, pip.col, pip.src, pip.dest,
+                            device, used_spines);
+            continue;
+        }
+
         const auto& tiledata = db.get_tile(row, col);
         auto& tile = tilemap[{row, col}];
 
@@ -193,7 +206,7 @@ std::vector<BelInfo> route_nets(
         std::set<Coord> bits;
         bool found = false;
 
-        // Check clock_pips first (skip for GW5A-25A which uses set_clock_fuses)
+        // Check clock_pips first (skip for GW5A-25A which uses set_clock_fuses above)
         if (device != "GW5A-25A") {
             auto clock_it = tiledata.clock_pips.find(pip.dest);
             if (clock_it != tiledata.clock_pips.end()) {
@@ -286,22 +299,142 @@ std::vector<BelInfo> route_nets(
 void set_clock_fuses(
     const Device& db,
     Tilemap& tilemap,
-    int64_t row,
-    int64_t col,
+    int64_t row_,   // 1-indexed pip row
+    int64_t col_,   // 1-indexed pip col
     const std::string& src,
     const std::string& dest,
-    const std::string& device) {
+    const std::string& device,
+    std::set<std::pair<char, std::string>>& used_spines) {
 
-    // Implementation for GW5A clock routing
-    const auto& tiledata = db.get_tile(row, col);
-    auto& tile = tilemap[{row, col}];
+    // SPINE->{GT00, GT10} must be set in the cell only
+    if (dest == "GT00" || dest == "GT10") {
+        const auto& tiledata = db.get_tile(row_ - 1, col_ - 1);
+        auto clock_it = tiledata.clock_pips.find(dest);
+        if (clock_it != tiledata.clock_pips.end()) {
+            auto src_it = clock_it->second.find(src);
+            if (src_it != clock_it->second.end()) {
+                auto& tile = tilemap[{row_ - 1, col_ - 1}];
+                for (const auto& [brow, bcol] : src_it->second) {
+                    tile[brow][bcol] = 1;
+                }
+            }
+        }
+        return;
+    }
 
-    auto clock_it = tiledata.clock_pips.find(dest);
-    if (clock_it != tiledata.clock_pips.end()) {
-        auto src_it = clock_it->second.find(src);
-        if (src_it != clock_it->second.end()) {
-            for (const auto& [brow, bcol] : src_it->second) {
-                tile[brow][bcol] = 1;
+    // Area-based filtering for GW5AST-138C
+    // area: 'T' = top, 'B' = bottom, 'C' = clock bridge
+    char area = 'T';
+    int64_t allowed_row_start = 0;
+    int64_t allowed_row_end = static_cast<int64_t>(db.rows());
+    int64_t allowed_col_start = 0;
+    int64_t allowed_col_end = static_cast<int64_t>(db.cols());
+
+    // Clock bridge tile types and locations for GW5AST-138C
+    static const std::set<int64_t> clock_bridge_ttypes = {80, 81, 82, 83, 84, 85};
+    std::set<int64_t> clock_bridge_cols;
+    int64_t clock_bridge_row = 54; // single bridge row
+
+    if (device == "GW5AST-138C") {
+        allowed_row_end = 55; // top half
+
+        // Build clock bridge cols
+        for (int64_t c = 0; c < static_cast<int64_t>(db.cols()); c++) {
+            int64_t ttyp = db.get_ttyp(clock_bridge_row, c);
+            if (clock_bridge_ttypes.count(ttyp)) {
+                clock_bridge_cols.insert(c);
+            }
+        }
+
+        if (row_ - 1 >= 55) {
+            // Bottom half
+            allowed_row_start = 55;
+            allowed_row_end = static_cast<int64_t>(db.rows());
+            area = 'B';
+        } else {
+            int64_t ttyp = db.get_ttyp(row_ - 1, col_ - 1);
+            if (clock_bridge_ttypes.count(ttyp)) {
+                // Clock bridge area
+                allowed_row_start = clock_bridge_row;
+                allowed_row_end = clock_bridge_row + 1;
+                allowed_col_start = 0;
+                allowed_col_end = static_cast<int64_t>(db.cols());
+                // Only include bridge cols
+                area = 'C';
+            }
+        }
+    }
+
+    std::string spine_enable_table;
+    std::pair<char, std::string> spine_key = {area, dest};
+
+    if (dest.substr(0, 5) == "SPINE" && used_spines.find(spine_key) == used_spines.end()) {
+        used_spines.insert(spine_key);
+
+        // Get spine number from name
+        const auto& nums = get_clknumbers(device);
+        auto it = nums.find(dest);
+        if (it != nums.end()) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "5A_PCLK_ENABLE_%02d", it->second);
+            spine_enable_table = buf;
+        }
+
+        // Scan all tiles in allowed area
+        for (int64_t row = 0; row < static_cast<int64_t>(db.rows()); row++) {
+            if (row < allowed_row_start || row >= allowed_row_end) continue;
+
+            for (int64_t col = 0; col < static_cast<int64_t>(db.cols()); col++) {
+                // Area filtering for 138C
+                if (device == "GW5AST-138C") {
+                    if (area == 'C') {
+                        if (!clock_bridge_cols.count(col)) continue;
+                    } else if (area == 'T') {
+                        // Skip clock bridge tiles in top area
+                        if (row == clock_bridge_row && clock_bridge_cols.count(col)) continue;
+                    }
+                }
+
+                const auto& rc = db.get_tile(row, col);
+                int64_t ttyp = db.get_ttyp(row, col);
+                std::set<Coord> bits;
+
+                // Check clock_pips for this tile
+                auto clock_it = rc.clock_pips.find(dest);
+                if (clock_it != rc.clock_pips.end()) {
+                    auto src_it = clock_it->second.find(src);
+                    if (src_it != clock_it->second.end()) {
+                        bits = src_it->second;
+                    }
+                }
+
+                // Check spine enable table in shortval
+                if (!spine_enable_table.empty()) {
+                    auto ttyp_it = db.shortval.find(ttyp);
+                    if (ttyp_it != db.shortval.end()) {
+                        auto table_it = ttyp_it->second.find(spine_enable_table);
+                        if (table_it != ttyp_it->second.end()) {
+                            Coord key{1, 0};
+                            auto val_it = table_it->second.find(key);
+                            if (val_it != table_it->second.end()) {
+                                bits.insert(val_it->second.begin(), val_it->second.end());
+                                std::cerr << "Enable spine " << dest << " <- " << src
+                                          << " (" << row_ << ", " << col_ << ") by "
+                                          << spine_enable_table << " at (" << row << ", " << col << ")" << std::endl;
+                            }
+                        }
+                    }
+                }
+
+                if (!bits.empty()) {
+                    auto& tile = tilemap[{row, col}];
+                    for (const auto& [brow, bcol] : bits) {
+                        if (brow >= 0 && brow < static_cast<int64_t>(tile.size()) &&
+                            bcol >= 0 && bcol < static_cast<int64_t>(tile[brow].size())) {
+                            tile[brow][bcol] = 1;
+                        }
+                    }
+                }
             }
         }
     }

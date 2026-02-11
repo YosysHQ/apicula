@@ -173,7 +173,8 @@ void place_cells(
     Tilemap& tilemap,
     const std::string& device,
     const std::vector<BelInfo>& extra_bels,
-    BsramInitMap* bsram_init_map) {
+    BsramInitMap* bsram_init_map,
+    std::vector<Gw5aBsramInfo>* gw5a_bsrams) {
 
     // Clear slice attributes for fresh run
     slice_attrvals.clear();
@@ -208,7 +209,20 @@ void place_cells(
         } else if (bel.type == "rPLL" || bel.type == "PLLVR" || bel.type == "PLLA" || bel.type == "RPLLA") {
             place_pll(db, bel, tilemap, device);
         } else if (bel.type == "DP" || bel.type == "SDP" || bel.type == "SP" || bel.type == "ROM") {
-            if (bsram_init_map && device != "GW5A-25A") {
+            if (device == "GW5A-25A" && gw5a_bsrams) {
+                // GW5A-25A: collect BSRAM positions for deferred processing
+                // Python: bisect.insort(gw5a_bsrams, (col - 1, row - 1, typ, parms, attrs))
+                // where col/row are 1-indexed from cell placement
+                Gw5aBsramInfo info;
+                info.col = bel.col - 1;  // 0-indexed
+                info.row = bel.row - 1;  // 0-indexed
+                info.typ = bel.type;
+                info.params = bel.parameters;
+                info.attrs = bel.attributes;
+                // Insert sorted (like Python's bisect.insort) - sorts by (col, row)
+                auto it = std::lower_bound(gw5a_bsrams->begin(), gw5a_bsrams->end(), info);
+                gw5a_bsrams->insert(it, info);
+            } else if (bsram_init_map) {
                 store_bsram_init_val(db, bel.row - 1, bel.col - 1, bel.type,
                                      bel.parameters, bel.attributes, device,
                                      *bsram_init_map);
@@ -678,6 +692,14 @@ void set_iob_default_fuses(
         std::string mode;
         std::map<std::string, std::string> user_attrs;  // parsed from &attrs
         std::map<std::string, std::string> params;       // NET_OEN, etc.
+        bool hclk = false;       // connected to HCLK_GCLK
+        bool hclk_pair = false;  // paired IOB for HCLK routing
+    };
+
+    // GW5A-25A HCLK IO pairs: (row, col) -> (pair_row, pair_col) (0-indexed)
+    static const std::map<std::pair<int64_t,int64_t>, std::pair<int64_t,int64_t>> hclk_io_pairs = {
+        {{36, 11}, {36, 30}}, {{36, 25}, {36, 32}},
+        {{36, 53}, {36, 28}}, {{36, 74}, {36, 90}},
     };
     struct BankInfo {
         std::string iostd;
@@ -798,6 +820,48 @@ void set_iob_default_fuses(
         for (const auto& [k, v] : bel.parameters) {
             if (k.substr(0, 4) == "NET_") {
                 iob_info.params[k] = v;
+            }
+        }
+
+        // GW5A-25A HCLK clock input detection (Python lines 3365-3381)
+        if (device == "GW5A-25A" && bel.cell) {
+            // Check if IOB's O port connects to a net with HCLK_GCLK in routing
+            auto o_it = bel.cell->port_connections.find("O");
+            if (o_it != bel.cell->port_connections.end()) {
+                bool hclk_connected = false;
+                for (const auto& [net_name, net] : netlist.nets) {
+                    auto routing_it = net.attributes.find("ROUTING");
+                    if (routing_it == net.attributes.end()) continue;
+                    const std::string* routing_str = std::get_if<std::string>(&routing_it->second);
+                    if (!routing_str || routing_str->find("HCLK_GCLK") == std::string::npos) continue;
+                    // Check if any O bit is in this net
+                    for (int obit : o_it->second) {
+                        for (int nbit : net.bits) {
+                            if (obit == nbit) {
+                                hclk_connected = true;
+                                break;
+                            }
+                        }
+                        if (hclk_connected) break;
+                    }
+                    if (hclk_connected) break;
+                }
+                if (hclk_connected) {
+                    auto pair_it = hclk_io_pairs.find({row, col});
+                    if (pair_it != hclk_io_pairs.end()) {
+                        // Create paired IOB entry
+                        UsedIOBInfo pair_info;
+                        pair_info.row = pair_it->second.first;
+                        pair_info.col = pair_it->second.second;
+                        pair_info.iob_idx = "A";
+                        pair_info.mode = iob_info.mode;
+                        pair_info.user_attrs = {{"IO_TYPE", iostd}};
+                        pair_info.params = iob_info.params;
+                        pair_info.hclk_pair = true;
+                        bi.used_iobs.push_back(std::move(pair_info));
+                    }
+                    iob_info.hclk = true;
+                }
             }
         }
 
@@ -1042,6 +1106,15 @@ void set_iob_default_fuses(
                     if (mode_for_attrs == "OBUF" || mode_for_attrs == "IOBUF") {
                         add_attr_val(db, "IOB", iob_attrs_set,
                                      iob_attrids.at("IOB_UNKNOWN51"), iob_attrvals.at("TRIMUX"));
+                    } else if (mode_for_attrs == "IBUF") {
+                        // HCLK clock input fuses (Python lines 3708-3711)
+                        if (iob.hclk) {
+                            add_attr_val(db, "IOB", iob_attrs_set,
+                                         iob_attrids.at("IOB_UNKNOWN67"), iob_attrvals.at("UNKNOWN263"));
+                        } else if (iob.hclk_pair) {
+                            add_attr_val(db, "IOB", iob_attrs_set,
+                                         iob_attrids.at("IOB_UNKNOWN67"), iob_attrvals.at("UNKNOWN266"));
+                        }
                     }
                 }
 
@@ -1690,7 +1763,8 @@ void store_bsram_init_val(const Device& db, int64_t row, int64_t col,
                           const std::map<std::string, std::string>& params,
                           const std::map<std::string, std::string>& attrs,
                           const std::string& device,
-                          BsramInitMap& bsram_init_map) {
+                          BsramInitMap& bsram_init_map,
+                          int map_offset) {
     // Skip BSRAM_AUX and cells without INIT_RAM_00
     if (typ == "BSRAM_AUX" || params.find("INIT_RAM_00") == params.end()) {
         return;
@@ -1819,7 +1893,9 @@ void store_bsram_init_val(const Device& db, int64_t row, int64_t col,
     }
 
     int x = 0;
-    if (!is_gw5) {
+    if (is_gw5) {
+        x = 256 * map_offset;
+    } else {
         for (int64_t jdx = 0; jdx < col; ++jdx) {
             x += static_cast<int>(db.get_tile(0, jdx).width);
         }
