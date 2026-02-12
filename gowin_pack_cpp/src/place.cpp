@@ -4,6 +4,7 @@
 #include "bitstream.hpp"
 #include "fuses.hpp"
 #include "attrids.hpp"
+#include "utils.hpp"
 #include <regex>
 #include <iostream>
 #include <cmath>
@@ -34,40 +35,6 @@ void clear_fuses_in_tile(TileBitmap& tile, const std::set<Coord>& fuses) {
     }
 }
 
-// Convert string to uppercase
-static std::string to_upper(const std::string& s) {
-    std::string result = s;
-    for (auto& c : result) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    return result;
-}
-
-// Parse a binary string to int (handles leading 0b or raw binary digits)
-static int64_t parse_binary(const std::string& s) {
-    std::string trimmed = s;
-    // Trim whitespace
-    while (!trimmed.empty() && std::isspace(static_cast<unsigned char>(trimmed.back()))) {
-        trimmed.pop_back();
-    }
-    while (!trimmed.empty() && std::isspace(static_cast<unsigned char>(trimmed.front()))) {
-        trimmed.erase(trimmed.begin());
-    }
-    if (trimmed.empty()) return 0;
-    // Handle 0b prefix
-    if (trimmed.size() >= 2 && trimmed[0] == '0' && (trimmed[1] == 'b' || trimmed[1] == 'B')) {
-        trimmed = trimmed.substr(2);
-    }
-    try {
-        return std::stoll(trimmed, nullptr, 2);
-    } catch (...) {
-        // Try decimal
-        try {
-            return std::stoll(trimmed, nullptr, 10);
-        } catch (...) {
-            return 0;
-        }
-    }
-}
-
 // GND/VCC net bit indices (populated from netlist $PACKER_GND/$PACKER_VCC)
 static std::set<int> gnd_net_bits;
 static std::set<int> vcc_net_bits;
@@ -77,15 +44,6 @@ static std::map<Coord, std::string> adc_iolocs;  // (row, col) -> bus string
 
 static bool is_const_net(int bit) {
     return gnd_net_bits.count(bit) || vcc_net_bits.count(bit);
-}
-
-// Get parameter with default
-static std::string get_param(const std::map<std::string, std::string>& params,
-                             const std::string& key,
-                             const std::string& default_val = "") {
-    auto it = params.find(key);
-    if (it != params.end()) return it->second;
-    return default_val;
 }
 
 // Get attribute with default

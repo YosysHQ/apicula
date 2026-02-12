@@ -3,6 +3,7 @@
 #include "../place.hpp"
 #include "../fuses.hpp"
 #include "../attrids.hpp"
+#include "../utils.hpp"
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -14,30 +15,6 @@ namespace apycula {
 // Helpers
 // ============================================================================
 
-static std::string to_upper_dsp(const std::string& s) {
-    std::string r = s;
-    for (auto& c : r) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    return r;
-}
-
-static int64_t parse_bin(const std::string& s) {
-    std::string t = s;
-    while (!t.empty() && std::isspace(static_cast<unsigned char>(t.back()))) t.pop_back();
-    while (!t.empty() && std::isspace(static_cast<unsigned char>(t.front()))) t.erase(t.begin());
-    if (t.size() >= 2 && t[0] == '0' && (t[1] == 'b' || t[1] == 'B')) t = t.substr(2);
-    if (t.empty()) return 0;
-    return std::stoll(t, nullptr, 2);
-}
-
-static void attrs_upper(std::map<std::string, std::string>& attrs) {
-    for (auto& [k, v] : attrs) v = to_upper_dsp(v);
-}
-
-static std::string get_param(const std::map<std::string, std::string>& p, const std::string& k, const std::string& def = "") {
-    auto it = p.find(k);
-    return it != p.end() ? it->second : def;
-}
-
 // Ensure params have default "0" for missing register parameters
 static void set_dsp_regs_0(std::map<std::string, std::string>& params, const std::vector<std::string>& names) {
     for (const auto& n : names) {
@@ -48,22 +25,22 @@ static void set_dsp_regs_0(std::map<std::string, std::string>& params, const std
 // CE/CLK/RESET value computation from binary attribute strings
 static std::string get_ce_val(const std::map<std::string, std::string>& attrs) {
     auto it = attrs.find("CE");
-    if (it != attrs.end() && parse_bin(it->second) != 0)
-        return "CEIN" + std::to_string(parse_bin(it->second));
+    if (it != attrs.end() && parse_binary(it->second) != 0)
+        return "CEIN" + std::to_string(parse_binary(it->second));
     return "UNKNOWN";
 }
 
 static std::string get_clk_val(const std::map<std::string, std::string>& attrs) {
     auto it = attrs.find("CLK");
-    if (it != attrs.end() && parse_bin(it->second) != 0)
-        return "CLKIN" + std::to_string(parse_bin(it->second));
+    if (it != attrs.end() && parse_binary(it->second) != 0)
+        return "CLKIN" + std::to_string(parse_binary(it->second));
     return "UNKNOWN";
 }
 
 static std::string get_reset_val(const std::map<std::string, std::string>& attrs) {
     auto it = attrs.find("RESET");
-    if (it != attrs.end() && parse_bin(it->second) != 0)
-        return "RSTIN" + std::to_string(parse_bin(it->second));
+    if (it != attrs.end() && parse_binary(it->second) != 0)
+        return "RSTIN" + std::to_string(parse_binary(it->second));
     return "UNKNOWN";
 }
 
@@ -86,7 +63,7 @@ static void set_multalu18x18_attrs(const Device& /*db*/, const std::string& /*ty
     std::string clk_val = get_clk_val(attrs);
     std::string reset_val = get_reset_val(attrs);
 
-    int mode = static_cast<int>(parse_bin(get_param(params, "MULTALU18X18_MODE", "0")));
+    int mode = static_cast<int>(parse_binary(get_param(params, "MULTALU18X18_MODE", "0")));
     int mode_01 = (mode != 2) ? 1 : 0;
     std::string accload = attrs["NET_ACCLOAD"];
 
@@ -98,7 +75,7 @@ static void set_multalu18x18_attrs(const Device& /*db*/, const std::string& /*ty
     da["OR2CIB_EN1L_2"] = "ENABLE";
     da["OR2CIB_EN1H_3"] = "ENABLE";
 
-    if (params.count("B_ADD_SUB") && parse_bin(params["B_ADD_SUB"]) == 1)
+    if (params.count("B_ADD_SUB") && parse_binary(params["B_ADD_SUB"]) == 1)
         da["OPCD_7"] = "1";
 
     da["ALU_EN"] = "ENABLE";
@@ -127,7 +104,7 @@ static void set_multalu18x18_attrs(const Device& /*db*/, const std::string& /*ty
         }
         if (mode == 0) {
             da["OPCD_4"] = "1";
-            if (params.count("C_ADD_SUB") && parse_bin(params["C_ADD_SUB"]) == 1)
+            if (params.count("C_ADD_SUB") && parse_binary(params["C_ADD_SUB"]) == 1)
                 da["OPCD_8"] = "1";
         }
     } else {
@@ -328,14 +305,14 @@ static void set_multaddalu18x18_attrs(const Device& /*db*/, const std::string& /
 {
     attrs_upper(attrs);
     std::string ce_val = get_ce_val(attrs), clk_val = get_clk_val(attrs), reset_val = get_reset_val(attrs);
-    int mode = static_cast<int>(parse_bin(get_param(params, "MULTADDALU18X18_MODE", "0")));
+    int mode = static_cast<int>(parse_binary(get_param(params, "MULTADDALU18X18_MODE", "0")));
     std::string accload = attrs["NET_ACCLOAD"];
 
     if (mode == 0) { da["RCISEL_3"] = "1"; da["RCISEL_1"] = "1"; }
     da["OR2CIB_EN0L_0"]="ENABLE"; da["OR2CIB_EN0H_1"]="ENABLE";
     da["OR2CIB_EN1L_2"]="ENABLE"; da["OR2CIB_EN1H_3"]="ENABLE";
 
-    if (params.count("B_ADD_SUB") && parse_bin(params["B_ADD_SUB"]) == 1) da["OPCD_7"] = "1";
+    if (params.count("B_ADD_SUB") && parse_binary(params["B_ADD_SUB"]) == 1) da["OPCD_7"] = "1";
     if (attrs.count("USE_CASCADE_IN")) { da["CSGIN_EXT"]="ENABLE"; da["CSIGN_PRE"]="ENABLE"; }
     if (attrs.count("USE_CASCADE_OUT")) da["OR2CASCADE_EN"] = "ENABLE";
 
@@ -346,7 +323,7 @@ static void set_multaddalu18x18_attrs(const Device& /*db*/, const std::string& /
     }
 
     if (mode == 0) { da["OPCD_4"]="1"; da["OPCD_5"]="1";
-        if (params.count("C_ADD_SUB") && parse_bin(params["C_ADD_SUB"]) == 1) da["OPCD_8"]="1";
+        if (params.count("C_ADD_SUB") && parse_binary(params["C_ADD_SUB"]) == 1) da["OPCD_8"]="1";
     } else if (mode == 2) { da["OPCD_5"]="1";
     } else {
         if (accload == "VCC") { da["OPCD_4"]="1"; da["OPCD_6"]="1"; da["OR2CASCADE_EN"]="ENABLE"; }
@@ -373,7 +350,7 @@ static void set_multaddalu18x18_attrs(const Device& /*db*/, const std::string& /
 
     for (const auto& [parm, val] : params) {
         if (parm == "A0REG" || parm == "A1REG") {
-            int k = static_cast<int>(parse_bin(std::string(1, parm[1])));
+            int k = static_cast<int>(parse_binary(std::string(1, parm[1])));
             if (val == "0") {
                 for (auto [i,h] : _01LH) {
                     da["IRBY_IREG"+std::to_string(k)+"A"+h+"_"+std::to_string(4*k+i)] = "ENABLE";
@@ -390,7 +367,7 @@ static void set_multaddalu18x18_attrs(const Device& /*db*/, const std::string& /
             }
         }
         if (parm == "B0REG" || parm == "B1REG") {
-            int k = static_cast<int>(parse_bin(std::string(1, parm[1])));
+            int k = static_cast<int>(parse_binary(std::string(1, parm[1])));
             if (val == "0") {
                 for (auto [i,h] : _01LH) {
                     da["IRBY_IREG"+std::to_string(k)+"B"+h+"_"+std::to_string(4*k+2+i)] = "ENABLE";
@@ -415,7 +392,7 @@ static void set_multaddalu18x18_attrs(const Device& /*db*/, const std::string& /
             }
         }
         if (parm == "ASIGN0_REG" || parm == "ASIGN1_REG") {
-            int k = static_cast<int>(parse_bin(std::string(1, parm[5])));
+            int k = static_cast<int>(parse_binary(std::string(1, parm[5])));
             if (val == "0") { da["CINNS_"+std::to_string(3*k)]="ENABLE"; da["CINBY_"+std::to_string(3*k)]="ENABLE"; }
             else {
                 da["CEMUX_ASIGN"+std::to_string(k)+"1"]=ce_val; da["CLKMUX_ASIGN"+std::to_string(k)+"1"]=clk_val; da["RSTMUX_ASIGN"+std::to_string(k)+"1"]=reset_val;
@@ -424,7 +401,7 @@ static void set_multaddalu18x18_attrs(const Device& /*db*/, const std::string& /
             }
         }
         if (parm == "BSIGN0_REG" || parm == "BSIGN1_REG") {
-            int k = static_cast<int>(parse_bin(std::string(1, parm[5])));
+            int k = static_cast<int>(parse_binary(std::string(1, parm[5])));
             if (val == "0") { da["CINNS_"+std::to_string(1+3*k)]="ENABLE"; da["CINBY_"+std::to_string(1+3*k)]="ENABLE"; }
             else {
                 da["CEMUX_BSIGN"+std::to_string(k)+"1"]=ce_val; da["CLKMUX_BSIGN"+std::to_string(k)+"1"]=clk_val; da["RSTMUX_BSIGN"+std::to_string(k)+"1"]=reset_val;
@@ -433,7 +410,7 @@ static void set_multaddalu18x18_attrs(const Device& /*db*/, const std::string& /
             }
         }
         if (parm == "PIPE0_REG" || parm == "PIPE1_REG") {
-            int k = static_cast<int>(parse_bin(std::string(1, parm[4])));
+            int k = static_cast<int>(parse_binary(std::string(1, parm[4])));
             if (val == "0") {
                 da["CPRNS_"+std::to_string(3*k)]="ENABLE"; da["CPRBY_"+std::to_string(3*k)]="ENABLE";
                 da["CPRNS_"+std::to_string(1+3*k)]="ENABLE"; da["CPRBY_"+std::to_string(1+3*k)]="ENABLE";
@@ -493,7 +470,7 @@ static void set_multalu36x18_attrs(const Device& /*db*/, const std::string& typ,
 {
     attrs_upper(attrs);
     std::string ce_val = get_ce_val(attrs), clk_val = get_clk_val(attrs), reset_val = get_reset_val(attrs);
-    int mode = static_cast<int>(parse_bin(get_param(params, "MULTALU36X18_MODE", "0")));
+    int mode = static_cast<int>(parse_binary(get_param(params, "MULTALU36X18_MODE", "0")));
     std::string accload = attrs["NET_ACCLOAD"];
 
     da["RCISEL_1"]="1"; da["RCISEL_3"]="1";
@@ -507,7 +484,7 @@ static void set_multalu36x18_attrs(const Device& /*db*/, const std::string& typ,
 
     da["OPCD_0"]="1"; da["OPCD_9"]="1";
     if (mode == 0) { da["OPCD_4"]="1"; da["OPCD_5"]="1";
-        if (params.count("C_ADD_SUB") && parse_bin(params["C_ADD_SUB"]) == 1) da["OPCD_8"]="1";
+        if (params.count("C_ADD_SUB") && parse_binary(params["C_ADD_SUB"]) == 1) da["OPCD_8"]="1";
     } else if (mode == 2) { da["OPCD_5"]="1";
     } else {
         if (accload == "VCC") { da["OPCD_4"]="1"; da["OPCD_6"]="1"; da["OR2CASCADE_EN"]="ENABLE"; }
@@ -601,7 +578,7 @@ static void set_alu54d_attrs(const Device& /*db*/, const std::string& /*typ*/,
     set_dsp_regs_0(params, {"AREG","BREG","OUT_REG","ACCLOAD_REG"});
     for (const auto& [parm, val] : params) {
         if (parm == "ALUD_MODE") {
-            int ival = static_cast<int>(parse_bin(val));
+            int ival = static_cast<int>(parse_binary(val));
             if (ival == 2) { da["OPCD_1"]="1"; da["OPCD_5"]="1"; }
             else {
                 if (ival == 0) { da["OPCD_6"]="1"; if (params["C_ADD_SUB"] == "1") da["OPCD_8"]="1"; }
