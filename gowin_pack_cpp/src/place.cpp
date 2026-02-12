@@ -737,6 +737,39 @@ void set_iob_default_fuses(
     std::map<int64_t, BankInfo> banks;
 
     auto bels = get_bels(netlist);
+
+    // Track the leaked 'mode' variable from the first pass (Python scoping bug).
+    // In Python, the first pass loop sets 'mode' for DFF and IOB cells, and
+    // the last value leaks into the second IO pass where it's used for DRIVE
+    // override at Python lines 3666-3668.
+    std::string first_pass_leaked_mode;
+    for (const auto& bel : bels) {
+        if (bel.type.size() >= 3 && bel.type.substr(0, 3) == "DFF") {
+            // Python: mode = typ.strip('E')
+            std::string stripped = bel.type;
+            while (!stripped.empty() && stripped.back() == 'E') stripped.pop_back();
+            first_pass_leaked_mode = stripped;
+        } else if (bel.type == "IBUF" || bel.type == "OBUF" ||
+                   bel.type == "IOBUF" || bel.type == "TBUF") {
+            // MIPI_IBUF B-pin: skipped before mode is set (Python line 3296-3297)
+            if (bel.parameters.count("MIPI_IBUF") && bel.num == "B") continue;
+            auto diff_it = bel.parameters.find("DIFF");
+            if (diff_it != bel.parameters.end()) {
+                // N-pin: skipped before mode is set (Python line 3300-3301)
+                if (diff_it->second == "N") continue;
+                auto dt_it = bel.parameters.find("DIFF_TYPE");
+                if (dt_it != bel.parameters.end()) {
+                    first_pass_leaked_mode = dt_it->second;
+                }
+            } else {
+                // Non-DIFF IOB: mode from ENABLE/INPUT/OUTPUT flags
+                // bel.type already gives the resolved mode
+                first_pass_leaked_mode = bel.type;
+            }
+        }
+        // Other types (LUT, ALU, etc.) don't change mode in Python
+    }
+
     for (const auto& bel : bels) {
         if (bel.type != "IBUF" && bel.type != "OBUF" &&
             bel.type != "TBUF" && bel.type != "IOBUF")
@@ -1070,6 +1103,17 @@ void set_iob_default_fuses(
             if (device == "GW1N-1") {
                 if (iob.row == 5 && mode_for_attrs == "OBUF") {
                     in_iob_attrs["TO"] = "UNKNOWN";
+                }
+            }
+            // Python lines 3666-3668: leaked 'mode' variable DRIVE override
+            // In Python, the 'mode' variable from the first pass leaks into the
+            // second IO pass. If mode[1:] starts with 'LVDS', all IOBs with
+            // non-zero DRIVE get DRIVE='UNKNOWN'.
+            if (device != "GW1N-4" && device != "GW1NS-4") {
+                if (first_pass_leaked_mode.size() > 1 &&
+                    first_pass_leaked_mode.substr(1, 4) == "LVDS" &&
+                    in_iob_attrs.count("DRIVE") && in_iob_attrs["DRIVE"] != "0") {
+                    in_iob_attrs["DRIVE"] = "UNKNOWN";
                 }
             }
             // Build B-pin attributes for LVDS pairs (Python lines 3664-3685)
@@ -3521,7 +3565,6 @@ void set_adc_iobuf_fuses(const Device& db, Tilemap& tilemap) {
     for (const auto& [ioloc, bus] : adc_iolocs) {
         int64_t row = ioloc.first;
         int64_t col = ioloc.second;
-
         const auto& tiledata = db.get_tile(row, col);
 
         // IOBA attributes

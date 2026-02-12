@@ -3447,7 +3447,6 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             bits = set()
             if 'ADC' in db.shortval[tiledata.ttyp]:
                 bits = get_shortval_fuses(db, tiledata.ttyp, adc_attrs, 'ADC')
-            #print(typ, tiledata.ttyp, bits)
             for r, c in bits:
                 tile[r][c] = 1
             # slot
