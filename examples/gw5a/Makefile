@@ -15,7 +15,8 @@ all: \
 	bsram-SDPB-primer25k.fs bsram-SDPX9B-primer25k.fs bsram-SDPB32-primer25k.fs \
 	femto-riscv-15-primer25k.fs femto-riscv-16-primer25k.fs femto-riscv-18-primer25k.fs \
 	adc-temp-primer25k.fs adc-loc-left-primer25k.fs adc-glo-right-primer25k.fs attosoc-primer25k.fs \
-	big-shift-tangmega138k.fs attosoc-tangmega138k.fs
+	big-shift-tangmega138k.fs attosoc-tangmega138k.fs \
+	bsram-count-primer25k.fs bsram-count-tangmega138k.fs
 
 clean: 
 	rm -f *.json *.fs *-unpacked.v
@@ -71,4 +72,7 @@ attosoc-tangmega138k.json: attosoc-tangmega138k-synth.json tangmega138k.cst
 
 attosoc-tangmega138k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+
+bsram-count-tangmega138k-synth.json: bsram-count.v
+	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=16 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
