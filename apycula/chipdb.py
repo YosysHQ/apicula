@@ -672,6 +672,7 @@ _known_logic_tables = {
             62: 'OSC',
             63: 'USB',
             67: 'ADC',
+            87: '5A_DSP',
             92: '5A_PCLK_ENABLE',
         }
 
@@ -716,6 +717,7 @@ _known_tables = {
             68: 'ADC',
             80: 'DLL1',
             82: 'POWERSAVE',
+            88: '5A_DSP',
             93: '5A_PCLK_ENABLE_08',
             94: '5A_PCLK_ENABLE_09',
             95: '5A_PCLK_ENABLE_10',
@@ -3450,58 +3452,63 @@ def fse_bram(fse, aux = False):
     bels[name] = Bel()
     return bels
 
-def fse_dsp(fse, aux = False):
+def fse_dsp(fse, device, aux = False):
     bels = {}
     if aux:
         bels['DSP_AUX0'] = Bel()
         bels['DSP_AUX1'] = Bel()
     else:
-        # These are two macro DSPs, their purpose is to manage the control
-        # signals CE, CLK and RESET, which seem to be allocated to different
-        # subblocks from a common pool, the size of which reaches 4 possible
-        # PIPs for each type of signal.
-        # In other words, only the portmap that describes the pool is important here.
         bels['DSP'] = Bel()
-        bels['DSP0'] = Bel()  # Macro 0
-        bels['DSP1'] = Bel()  # Macro 1
-        # Padd
-        bels['PADD900'] = Bel()  # macro 0 padd9 0
-        bels['PADD901'] = Bel()  # macro 0 padd9 1
-        bels['PADD902'] = Bel()  # macro 0 padd9 2
-        bels['PADD903'] = Bel()  # macro 0 padd9 3
-        bels['PADD1800'] = Bel() # macro 0 padd18 0
-        bels['PADD1801'] = Bel() # macro 0 padd18 1
-        bels['PADD910'] = Bel()  # macro 1 padd9 0
-        bels['PADD911'] = Bel()  # macro 1 padd9 1
-        bels['PADD912'] = Bel()  # macro 1 padd9 2
-        bels['PADD913'] = Bel()  # macro 1 padd9 3
-        bels['PADD1810'] = Bel() # macro 1 padd18 0
-        bels['PADD1811'] = Bel() # macro 1 padd18 1
-        # mult
-        bels['MULT9X900'] = Bel()   # macro 0 mult9x9 0
-        bels['MULT9X901'] = Bel()   # macro 0 mult9x9 1
-        bels['MULT9X902'] = Bel()   # macro 0 mult9x9 2
-        bels['MULT9X903'] = Bel()   # macro 0 mult9x9 3
-        bels['MULT18X1800'] = Bel() # macro 0 mult18x18 0
-        bels['MULT18X1801'] = Bel() # macro 0 mult18x18 1
-        bels['MULT9X910'] = Bel()   # macro 1 mult9x9 0
-        bels['MULT9X911'] = Bel()   # macro 1 mult9x9 1
-        bels['MULT9X912'] = Bel()   # macro 1 mult9x9 2
-        bels['MULT9X913'] = Bel()   # macro 1 mult9x9 3
-        bels['MULT18X1810'] = Bel() # macro 1 mult18x18 0
-        bels['MULT18X1811'] = Bel() # macro 1 mult18x18 1
-        # alu
-        bels['ALU54D0'] = Bel()     # macro 0 ALU54D
-        bels['ALU54D1'] = Bel()     # macro 1 ALU54D
-        # multalu
-        bels['MULTALU18X180'] = Bel()     # macro 0 multalu 18x18
-        bels['MULTALU18X181'] = Bel()     # macro 1 multalu 18x18
-        bels['MULTALU36X180'] = Bel()     # macro 0 multalu 36x18
-        bels['MULTALU36X181'] = Bel()     # macro 1 multalu 36x18
-        bels['MULTADDALU18X180'] = Bel()     # macro 0 multaddalu 18x18
-        bels['MULTADDALU18X181'] = Bel()     # macro 1 multaddalu 18x18
+        if device not in {'GW5A-25A', 'GW5AST-138C'}:
+            # These are two macro DSPs, their purpose is to manage the control
+            # signals CE, CLK and RESET, which seem to be allocated to different
+            # subblocks from a common pool, the size of which reaches 4 possible
+            # PIPs for each type of signal.
+            # In other words, only the portmap that describes the pool is important here.
+            bels['DSP0'] = Bel()  # Macro 0
+            bels['DSP1'] = Bel()  # Macro 1
+            # Padd
+            bels['PADD900'] = Bel()  # macro 0 padd9 0
+            bels['PADD901'] = Bel()  # macro 0 padd9 1
+            bels['PADD902'] = Bel()  # macro 0 padd9 2
+            bels['PADD903'] = Bel()  # macro 0 padd9 3
+            bels['PADD1800'] = Bel() # macro 0 padd18 0
+            bels['PADD1801'] = Bel() # macro 0 padd18 1
+            bels['PADD910'] = Bel()  # macro 1 padd9 0
+            bels['PADD911'] = Bel()  # macro 1 padd9 1
+            bels['PADD912'] = Bel()  # macro 1 padd9 2
+            bels['PADD913'] = Bel()  # macro 1 padd9 3
+            bels['PADD1810'] = Bel() # macro 1 padd18 0
+            bels['PADD1811'] = Bel() # macro 1 padd18 1
+            # mult
+            bels['MULT9X900'] = Bel()   # macro 0 mult9x9 0
+            bels['MULT9X901'] = Bel()   # macro 0 mult9x9 1
+            bels['MULT9X902'] = Bel()   # macro 0 mult9x9 2
+            bels['MULT9X903'] = Bel()   # macro 0 mult9x9 3
+            bels['MULT18X1800'] = Bel() # macro 0 mult18x18 0
+            bels['MULT18X1801'] = Bel() # macro 0 mult18x18 1
+            bels['MULT9X910'] = Bel()   # macro 1 mult9x9 0
+            bels['MULT9X911'] = Bel()   # macro 1 mult9x9 1
+            bels['MULT9X912'] = Bel()   # macro 1 mult9x9 2
+            bels['MULT9X913'] = Bel()   # macro 1 mult9x9 3
+            bels['MULT18X1810'] = Bel() # macro 1 mult18x18 0
+            bels['MULT18X1811'] = Bel() # macro 1 mult18x18 1
+            # alu
+            bels['ALU54D0'] = Bel()     # macro 0 ALU54D
+            bels['ALU54D1'] = Bel()     # macro 1 ALU54D
+            # multalu
+            bels['MULTALU18X180'] = Bel()     # macro 0 multalu 18x18
+            bels['MULTALU18X181'] = Bel()     # macro 1 multalu 18x18
+            bels['MULTALU36X180'] = Bel()     # macro 0 multalu 36x18
+            bels['MULTALU36X181'] = Bel()     # macro 1 multalu 36x18
+            bels['MULTADDALU18X180'] = Bel()     # macro 0 multaddalu 18x18
+            bels['MULTADDALU18X181'] = Bel()     # macro 1 multaddalu 18x18
 
-        bels['MULT36X36'] = Bel()   # entire DSP mult36x36
+            bels['MULT36X36'] = Bel()   # entire DSP mult36x36
+        else:
+            bels['DSP0'] = Bel()  # Macro 0
+            bels['MULT12X1200'] = Bel() # mult12x12 0
+            bels['MULT12X1201'] = Bel() # mult12x12 1
 
     return bels
 
@@ -3538,11 +3545,13 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_CIN_MUX")
         dev.chip_flags.append("NEED_BSRAM_RESET_FIX")
         dev.chip_flags.append("NEED_SDP_FIX")
+        dev.chip_flags.append("HAS_5A_DSP")
     if device in {'GW5AST-138C'}:
         dev.chip_flags.append("HAS_PINCFG")
         dev.chip_flags.append("HAS_DFF67")
         dev.chip_flags.append("HAS_CIN_MUX")
         dev.chip_flags.append("NEED_CFGPINS_INVERSION")
+        dev.chip_flags.append("HAS_5A_DSP")
 
     if device in {'GW5A-25A'}:
         dev.dcs_prefix = "CLKIN"
@@ -3579,10 +3588,10 @@ def from_fse(device, fse, dat: Datfile):
             tile.bels = fse_bram(fse)
         elif ttyp in bram_aux_ttypes and device not in {'GW5A-25A', 'GW5AST-138C'}:
             tile.bels = fse_bram(fse, True)
-        elif ttyp in dsp_ttypes and device not in {'GW5A-25A', 'GW5AST-138C'}:
-            tile.bels = fse_dsp(fse)
+        elif ttyp in dsp_ttypes:
+            tile.bels = fse_dsp(fse, device)
         elif ttyp in dsp_aux_ttypes:
-            tile.bels = fse_dsp(fse, True)
+            tile.bels = fse_dsp(fse, device, True)
         elif ttyp in pll_ttypes:
             tile.bels = fse_pll(device, fse, ttyp)
         tile.bels.update(fse_iologic(device, fse, ttyp))
@@ -3600,11 +3609,12 @@ def from_fse(device, fse, dat: Datfile):
         dev.tile_types.setdefault('C', set()).update(dev.tile_types['M'])
         dev.tile_types['P'] = set()
         dev.tile_types['M'] = set()
-        # XXX
+        dev.tile_types['D5A'] = dev.tile_types['D']
         dev.tile_types['D'] = set()
     if device in {'GW5AST-138C'}:
         dev.tile_types['P'] = set()
         dev.tile_types['B'] = set()
+        dev.tile_types['D5A'] = dev.tile_types['D']
         dev.tile_types['D'] = set()
 
     # GW5 series have DFF6 and DFF7, so leave Q6 and Q7 as is
@@ -4388,6 +4398,57 @@ def dat_portmap(dat, dev, device):
                             nam = f'DOUT{i - odd_idx}'
                         else:
                             continue
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_O")
+
+                elif name.startswith('MULT12X12'):
+                    idx = int(name[-1])
+                    for i in range(6):
+                        off = dat.gw5aStuff['MultCtrlInDlt'][i]
+                        wire_idx = dat.gw5aStuff['MultCtrlIn'][i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        nam = ["CLK", "CE", "RESET"][i // 2] + str(i % 2)
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, wire_type)
+
+                    # dat.gw5aStuff['Mult12x12InDlt'] indicates port offset in cells
+                    # Even cells describe the left multiplier, odd cells describe the right multiplier.
+                    multin_len = len(dat.gw5aStuff['Mult12x12In'])
+                    for i in range(multin_len):
+                        if i % 2 != idx:
+                            continue
+                        off = dat.gw5aStuff['Mult12x12InDlt'][i]
+                        wire_idx = dat.gw5aStuff['Mult12x12In'][i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        if i % 2:
+                            nam = f'{"AB"[i // 24]}{((i - 1) // 2) % 12}'
+                        else:
+                            nam = f'{"AB"[i // 24]}{(i // 2) % 12}'
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    # outputs
+                    # dat.gw5aStuff['Mult12x12OutDlt'] indicates port offset in cells
+                    # Even cells describe the left multiplier, odd cells describe the right multiplier.
+                    for i in range(len(dat.gw5aStuff['Mult12x12Out'])):
+                        if i % 2 != idx:
+                            continue
+                        off = dat.gw5aStuff['Mult12x12OutDlt'][i]
+                        wire_idx = dat.gw5aStuff['Mult12x12Out'][i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        # output wire sequence:
+                        # DOUT0-23
+                        if i % 2:
+                            nam = f'DOUT{((i - 1) // 2) % 24}'
+                        else:
+                            nam = f'DOUT{(i // 2) % 24}'
                         create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_O")
 
                 elif name.startswith('MULT18X18'):
