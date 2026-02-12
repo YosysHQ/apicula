@@ -137,7 +137,22 @@ Same issue: byte-enable dispatch for `BIT_WIDTH_1` is entirely dead code in Pyth
 
 ## 3. Code Duplication
 
-### 3.1 DSP Attribute Handlers (`bels/dsp.cpp`)
+### 3.1 Duplicate Utility Functions across `place.cpp` and `bels/dsp.cpp`
+
+Three utility functions are duplicated (copy-paste with trivial renaming) between
+`place.cpp` and `bels/dsp.cpp`. Both are `static`, so they compile independently,
+but this is unnecessary code duplication:
+
+| Function | `place.cpp` | `bels/dsp.cpp` | Notes |
+|----------|------------|----------------|-------|
+| `to_upper()` / `to_upper_dsp()` | Line 38 | Line 17 | Identical logic, different name |
+| `parse_binary()` / `parse_bin()` | Line 45 | Line 23 | Same core logic; `place.cpp` has extra decimal fallback |
+| `get_param()` | Line 83 | Line 36 | Identical signature and body |
+
+**Suggestion:** Move these into a shared `utils.hpp` header or make the `place.cpp`
+versions non-static and include via the header.
+
+### 3.2 DSP Attribute Handlers (`bels/dsp.cpp`)
 
 The `dsp.cpp` file (971 lines) has significant duplication across its six type-specific
 handlers:
@@ -155,7 +170,7 @@ handlers:
 **Suggestion:** Extract a `configure_dsp_register()` helper that takes register name,
 CE/CLK/RST values, and sync reset flag.
 
-### 3.2 IOB Fuse Application
+### 3.3 IOB Fuse Application
 
 The IOB placement code in `place_iob()` (`place.cpp:661-1391`) and
 `set_adc_iobuf_fuses()` (`place.cpp:3520-3619`) both build IOB attribute sets and
@@ -166,7 +181,7 @@ for bus type).
 **Suggestion:** Extract a helper like `build_adc_iob_base_attrs()` that returns the
 common attribute set.
 
-### 3.3 Bank Fuse Handling
+### 3.4 Bank Fuse Handling
 
 Bank fuse generation at `place.cpp:1173-1259` has two near-identical blocks: one for
 used banks (lines 1180-1206) and one for unused banks (lines 1235-1258). Both call
@@ -174,7 +189,7 @@ used banks (lines 1180-1206) and one for unused banks (lines 1235-1258). Both ca
 
 **Suggestion:** Extract a `set_bank_fuses()` helper parameterized by the attribute set.
 
-### 3.4 Bounds Checking Boilerplate
+### 3.5 Bounds Checking Boilerplate
 
 Nearly every `place_*` function starts with:
 ```cpp
@@ -291,6 +306,7 @@ no-op (line 288) without validation.
 | **Bug-compat** | PLL DYN_DA_EN dead code | Medium |
 | **Bug-compat** | `_banks.bels` not tracked | Low — extra fuse writes |
 | **Bug-compat** | BSRAM BIT_WIDTH_0/1 byte-enable dead code | Low |
+| **Duplication** | `to_upper`/`parse_binary`/`get_param` in place.cpp & dsp.cpp | Medium |
 | **Duplication** | DSP register configuration (~200 lines) | Medium |
 | **Duplication** | ADC IOB fuse builder | Low |
 | **Duplication** | Bank fuse handling | Low |
