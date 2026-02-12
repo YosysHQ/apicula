@@ -47,6 +47,7 @@ all: \
 	bsram-pROM-tangnano.fs bsram-SDPB-tangnano.fs bsram-DPB-tangnano.fs \
 	bsram-SP-tangnano.fs bsram-pROMX9-tangnano.fs bsram-SDPX9B-tangnano.fs \
 	bsram-SPX9-tangnano.fs bsram-DPX9B-tangnano.fs \
+	dlldly-tangnano.fs \
 	\
 	blinky-tangnano1k.fs shift-tangnano1k.fs blinky-tbuf-tangnano1k.fs blinky-oddr-tangnano1k.fs \
 	blinky-osc-tangnano1k.fs elvds-tangnano1k.fs oddr-elvds-tangnano1k.fs pll-nanolcd-tangnano1k.fs \
@@ -58,6 +59,7 @@ all: \
 	bsram-SP-tangnano1k.fs bsram-pROMX9-tangnano1k.fs bsram-SDPX9B-tangnano1k.fs \
 	bsram-SPX9-tangnano1k.fs bsram-DPX9B18-tangnano1k.fs \
 	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs bandgap-tangnano1k.fs \
+	dlldly-tangnano1k.fs \
 	\
 	blinky-tangnano4k.fs shift-tangnano4k.fs blinky-tbuf-tangnano4k.fs blinky-oddr-tangnano4k.fs \
 	blinky-osc-tangnano4k.fs tlvds-tangnano4k.fs elvds-tangnano4k.fs oddr-tlvds-tangnano4k.fs \
