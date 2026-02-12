@@ -1,0 +1,22 @@
+{
+    "top": "top",
+    "modules": {
+        "top": {
+            "settings": {},
+            "cells": {
+                "bsram_inst": {
+                    "type": "SP",
+                    "parameters": {
+                        "BIT_WIDTH": "00000000000000000000000000010000",
+                        "INIT_RAM_00": "0000000000000000000000000000000000000000000000000000000000000000"
+                    },
+                    "attributes": {
+                        "NEXTPNR_BEL": "X5Y10/BSRAM0"
+                    },
+                    "connections": {}
+                }
+            },
+            "netnames": {}
+        }
+    }
+}

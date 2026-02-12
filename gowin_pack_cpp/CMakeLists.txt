@@ -45,14 +45,7 @@ add_executable(gowin_pack
     src/route.cpp
     src/place.cpp
     src/fuses.cpp
-    src/bels/lut.cpp
-    src/bels/dff.cpp
-    src/bels/alu.cpp
-    src/bels/iob.cpp
-    src/bels/pll.cpp
-    src/bels/bsram.cpp
     src/bels/dsp.cpp
-    src/bels/iologic.cpp
 )
 
 target_include_directories(gowin_pack PRIVATE

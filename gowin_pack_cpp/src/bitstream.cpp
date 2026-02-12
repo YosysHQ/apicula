@@ -720,7 +720,7 @@ Bitstream generate_bitstream(Device& db, const Netlist& netlist, const PackArgs&
     bool is_gw5_device = (device == "GW5A-25A" || device == "GW5AST-138C");
     place_cells(db, netlist, tilemap, device, pip_bels, &bsram_init_map,
                 is_gw5_device ? &gw5a_bsrams : nullptr,
-                &bs.extra_slots);
+                &bs.extra_slots, &args);
 
     // -----------------------------------------------------------------------
     // Step 5b: Set default IOB and bank fuses for all pins (used and unused)
