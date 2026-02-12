@@ -2,6 +2,7 @@
 // Based on apycula/gowin_pack.py place_* functions
 #include "place.hpp"
 #include "bitstream.hpp"
+#include "chipdb.hpp"
 #include "fuses.hpp"
 #include "attrids.hpp"
 #include <regex>
@@ -97,6 +98,12 @@ static std::string get_attr(const std::map<std::string, std::string>& attrs,
     return default_val;
 }
 
+// Check if row/col are within the grid bounds
+static bool in_bounds(int64_t row, int64_t col, const Device& db) {
+    return row >= 0 && row < static_cast<int64_t>(db.rows()) &&
+           col >= 0 && col < static_cast<int64_t>(db.cols());
+}
+
 // ============================================================================
 // Store slice attributes to be applied at the end
 // Key: (row, col, slice_idx), Value: map of attr->val
@@ -178,7 +185,8 @@ void place_cells(
     const std::vector<BelInfo>& extra_bels,
     BsramInitMap* bsram_init_map,
     std::vector<Gw5aBsramInfo>* gw5a_bsrams,
-    std::map<int, TileBitmap>* extra_slots) {
+    std::map<int, TileBitmap>* extra_slots,
+    const PackArgs* args) {
 
     // Clear slice attributes and ADC IO locations for fresh run
     slice_attrvals.clear();
@@ -232,8 +240,8 @@ void place_cells(
         } else if (bel.type == "rPLL" || bel.type == "PLLVR" || bel.type == "PLLA" || bel.type == "RPLLA") {
             place_pll(db, bel, tilemap, device, extra_slots);
         } else if (bel.type == "DP" || bel.type == "SDP" || bel.type == "SP" || bel.type == "ROM") {
-            if (device == "GW5A-25A" && gw5a_bsrams) {
-                // GW5A-25A: collect BSRAM positions for deferred processing
+            if (is_gw5_family(device) && gw5a_bsrams) {
+                // GW5A/GW5AST: collect BSRAM positions for deferred processing
                 // Python: bisect.insort(gw5a_bsrams, (col - 1, row - 1, typ, parms, attrs))
                 // where col/row are 1-indexed from cell placement
                 Gw5aBsramInfo info;
@@ -283,9 +291,23 @@ void place_cells(
             place_dhcen(db, bel, tilemap);
         } else if (bel.type == "ADC") {
             place_adc(db, bel, tilemap, extra_slots);
+        } else if (bel.type == "DLLDLY") {
+            place_dlldly(db, bel, tilemap);
+        } else if (bel.type == "PINCFG") {
+            // Validate that --*_as_gpio flags match PINCFG cell parameters
+            // (Python gowin_pack.py lines 3212-3216)
+            if (args) {
+                bool has_i2c = bel.parameters.count("I2C") > 0;
+                bool has_sspi = bel.parameters.count("SSPI") > 0;
+                if (args->i2c_as_gpio != has_i2c) {
+                    std::cerr << "Warning: i2c_as_gpio has conflicting settings in nextpnr and gowin_pack." << std::endl;
+                }
+                if (args->sspi_as_gpio != has_sspi) {
+                    std::cerr << "Warning: sspi_as_gpio has conflicting settings in nextpnr and gowin_pack." << std::endl;
+                }
+            }
         } else if (bel.type == "GSR" ||
                    bel.type == "BANDGAP" ||
-                   bel.type == "PINCFG" ||
                    bel.type.find("FLASH") != std::string::npos ||
                    bel.type.find("EMCU") != std::string::npos ||
                    bel.type.find("MUX2_") != std::string::npos ||
@@ -298,8 +320,7 @@ void place_cells(
             // (Python: extra_mipi_bels + MIPI_IBUF_AUX handling, lines 3225-3232)
             int64_t aux_row = bel.row - 1;
             int64_t aux_col = bel.col;  // col+1 in 0-based (bel.col is already 1-based col, so col = bel.col - 1 + 1 = bel.col)
-            if (aux_row >= 0 && aux_row < static_cast<int64_t>(db.rows()) &&
-                aux_col >= 0 && aux_col < static_cast<int64_t>(db.cols())) {
+            if (in_bounds(aux_row, aux_col, db)) {
                 const auto& aux_tiledata = db.get_tile(aux_row, aux_col);
                 // Set MIPI AUX fuses for both A and B pins
                 static const std::map<std::string, std::vector<std::pair<std::string, std::string>>> mipi_aux_attrs = {
@@ -336,10 +357,7 @@ void place_lut(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     auto& tile = tilemap[{row, col}];
     const auto& tiledata = db.get_tile(row, col);
@@ -404,10 +422,7 @@ void place_dff(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     (void)tilemap;  // DFF doesn't set fuses directly, uses slice fuses
 
@@ -465,10 +480,7 @@ void place_alu(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     auto& tile = tilemap[{row, col}];
     const auto& tiledata = db.get_tile(row, col);
@@ -1145,8 +1157,7 @@ void set_iob_default_fuses(
             }
 
             // Look up and set fuses for both A and B pins
-            if (iob.row < 0 || iob.row >= static_cast<int64_t>(db.rows()) ||
-                iob.col < 0 || iob.col >= static_cast<int64_t>(db.cols()))
+            if (!in_bounds(iob.row, iob.col, db))
                 continue;
             const auto& tiledata = db.get_tile(iob.row, iob.col);
 
@@ -1332,9 +1343,7 @@ std::set<Coord> fuses = get_longval_fuses(db, fuse_ttyp, iob_attrs_set,
             continue;
         }
 
-        if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-            col < 0 || col >= static_cast<int64_t>(db.cols()))
-            continue;
+        if (!in_bounds(row, col, db)) continue;
 
         const auto& tiledata = db.get_tile(row, col);
         if (tiledata.bels.find("IOB" + iob_idx) == tiledata.bels.end())
@@ -1527,10 +1536,7 @@ void place_pll(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     const auto& tiledata = db.get_tile(row, col);
     int64_t ttyp = tiledata.ttyp;
@@ -2047,7 +2053,7 @@ void store_bsram_init_val(const Device& db, int64_t row, int64_t col,
         subtype = (start == std::string::npos) ? "" : subtype.substr(start, end - start + 1);
     }
 
-    bool is_gw5 = (device == "GW5A-25A");
+    bool is_gw5 = is_gw5_family(device);
 
     // Initialize global map if empty
     if (bsram_init_map.empty()) {
@@ -2192,10 +2198,7 @@ void place_bsram(const Device& db, const BelInfo& bel, Tilemap& tilemap, const s
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     const auto& tiledata = db.get_tile(row, col);
     int64_t ttyp = tiledata.ttyp;
@@ -2441,10 +2444,7 @@ void place_dsp(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     std::string typ = bel.type;
     std::string num = bel.num;
@@ -2591,10 +2591,7 @@ void place_iologic(const Device& db, const BelInfo& bel, Tilemap& tilemap, const
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     const auto& tiledata = db.get_tile(row, col);
     int64_t ttyp = tiledata.ttyp;
@@ -2782,10 +2779,7 @@ void place_osc(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     const auto& tiledata = db.get_tile(row, col);
     int64_t ttyp = tiledata.ttyp;
@@ -2899,10 +2893,7 @@ void place_bufs(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     const auto& tiledata = db.get_tile(row, col);
     auto& tile = tilemap[{row, col}];
@@ -2960,10 +2951,7 @@ void place_clkdiv(const Device& db, const BelInfo& bel, Tilemap& tilemap, const 
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     const auto& tiledata = db.get_tile(row, col);
     int64_t ttyp = tiledata.ttyp;
@@ -3044,10 +3032,7 @@ void place_dcs(const Device& db, const BelInfo& bel, Tilemap& tilemap, const std
     int64_t row = bel.row - 1;
     int64_t col = bel.col - 1;
 
-    if (row < 0 || row >= static_cast<int64_t>(db.rows()) ||
-        col < 0 || col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(row, col, db)) return;
 
     // Check if DCS_MODE attribute is set
     auto dcs_mode_it = bel.attributes.find("DCS_MODE");
@@ -3168,10 +3153,7 @@ void place_dqce(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
     std::string dest = match[3].str();
     std::string src = match[4].str();
 
-    if (pip_row < 0 || pip_row >= static_cast<int64_t>(db.rows()) ||
-        pip_col < 0 || pip_col >= static_cast<int64_t>(db.cols())) {
-        return;
-    }
+    if (!in_bounds(pip_row, pip_col, db)) return;
 
     const auto& pip_tiledata = db.get_tile(pip_row, pip_col);
     auto& pip_tile = tilemap[{pip_row, pip_col}];
@@ -3273,6 +3255,91 @@ void place_dhcen(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
 }
 
 // ============================================================================
+// place_dlldly - Place a DLLDLY (Delay Line DLL) BEL
+// Mirrors Python set_dlldly_attrs() (gowin_pack.py lines 2717-2744)
+// and dispatch (line 3493-3500)
+// ============================================================================
+void place_dlldly(const Device& db, const BelInfo& bel, Tilemap& tilemap) {
+    int64_t row = bel.row - 1;
+    int64_t col = bel.col - 1;
+    if (!in_bounds(row, col, db)) return;
+
+    auto params = bel.parameters;
+    // Uppercase param values (like Python attrs_upper)
+    for (auto& [k, v] : params) v = to_upper(v);
+
+    std::string dll_insel = get_param(params, "DLL_INSEL", "1");
+    std::string dly_sign = get_param(params, "DLY_SIGN", "0");
+    std::string dly_adj = get_param(params, "DLY_ADJ",
+        "00000000000000000000000000000000");
+
+    if (dll_insel != "1") {
+        std::cerr << "Error: DLL_INSEL parameter values other than 1 are not supported" << std::endl;
+        return;
+    }
+
+    // Build DLLDLY attribute map
+    std::map<std::string, std::string> dlldly_attrs;
+    dlldly_attrs["ENABLED"] = "ENABLE";
+    dlldly_attrs["MODE"] = "NORMAL";
+
+    if (dly_sign == "1") {
+        dlldly_attrs["SIGN"] = "NEG";
+    }
+
+    // Expand DLY_ADJ: iterate reversed string, set ADJ{i}="1" for each set bit
+    for (int i = 0; i < static_cast<int>(dly_adj.size()); ++i) {
+        int char_idx = static_cast<int>(dly_adj.size()) - 1 - i;
+        if (char_idx >= 0 && dly_adj[char_idx] == '1') {
+            dlldly_attrs["ADJ" + std::to_string(i)] = "1";
+        }
+    }
+
+    // Convert to fuse attribute set
+    std::set<int64_t> fin_attrs;
+    for (const auto& [attr, val] : dlldly_attrs) {
+        auto attr_it = attrids::dlldly_attrids.find(attr);
+        if (attr_it == attrids::dlldly_attrids.end()) continue;
+        auto val_it = attrids::dlldly_attrvals.find(val);
+        if (val_it == attrids::dlldly_attrvals.end()) continue;
+        add_attr_val(db, "DLLDLY", fin_attrs, attr_it->second, val_it->second);
+    }
+
+    // Get dlldly_fusebels from extra_func[row, col]
+    auto ef_it = db.extra_func.find({row, col});
+    if (ef_it == db.extra_func.end()) return;
+
+    auto fb_it = ef_it->second.find("dlldly_fusebels");
+    if (fb_it == ef_it->second.end()) return;
+
+    const msgpack::object& fusebels_obj = fb_it->second;
+    if (fusebels_obj.type != msgpack::type::ARRAY) return;
+
+    // Iterate fusebel locations and set fuses in each tile
+    for (uint32_t i = 0; i < fusebels_obj.via.array.size; ++i) {
+        const auto& pair = fusebels_obj.via.array.ptr[i];
+        if (pair.type != msgpack::type::ARRAY || pair.via.array.size < 2) continue;
+
+        int64_t dlldly_row = 0, dlldly_col = 0;
+        if (pair.via.array.ptr[0].type == msgpack::type::POSITIVE_INTEGER)
+            dlldly_row = static_cast<int64_t>(pair.via.array.ptr[0].via.u64);
+        else if (pair.via.array.ptr[0].type == msgpack::type::NEGATIVE_INTEGER)
+            dlldly_row = pair.via.array.ptr[0].via.i64;
+        if (pair.via.array.ptr[1].type == msgpack::type::POSITIVE_INTEGER)
+            dlldly_col = static_cast<int64_t>(pair.via.array.ptr[1].via.u64);
+        else if (pair.via.array.ptr[1].type == msgpack::type::NEGATIVE_INTEGER)
+            dlldly_col = pair.via.array.ptr[1].via.i64;
+
+        if (!in_bounds(dlldly_row, dlldly_col, db)) continue;
+
+        int64_t ttyp = db.get_ttyp(dlldly_row, dlldly_col);
+        std::string table_name = "DLLDEL" + bel.num;
+        std::set<Coord> fuses = get_long_fuses(db, ttyp, fin_attrs, table_name);
+        set_fuses_in_tile(tilemap[{dlldly_row, dlldly_col}], fuses);
+    }
+}
+
+// ============================================================================
 // set_slice_fuses - Apply accumulated slice fuses
 // ============================================================================
 void set_slice_fuses(const Device& db, Tilemap& tilemap) {
@@ -3283,10 +3350,7 @@ void set_slice_fuses(const Device& db, Tilemap& tilemap) {
         int64_t grid_row = row - 1;
         int64_t grid_col = col - 1;
 
-        if (grid_row < 0 || grid_row >= static_cast<int64_t>(db.rows()) ||
-            grid_col < 0 || grid_col >= static_cast<int64_t>(db.cols())) {
-            continue;
-        }
+        if (!in_bounds(grid_row, grid_col, db)) continue;
 
         auto& tile = tilemap[{grid_row, grid_col}];
         int64_t ttyp = db.get_ttyp(grid_row, grid_col);
@@ -3369,13 +3433,7 @@ static std::set<int64_t> set_adc_attrs(const Device& db,
     for (const auto& [k, v] : default_adc_attrs) {
         adc_inattrs[k] = v;
     }
-    for (const auto& [k, v] : parms) {
-        std::string key = to_upper(k);
-        if (adc_inattrs.count(key) || default_adc_attrs.count(key) == 0) {
-            adc_inattrs[key] = v;
-        }
-    }
-    // Actually, user params always override
+    // User params always override defaults
     for (const auto& [k, v] : parms) {
         std::string key = to_upper(k);
         adc_inattrs[key] = v;

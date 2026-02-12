@@ -1,0 +1,23 @@
+{
+    "top": "top",
+    "modules": {
+        "top": {
+            "settings": {},
+            "cells": {
+                "dlldly_inst": {
+                    "type": "DLLDLY",
+                    "parameters": {
+                        "DLL_INSEL": "1",
+                        "DLY_SIGN": "0",
+                        "DLY_ADJ": "00000000000000000000000000000101"
+                    },
+                    "attributes": {
+                        "NEXTPNR_BEL": "X10Y5/DLLDLY0"
+                    },
+                    "connections": {}
+                }
+            },
+            "netnames": {}
+        }
+    }
+}

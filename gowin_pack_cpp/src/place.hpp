@@ -11,6 +11,7 @@
 namespace apycula {
 
 // Forward declarations
+struct PackArgs;
 using TileBitmap = std::vector<std::vector<uint8_t>>;
 using Tilemap = std::map<Coord, TileBitmap>;
 using BsramInitMap = std::vector<std::vector<uint8_t>>;
@@ -57,7 +58,8 @@ void place_cells(
     const std::vector<BelInfo>& extra_bels = {},
     BsramInitMap* bsram_init_map = nullptr,
     std::vector<Gw5aBsramInfo>* gw5a_bsrams = nullptr,
-    std::map<int, TileBitmap>* extra_slots = nullptr);
+    std::map<int, TileBitmap>* extra_slots = nullptr,
+    const PackArgs* args = nullptr);
 
 // Placement functions for specific BEL types
 void place_lut(const Device& db, const BelInfo& bel, Tilemap& tilemap);
@@ -78,6 +80,7 @@ void place_dqce(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 void place_dhcen(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 void place_adc(const Device& db, const BelInfo& bel, Tilemap& tilemap,
                std::map<int, TileBitmap>* extra_slots);
+void place_dlldly(const Device& db, const BelInfo& bel, Tilemap& tilemap);
 
 // Set default IO fuses for all IOB pins (used and unused) and bank-level fuses
 void set_iob_default_fuses(
