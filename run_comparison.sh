@@ -23,11 +23,15 @@ BOARD_DEVICE[miniszfpga]="GW1N-9"
 BOARD_DEVICE[szfpga]="GW1N-9"
 BOARD_DEVICE[tec0117]="GW1N-9"
 BOARD_DEVICE[runber]="GW1N-4"
+BOARD_DEVICE[primer25k]="GW5A-25A"
+BOARD_DEVICE[tangmega138k]="GW5AST-138C"
 
-# Find all .fs reference files
-for fs_file in "$EXAMPLES"/*.fs; do
+# Find all .fs reference files (including gw5a subdirectory)
+for fs_file in "$EXAMPLES"/*.fs "$EXAMPLES"/gw5a/*.fs; do
+    [ -f "$fs_file" ] || continue
+    dir=$(dirname "$fs_file")
     bname=$(basename "$fs_file" .fs)
-    json_file="$EXAMPLES/${bname}.json"
+    json_file="$dir/${bname}.json"
 
     if [ ! -f "$json_file" ]; then
         continue
@@ -35,7 +39,7 @@ for fs_file in "$EXAMPLES"/*.fs; do
 
     # Determine board from suffix
     board=""
-    for b in tangnano20k primer20k tangnano1k tangnano4k tangnano9k miniszfpga szfpga tec0117 runber tangnano; do
+    for b in tangnano20k primer20k primer25k tangmega138k tangnano1k tangnano4k tangnano9k miniszfpga szfpga tec0117 runber tangnano; do
         if [[ "$bname" == *"-$b" ]]; then
             board="$b"
             break
@@ -62,6 +66,14 @@ for fs_file in "$EXAMPLES"/*.fs; do
     # Special cases: no compression for emcu
     if [[ "$bname" == emcu-* ]]; then
         flags=""
+    fi
+
+    # GW5A boards: no compression, board-specific GPIO flags
+    if [[ "$board" == "primer25k" ]]; then
+        flags="--sspi_as_gpio --cpu_as_gpio"
+    fi
+    if [[ "$board" == "tangmega138k" ]]; then
+        flags="--cpu_as_gpio"
     fi
 
     # Special flags for specific boards
