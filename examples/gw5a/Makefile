@@ -36,22 +36,22 @@ alu-%-primer25k.json: alu-%-primer25k-synth.json alu-%-primer25k.cst
 	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=$(basename $@).cst --vopt sspi_as_gpio
 
 %-primer25k-synth.json: %.v
-	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
 big-shift-primer25k-synth.json: big-shift.v 
-	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=24 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=24 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
 bsram-%-primer25k-synth.json: pll/GW5A-25A.vh io444.vh display-640x480.v %-image-rom.v %-video-ram.v %.v clock-PLLA.v
-	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
 femto-%-primer25k-synth.json: femto-%.v
-	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -D OSC_TYPE_OSCA -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -nolutram -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -nolutram -family gw5a ${YOSYS_FLAGS}"
 
 attosoc-primer25k.json: attosoc-primer25k-synth.json primer25k.cst
 	$(NEXTPNR) $(DEBUG) --top attosoc --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt sspi_as_gpio
 
 attosoc-primer25k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
-	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -nolutram -strict-gw5a-dffs -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -nolutram -strict-gw5a-dffs -family gw5a ${YOSYS_FLAGS}"
 
 # ============================================================
 # TangMega138k
@@ -62,11 +62,11 @@ attosoc-primer25k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(NEXTPNR) $(DEBUG) --json $< --write $@ --device GW5AST-LV138PG484AC1/I0 --vopt cst=tangmega138k.cst
 
 big-shift-tangmega138k-synth.json: big-shift.v
-	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=16 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=16 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
 attosoc-tangmega138k.json: attosoc-tangmega138k-synth.json tangmega138k.cst
 	$(NEXTPNR) $(DEBUG) --top attosoc --json $< --write $@ --device GW5AST-LV138PG484AC1/I0 --vopt cst=tangmega138k.cst
 
 attosoc-tangmega138k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
-	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
