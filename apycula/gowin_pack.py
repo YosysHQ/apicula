@@ -3127,7 +3127,7 @@ def check_adc_io(db, io_loc):
     iore = re.compile(r"(\d+)/X(\d+)Y(\d+)")
     res = iore.fullmatch(io_loc)
     if not res:
-        raise Exception(f"Bad IOLOC {ioloc} in the ADC src list.")
+        raise Exception(f"Bad IOLOC {io_loc} in the ADC src list.")
     adc_bus, io_col, io_row = res.groups()
     row = int(io_row)
     col = int(io_col)
