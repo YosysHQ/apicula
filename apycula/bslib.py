@@ -1,9 +1,9 @@
 from math import ceil
 import array
-import crc
 from apycula import bitmatrix
+from apycula.crc16 import make_crc16_calculator
 
-crc16arc = crc.Configuration(width=16, polynomial=0x8005, reverse_input=True, reverse_output=True)
+_B2B = [f"{i:08b}" for i in range(256)]
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -44,7 +44,7 @@ def read_bitstream(fname):
     c = 0
     is5ASeries = False
 
-    calc = crc.Calculator(crc16arc)
+    calc = make_crc16_calculator()
     compressed = False
     compress_keys = {}
     with open(fname) as inp:
@@ -199,40 +199,40 @@ def write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams):
     for start, cnt in block_seq.items():
         ba = bytearray(b'\x12\x00\x00\x00')
         crcdat.extend(ba)
-        f.write(''.join(f"{b:08b}" for b in ba))
+        f.write(''.join(_B2B[b] for b in ba))
         f.write('\n')
 
         # empty cols
         ba = bytearray(b'\x70\x00\x00')
         crcdat.extend(ba)
-        f.write(''.join(f"{b:08b}" for b in ba))
+        f.write(''.join(_B2B[b] for b in ba))
         ba = bytearray.fromhex(f"{start + 1:02x}")
         crcdat.extend(ba)
-        f.write(''.join(f"{b:08b}" for b in ba))
+        f.write(''.join(_B2B[b] for b in ba))
         ba = bytearray(b'\x00' * (start + 1))
         crcdat.extend(ba)
-        f.write(''.join(f"{b:08b}" for b in ba))
+        f.write(''.join(_B2B[b] for b in ba))
         f.write('\n')
 
         # data cols
         ba = bytearray(b'\x4e\x80')
         crcdat.extend(ba)
-        f.write(''.join(f"{b:08b}" for b in ba))
+        f.write(''.join(_B2B[b] for b in ba))
         ba = bytearray.fromhex(f"{cnt % 256 :02x}")
         crcdat.extend(ba)
-        f.write(''.join(f"{b:08b}" for b in ba))
+        f.write(''.join(_B2B[b] for b in ba))
         ba = bytearray.fromhex(f"{cnt >> 8 :02x}")
         crcdat.extend(ba)
-        f.write(''.join(f"{b:08b}" for b in ba))
+        f.write(''.join(_B2B[b] for b in ba))
         f.write('\n')
 
         # data
         for data_row in byteInitMap[data_first_col : data_first_col + 256 * cnt]:
-            f.write(''.join(f"{b:08b}" for b in data_row))
+            f.write(''.join(_B2B[b] for b in data_row))
             crcdat.extend(data_row)
             crc_ = calc.checksum(crcdat)
             crcdat = bytearray(b'\xff'*6)
-            f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
+            f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
             f.write('1'*48)
             f.write('\n')
 
@@ -241,10 +241,10 @@ def write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams):
         # end of block
         ba = bytearray(b'\xff' * 18)
         crcdat.extend(ba)
-        f.write(''.join(f"{b:08b}" for b in ba))
+        f.write(''.join(_B2B[b] for b in ba))
         crc_ = calc.checksum(crcdat)
         crcdat = bytearray()
-        f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
+        f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
         f.write('\n')
 
 def write_bitstream_with_bsram_init(fname, bs, hdr, ftr, compress, extra_slots, bsram_init):
@@ -254,7 +254,7 @@ def write_bitstream_with_bsram_init(fname, bs, hdr, ftr, compress, extra_slots, 
 
 def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_map = None, gw5a_bsrams = None):
     bs = bitmatrix.fliplr(bs)
-    hdr[-1][2:] = bitmatrix.shape(bs)[0].to_bytes(2, 'big')
+    hdr[-1][2:] = int(bitmatrix.shape(bs)[0]).to_bytes(2, 'big')
 
     if compress:
         padlen = (ceil(bitmatrix.shape(bs)[1] / 64) * 64) - bitmatrix.shape(bs)[1]
@@ -287,13 +287,13 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
 
     crcdat = bytearray()
     preamble = 3
-    calc = crc.Calculator(crc16arc)
+    calc = make_crc16_calculator()
     with open(fname, 'w') as f:
         for ba in hdr:
             if not preamble and ba[0] != 0xd2: # SPI address
                 crcdat.extend(ba)
             preamble = max(0, preamble-1)
-            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write(''.join(_B2B[b] for b in ba))
             f.write('\n')
         for ba in bs:
             if compress:
@@ -301,16 +301,16 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
                     ba = compressLine(ba, key8Z, key4Z, key2Z)
                 else:
                     ba = ba[no_compress_pad_bytes : ]
-            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write(''.join(_B2B[b] for b in ba))
             crcdat.extend(ba)
             crc_ = calc.checksum(crcdat)
             crcdat = bytearray(b'\xff'*6)
-            f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
+            f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
             f.write('1'*48)
             f.write('\n')
 
         # end of main grid
-        f.write(''.join(f"{b:08b}" for b in ftr[0]))
+        f.write(''.join(_B2B[b] for b in ftr[0]))
         f.write('\n')
 
         if extra_slots:
@@ -318,32 +318,32 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
             crcdat = bytearray()
             ba = bytearray(b'\x6a\x00\x00\x00\x00\x00\x00\xff')
             crcdat.extend(ba)
-            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write(''.join(_B2B[b] for b in ba))
             f.write('\n')
             ba = bytearray(b'\x6d\x00\x00\x00')
             crcdat.extend(ba)
-            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write(''.join(_B2B[b] for b in ba))
             ba = bytearray(b'\xff'*16)
-            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write(''.join(_B2B[b] for b in ba))
             f.write('\n')
 
             for slot_idx, slot_bitmap in extra_slots.items():
                 # slot header
                 ba = bytearray(b'\x6a\x00\x00\x00\x00\x00\x00')
                 crcdat.extend(ba)
-                f.write(''.join(f"{b:08b}" for b in ba))
+                f.write(''.join(_B2B[b] for b in ba))
                 ba = bytearray.fromhex(f"{slot_idx:02x}")
                 crcdat.extend(ba)
-                f.write(''.join(f"{b:08b}" for b in ba))
+                f.write(''.join(_B2B[b] for b in ba))
                 f.write('\n')
 
                 ba = bytearray(b'\x6b\x80\x00')
                 crcdat.extend(ba)
-                f.write(''.join(f"{b:08b}" for b in ba))
+                f.write(''.join(_B2B[b] for b in ba))
                 shape = bitmatrix.shape(slot_bitmap)
                 ba = bytearray.fromhex(f"{shape[0] * shape[1] // 8:02x}")
                 crcdat.extend(ba)
-                f.write(''.join(f"{b:08b}" for b in ba))
+                f.write(''.join(_B2B[b] for b in ba))
 
                 # slot bitmap
                 bs = bitmatrix.transpose(slot_bitmap)
@@ -351,10 +351,10 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
                 bs = bitmatrix.packbits(bs, axis = 1)
                 for ba in bs:
                     crcdat.extend(ba)
-                    f.write(''.join(f"{b:08b}" for b in ba))
+                    f.write(''.join(_B2B[b] for b in ba))
                 crc_ = calc.checksum(crcdat)
                 crcdat = bytearray(b'\xff'*2)
-                f.write(f"{crc_&0xff:08b}{crc_>>8:08b}")
+                f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
                 f.write('1'*128)
                 f.write('\n')
         else:
@@ -364,7 +364,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
             crcdat = bytearray()
 
         for ba in ftr[1:]:
-            f.write(''.join(f"{b:08b}" for b in ba))
+            f.write(''.join(_B2B[b] for b in ba))
             f.write('\n')
 
 

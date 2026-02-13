@@ -17,9 +17,10 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    install_requires=[
-        'crc',
-    ],
+    install_requires=[],
+    extras_require={
+        'fast': ['numpy', 'crcmod'],
+    },
     python_requires='>=3.9',
     package_data={
         'apycula': ['*.pickle']

@@ -14,7 +14,7 @@ RUN apt-get update && \
     apt-get install -y xxd && \
     echo "B016: EB" | xxd -r -g 0 - ${GOWINHOME}/IDE/bin/gw_sh
 
-RUN pip install --no-cache-dir crc msgspec
+RUN pip install --no-cache-dir numpy crcmod msgspec
 
 WORKDIR /usr/src/apicula
 
