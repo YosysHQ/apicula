@@ -101,6 +101,15 @@ def run_script(db, pins, device, package, partnumber):
     # tracing.visualize_grid(draw_map, db.rows, db.cols, save_name="sdram_pinout.jpeg")
     return pinout
 
+def add_alias_to_zero_idx(pinmap):
+    aliases = []
+    for pin in pinmap:
+        name, rest = pin[0], pin[1:]
+        if name[-3:] == '[0]':
+            alias = name[:-3]
+            aliases.append((alias, *rest))
+    pinmap.extend(aliases)
+
 params = {
     "GW1NS-4": [{
         "package": "QFN48P",
@@ -176,6 +185,7 @@ if __name__ == "__main__":
         for device_args in devices:
             tiled_fuzzer.params = device_args
             pinmap = run_script(db, device_args["pins"], device_args["device"], device_args["package"], device_args["partnumber"])
+            add_alias_to_zero_idx(pinmap)
             db.sip_cst.setdefault(device_args["device"], {})[device_args["package"]] = pinmap
 
     # the reverse logicinfo does not make sense to store in the database
