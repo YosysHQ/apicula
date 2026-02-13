@@ -24,12 +24,12 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: chipdbs
-        path: apycula/*.pickle
+        path: apycula/*.msgpack.gz
     - name: Archive stages
       uses: actions/upload-artifact@v4
       with:
         name: stages
-        path: GW*_stage*.pickle
+        path: GW*_stage*.msgpack.gz
 
   pypi:
     runs-on: ubuntu-latest
@@ -69,7 +69,7 @@ jobs:
     - name: Pack release data
       if: startsWith(github.ref, 'refs/heads/master')
       run: |
-        tar cvfz linux-x64-gowin-data.tgz apycula/*.pickle
+        tar cvfz linux-x64-gowin-data.tgz apycula/*.msgpack.gz
     - name: Upload to oss-cad-suite
       uses: ncipollo/release-action@v1
       if: hashFiles('linux-x64-gowin-data.tgz') != ''

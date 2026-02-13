@@ -1,5 +1,5 @@
-import pickle
 from apycula import chipdb
+from apycula.chipdb import load_chipdb, save_chipdb
 from apycula import codegen
 from apycula import tiled_fuzzer
 from apycula import tracing
@@ -14,7 +14,7 @@ def find_pins(db, pnr:codegen.Pnr, trace_args):
         iob, pin_name, pin_idx, direction = args
         iob_type = "IOB" + iob[-1]
         fuzz_io_row, fuzz_io_col, bel_idx = gowin_unpack.tbrl2rc(db, iob)
-        fuzz_io_node = db.grid[fuzz_io_row][fuzz_io_col].bels[iob_type].portmap["O"]
+        fuzz_io_node = db[fuzz_io_row, fuzz_io_col].bels[iob_type].portmap["O"]
         trace_starts.append((fuzz_io_row, fuzz_io_col, fuzz_io_node))
 
     dests = [x for x in tracing.get_io_nodes(db) if x not in trace_starts]
@@ -168,8 +168,7 @@ params = {
 }
 
 if __name__ == "__main__":
-    with open(f"{tiled_fuzzer.device}_stage1.pickle", 'rb') as f:
-        db = pickle.load(f)
+    db = load_chipdb(f"{tiled_fuzzer.device}_stage1.msgpack.gz")
 
     if tiled_fuzzer.device in params:
         devices = params[tiled_fuzzer.device]
@@ -180,5 +179,4 @@ if __name__ == "__main__":
 
     # the reverse logicinfo does not make sense to store in the database
     db.rev_li = {}
-    with open(f"{tiled_fuzzer.device}_stage2.pickle", 'wb') as f:
-        pickle.dump(db, f)
+    save_chipdb(db, f"{tiled_fuzzer.device}_stage2.msgpack.gz")

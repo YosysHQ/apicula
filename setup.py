@@ -19,10 +19,11 @@ setuptools.setup(
     ],
     install_requires=[
         'crc',
+        'msgspec',
     ],
     python_requires='>=3.9',
     package_data={
-        'apycula': ['*.pickle']
+        'apycula': ['*.msgpack.gz']
     },
     entry_points={
         'console_scripts': [

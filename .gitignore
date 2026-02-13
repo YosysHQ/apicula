@@ -13,6 +13,7 @@
 impl
 env
 *.pickle
+*.msgpack.gz
 __pycache__
 generic/blinky.fasm
 generic/blinky.png
