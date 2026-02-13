@@ -56,7 +56,9 @@ try:
         dst[y:y+h, x:x+w] = src
 
 except ImportError:
-
+    import warnings
+    warnings.warn("Numpy is not available, performance will be degraded.")
+    
     def fliplr(bmp):
         """
         Flips the entries in each row in the left/right direction.
