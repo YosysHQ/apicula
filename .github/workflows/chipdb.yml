@@ -125,7 +125,7 @@ jobs:
         git submodule update --init --recursive
         make config-gcc
         make -j$(nproc)
-        sudo make install
+        make install DESTDIR=$PWD/staging
     - name: Build nextpnr
       run: |
         git clone https://github.com/YosysHQ/nextpnr.git
@@ -135,9 +135,9 @@ jobs:
         cmake -B build -DBUILD_PYTHON=OFF -DARCH="himbaechel" \
           -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all"
         make -C build -j$(nproc)
-        sudo make -C build install
+        make -C build install DESTDIR=${{ github.workspace }}/staging
     - name: Package tools
-      run: tar czf tools.tar.gz -C /usr/local .
+      run: tar czf tools.tar.gz -C staging/usr/local .
     - name: Upload tools
       uses: actions/upload-artifact@v4
       with:
