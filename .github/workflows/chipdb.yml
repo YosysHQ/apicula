@@ -175,8 +175,13 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: tools-${{ matrix.toolchain.name }}
+    - name: Install runtime deps
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libboost-filesystem1.83.0 libboost-program-options1.83.0 \
+          libboost-iostreams1.83.0 libboost-thread1.83.0 libboost-system1.83.0
     - name: Install tools
-      run: sudo tar xzf tools.tar.gz -C /usr/local
+      run: sudo tar xzf tools.tar.gz -C /usr/local && sudo ldconfig
     - name: Download python package
       uses: actions/download-artifact@v4
       with:
