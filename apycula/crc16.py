@@ -14,7 +14,10 @@ def make_crc16_calculator():
         return _CrcmodWrap(fn)
     except ImportError:
         pass
-
+        
+    import warnings
+    warnings.warn("Crcmod is not available, performance will be degraded.")
+    
     return _TableCRC16()
 
 
