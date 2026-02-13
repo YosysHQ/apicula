@@ -5,7 +5,10 @@ DEBUG = -v --debug
 DEBUG =
 
 .DEFAULT_GOAL := all
-all: \
+
+.PHONY: all primer25k tangmega138k clean
+
+primer25k: \
 	in-out-primer25k.fs in-inv-out-primer25k.fs in-or-inv-out-primer25k.fs \
 	lut8-primer25k.fs big-shift-primer25k.fs alu-simple-primer25k.fs lutram-primer25k.fs \
 	blinky-osc-primer25k.fs pll7-primer25k.fs dcs-primer25k.fs \
@@ -13,13 +16,15 @@ all: \
 	bsram-pROM-primer25k.fs bsram-pROMX9-primer25k.fs bsram-SP-primer25k.fs bsram-SPX9-primer25k.fs \
 	bsram-SDPB-primer25k.fs bsram-SDPX9B-primer25k.fs bsram-SDPB32-primer25k.fs \
 	femto-riscv-15-primer25k.fs femto-riscv-16-primer25k.fs femto-riscv-18-primer25k.fs \
-	adc-temp-primer25k.fs adc-loc-left-primer25k.fs adc-glo-right-primer25k.fs attosoc-primer25k.fs \
+	adc-temp-primer25k.fs adc-loc-left-primer25k.fs adc-glo-right-primer25k.fs attosoc-primer25k.fs
+
+tangmega138k: \
 	big-shift-tangmega138k.fs attosoc-tangmega138k.fs
 
-clean: 
+all: primer25k tangmega138k
+
+clean:
 	rm -f *.json *.fs *-unpacked.v
-	
-.PHONY: unpacked clean
 
 # ============================================================
 # TangPrimer25k

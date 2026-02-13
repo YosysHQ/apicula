@@ -1,8 +1,6 @@
 name: Chipdb builder
 
 on:
-  # Trigger the workflow on push or pull request,
-  # but only for the main branch
   push:
     branches:
       - master
@@ -14,240 +12,34 @@ env:
   APICULA_IMAGE: pepijndevos/apicula:1.9.10.03
 
 jobs:
-  gw1n1:
+  chipdb:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Build gw1n-1 chipdb
+    - name: Build all chipdbs
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-1.pickle
-    - name: Archive artifact
+        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make -j$(nproc)
+    - name: Archive chipdbs
       uses: actions/upload-artifact@v4
       with:
-          name: gw1n-1-chipdb
-          path: apycula/GW1N-1.pickle
-    - name: Archive stage artifact
+        name: chipdbs
+        path: apycula/*.pickle
+    - name: Archive stages
       uses: actions/upload-artifact@v4
       with:
-          name: gw1n-1-stage
-          path: GW1N-1*
-  gw1nz1:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw1nz-1 chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1NZ-1.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1nz-1-chipdb
-          path: apycula/GW1NZ-1.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1nz-1-stage
-          path: GW1NZ-1*
-  gw1n9:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw1n-9 chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-9.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1n-9-chipdb
-          path: apycula/GW1N-9.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1n-9-stage
-          path: GW1N-9*
-  gw1n9c:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw1n-9c chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-9C.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1n-9c-chipdb
-          path: apycula/GW1N-9C.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1n-9c-stage
-          path: GW1N-9C*
-  gw1n4:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw1n-4 chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1N-4.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1n-4-chipdb
-          path: apycula/GW1N-4.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1n-4-stage
-          path: GW1N-4*
-  gw1ns4:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw1ns-4 chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW1NS-4.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1ns-4-chipdb
-          path: apycula/GW1NS-4.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw1ns-4-stage
-          path: GW1NS-4*
-  gw2a18:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw2a-18 chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW2A-18.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw2a-18-chipdb
-          path: apycula/GW2A-18.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw2a-18-stage
-          path: GW2A-18*
-  gw2a18c:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw2a-18c chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW2A-18C.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw2a-18c-chipdb
-          path: apycula/GW2A-18C.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw2a-18C-stage
-          path: GW2A-18C*
-  gw5a25a:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw5a-25a chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5A-25A.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw5a-25a-chipdb
-          path: apycula/GW5A-25A.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw5a-25a-stage
-          path: GW5A-25A*
-  gw5ast138c:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build gw5ast-138c chipdb
-      run: |
-        docker pull ${{ env.APICULA_IMAGE }}
-        docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make apycula/GW5AST-138C.pickle
-    - name: Archive artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw5ast-138c-chipdb
-          path: apycula/GW5AST-138C.pickle
-    - name: Archive stage artifact
-      uses: actions/upload-artifact@v4
-      with:
-          name: gw5ast-138c-stage
-          path: GW5AST-138C*
+        name: stages
+        path: GW*_stage*.pickle
+
   pypi:
     runs-on: ubuntu-latest
-    needs: [gw1n1, gw1nz1, gw1n9, gw1n9c, gw1n4, gw1ns4, gw2a18, gw2a18c, gw5a25a, gw5ast138c]
+    needs: [chipdb]
     steps:
     - uses: actions/checkout@v4
-    - name: Download gw1n-1 chipdb
+    - name: Download chipdbs
       uses: actions/download-artifact@v4
       with:
-        name: gw1n-1-chipdb
-        path: apycula
-    - name: Download gw1nz-1 chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw1nz-1-chipdb
-        path: apycula
-    - name: Download gw1n-4 chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw1n-4-chipdb
-        path: apycula
-    - name: Download gw1n-9 chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw1n-9-chipdb
-        path: apycula
-    - name: Download gw1n-9c chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw1n-9c-chipdb
-        path: apycula
-    - name: Download gw1ns-4 chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw1ns-4-chipdb
-        path: apycula
-    - name: Download gw2a-18 chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw2a-18-chipdb
-        path: apycula
-    - name: Download gw2a-18c chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw2a-18c-chipdb
-        path: apycula
-    - name: Download gw5a-25a chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw5a-25a-chipdb
-        path: apycula
-    - name: Download gw5ast-138c chipdb
-      uses: actions/download-artifact@v4
-      with:
-        name: gw5ast-138c-chipdb
+        name: chipdbs
         path: apycula
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -265,8 +57,8 @@ jobs:
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
-          name: python-dist
-          path: dist
+        name: python-dist
+        path: dist
     - name: Publish to Pypi
       if: startsWith(github.ref, 'refs/tags')
       env:
@@ -291,32 +83,25 @@ jobs:
         artifacts: "linux-x64-gowin-data.tgz"
         token: ${{ secrets.GITHUB_TOKEN }}
 
-  example:
+  build-tools:
     runs-on: ubuntu-latest
-    needs: [pypi]
     strategy:
-      fail-fast: false
       matrix:
-        yosys: [main, v0.62]
-        nextpnr: [master, nextpnr-0.9]
+        include:
+          - name: dev
+            yosys: main
+            nextpnr: master
+          - name: stable
+            yosys: v0.62
+            nextpnr: nextpnr-0.9
     steps:
     - uses: actions/checkout@v4
-    - name: Download python package
-      uses: actions/download-artifact@v4
-      with:
-        name: python-dist
-        path: dist
     - name: Set up Python
       uses: actions/setup-python@v5
-      id: pysetup
       with:
         python-version: '3.9'
-    - name: Install and build
+    - name: Install build deps
       run: |
-        pip install dist/*.whl
-        # pip install apycula
-        git clone https://github.com/YosysHQ/yosys.git
-        git clone https://github.com/YosysHQ/nextpnr.git
         sudo apt-get update
         sudo apt-get install build-essential clang bison flex \
           libreadline-dev gawk tcl-dev libffi-dev git libfl-dev \
@@ -324,33 +109,85 @@ jobs:
           libboost-python-dev libboost-filesystem-dev zlib1g-dev \
           libboost-thread-dev libboost-program-options-dev libboost-iostreams-dev libboost-dev \
           libeigen3-dev
+    - name: Build yosys
+      run: |
+        git clone https://github.com/YosysHQ/yosys.git
         cd yosys
         git checkout ${{ matrix.yosys }}
         git submodule update --init --recursive
         make config-gcc
         make -j$(nproc)
         sudo make install
-        cd ../nextpnr
+    - name: Build nextpnr
+      run: |
+        git clone https://github.com/YosysHQ/nextpnr.git
+        cd nextpnr
         git checkout ${{ matrix.nextpnr }}
         git submodule update --init --recursive
-        mkdir -p build
-        cd build
-        cmake .. -DBUILD_PYTHON=OFF -DARCH="himbaechel" -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" -DPython3_EXECUTABLE=${{ steps.pysetup.outputs.python-path }}
-        make -j$(nproc)
-        sudo make install
-        cd ../../examples
-        make -j$(nproc) all
-        cd gw5a
-        make -j$(nproc) all
+        cmake -B build -DBUILD_PYTHON=OFF -DARCH="himbaechel" \
+          -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all"
+        make -C build -j$(nproc)
+        sudo make -C build install
+    - name: Package tools
+      run: tar czf tools.tar.gz -C /usr/local .
+    - name: Upload tools
+      uses: actions/upload-artifact@v4
+      with:
+        name: tools-${{ matrix.name }}
+        path: tools.tar.gz
+
+  example:
+    runs-on: ubuntu-latest
+    needs: [pypi, build-tools]
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain:
+          - {name: dev}
+          - {name: stable}
+        board:
+          - {target: tangnano20k, dir: examples}
+          - {target: primer20k, dir: examples}
+          - {target: tangnano, dir: examples}
+          - {target: tangnano1k, dir: examples}
+          - {target: tangnano4k, dir: examples}
+          - {target: tangnano9k, dir: examples}
+          - {target: szfpga, dir: examples}
+          - {target: tec0117, dir: examples}
+          - {target: runber, dir: examples}
+          - {target: primer25k, dir: examples/gw5a}
+          - {target: tangmega138k, dir: examples/gw5a}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+    - name: Download tools
+      uses: actions/download-artifact@v4
+      with:
+        name: tools-${{ matrix.toolchain.name }}
+    - name: Install tools
+      run: sudo tar xzf tools.tar.gz -C /usr/local
+    - name: Download python package
+      uses: actions/download-artifact@v4
+      with:
+        name: python-dist
+        path: dist
+    - name: Install apycula
+      run: pip install dist/*.whl
+    - name: Build examples
+      run: make -C ${{ matrix.board.dir }} -j$(nproc) ${{ matrix.board.target }}
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
-          name: examples-${{ matrix.yosys }}-${{ matrix.nextpnr }}
-          path: examples
-    - name: Do sanity check
+        name: examples-${{ matrix.toolchain.name }}-${{ matrix.board.target }}
+        path: ${{ matrix.board.dir }}/*.fs
+    - name: Sanity check
+      if: matrix.board.dir == 'examples'
       run: |
+        make -C examples -j$(nproc) ${{ matrix.board.target }}-unpacked
         cd examples
-        make -j$(nproc) unpacked
         for f in *-unpacked.v; do
           yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
         done
