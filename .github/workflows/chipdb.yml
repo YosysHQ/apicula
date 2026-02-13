@@ -85,6 +85,7 @@ jobs:
 
   build-tools:
     runs-on: ubuntu-latest
+    needs: [pypi]
     strategy:
       matrix:
         include:
@@ -109,6 +110,13 @@ jobs:
           libboost-python-dev libboost-filesystem-dev zlib1g-dev \
           libboost-thread-dev libboost-program-options-dev libboost-iostreams-dev libboost-dev \
           libeigen3-dev
+    - name: Download python package
+      uses: actions/download-artifact@v4
+      with:
+        name: python-dist
+        path: dist
+    - name: Install apycula
+      run: pip install dist/*.whl
     - name: Build yosys
       run: |
         git clone https://github.com/YosysHQ/yosys.git
@@ -138,7 +146,7 @@ jobs:
 
   example:
     runs-on: ubuntu-latest
-    needs: [pypi, build-tools]
+    needs: [build-tools]
     strategy:
       fail-fast: false
       matrix:
