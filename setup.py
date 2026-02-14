@@ -18,9 +18,11 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
-        'crc',
         'msgspec',
     ],
+    extras_require={
+        'fast': ['numpy', 'crcmod'],
+    },
     python_requires='>=3.9',
     package_data={
         'apycula': ['*.msgpack.xz']
