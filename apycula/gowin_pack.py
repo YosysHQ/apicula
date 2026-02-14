@@ -1,19 +1,16 @@
 import sys
 import os
 import re
-import pickle
 import bisect
-import gzip
 import itertools
 import math
 import json
 import argparse
 import importlib.resources
 from collections import namedtuple
-from contextlib import closing
 from apycula import codegen
 from apycula import chipdb
-from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses, get_bank_io_fuses, get_long_fuses
+from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses, get_bank_io_fuses, get_long_fuses, load_chipdb
 from apycula import attrids
 from apycula import bslib
 from apycula import bitmatrix
@@ -162,7 +159,7 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset = 0):
 
     attrs_upper(attrs)
     subtype = attrs['BSRAM_SUBTYPE']
-    if not bsram_init_map:
+    if bsram_init_map is None:
         if device in {'GW5A-25A'}:
             # 72 * bsram rows * chip bit width
             bsram_init_map = bitmatrix.zeros(72 * len(db.simplio_rows), db.width)
@@ -235,7 +232,7 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset = 0):
     else:
         x = 0
         for jdx in range(col):
-            x += db.grid[0][jdx].width
+            x += db[0, jdx].width
     loc_map = bitmatrix.flipud(loc_map)
     for row in loc_map:
         x0 = x
@@ -334,7 +331,7 @@ def isolate_segments(pnr, db, tilemap):
                 s_col, s_row, wire = res.groups()
                 row = int(s_row)
                 col = int(s_col)
-                tiledata = db.grid[row][col]
+                tiledata = db[row, col]
                 tile = tilemap[(row, col)]
                 if wire not in tiledata.alonenode_6:
                     raise Exception(f"Wire {wire} is not in alonenode fuse table")
@@ -2761,7 +2758,7 @@ def find_and_set_dhcen_hclk_fuses(db, tilemap, wire, side):
     add_attr_val(db, 'HCLK', fin_attrs, attrids.hclk_attrids[attr], val)
 
     def set_fuse():
-        ttyp = db.grid[row][col].ttyp
+        ttyp = db.grid[row][col]
         if 'HCLK' in db.shortval[ttyp]:
             bits = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK")
             tile = tilemap[row, col]
@@ -3113,11 +3110,12 @@ _sides = "AB"
 
 def set_dcs_fuses(db, tilemap, dcs_idx, dcs_attrs, spine_idx):
     dcs_name = f'DCS{dcs_idx + 6}'
-    for row, rd in enumerate(db.grid):
-        for col, rc in enumerate(rd):
-            if rc.ttyp in db.longfuses and dcs_name in db.longfuses[rc.ttyp]:
+    for row in range(db.rows):
+        for col in range(db.cols):
+            ttyp = db.grid[row][col]
+            if ttyp in db.longfuses and dcs_name in db.longfuses[ttyp]:
                 tile = tilemap[(row, col)]
-                bits = get_long_fuses(db, rc.ttyp, dcs_attrs, spine_idx)
+                bits = get_long_fuses(db, ttyp, dcs_attrs, spine_idx)
                 for brow, bcol in bits:
                     tile[brow][bcol] = 1
 
@@ -3162,7 +3160,7 @@ def get_pullup_io(cfg):
 def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
     global adc_ios
     for typ, row, col, num, parms, attrs, cellname, cell in bels:
-        tiledata = db.grid[row-1][col-1]
+        tiledata = db[row-1, col-1]
         tile = tilemap[(row-1, col-1)]
 
         if typ in {'IBUF', 'OBUF', 'TBUF', 'IOBUF'}:
@@ -3248,7 +3246,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
         elif typ in {'OSC', 'OSCZ', 'OSCF', 'OSCH', 'OSCW', 'OSCO', 'OSCA'}:
             # XXX turn on (GW1NZ-1)
             if device == 'GW1NZ-1':
-                en_tiledata = db.grid[db.rows - 1][db.cols - 1]
+                en_tiledata = db[db.rows - 1, db.cols - 1]
                 en_tile = tilemap[(db.rows - 1, db.cols - 1)]
                 en_tile[23][63] = 0
                 en_tile[22][63] = 1
@@ -3266,7 +3264,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     if 'osc' in func_desc or 'osc_fuses_only' in func_desc:
                         osc_row, osc_col = row_col
                         osc_tile = tilemap[osc_row, osc_col]
-                        bits = get_shortval_fuses(db, db.grid[osc_row][osc_col].ttyp, osc_attrs, 'OSC')
+                        bits = get_shortval_fuses(db, db.grid[osc_row][osc_col], osc_attrs, 'OSC')
                         #print(osc_row, osc_col, osc_attrs)
                         for r, c in bits:
                             osc_tile[r][c] = 1
@@ -3496,7 +3494,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
         elif typ == 'DLLDLY':
             dlldly_attrs = set_dlldly_attrs(db, typ, parms, cell)
             for dlldly_row, dlldly_col in db.extra_func[row - 1, col -1]['dlldly_fusebels']:
-                dlldly_tiledata = db.grid[dlldly_row][dlldly_col]
+                dlldly_tiledata = db[dlldly_row, dlldly_col]
                 dlldly_tile = tilemap[(dlldly_row, dlldly_col)]
                 bits = get_long_fuses(db, dlldly_tiledata.ttyp, dlldly_attrs, f'DLLDEL{num}')
                 for r, c in bits:
@@ -3527,7 +3525,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             pip_row = int(pip_row)
             pip_col = int(pip_col)
 
-            pip_tiledata = db.grid[pip_row][pip_col]
+            pip_tiledata = db[pip_row, pip_col]
             pip_tile = tilemap[(pip_row, pip_col)]
             bits = pip_tiledata.clock_pips[dest][src]
             for r, c in bits:
@@ -3598,7 +3596,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
         # set io bits
         for name, iob in ios.items():
             row, col, idx = iob.pos
-            tiledata = db.grid[row][col]
+            tiledata = db[row, col]
 
             mode_for_attrs = iob.flags['mode']
             lvds_attrs = {}
@@ -3717,7 +3715,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     if off:
                         fuse_row += off[0]
                         fuse_col += off[1]
-                        fuse_ttyp = db.grid[fuse_row][fuse_col].ttyp
+                        fuse_ttyp = db.grid[fuse_row][fuse_col]
                     # IOR3 A and B are actually A only in different cells
                     if (row, col, iob_idx) == (2, 91, 'B'):
                         iob_idx = 'A'
@@ -3733,7 +3731,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
 
         # bank bits
         brow, bcol = db.bank_tiles[bank]
-        tiledata = db.grid[brow][bcol]
+        tiledata = db[brow, bcol]
 
         bank_attrs = set()
         for k, val in in_bank_attrs.items():
@@ -3776,7 +3774,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             _banks.setdefault(bank, BankDesc(None, set())).iostd = io_std
             # unused bank bits
             brow, bcol = db.bank_tiles[bank]
-            tiledata = db.grid[brow][bcol]
+            tiledata = db[brow, bcol]
 
             bank_attrs = set()
             for k, val in in_bank_attrs.items():
@@ -3820,7 +3818,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             row = int(num) - 1
             col = db.cols - 1
 
-        tiledata = db.grid[row][col]
+        tiledata = db[row, col]
         if f'IOB{iob_idx}' not in tiledata.bels:
             continue
 
@@ -3838,7 +3836,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             if off:
                 fuse_row += off[0]
                 fuse_col += off[1]
-                fuse_ttyp = db.grid[fuse_row][fuse_col].ttyp
+                fuse_ttyp = db.grid[fuse_row][fuse_col]
             # IOR3 A and B are actually A only in different cells
             if (row, col, iob_idx) == (2, 91, 'B'):
                 iob_idx = 'A'
@@ -3857,7 +3855,7 @@ def do_hclk_banks(db, row, col, src, dest):
         fin_attrs = set()
         add_attr_val(db, 'HCLK', fin_attrs, attrids.hclk_attrids[f'BRGMUX{dest[-1]}_BRGOUT'], attrids.hclk_attrvals['ENABLE'])
 
-        ttyp = db.grid[row][col].ttyp
+        ttyp = db.grid[row][col]
         if 'HCLK' in db.shortval[ttyp]:
             res = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK")
     return res
@@ -3886,13 +3884,13 @@ def route(db, tilemap, pips):
 
     if device in {'GW5AST-138C'}:
         clock_bridge_ttypes = range(80, 86) # XXX clock mux bridge cells
-        clock_bridge_cols = {col for col in range(db.cols) for row in range(db.rows) if db.grid[row][col].ttyp in clock_bridge_ttypes}
+        clock_bridge_cols = {col for col in range(db.cols) for row in range(db.rows) if db.grid[row][col] in clock_bridge_ttypes}
         clock_bridge_rows = {54}
 
     def set_clock_fuses(row_, col_, src, dest):
         # SPINE->{GT00, GT10} must be set in the cell only
         if dest in {'GT00', 'GT10'}:
-            bits = db.grid[row_ - 1][col_ - 1].clock_pips[dest][src]
+            bits = db[row_ - 1, col_ - 1].clock_pips[dest][src]
             tile = tilemap[(row_ - 1, col_ - 1)]
             for brow, bcol in bits:
                 tile[brow][bcol] = 1
@@ -3909,7 +3907,7 @@ def route(db, tilemap, pips):
             if row_ - 1 not in allowed_rows:
                 allowed_rows = range(allowed_rows.stop, db.rows)
                 area = 'B'
-            elif db.grid[row_ - 1][col_ - 1].ttyp in clock_bridge_ttypes:
+            elif db.grid[row_ - 1][col_ - 1] in clock_bridge_ttypes:
                 allowed_rows = clock_bridge_rows
                 allowed_cols = clock_bridge_cols
                 area = 'C'
@@ -3920,18 +3918,20 @@ def route(db, tilemap, pips):
             used_spines.update({(area, dest)})
             spine_enable_table = f'5A_PCLK_ENABLE_{wnames.clknumbers[dest]:02}'
 
-            for row, rd in enumerate(db.grid):
+            for row in range(db.rows):
                 if row in allowed_rows:
-                    for col, rc in enumerate(rd):
+                    for col in range(db.cols):
                         if col in allowed_cols:
                             if device in {'GW5AST-138C'} and area == 'T' and row in clock_bridge_rows and col in clock_bridge_cols:
                                 continue
+                        rc = db[row, col]
+                        ttyp = db.grid[row][col]
                         bits = set()
                         if dest in rc.clock_pips:
                             if src in rc.clock_pips[dest]:
                                 bits = rc.clock_pips[dest][src]
-                        if spine_enable_table in db.shortval[rc.ttyp] and (1, 0) in db.shortval[rc.ttyp][spine_enable_table]:
-                            bits.update(db.shortval[rc.ttyp][spine_enable_table][(1, 0)]) # XXX move to attrs?
+                        if spine_enable_table in db.shortval[ttyp] and (1, 0) in db.shortval[ttyp][spine_enable_table]:
+                            bits.update(db.shortval[ttyp][spine_enable_table][(1, 0)]) # XXX move to attrs?
                             print(f"Enable spine {dest} <- {src} ({row_}, {col_}) by {spine_enable_table} at ({row}, {col})")
                         if bits:
                             tile = tilemap[(row, col)]
@@ -3943,7 +3943,7 @@ def route(db, tilemap, pips):
             set_clock_fuses(row, col, src, dest)
             continue
 
-        tiledata = db.grid[row-1][col-1]
+        tiledata = db[row-1, col-1]
         tile = tilemap[(row-1, col-1)]
 
         try:
@@ -4022,13 +4022,14 @@ def gsr(db, tilemap, args):
         gsr_type = {220}
         cfg_type = {220}
 
-    for row, rd in enumerate(db.grid):
-        for col, rc in enumerate(rd):
+    for row in range(db.rows):
+        for col in range(db.cols):
+            ttyp = db.grid[row][col]
             bits = set()
-            if rc.ttyp in gsr_type:
-                bits = get_shortval_fuses(db, rc.ttyp, gsr_attrs, 'GSR')
-            if rc.ttyp in cfg_type:
-                bits.update(get_shortval_fuses(db, rc.ttyp, cfg_attrs, 'CFG'))
+            if ttyp in gsr_type:
+                bits = get_shortval_fuses(db, ttyp, gsr_attrs, 'GSR')
+            if ttyp in cfg_type:
+                bits.update(get_shortval_fuses(db, ttyp, cfg_attrs, 'CFG'))
             if bits:
                 btile = tilemap[(row, col)]
                 for brow, bcol in bits:
@@ -4079,13 +4080,14 @@ def dualmode_pins(db, tilemap, args):
     elif device in {'GW5AST-138C'}:
         cfg_type = {220}
 
-    for row, rd in enumerate(db.grid):
-        for col, rc in enumerate(rd):
+    for row in range(db.rows):
+        for col in range(db.cols):
+            ttyp = db.grid[row][col]
             bits = set()
             clr_bits = set()
-            if rc.ttyp in cfg_type:
-                bits.update(get_shortval_fuses(db, rc.ttyp, set_attrs, 'CFG'))
-                clr_bits.update(get_shortval_fuses(db, rc.ttyp, clr_attrs, 'CFG'))
+            if ttyp in cfg_type:
+                bits.update(get_shortval_fuses(db, ttyp, set_attrs, 'CFG'))
+                clr_bits.update(get_shortval_fuses(db, ttyp, clr_attrs, 'CFG'))
             if clr_bits:
                 btile = tilemap[(row, col)]
                 for brow, bcol in clr_bits:
@@ -4094,7 +4096,7 @@ def dualmode_pins(db, tilemap, args):
                     btile[brow][bcol] = 1
 
 def set_const_fuses(db, row, col, tile):
-    tiledata = db.grid[row][col]
+    tiledata = db[row, col]
     if tiledata.ttyp in db.const:
         for bits in db.const[tiledata.ttyp]:
             brow, bcol = bits
@@ -4104,7 +4106,7 @@ def set_adc_iobuf_fuses(db, tilemap):
     for ioloc in adc_iolocs.keys():
         row, col = ioloc
         bus = adc_iolocs[ioloc]['bus']
-        tiledata = db.grid[row][col]
+        tiledata = db[row, col]
         # A
         attrs = {}
         if bus not in '01':
@@ -4136,7 +4138,7 @@ def set_adc_iobuf_fuses(db, tilemap):
         if tiledata.bels['IOBB'].fuse_cell_offset:
             row += tiledata.bels['IOBB'].fuse_cell_offset[0]
             col += tiledata.bels['IOBB'].fuse_cell_offset[1]
-            tiledata = db.grid[row][col]
+            tiledata = db[row, col]
 
         attrs = {}
         if bus in '01':
@@ -4188,9 +4190,9 @@ def set_slice_fuses(db, tilemap, slice_attrvals):
         for attr, val in attrvals.items():
             add_attr_val(db, 'SLICE', av, attrids.cls_attrids[attr], attrids.cls_attrvals[val])
 
-        if f'CLS{num}' in db.shortval[db.grid[row - 1][col - 1].ttyp]:
+        if f'CLS{num}' in db.shortval[db.grid[row - 1][col - 1]]:
             #print(f"slice ({row - 1}, {col - 1}), {num}, {attrvals}, {av}")
-            bits = get_shortval_fuses(db, db.grid[row - 1][col - 1].ttyp, av, f'CLS{num}')
+            bits = get_shortval_fuses(db, db.grid[row - 1][col - 1], av, f'CLS{num}')
             tile = tilemap[(row - 1, col - 1)]
             for brow, bcol in bits:
                 tile[brow][bcol] = 1
@@ -4242,9 +4244,8 @@ def main():
         num = m.group(4)
         device = f"{series}{mods}-{num}"
 
-    with importlib.resources.path('apycula', f'{device}.pickle') as path:
-        with closing(gzip.open(path, 'rb')) as f:
-            db = pickle.load(f)
+    with importlib.resources.path('apycula', f'{device}.msgpack.xz') as path:
+        db = load_chipdb(path)
 
     wnames.select_wires(device)
 
@@ -4348,7 +4349,7 @@ def main():
 
         bsram_init_map = bitmatrix.transpose(bsram_init_map)
         bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map, gw5a_bsrams)
-    elif bsram_init_map:
+    elif bsram_init_map is not None:
         bslib.write_bitstream_with_bsram_init(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map)
     else:
         bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots)
