@@ -2,7 +2,7 @@
 
 module top(input wire clk, input wire reset, output wire [`LEDS_NR - 1:0]led);
 wire tick_hz;
-wire rst = `INV_BTN ^ reset;
+wire rst = !(`INV_BTN ^ reset);
 
 localparam HZ_PRESC = 6_000_000,
 		HZ_SIZE = $clog2(HZ_PRESC);

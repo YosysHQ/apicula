@@ -4,7 +4,12 @@ YOSYS_FLAGS = -setundef
 
 .DEFAULT_GOAL := all
 
-all: \
+.PHONY: all tangnano20k primer20k tangnano tangnano1k tangnano4k tangnano9k szfpga tec0117 runber
+.PHONY: unpacked tangnano20k-unpacked primer20k-unpacked tangnano-unpacked tangnano1k-unpacked
+.PHONY: tangnano4k-unpacked tangnano9k-unpacked szfpga-unpacked tec0117-unpacked runber-unpacked
+.PHONY: clean
+
+tangnano20k: \
 	blinky-tangnano20k.fs shift-tangnano20k.fs blinky-tbuf-tangnano20k.fs blinky-oddr-tangnano20k.fs \
 	blinky-osc-tangnano20k.fs tlvds-tangnano20k.fs elvds-tangnano20k.fs oddr-tlvds-tangnano20k.fs \
 	blinky-clkdiv-tangnano20k.fs dvi-example-tangnano20k.fs blinky-clkdiv-dhcen-tangnano20k.fs \
@@ -14,13 +19,14 @@ all: \
 	ides4-tangnano20k.fs ivideo-tangnano20k.fs ides8-tangnano20k.fs ides10-tangnano20k.fs \
 	bsram-pROM-tangnano20k.fs bsram-SDPB-tangnano20k.fs bsram-SP-tangnano20k.fs \
 	bsram-DPB-tangnano20k.fs bsram-pROMX9-tangnano20k.fs bsram-SDPX9B-tangnano20k.fs \
-	bsram-SPX9-tangnano20k.fs bsram-DPX9B-tangnano20k.fs  femto-riscv-memtest-tangnano20k.fs \
+	bsram-SPX9-tangnano20k.fs bsram-DPX9B-tangnano20k.fs femto-riscv-memtest-tangnano20k.fs \
 	femto-riscv-15-tangnano20k.fs femto-riscv-16-tangnano20k.fs femto-riscv-18-tangnano20k.fs \
 	dsp-mult18x18-tangnano20k.fs dsp-mult36x36-tangnano20k.fs dsp-padd9-tangnano20k.fs dsp-padd18-tangnano20k.fs \
 	dsp-mult9x9-tangnano20k.fs dsp-alu54d-tangnano20k.fs dsp-multalu18x18-tangnano20k.fs \
 	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
-	dqce-tangnano20k.fs  dcs-tangnano20k.fs \
-	\
+	dqce-tangnano20k.fs dcs-tangnano20k.fs
+
+primer20k: \
 	blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
 	blinky-osc-primer20k.fs tlvds-primer20k.fs elvds-primer20k.fs oddr-tlvds-primer20k.fs \
 	blinky-clkdiv-primer20k.fs dvi-example-primer20k.fs blinky-clkdiv-dhcen-primer20k.fs \
@@ -35,8 +41,9 @@ all: \
 	dsp-mult18x18-primer20k.fs dsp-mult36x36-primer20k.fs dsp-padd9-primer20k.fs dsp-padd18-primer20k.fs \
 	dsp-mult9x9-primer20k.fs dsp-alu54d-primer20k.fs dsp-multalu18x18-primer20k.fs \
 	dsp-multalu36x18-primer20k.fs dsp-multaddalu18x18-primer20k.fs \
-	dqce-primer20k.fs  dcs-primer20k.fs \
-	\
+	dqce-primer20k.fs dcs-primer20k.fs
+
+tangnano: \
 	blinky-tangnano.fs shift-tangnano.fs blinky-tbuf-tangnano.fs blinky-oddr-tangnano.fs \
 	blinky-osc-tangnano.fs elvds-tangnano.fs oddr-elvds-tangnano.fs pll-nanolcd-tangnano.fs \
 	blinky-clkdiv-tangnano.fs blinky-clkdiv-dhcen-tangnano.fs \
@@ -45,8 +52,9 @@ all: \
 	ides4-tangnano.fs ivideo-tangnano.fs ides8-tangnano.fs ides10-tangnano.fs \
 	bsram-pROM-tangnano.fs bsram-SDPB-tangnano.fs bsram-DPB-tangnano.fs \
 	bsram-SP-tangnano.fs bsram-pROMX9-tangnano.fs bsram-SDPX9B-tangnano.fs \
-	bsram-SPX9-tangnano.fs bsram-DPX9B-tangnano.fs \
-	\
+	bsram-SPX9-tangnano.fs bsram-DPX9B-tangnano.fs
+
+tangnano1k: \
 	blinky-tangnano1k.fs shift-tangnano1k.fs blinky-tbuf-tangnano1k.fs blinky-oddr-tangnano1k.fs \
 	blinky-osc-tangnano1k.fs elvds-tangnano1k.fs oddr-elvds-tangnano1k.fs pll-nanolcd-tangnano1k.fs \
 	blinky-clkdiv-tangnano1k.fs blinky-clkdiv-dhcen-tangnano1k.fs \
@@ -56,8 +64,9 @@ all: \
 	bsram-pROM-tangnano1k.fs bsram-SDPB-tangnano1k.fs bsram-DPB16-tangnano1k.fs \
 	bsram-SP-tangnano1k.fs bsram-pROMX9-tangnano1k.fs bsram-SDPX9B-tangnano1k.fs \
 	bsram-SPX9-tangnano1k.fs bsram-DPX9B18-tangnano1k.fs \
-	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs bandgap-tangnano1k.fs \
-	\
+	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs bandgap-tangnano1k.fs
+
+tangnano4k: \
 	blinky-tangnano4k.fs shift-tangnano4k.fs blinky-tbuf-tangnano4k.fs blinky-oddr-tangnano4k.fs \
 	blinky-osc-tangnano4k.fs tlvds-tangnano4k.fs elvds-tangnano4k.fs oddr-tlvds-tangnano4k.fs \
 	blinky-clkdiv-tangnano4k.fs blinky-clkdiv-dhcen-tangnano4k.fs \
@@ -65,16 +74,17 @@ all: \
 	oser4-tangnano4k.fs ovideo-tangnano4k.fs oser8-tangnano4k.fs oser10-tangnano4k.fs \
 	iddr-tangnano4k.fs iddrc-tangnano4k.fs ides16-tangnano4k.fs \
 	ides4-tangnano4k.fs ivideo-tangnano4k.fs ides8-tangnano4k.fs ides10-tangnano4k.fs \
-	oser10-tlvds-tangnano4k.fs iodelay-tangnano4k.fs mipi-out-tangnano4k.fs  femto-riscv-memtest-tangnano4k.fs \
+	oser10-tlvds-tangnano4k.fs iodelay-tangnano4k.fs mipi-out-tangnano4k.fs femto-riscv-memtest-tangnano4k.fs \
 	femto-riscv-15-tangnano4k.fs femto-riscv-16-tangnano4k.fs femto-riscv-18-tangnano4k.fs \
 	dsp-mult18x18-tangnano4k.fs dsp-mult36x36-tangnano4k.fs dsp-padd9-tangnano4k.fs dsp-padd18-tangnano4k.fs \
 	dsp-mult9x9-tangnano4k.fs dsp-alu54d-tangnano4k.fs dsp-multalu18x18-tangnano4k.fs \
 	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
 	dqce-tangnano4k.fs dcs-tangnano4k.fs emcu-blinky-tangnano4k.fs emcu-with-apb-blinky-tangnano4k.fs \
-	emcu-with-apb-spi-tangnano4k.fs i3c-tangnano4k.fs mipi-out-tangnano4k.fs \
-	\
+	emcu-with-apb-spi-tangnano4k.fs i3c-tangnano4k.fs mipi-out-tangnano4k.fs
+
+tangnano9k: \
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
-	blinky-clkdiv-tangnano9k.fs dvi-example-tangnano9k.fs\
+	blinky-clkdiv-tangnano9k.fs dvi-example-tangnano9k.fs \
 	blinky-osc-tangnano9k.fs tlvds-tangnano9k.fs elvds-tangnano9k.fs oddr-tlvds-tangnano9k.fs \
 	oddr-elvds-tangnano9k.fs pll-nanolcd-tangnano9k.fs oser16-tangnano9k.fs attosoc-tangnano9k.fs \
 	oser4-tangnano9k.fs ovideo-tangnano9k.fs oser8-tangnano9k.fs oser10-tangnano9k.fs \
@@ -89,8 +99,9 @@ all: \
 	dsp-mult9x9-tangnano9k.fs dsp-alu54d-tangnano9k.fs dsp-multalu18x18-tangnano9k.fs \
 	dsp-multalu36x18-tangnano9k.fs dsp-multaddalu18x18-tangnano9k.fs \
 	dqce-tangnano9k.fs dcs-tangnano9k.fs femto-riscv-userflash-tangnano9k.fs \
-	i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs \
-	\
+	i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs
+
+szfpga: \
 	blinky-szfpga.fs shift-szfpga.fs blinky-tbuf-szfpga.fs blinky-oddr-szfpga.fs \
 	blinky-osc-szfpga.fs tlvds-szfpga.fs elvds-szfpga.fs oddr-tlvds-szfpga.fs \
 	blinky-clkdiv-szfpga.fs blinky-clkdiv-dhcen-szfpga.fs \
@@ -104,8 +115,9 @@ all: \
 	femto-riscv-15-szfpga.fs femto-riscv-16-szfpga.fs femto-riscv-18-szfpga.fs \
 	dsp-mult18x18-szfpga.fs dsp-mult36x36-szfpga.fs dsp-padd9-szfpga.fs dsp-padd18-szfpga.fs \
 	dsp-mult9x9-szfpga.fs dsp-alu54d-szfpga.fs dsp-multalu18x18-szfpga.fs \
-	dsp-multalu36x18-szfpga.fs dsp-multaddalu18x18-szfpga.fs \
-	\
+	dsp-multalu36x18-szfpga.fs dsp-multaddalu18x18-szfpga.fs
+
+tec0117: \
 	blinky-tec0117.fs shift-tec0117.fs blinky-tbuf-tec0117.fs blinky-oddr-tec0117.fs \
 	blinky-osc-tec0117.fs tlvds-tec0117.fs elvds-tec0117.fs oddr-tlvds-tec0117.fs \
 	blinky-clkdiv-tec0117.fs blinky-clkdiv-dhcen-tec0117.fs \
@@ -115,8 +127,9 @@ all: \
 	ides4-tec0117.fs ivideo-tec0117.fs ides8-tec0117.fs ides10-tec0117.fs \
 	dsp-mult18x18-tec0117.fs dsp-mult36x36-tec0117.fs dsp-padd9-tec0117.fs dsp-padd18-tec0117.fs \
 	dsp-mult9x9-tec0117.fs dsp-alu54d-tec0117.fs dsp-multalu18x18-tec0117.fs \
-	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs \
-	\
+	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs
+
+runber: \
 	blinky-runber.fs shift-runber.fs blinky-tbuf-runber.fs blinky-oddr-runber.fs \
 	blinky-osc-runber.fs tlvds-runber.fs elvds-runber.fs oddr-tlvds-runber.fs \
 	blinky-clkdiv-runber.fs \
@@ -128,7 +141,9 @@ all: \
 	dsp-mult9x9-runber.fs dsp-alu54d-runber.fs dsp-multalu18x18-runber.fs \
 	dsp-multalu36x18-runber.fs dsp-multaddalu18x18-runber.fs
 
-unpacked:\
+all: tangnano20k primer20k tangnano tangnano1k tangnano4k tangnano9k szfpga tec0117 runber
+
+tangnano20k-unpacked: \
 	blinky-tangnano20k-unpacked.v shift-tangnano20k-unpacked.v \
 	blinky-tbuf-tangnano20k-unpacked.v blinky-oddr-tangnano20k-unpacked.v \
 	blinky-osc-tangnano20k-unpacked.v tlvds-tangnano20k-unpacked.v \
@@ -142,8 +157,9 @@ unpacked:\
 	bsram-DPB-tangnano20k-unpacked.v bsram-pROMX9-tangnano20k-unpacked.v \
 	bsram-SDPX9B-tangnano20k-unpacked.v bsram-SPX9-tangnano-unpacked.v \
 	bsram-DPX9B-tangnano20k-unpacked.v \
-	femto-riscv-15-tangnano20k-unpacked.v femto-riscv-16-tangnano20k-unpacked.v femto-riscv-18-tangnano20k-unpacked.v \
-	\
+	femto-riscv-15-tangnano20k-unpacked.v femto-riscv-16-tangnano20k-unpacked.v femto-riscv-18-tangnano20k-unpacked.v
+
+primer20k-unpacked: \
 	blinky-primer20k-unpacked.v shift-primer20k-unpacked.v blinky-tbuf-primer20k-unpacked.v \
 	blinky-oddr-primer20k-unpacked.v blinky-osc-primer20k-unpacked.v tlvds-primer20k-unpacked.v \
 	elvds-primer20k-unpacked.v oddr-tlvds-primer20k-unpacked.v \
@@ -155,8 +171,9 @@ unpacked:\
 	bsram-DPB-primer20k-unpacked.v bsram-pROMX9-primer20k-unpacked.v \
 	bsram-SDPX9B-primer20k-unpacked.v bsram-SPX9-tangnano-unpacked.v \
 	bsram-DPX9B-primer20k-unpacked.v \
-	femto-riscv-15-primer20k-unpacked.v femto-riscv-16-primer20k-unpacked.v femto-riscv-18-primer20k-unpacked.v \
-	\
+	femto-riscv-15-primer20k-unpacked.v femto-riscv-16-primer20k-unpacked.v femto-riscv-18-primer20k-unpacked.v
+
+tangnano-unpacked: \
 	blinky-tangnano-unpacked.v shift-tangnano-unpacked.v blinky-tbuf-tangnano-unpacked.v \
 	blinky-oddr-tangnano-unpacked.v blinky-osc-tangnano-unpacked.v elvds-tangnano-unpacked.v \
 	oddr-elvds-tangnano-unpacked.v pll-nanolcd-tangnano-unpacked.v \
@@ -165,8 +182,9 @@ unpacked:\
 	ides8-tangnano-unpacked.v ides10-tangnano-unpacked.v bsram-pROM-tangnano-unpacked.v \
 	bsram-SDPB-tangnano-unpacked.v bsram-SP-tangnano-unpacked.v bsram-pROMX9-tangnano-unpacked.v \
 	bsram-SDPX9B-tangnano-unpacked.v bsram-SPX9-tangnano-unpacked.v \
-	bsram-DPB-tangnano-unpacked.v bsram-DPX9B-tangnano-unpacked.v \
-	\
+	bsram-DPB-tangnano-unpacked.v bsram-DPX9B-tangnano-unpacked.v
+
+tangnano1k-unpacked: \
 	blinky-tangnano1k-unpacked.v shift-tangnano1k-unpacked.v blinky-tbuf-tangnano1k-unpacked.v \
 	blinky-oddr-tangnano1k-unpacked.v blinky-osc-tangnano1k-unpacked.v elvds-tangnano1k-unpacked.v \
 	oddr-elvds-tangnano1k-unpacked.v pll-nanolcd-tangnano1k-unpacked.v oser4-tangnano1k-unpacked.v \
@@ -175,8 +193,9 @@ unpacked:\
 	ides10-tangnano1k-unpacked.v bsram-pROM-tangnano1k-unpacked.v bsram-SDPB-tangnano1k-unpacked.v \
 	bsram-DPB16-tangnano1k-unpacked.v bsram-SP-tangnano1k-unpacked.v \
 	bsram-pROMX9-tangnano1k-unpacked.v bsram-SDPX9B-tangnano1k-unpacked.v \
-	bsram-SPX9-tangnano1k-unpacked.v bsram-DPX9B18-tangnano1k-unpacked.v \
-	\
+	bsram-SPX9-tangnano1k-unpacked.v bsram-DPX9B18-tangnano1k-unpacked.v
+
+tangnano4k-unpacked: \
 	blinky-tangnano4k-unpacked.v shift-tangnano4k-unpacked.v blinky-tbuf-tangnano4k-unpacked.v \
 	blinky-oddr-tangnano4k-unpacked.v blinky-osc-tangnano4k-unpacked.v tlvds-tangnano4k-unpacked.v \
 	elvds-tangnano4k-unpacked.v oddr-tlvds-tangnano4k-unpacked.v oddr-elvds-tangnano4k-unpacked.v \
@@ -184,8 +203,9 @@ unpacked:\
 	ovideo-tangnano4k-unpacked.v oser8-tangnano4k-unpacked.v oser10-tangnano4k-unpacked.v \
 	ides16-tangnano4k-unpacked.v ides4-tangnano4k-unpacked.v ivideo-tangnano4k-unpacked.v \
 	ides8-tangnano4k-unpacked.v ides10-tangnano4k-unpacked.v oser10-tlvds-tangnano4k-unpacked.v \
-	femto-riscv-15-tangnano4k-unpacked.v femto-riscv-16-tangnano4k-unpacked.v femto-riscv-18-tangnano4k-unpacked.v \
-	\
+	femto-riscv-15-tangnano4k-unpacked.v femto-riscv-16-tangnano4k-unpacked.v femto-riscv-18-tangnano4k-unpacked.v
+
+tangnano9k-unpacked: \
 	blinky-tangnano9k-unpacked.v shift-tangnano9k-unpacked.v blinky-tbuf-tangnano9k-unpacked.v \
 	blinky-oddr-tangnano9k-unpacked.v blinky-osc-tangnano9k-unpacked.v tlvds-tangnano9k-unpacked.v \
 	elvds-tangnano9k-unpacked.v oddr-tlvds-tangnano9k-unpacked.v oddr-elvds-tangnano9k-unpacked.v \
@@ -197,8 +217,9 @@ unpacked:\
 	bsram-DPB-tangnano9k-unpacked.v bsram-pROMX9-tangnano9k-unpacked.v \
 	bsram-SDPX9B-tangnano9k-unpacked.v bsram-SPX9-tangnano-unpacked.v \
 	bsram-DPX9B-tangnano9k-unpacked.v \
-	femto-riscv-15-tangnano9k-unpacked.v femto-riscv-16-tangnano9k-unpacked.v femto-riscv-18-tangnano9k-unpacked.v \
-	\
+	femto-riscv-15-tangnano9k-unpacked.v femto-riscv-16-tangnano9k-unpacked.v femto-riscv-18-tangnano9k-unpacked.v
+
+szfpga-unpacked: \
 	blinky-szfpga-unpacked.v shift-szfpga-unpacked.v blinky-tbuf-szfpga-unpacked.v \
 	blinky-oddr-szfpga-unpacked.v blinky-osc-szfpga-unpacked.v tlvds-szfpga-unpacked.v \
 	elvds-szfpga-unpacked.v oddr-tlvds-szfpga-unpacked.v oddr-elvds-szfpga-unpacked.v \
@@ -209,8 +230,9 @@ unpacked:\
 	bsram-pROM-szfpga-unpacked.v bsram-SDPB-szfpga-unpacked.v bsram-SP-szfpga-unpacked.v \
 	bsram-SDPX9B-szfpga-unpacked.v bsram-SPX9-tangnano-unpacked.v \
 	bsram-pROMX9-szfpga-unpacked.v \
-	femto-riscv-15-szfpga-unpacked.v femto-riscv-16-szfpga-unpacked.v femto-riscv-18-szfpga-unpacked.v \
-	\
+	femto-riscv-15-szfpga-unpacked.v femto-riscv-16-szfpga-unpacked.v femto-riscv-18-szfpga-unpacked.v
+
+tec0117-unpacked: \
 	blinky-tec0117-unpacked.v shift-tec0117-unpacked.v blinky-tbuf-tec0117-unpacked.v \
 	blinky-oddr-tec0117-unpacked.v blinky-osc-tec0117-unpacked.v tlvds-tec0117-unpacked.v \
 	elvds-tec0117-unpacked.v oddr-tlvds-tec0117-unpacked.v oddr-elvds-tec0117-unpacked.v \
@@ -218,8 +240,9 @@ unpacked:\
 	oser4-tec0117-unpacked.v ovideo-tec0117-unpacked.v oser8-tec0117-unpacked.v \
 	oser10-tec0117-unpacked.v ides16-tec0117-unpacked.v ides4-tec0117-unpacked.v \
 	ivideo-tec0117-unpacked.v ides8-tec0117-unpacked.v ides10-tec0117-unpacked.v \
-	femto-riscv-15-tangnano9k-unpacked.v femto-riscv-16-tangnano9k-unpacked.v femto-riscv-18-tangnano9k-unpacked.v \
-	\
+	femto-riscv-15-tangnano9k-unpacked.v femto-riscv-16-tangnano9k-unpacked.v femto-riscv-18-tangnano9k-unpacked.v
+
+runber-unpacked: \
 	blinky-runber-unpacked.v shift-runber-unpacked.v blinky-tbuf-runber-unpacked.v \
 	blinky-oddr-runber-unpacked.v blinky-osc-runber-unpacked.v tlvds-runber-unpacked.v \
 	elvds-runber-unpacked.v oddr-tlvds-runber-unpacked.v oddr-elvds-runber-unpacked.v \
@@ -227,10 +250,11 @@ unpacked:\
 	oser8-runber-unpacked.v oser10-runber-unpacked.v ides4-runber-unpacked.v \
 	ivideo-runber-unpacked.v ides8-runber-unpacked.v ides10-runber-unpacked.v
 
-clean: 
+unpacked: tangnano20k-unpacked primer20k-unpacked tangnano-unpacked tangnano1k-unpacked \
+	tangnano4k-unpacked tangnano9k-unpacked szfpga-unpacked tec0117-unpacked runber-unpacked
+
+clean:
 	rm -f *.json *.fs *-unpacked.v
-	
-.PHONY: unpacked clean
 
 # ============================================================
 # Tangnano20k
