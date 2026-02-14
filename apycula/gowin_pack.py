@@ -159,7 +159,7 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset = 0):
 
     attrs_upper(attrs)
     subtype = attrs['BSRAM_SUBTYPE']
-    if not bsram_init_map:
+    if bsram_init_map is None:
         if device in {'GW5A-25A'}:
             # 72 * bsram rows * chip bit width
             bsram_init_map = bitmatrix.zeros(72 * len(db.simplio_rows), db.width)
@@ -4349,7 +4349,7 @@ def main():
 
         bsram_init_map = bitmatrix.transpose(bsram_init_map)
         bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map, gw5a_bsrams)
-    elif bsram_init_map:
+    elif bsram_init_map is not None:
         bslib.write_bitstream_with_bsram_init(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map)
     else:
         bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots)
