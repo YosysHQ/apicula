@@ -11,7 +11,6 @@ import apycula.fuse_h4x as fuse
 from apycula import wirenames as wnames
 from apycula import pindef
 from apycula import bitmatrix
-import msgspec
 
 # the character that marks the I/O attributes that come from the nextpnr
 mode_attr_sep = '&'
@@ -26,7 +25,7 @@ class Bel:
     with the specified modes mapped to bits
     and the specified portmap"""
     # there can be zero or more flags
-    flags: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
+    flags: Dict[int, Set[Coord]] = field(default_factory=dict)
     # this Bel is IOBUF and needs routing to become IBUF or OBUF
     simplified_iob: bool = field(default = False)
     # differential signal capabilities info
@@ -34,7 +33,7 @@ class Bel:
     is_true_lvds: bool = field(default = False)
     is_diff_p:    bool = field(default = False)
     # there can be only one mode, modes are exclusive
-    modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
+    modes: Dict[str, Set[Coord]] = field(default_factory=dict)
     portmap: Dict[str, Union[str, List[Union[str, List[str]]]]] = field(default_factory=dict)
     # where to set the fuses for the bel
     fuse_cell_offset: Optional[Coord] = None
@@ -213,31 +212,58 @@ class Device:
         return self.rev_li[name]
 
 
-def save_chipdb(db: Device, path: str) -> None:
-    """Save a Device database to a compressed MessagePack file.
+try:
+    import msgspec
 
-    Args:
-        db: The Device object to serialize
-        path: Output file path (should end with .msgpack.xz)
-    """
-    data = msgspec.msgpack.encode(db)
-    with lzma.open(path, 'wb', preset=1) as f:
-        f.write(data)
+    def save_chipdb(db: Device, path: str) -> None:
+        """Save a Device database to a compressed MessagePack file."""
+        data = msgspec.msgpack.encode(db)
+        with lzma.open(path, 'wb', preset=1) as f:
+            f.write(data)
 
+    def load_chipdb(path: str) -> Device:
+        """Load a Device database from a compressed MessagePack file."""
+        with lzma.open(path, 'rb') as f:
+            data = f.read()
+        return msgspec.msgpack.decode(data, type=Device)
 
-def load_chipdb(path: str) -> Device:
-    """Load a Device database from a compressed MessagePack file.
+except ImportError:
+    import warnings
+    warnings.warn("Msgspec is not available, performance will be degraded.")
+    import msgpack
+    import cattrs
 
-    Args:
-        path: Input file path (.msgpack.xz)
+    _converter = cattrs.Converter()
 
-    Returns:
-        The deserialized Device object
-    """
-    with lzma.open(path, 'rb') as f:
-        data = f.read()
+    # cattrs handles most types automatically (dataclasses, List, Set, Tuple,
+    # Dict, Optional) but needs help with ambiguous unions and bytearray.
 
-    return msgspec.msgpack.decode(data, type=Device)
+    _converter.register_structure_hook(
+        bytearray, lambda v, _: bytearray(v))
+    # timing: Union[List[float], int]
+    _converter.register_structure_hook(
+        Union[List[float], int],
+        lambda v, _: v if isinstance(v, int) else list(v))
+    # portmap inner: Union[str, List[str]]
+    _converter.register_structure_hook(
+        Union[str, List[str]],
+        lambda v, _: v if isinstance(v, str) else list(v))
+    # portmap outer: Union[str, List[Union[str, List[str]]]]
+    _converter.register_structure_hook(
+        Union[str, List[Union[str, List[str]]]],
+        lambda v, _: v if isinstance(v, str) else [
+            x if isinstance(x, str) else list(x) for x in v])
+
+    def save_chipdb(db: Device, path: str) -> None:
+        raise RuntimeError("save_chipdb requires msgspec")
+
+    def load_chipdb(path: str) -> Device:
+        """Load a Device database from a compressed MessagePack file."""
+        with lzma.open(path, 'rb') as f:
+            data = f.read()
+        raw = msgpack.unpackb(data, raw=False, strict_map_key=False,
+                              use_list=False)
+        return _converter.structure(raw, Device)
 
 
 def is_GW5_family(device):

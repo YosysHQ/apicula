@@ -52,7 +52,7 @@ jobs:
         python setup.py --version
         python setup.py sdist bdist_wheel
         # Validate that the resulting wheel can be executed
-        pip install dist/apycula-$(python setup.py --version)-py3-none-any.whl
+        pip install "dist/apycula-$(python setup.py --version)-py3-none-any.whl[fast]"
         gowin_pack --help
     - name: Archive artifact
       uses: actions/upload-artifact@v4
@@ -116,7 +116,7 @@ jobs:
         name: python-dist
         path: dist
     - name: Install apycula
-      run: pip install dist/*.whl
+      run: pip install "$(ls dist/*.whl)[fast]"
     - name: Build yosys
       run: |
         git clone https://github.com/YosysHQ/yosys.git
@@ -154,17 +154,17 @@ jobs:
           - {name: dev}
           - {name: stable}
         board:
-          - {target: tangnano20k, dir: examples}
-          - {target: primer20k, dir: examples}
-          - {target: tangnano, dir: examples}
-          - {target: tangnano1k, dir: examples}
-          - {target: tangnano4k, dir: examples}
-          - {target: tangnano9k, dir: examples}
-          - {target: szfpga, dir: examples}
-          - {target: tec0117, dir: examples}
-          - {target: runber, dir: examples}
-          - {target: primer25k, dir: examples/gw5a}
-          - {target: tangmega138k, dir: examples/gw5a}
+          - {target: tangnano20k, dir: examples, pip_extra: "[fast]"}
+          - {target: primer20k, dir: examples, pip_extra: "[fast]"}
+          - {target: tangnano, dir: examples, pip_extra: "[pure]"}
+          - {target: tangnano1k, dir: examples, pip_extra: "[fast]"}
+          - {target: tangnano4k, dir: examples, pip_extra: "[fast]"}
+          - {target: tangnano9k, dir: examples, pip_extra: "[fast]"}
+          - {target: szfpga, dir: examples, pip_extra: "[fast]"}
+          - {target: tec0117, dir: examples, pip_extra: "[fast]"}
+          - {target: runber, dir: examples, pip_extra: "[fast]"}
+          - {target: primer25k, dir: examples/gw5a, pip_extra: "[fast]"}
+          - {target: tangmega138k, dir: examples/gw5a, pip_extra: "[fast]"}
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
@@ -188,7 +188,7 @@ jobs:
         name: python-dist
         path: dist
     - name: Install apycula
-      run: pip install dist/*.whl
+      run: pip install "$(ls dist/*.whl)${{ matrix.board.pip_extra }}"
     - name: Build examples
       run: make -C ${{ matrix.board.dir }} -j$(nproc) ${{ matrix.board.target }}
     - name: Archive artifact
