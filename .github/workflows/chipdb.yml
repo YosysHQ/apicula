@@ -125,7 +125,7 @@ jobs:
         git submodule update --init --recursive
         make config-clang
         make -j$(nproc)
-        make install DESTDIR=$PWD/staging
+        make install DESTDIR=${{ github.workspace }}/staging
     - name: Build nextpnr
       run: |
         git clone https://github.com/YosysHQ/nextpnr.git
