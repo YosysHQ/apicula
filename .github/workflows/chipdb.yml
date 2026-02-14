@@ -24,12 +24,12 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: chipdbs
-        path: apycula/*.msgpack.gz
+        path: apycula/*.msgpack.xz
     - name: Archive stages
       uses: actions/upload-artifact@v4
       with:
         name: stages
-        path: GW*_stage*.msgpack.gz
+        path: GW*_stage*.msgpack.xz
 
   pypi:
     runs-on: ubuntu-latest
@@ -69,7 +69,7 @@ jobs:
     - name: Pack release data
       if: startsWith(github.ref, 'refs/heads/master')
       run: |
-        tar cvfz linux-x64-gowin-data.tgz apycula/*.msgpack.gz
+        tar cvfz linux-x64-gowin-data.tgz apycula/*.msgpack.xz
     - name: Upload to oss-cad-suite
       uses: ncipollo/release-action@v1
       if: hashFiles('linux-x64-gowin-data.tgz') != ''
@@ -91,10 +91,10 @@ jobs:
         include:
           - name: dev
             yosys: main
-            nextpnr: master
+            nextpnr: msgspec-serialization
           - name: stable
             yosys: v0.62
-            nextpnr: nextpnr-0.9
+            nextpnr: msgspec-serialization
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
@@ -128,7 +128,7 @@ jobs:
         make install DESTDIR=${{ github.workspace }}/staging
     - name: Build nextpnr
       run: |
-        git clone https://github.com/YosysHQ/nextpnr.git
+        git clone https://github.com/pepijndevos/nextpnr.git
         cd nextpnr
         git checkout ${{ matrix.nextpnr }}
         git submodule update --init --recursive

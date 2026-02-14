@@ -23,7 +23,7 @@ setuptools.setup(
     ],
     python_requires='>=3.9',
     package_data={
-        'apycula': ['*.msgpack.gz']
+        'apycula': ['*.msgpack.xz']
     },
     entry_points={
         'console_scripts': [

@@ -4244,7 +4244,7 @@ def main():
         num = m.group(4)
         device = f"{series}{mods}-{num}"
 
-    with importlib.resources.path('apycula', f'{device}.msgpack.gz') as path:
+    with importlib.resources.path('apycula', f'{device}.msgpack.xz') as path:
         db = load_chipdb(path)
 
     wnames.select_wires(device)

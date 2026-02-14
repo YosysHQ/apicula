@@ -388,4 +388,4 @@ if __name__ == "__main__":
 
 
     # Save stage1 output
-    save_chipdb(db, f"{device}_stage1.msgpack.gz")
+    save_chipdb(db, f"{device}_stage1.msgpack.xz")

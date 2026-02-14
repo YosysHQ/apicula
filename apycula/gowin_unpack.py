@@ -1247,7 +1247,7 @@ def main():
         luts = m.group(3)
         _device = f"GW1N{mods}-{luts}"
 
-    with importlib.resources.path('apycula', f'{args.device}.msgpack.gz') as path:
+    with importlib.resources.path('apycula', f'{args.device}.msgpack.xz') as path:
         db = load_chipdb(path)
 
     global _pinout

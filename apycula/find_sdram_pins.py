@@ -168,7 +168,7 @@ params = {
 }
 
 if __name__ == "__main__":
-    db = load_chipdb(f"{tiled_fuzzer.device}_stage1.msgpack.gz")
+    db = load_chipdb(f"{tiled_fuzzer.device}_stage1.msgpack.xz")
 
     if tiled_fuzzer.device in params:
         devices = params[tiled_fuzzer.device]
@@ -179,4 +179,4 @@ if __name__ == "__main__":
 
     # the reverse logicinfo does not make sense to store in the database
     db.rev_li = {}
-    save_chipdb(db, f"{tiled_fuzzer.device}_stage2.msgpack.gz")
+    save_chipdb(db, f"{tiled_fuzzer.device}_stage2.msgpack.xz")

@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union, Any
 from itertools import chain
 import re
 import copy
-import gzip
+import lzma
 from functools import reduce
 from collections import namedtuple
 from apycula.dat19 import Datfile
@@ -218,10 +218,10 @@ def save_chipdb(db: Device, path: str) -> None:
 
     Args:
         db: The Device object to serialize
-        path: Output file path (should end with .msgpack.gz)
+        path: Output file path (should end with .msgpack.xz)
     """
     data = msgspec.msgpack.encode(db)
-    with gzip.open(path, 'wb') as f:
+    with lzma.open(path, 'wb', preset=1) as f:
         f.write(data)
 
 
@@ -229,12 +229,12 @@ def load_chipdb(path: str) -> Device:
     """Load a Device database from a compressed MessagePack file.
 
     Args:
-        path: Input file path (.msgpack.gz)
+        path: Input file path (.msgpack.xz)
 
     Returns:
         The deserialized Device object
     """
-    with gzip.open(path, 'rb') as f:
+    with lzma.open(path, 'rb') as f:
         data = f.read()
 
     return msgspec.msgpack.decode(data, type=Device)
