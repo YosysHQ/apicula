@@ -1,39 +1,21 @@
 import re
 import os
-import sys
 import copy
-import tempfile
-import subprocess
-from pathlib import Path
-from collections import deque, Counter, namedtuple
-from itertools import chain, count, zip_longest
-from functools import reduce
-from random import shuffle, seed
-from warnings import warn
-from math import factorial
-from multiprocessing.dummy import Pool
+import argparse
 import pickle
-from shutil import copytree
-
+from pathlib import Path
 from apycula import codegen
-from apycula import bslib
 from apycula import pindef
-from apycula import fuse_h4x
+from apycula import fse_parser
 from apycula import wirenames as wnames
-from apycula import dat19
-from apycula import tm_h4x
+from apycula import dat_parser
+from apycula import tm_parser
 from apycula import chipdb
 from apycula.chipdb import save_chipdb
-from apycula import attrids
+from apycula import tracing
+from apycula import gowin_unpack
 
-gowinhome = os.getenv("GOWINHOME")
-if not gowinhome:
-    raise Exception("GOWINHOME not set")
-gowin_debug = os.getenv("GOWIN_DEBUG")
-
-# device = os.getenv("DEVICE")
-device = sys.argv[1]
-params = {
+DEVICE_PARAMS = {
     "GW1NS-4": {
         "package": "QFN48P",
         "device": "GW1NSR-4C",
@@ -84,14 +66,73 @@ params = {
         "device": "GW5AST-138C",
         "partnumber": "GW5AST-LV138PG484AC1/I0",
     },
-}[device]
+}
 
-# utils
-name_idx = 0
-def make_name(bel, typ):
-    global name_idx
-    name_idx += 1
-    return f"inst{name_idx}_{bel}_{typ}"
+SDRAM_PARAMS = {
+    "GW1NS-4": [{
+        "package": "QFN48P",
+        "device": "GW1NSR-4C",
+        "partnumber": "GW1NSR-LV4CQN48PC7/I6",
+        "pins": [
+            ("O_hpram_ck", 2, None),
+            ("O_hpram_ck_n", 2, None),
+            ("O_hpram_cs_n", 2, None),
+            ("O_hpram_reset_n", 2, None),
+            ("IO_hpram_dq", 16, None),
+            ("IO_hpram_rwds", 2, None),
+        ],
+    }],
+
+    "GW1N-9": [{
+        "package": "QFN88",
+        "device": "GW1NR-9",
+        "partnumber": "GW1NR-UV9QN88C6/I5",
+        "pins": [
+            ("IO_sdram_dq", 16, "LVCMOS33"),
+            ("O_sdram_clk", 0, "LVCMOS33"),
+            ("O_sdram_cke", 0, "LVCMOS33"),
+            ("O_sdram_cs_n", 0, "LVCMOS33"),
+            ("O_sdram_cas_n", 0, "LVCMOS33"),
+            ("O_sdram_ras_n", 0, "LVCMOS33"),
+            ("O_sdram_wen_n", 0, "LVCMOS33"),
+            ("O_sdram_addr", 12, "LVCMOS33"),
+            ("O_sdram_dqm", 2, "LVCMOS33"),
+            ("O_sdram_ba", 2, "LVCMOS33")
+        ],
+    }],
+
+    "GW1N-9C": [{
+        "package": "QFN88P",
+        "device": "GW1NR-9C",
+        "partnumber": "GW1NR-LV9QN88PC6/I5",
+        "pins": [
+            ("O_psram_ck", 2, None),
+            ("O_psram_ck_n", 2, None),
+            ("O_psram_cs_n", 2, None),
+            ("O_psram_reset_n", 2, None),
+            ("IO_psram_dq", 16, None),
+            ("IO_psram_rwds", 2, None),
+        ],
+    }],
+
+    "GW2A-18C": [{
+        "package": "QFN88",
+        "device": "GW2AR-18C",
+        "partnumber": "GW2AR-LV18QN88C8/I7",
+        "pins": [
+            ("O_sdram_clk", 0, "LVCMOS33"),
+            ("O_sdram_cke", 0, "LVCMOS33"),
+            ("O_sdram_cs_n", 0, "LVCMOS33"),
+            ("O_sdram_cas_n", 0, "LVCMOS33"),
+            ("O_sdram_ras_n", 0, "LVCMOS33"),
+            ("O_sdram_wen_n", 0, "LVCMOS33"),
+            ("O_sdram_dqm", 4, "LVCMOS33"),
+            ("O_sdram_addr", 11, "LVCMOS33"),
+            ("O_sdram_ba", 2, "LVCMOS33"),
+            ("IO_sdram_dq", 32, "LVCMOS33"),
+        ]
+    }],
+}
 
 def tbrl2rc(fse, side, num):
     if side == 'T':
@@ -108,96 +149,8 @@ def tbrl2rc(fse, side, num):
         col = len(fse['header']['grid'][61][0])-1
     return (row, col)
 
-# Read the packer vendor log to identify problem with primitives/attributes
-# returns dictionary {(primitive name, error code) : [full error text]}
-_err_parser = re.compile(r"(\w+) +\(([\w\d]+)\).*'(inst[^\']+)\'.*")
-def read_err_log(fname):
-    errs = {}
-    with open(fname, 'r') as f:
-        for line in f:
-            res = _err_parser.match(line)
-            if res:
-                line_type, code, name = res.groups()
-                text = res.group(0)
-                if line_type in ["Warning", "Error"]:
-                    errs.setdefault((name, code), []).append(text)
-    return errs
-
-# Result of the vendor router-packer run
-PnrResult = namedtuple('PnrResult', [
-    'bitmap', 'hdr', 'ftr', 'extra_slots',
-    'constrs',        # constraints
-    'config',         # device config
-    'attrs',          # port attributes
-    'errs',           # parsed log file
-    'version',        # IDE version
-    ])
-
-def run_pnr(mod, constr, config):
-    cfg = codegen.DeviceConfig({
-        "use_jtag_as_gpio"      : config.get('jtag', "1"),
-        "use_sspi_as_gpio"      : config.get('sspi', "1"),
-        "use_mspi_as_gpio"      : config.get('mspi', "1"),
-        "use_ready_as_gpio"     : config.get('ready', "1"),
-        "use_done_as_gpio"      : config.get('done', "1"),
-        "use_reconfign_as_gpio" : config.get('reconfig', "1"),
-        "use_mode_as_gpio"      : config.get('mode', "1"),
-        "use_i2c_as_gpio"       : config.get('i2c', "1"),
-        "bit_crc_check"         : "1",
-        "bit_compress"          : "1",
-        "bit_encrypt"           : "0",
-        "bit_security"          : "1",
-        "bit_incl_bsram_init"   : "0",
-        #"loading_rate"          : "250/100",
-        "spi_flash_addr"        : "0x00FFF000",
-        "bit_format"            : "txt",
-        "bg_programming"        : "off",
-        "secure_mode"           : "0"})
-
-    opt = codegen.PnrOptions({
-        "gen_posp"          : "1",
-        "gen_io_cst"        : "1",
-        "gen_ibis"          : "1",
-        "ireg_in_iob"       : "0",
-        "oreg_in_iob"       : "0",
-        "ioreg_in_iob"      : "0",
-        "timing_driven"     : "0",
-        "cst_warn_to_error" : "0"})
-    #"show_all_warn" : "1",
-
-    pnr = codegen.Pnr()
-    pnr.device = params['device']
-    pnr.partnumber = params['partnumber']
-    pnr.opt = opt
-    pnr.cfg = cfg
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with open(tmpdir+"/top.v", "w") as f:
-            mod.write(f)
-        pnr.netlist = tmpdir+"/top.v"
-        with open(tmpdir+"/top.cst", "w") as f:
-            constr.write(f)
-        pnr.cst = tmpdir+"/top.cst"
-        with open(tmpdir+"/run.tcl", "w") as f:
-            pnr.write(f)
-
-        print(["/usr/bin/env", "LD_PRELOAD=" + gowinhome + "/Programmer/bin/libfontconfig.so.1", gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"])
-        subprocess.run(["/usr/bin/env", "LD_PRELOAD=" + gowinhome + "/Programmer/bin/libfontconfig.so.1", gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
-        #print(tmpdir); input()
-        try:
-            return PnrResult(
-                    *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
-                    constr,
-                    config, constr.attrs,
-                    read_err_log(tmpdir+"/impl/pnr/top.log"),
-                    bslib.read_bitstream_version(tmpdir+"/impl/pnr/top.fs"))
-        except FileNotFoundError:
-            print('ERROR', tmpdir)
-            #input()
-            return None
-
 _tbrlre = re.compile(r"IO([TBRL])(\d+)")
-def fse_iob(fse, db, diff_cap_info, locations):
+def fse_iob(fse, db, diff_cap_info, locations, device):
     chipdb.set_corners_io(db, device)
     iob_bels = {}
     is_true_lvds = False
@@ -205,7 +158,6 @@ def fse_iob(fse, db, diff_cap_info, locations):
     for ttyp in fse.keys():
         if ttyp == 'header' or 'longval' not in fse[ttyp]:
             continue
-        # for ttyp, tiles in pin_locations.items():
         # crieate all IO bels
         bel_cnt = 0
         for idx, fuse_table_n in {'A':23, 'B':24, 'C':40, 'D':41, 'E':42, 'F':43, 'G':44, 'H':45, 'I':46, 'J':47}.items():
@@ -228,7 +180,6 @@ def fse_iob(fse, db, diff_cap_info, locations):
                         bel.is_diff_p = is_positive
                         first_cell = False
 
-                    #print(f"type:{ttyp} [{row}][{col}], {name}, diff:{bel.is_diff}, true lvds:{bel.is_true_lvds}, p:{bel.is_diff_p}")
             db[row, col].bels.update(iob_bels[ttyp])
 
     # adc bus
@@ -281,7 +232,7 @@ _chip_id = {
         }
 
 # generate bitsream header
-def gen_hdr():
+def gen_hdr(device, params):
     hdr = [bytearray(b'\xff'*20)]
     hdr.append(bytearray(b'\xff'*2))
     # magic
@@ -305,18 +256,129 @@ def gen_hdr():
 
     return hdr
 
-if __name__ == "__main__":
-    with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.fse", 'rb') as f:
-        fse = fuse_h4x.readFse(f, device)
+# --- SDRAM pin discovery (absorbed from find_sdram_pins.py) ---
 
-    dat = dat19.Datfile(Path(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.dat"))
+def find_pins(db, pnr, trace_args):
+    pnr_result = pnr.run_pnr()
+    tiles = chipdb.tile_bitmap(db, pnr_result.bitmap)
+
+    trace_starts = []
+    for args in trace_args:
+        iob, pin_name, pin_idx, direction = args
+        iob_type = "IOB" + iob[-1]
+        fuzz_io_row, fuzz_io_col, bel_idx = gowin_unpack.tbrl2rc(db, iob)
+        fuzz_io_node = db[fuzz_io_row, fuzz_io_col].bels[iob_type].portmap["O"]
+        trace_starts.append((fuzz_io_row, fuzz_io_col, fuzz_io_node))
+
+    dests = [x for x in tracing.get_io_nodes(db) if x not in trace_starts]
+    pinout = {}
+
+    all_paths = []
+    for trace_start, args in zip(trace_starts, trace_args):
+        iob, pin_name, pin_idx, direction = args
+        sdram_idxName = pin_name if pin_idx is None else f"{pin_name}[{pin_idx}]"
+
+        path_dict = tracing.get_path_dict(tiles, db, trace_start)
+        paths = tracing.get_paths(path_dict, [trace_start], dests)
+        all_paths.append(paths[0])
+        possible_pins = list({path[-1] for path in paths})
+        if len(possible_pins) > 1:
+            print(f"WARNING: Multiple candidates found for {sdram_idxName}: {possible_pins}")
+        if not possible_pins:
+            print(f"WARNING: No candidate found for {sdram_idxName}")
+        else:
+            pin_node = possible_pins[0]  #pin : [row, col, wire]
+            tbrl_pin = tracing.io_node_to_tbrl(db, pin_node)
+            pinout[sdram_idxName] = (*pin_node[:2], tbrl_pin[-1])
+
+    return pinout
+
+def run_sdram_script(db, pins, device, package, partnumber):
+    sdram_pins = []
+    pinout = []
+
+    for pinName, pincount, iostd in pins:
+        if pincount == 0:
+            sdram_port = sdram_idxName = pinName
+            sdram_pins.append((sdram_port, pinName, None, iostd))
+        else:
+            sdram_port = f"[{pincount-1}:0] {pinName}"
+            for idx in range(pincount):
+                sdram_pins.append((sdram_port, pinName, idx, iostd))
+
+    #Use only pins without a special function to avoid placement errors
+    all_pins = db.pinout[device][package]
+    package_pins = [all_pins[k][0] for k in all_pins if not all_pins[k][1]]
+
+    i = 0
+    while i < len(sdram_pins):
+        trace_args = []
+        pnr = codegen.Pnr()
+        pnr.cst = codegen.Constraints()
+        pnr.netlist_type = "verilog"
+        pnr.netlist = codegen.Module()
+        pnr.device = device
+        pnr.partnumber = partnumber
+
+        for sdram_pin in sdram_pins:
+            pnr.netlist.inouts.add(sdram_pin[0])
+
+        for fuzz_pin, sdram_pin in zip(package_pins, sdram_pins[i:i+len(package_pins)]):
+            sdram_port, sdram_pin_name, idx, iostd = sdram_pin
+            sdram_idxName = sdram_pin_name if idx is None else f"{sdram_pin_name}[{idx}]"
+            sdram_io_mod_name = f"{sdram_pin_name}_{idx}_iobased"
+
+            suffix = f"_{idx}" if idx is not None else ""
+            fuzz_input_wire = f"__{fuzz_pin}_input_{sdram_pin_name}{suffix}"
+            fuzz_output_wire = f"__{fuzz_pin}_output_{sdram_pin_name}{suffix}"
+
+            pnr.cst.ports[fuzz_input_wire] = fuzz_pin
+            pnr.netlist.inputs.add(fuzz_input_wire)
+            trace_args.append((fuzz_pin, sdram_pin_name, idx, "input"))
+            iob = codegen.Primitive("TBUF", sdram_io_mod_name)
+            iob.portmap["O"] = sdram_idxName
+            iob.portmap["I"] = fuzz_input_wire
+            iob.portmap["OEN"] = "1'b1"
+            pnr.netlist.primitives[sdram_io_mod_name] = iob
+
+        i += len(package_pins)
+
+        iter_pinout = find_pins(db, pnr, trace_args)
+        iter_pinout = [(k,*v,iostd) for k, v in iter_pinout.items()]
+        pinout.extend(iter_pinout)
+
+    return pinout
+
+# --- Main builder ---
+
+def main():
+    parser = argparse.ArgumentParser(description='Build chip database from Gowin vendor files')
+    parser.add_argument('device', choices=DEVICE_PARAMS.keys())
+    parser.add_argument('--skip-sdram', action='store_true',
+                        help='Skip SDRAM pin discovery')
+    parser.add_argument('-o', '--output',
+                        help='Output path (default: apycula/{device}.msgpack.xz)')
+    args = parser.parse_args()
+
+    device = args.device
+    params = DEVICE_PARAMS[device]
+
+    gowinhome = os.getenv("GOWINHOME")
+    if not gowinhome:
+        raise Exception("GOWINHOME not set")
+    gowin_debug = os.getenv("GOWIN_DEBUG")
+
+    with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.fse", 'rb') as f:
+        fse = fse_parser.read_fse(f, device)
+
+    dat = dat_parser.Datfile(Path(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.dat"))
 
     if gowin_debug:
         with open(f"{device}-dat.pickle", 'wb') as f:
             pickle.dump(dat, f)
 
     with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.tm", 'rb') as f:
-        tm = tm_h4x.read_tm(f, device)
+        tm = tm_parser.read_tm(f, device)
 
     db = chipdb.from_fse(device, fse, dat)
     chipdb.set_banks(fse, dat, db)
@@ -350,12 +412,12 @@ if __name__ == "__main__":
         ttyp_pins.setdefault(name[:-1], set()).add(name)
 
     # fill header/footer by hand
-    db.cmd_hdr = gen_hdr()
+    db.cmd_hdr = gen_hdr(device, params)
     db.cmd_ftr = gen_ftr()
 
     # IOB
     diff_cap_info = pindef.get_diff_adc_cap_info(params['device'], params['package'], True)
-    fse_iob(fse, db, diff_cap_info, locations);
+    fse_iob(fse, db, diff_cap_info, locations, device)
     if chipdb.is_GW5_family(device):
         chipdb.fill_GW5A_io_bels(db)
     chipdb.dat_fill_io_cfgs(db, dat, device, db.pinout[params['device']][params['package']])
@@ -376,16 +438,28 @@ if __name__ == "__main__":
 
     # GSR
     if device in {'GW2A-18', 'GW2A-18C'}:
-        db[27, 50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+        db[27, 50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
     elif device in {'GW5A-25A'}:
-        db[27, 88].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'LSR0';
+        db[27, 88].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'LSR0'
     elif device in {'GW5AST-138C'}:
-        db[108, 165].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'D7';
+        db[108, 165].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'D7'
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
-        db[0, 0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4';
+        db[0, 0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
     else:
         raise Exception(f"No GSR for {device}")
 
+    # SDRAM pin discovery (previously find_sdram_pins.py stage 2)
+    if not args.skip_sdram and device in SDRAM_PARAMS:
+        for device_args in SDRAM_PARAMS[device]:
+            pinmap = run_sdram_script(db, device_args["pins"], device_args["device"], device_args["package"], device_args["partnumber"])
+            db.sip_cst.setdefault(device_args["device"], {})[device_args["package"]] = pinmap
 
-    # Save stage1 output
-    save_chipdb(db, f"{device}_stage1.msgpack.xz")
+    # the reverse logicinfo does not make sense to store in the database
+    db.rev_li = {}
+
+    # Save output
+    output = args.output or f"apycula/{device}.msgpack.xz"
+    save_chipdb(db, output)
+
+if __name__ == "__main__":
+    main()

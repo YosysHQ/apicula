@@ -20,11 +20,6 @@ jobs:
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
         docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make -j$(nproc)
-    - name: Archive stages
-      uses: actions/upload-artifact@v4
-      with:
-        name: stages
-        path: GW*_stage*.msgpack.xz
     - name: Set up Python
       uses: actions/setup-python@v5
       with:

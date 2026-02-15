@@ -35,7 +35,7 @@ The format for inter-tile wires is {direction}{length}{number}{segment}. So W270
 
 # Data file
 
-The `.dat` file seems to contain a lot of information related to PnR. It appears to be a C struct directly written to file, so not much structure is present. The parser for this is located in `dat19.py`. This format is not stable across IDE versions.
+The `.dat` file seems to contain a lot of information related to PnR. It appears to be a C struct directly written to file, so not much structure is present. The parser for this is located in `dat_parser.py`. This format is not stable across IDE versions.
 
 Some unknown areas remain in this file, a large part of which is expected to be related to chip packages.
 

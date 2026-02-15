@@ -1,11 +1,6 @@
 import os
 import sys
-import json
 import struct
-
-gowinhome = os.getenv("GOWINHOME")
-if not gowinhome:
-    raise Exception("GOWINHOME not set")
 
 tc = 8 # number of timing classes
 chunklen = 15552 # length of each class
@@ -359,6 +354,9 @@ def read_tm(f, device):
 
 
 if __name__ == "__main__":
+    gowinhome = os.getenv("GOWINHOME")
+    if not gowinhome:
+        raise Exception("GOWINHOME not set")
     device = sys.argv[1]
 
     with open(f"{gowinhome}/IDE/share/device/{device}/{device}.tm", 'rb') as f:
