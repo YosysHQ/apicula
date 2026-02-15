@@ -18,9 +18,11 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     install_requires=[
+        'msgspec',
+        'numpy',
+        'crcmod',
     ],
     extras_require={
-        'fast': ['msgspec', 'numpy', 'crcmod'],
         'pure': ['msgpack', 'cattrs'],
     },
     python_requires='>=3.9',
