@@ -16,6 +16,7 @@ primer25k: \
 	bsram-pROM-primer25k.fs bsram-pROMX9-primer25k.fs bsram-SP-primer25k.fs bsram-SPX9-primer25k.fs \
 	bsram-SDPB-primer25k.fs bsram-SDPX9B-primer25k.fs bsram-SDPB32-primer25k.fs \
 	femto-riscv-15-primer25k.fs femto-riscv-16-primer25k.fs femto-riscv-18-primer25k.fs \
+	dsp-mult12x12-primer25k.fs \
 	adc-temp-primer25k.fs adc-loc-left-primer25k.fs adc-glo-right-primer25k.fs attosoc-primer25k.fs
 
 tangmega138k: \
@@ -41,7 +42,7 @@ alu-%-primer25k.json: alu-%-primer25k-synth.json alu-%-primer25k.cst
 	$(NEXTPNR) $(DEBUG) --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=$(basename $@).cst --vopt sspi_as_gpio
 
 %-primer25k-synth.json: %.v
-	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA  -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
 
 big-shift-primer25k-synth.json: big-shift.v 
 	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=24 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
