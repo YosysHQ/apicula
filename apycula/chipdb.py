@@ -6,8 +6,8 @@ import copy
 import lzma
 from functools import reduce
 from collections import namedtuple
-from apycula.dat19 import Datfile
-import apycula.fuse_h4x as fuse
+from apycula.dat_parser import Datfile
+import apycula.fse_parser as fuse
 from apycula import wirenames as wnames
 from apycula import pindef
 from apycula import bitmatrix

@@ -182,7 +182,8 @@ PnrResult = namedtuple('PnrResult', [
     'constrs',        # constraints
     'config',         # device config
     'attrs',          # port attributes
-    'errs'            # parsed log file
+    'errs',           # parsed log file
+    'version',        # IDE version
     ])
 
 
@@ -269,15 +270,20 @@ run pnr
             subprocess.run(["/usr/bin/env", "LD_PRELOAD=" + self.gowinhome + "/Programmer/bin/libfontconfig.so.1", self.gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
             #print(tmpdir); input()
             try:
+                constrs = self.cst if isinstance(self.cst, Constraints) else Constraints()
+                attrs = constrs.attrs if isinstance(constrs, Constraints) else {}
+                log_path = tmpdir+"/impl/pnr/top.log"
+                errs = self.read_err_log(log_path) if os.path.exists(log_path) else {}
+                version = bslib.read_bitstream_version(tmpdir+"/impl/pnr/top.fs")
                 return PnrResult(
                         *bslib.read_bitstream(tmpdir+"/impl/pnr/top.fs"),
-                        Constraints(),
-                        DeviceConfig(),
-                        None,
-                        None)
+                        constrs,
+                        self.cfg,
+                        attrs,
+                        errs,
+                        version)
             except FileNotFoundError:
-                print(tmpdir)
-                input()
+                print('ERROR', tmpdir)
                 return None
 
 
