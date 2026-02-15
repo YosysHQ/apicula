@@ -5142,13 +5142,7 @@ def fuse_bitmap(db, bitmap):
         for jdx, td in enumerate(row):
             w = td.width
             h = td.height
-            y0 = y
-            for row in bitmap[(idx, jdx)]:
-                x0 = x
-                for val in row:
-                    res[y0][x0] = val
-                    x0 += 1
-                y0 += 1
+            bitmatrix.blit(res, y, x, bitmap[(idx, jdx)])
             x += w
         y += h
 

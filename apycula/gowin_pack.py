@@ -4024,7 +4024,7 @@ def header_footer(db, bs, compress):
     bs = bitmatrix.packbits(bs)
     # configuration data checksum is computed on all
     # data in 16bit format
-    res = int(sum(bs[0::2]) * pow(2,8) + sum(bs[1::2]))
+    res = int(bitmatrix.bsum(bs[0::2]) * pow(2,8) + bitmatrix.bsum(bs[1::2]))
     checksum = res & 0xffff
     # set the checksum
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
