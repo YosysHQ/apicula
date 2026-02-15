@@ -110,6 +110,11 @@ jobs:
           libboost-python-dev libboost-filesystem-dev zlib1g-dev \
           libboost-thread-dev libboost-program-options-dev libboost-iostreams-dev libboost-dev \
           libeigen3-dev
+    - name: Set up ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ matrix.name }}
+        max-size: 1G
     - name: Download python package
       uses: actions/download-artifact@v4
       with:
@@ -124,7 +129,7 @@ jobs:
         git checkout ${{ matrix.yosys }}
         git submodule update --init --recursive
         make config-clang
-        make -j$(nproc)
+        make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
         make install DESTDIR=${{ github.workspace }}/staging
     - name: Build nextpnr
       run: |
@@ -133,7 +138,8 @@ jobs:
         git checkout ${{ matrix.nextpnr }}
         git submodule update --init --recursive
         cmake -B build -DBUILD_PYTHON=OFF -DARCH="himbaechel" \
-          -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all"
+          -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         make -C build -j$(nproc)
         make -C build install DESTDIR=${{ github.workspace }}/staging
     - name: Package tools
