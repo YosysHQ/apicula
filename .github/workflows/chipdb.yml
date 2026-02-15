@@ -91,10 +91,10 @@ jobs:
         include:
           - name: dev
             yosys: main
-            nextpnr: msgspec-serialization
+            nextpnr: master
           - name: stable
             yosys: v0.62
-            nextpnr: msgspec-serialization
+            nextpnr: nextpnr-0.9
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
@@ -133,7 +133,7 @@ jobs:
         make install DESTDIR=${{ github.workspace }}/staging
     - name: Build nextpnr
       run: |
-        git clone https://github.com/pepijndevos/nextpnr.git
+        git clone https://github.com/YosysHQ/nextpnr.git
         cd nextpnr
         git checkout ${{ matrix.nextpnr }}
         git submodule update --init --recursive
