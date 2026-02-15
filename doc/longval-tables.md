@@ -1,7 +1,7 @@
 # longval tables
 The table entries are divided into two parts: key and fuses. The key is an ascending ordered list of non-repeating feature codes, padded with zeros to the right up to a length of 16 elements. Fuzes is an ascending ordered list of non-repeating numbers of fuzes, extended to the right by -1 to a length of 12 elements.
 
-The feature codes change from board to board and no common recoding table has been found yet. So all codes below are correct for GW1N-1, for other boards empirical recoding is used (see beginning of file tiled_fuzzer.py). 
+The feature codes change from board to board and no common recoding table has been found yet. So all codes below are correct for GW1N-1, for other boards empirical recoding is used (see beginning of file chipdb_builder.py).
 
 In some cases, the key uses an as yet unknown feature that seems to be responsible for configuring the I/O logic. Voltage levels and I/O attributes do not depend on it, so this code is ignored when searching for a entry.
 
@@ -88,7 +88,7 @@ example: 'IO_TYPE=LVCMOS18, DRIVE=8':
 [12, 50, 56, 66, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3356, 3372, 3375, 3379, 3394, 3397, -1, -1, -1, -1, -1, -1]
 
 `OPEN_DRAIN`
-Perhaps the most difficult attribute at the moment. It uses the same fuses as `DRIVE`, setting one of them and clearing the other two. The procedure for determining the fuzes is epirical and is best seen in the tiled_fuzzer.py code.
+Perhaps the most difficult attribute at the moment. It uses the same fuses as `DRIVE`, setting one of them and clearing the other two. The procedure for determining the fuzes is epirical and is best seen in the chipdb_builder.py code.
 
 | Value | Code        |
 |:-----:|:-----------:|

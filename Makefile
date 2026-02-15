@@ -10,16 +10,11 @@ all: apycula/GW1N-1.msgpack.xz apycula/GW1N-9.msgpack.xz apycula/GW1N-4.msgpack.
 	 apycula/GW2A-18.msgpack.xz apycula/GW2A-18C.msgpack.xz apycula/GW5A-25A.msgpack.xz \
 	 apycula/GW5AST-138C.msgpack.xz
 
-%_stage1.msgpack.xz: apycula/tiled_fuzzer.py
-	python3 -m apycula.tiled_fuzzer $*
+BUILDER_DEPS = apycula/chipdb_builder.py apycula/fse_parser.py apycula/dat_parser.py \
+               apycula/tm_parser.py apycula/chipdb.py
 
-%_stage2.msgpack.xz: apycula/find_sdram_pins.py %_stage1.msgpack.xz
-	python3 -m apycula.find_sdram_pins $*
-
-apycula/%.msgpack.xz: %_stage2.msgpack.xz
-	cp $< $@
+apycula/%.msgpack.xz: $(BUILDER_DEPS)
+	python3 -m apycula.chipdb_builder $*
 
 clean:
-	rm -f *.json
-	rm -f *.msgpack.xz
 	rm -f apycula/*.msgpack.xz

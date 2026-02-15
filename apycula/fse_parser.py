@@ -1,83 +1,75 @@
-import sys
 import random
-import os
 from apycula import bitmatrix
 
-#gowinhome = os.getenv("GOWINHOME")
-#if not gowinhome:
-#    raise Exception("GOWINHOME not set")
 
-# device = os.getenv("DEVICE")
-device = sys.argv[1]
-
-def rint(f, w):
+def read_int(f, w):
     val = int.from_bytes(f.read(w), 'little', signed=True)
     return val
 
-def readFse(f, device):
-    print("check", rint(f, 4))
+def read_fse(f, device):
+    print("check", read_int(f, 4))
     tiles = {}
-    ttyp = rint(f, 4)
+    ttyp = read_int(f, 4)
     #print(f"tile type:{ttyp}/{hex(ttyp)}")
-    tiles['header'] = readOneFile(f, ttyp, device)
+    tiles['header'] = read_one_file(f, ttyp, device)
     while True:
-        ttyp = rint(f, 4)
+        ttyp = read_int(f, 4)
         if ttyp == 0x9a1d85: break
         #print(f"tile type:{ttyp}/{hex(ttyp)}")
-        tiles[ttyp] = readOneFile(f, ttyp, device)
+        tiles[ttyp] = read_one_file(f, ttyp, device)
     return tiles
 
-def readTable(f, size1, size2, w=2):
-    return [[rint(f, w) for j in range(size2)]
+def read_table(f, size1, size2, w=2):
+    return [[read_int(f, w) for j in range(size2)]
                         for i in range(size1)]
 
-def readOneFile(f, tileType, device):
-    tmap = {"height": rint(f, 4),
-            "width": rint(f, 4)}
-    tables = rint(f, 4)
+def read_one_file(f, tile_type, device):
+    tmap = {"height": read_int(f, 4),
+            "width": read_int(f, 4)}
+    tables = read_int(f, 4)
     #print("height: ", tmap["height"], "width: ", tmap["width"], "tables:", tables)
 
     #v1 = 0x1b8
     #v2 = 3
-    #if (tileType < 0x400):
-    #    if ((0x1b7 < tileType) or (tileType < 0)):
-    #        print("Error: readOneFile 1")
+    #if (tile_type < 0x400):
+    #    if ((0x1b7 < tile_type) or (tile_type < 0)):
+    #        print("Error: read_one_file 1")
     #else:
-    #    if (2 < tileType + -0x400):
-    #        print("Error: readOneFile 2")
+    #    if (2 < tile_type + -0x400):
+    #        print("Error: read_one_file 2")
 
-    #    v2 = tileType + -0x400
-    #    tileType = v1
+    #    v2 = tile_type + -0x400
+    #    tile_type = v1
 
-    #v1 = tileType
+    #v1 = tile_type
 
-    is5Series = device.lower().startswith("gw5a")
+    is_5_series = device.lower().startswith("gw5a")
 
     for i in range(tables):
-        typ = rint(f, 4)
-        size = rint(f, 4)
+        typ = read_int(f, 4)
+        size = read_int(f, 4)
         #print(hex(f.tell()), " Table type", typ, "/", hex(typ), "of size", size)
         if typ == 61:
-            size2 = rint(f, 4)
+            size2 = read_int(f, 4)
             typn = "grid"
-            t = readTable(f, size, size2, 4)
+            t = read_table(f, size, size2, 4)
         elif typ == 1:
             # Check if the device is 5 series as tile type 1 needs to be read differently
             typn = "fuse"
-            if is5Series:
-                t = readTable(f, size, 512, 2)
+            if is_5_series:
+                t = read_table(f, size, 512, 2)
             else:
-                t = readTable(f, size, 150, 2)
+                t = read_table(f, size, 150, 2)
         elif typ in {0x02, 0x26, 0x30, 0x5a, 0x5b}:
             typn = "wire"
-            if not is5Series: t = readTable(f, size, 8, 2)
-            else: t = readTable(f, size, 9, 2)
+            if not is_5_series: t = read_table(f, size, 8, 2)
+            else: t = read_table(f, size, 9, 2)
         elif typ == 0x03:
             typn = "wiresearch"
-            t = readTable(f, size, 3, 2)
+            t = read_table(f, size, 3, 2)
         elif typ == 0x04:
             typn = "const"
-            t = readTable(f, size, 1, 2)
+            t = read_table(f, size, 1, 2)
         elif typ in {0x05, 0x11, 0x14, 0x15, 0x16, 0x19, 0x1a, 0x1b,
                      0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23,
                      0x24, 0x32, 0x33, 0x38, 0x3c, 0x40, 0x42, 0x44,
@@ -89,37 +81,37 @@ def readOneFile(f, tileType, device):
                      0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80, 0x81,
                      0x82, 0x83, 0x84, 0x85, 0x88, 0x89, 0x8a}:
             typn = "shortval"
-            t = readTable(f, size, 14, 2)
+            t = read_table(f, size, 14, 2)
         elif typ in {6, 0x45}:
             typn = "alonenode"
-            t = readTable(f, size, 15, 2)
+            t = read_table(f, size, 15, 2)
         elif typ in {0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
                      0x0f, 0x10, 0x27, 0x31, 0x34, 0x37, 0x39, 0x3b,
                      0x3e, 0x3f, 0x41, 0x46, 0x48, 0x4a, 0x4c, 0x4e,
                      0x51, 0x53, 0x55, 0x57, 0x5c}:
             typn = "logicinfo"
-            t = readTable(f, size, 3, 2)
+            t = read_table(f, size, 3, 2)
         elif typ in {0x12, 0x13, 0x35, 0x36, 0x3a}:
             typn = "longfuse"
-            t = readTable(f, size, 17, 2)
+            t = read_table(f, size, 17, 2)
         elif typ in {0x17, 0x18, 0x25, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f}:
             typn = "longval"
-            t = readTable(f, size, 28, 2)
+            t = read_table(f, size, 28, 2)
         elif typ == 0x43:
             if device in {'GW1N-1', 'GW1NZ-1', 'GW1N-9', 'GW1N-9C', 'GW1N-4', 'GW1NS-4',
                         'GW2A-18', 'GW2A-18C', 'GW5A-25A', 'GW5AS-25A', 'GW5AST-138C'}:
                 typn = "logicinfo"
-                t = readTable(f, size, 3, 2)
+                t = read_table(f, size, 3, 2)
             else: # GW5A-138B GW5AST-138B GW5AT-138 GW5AT-138B GW5AT-75B
                 typn = "signedlogicinfo"
-                t = readTable(f, size, 3, 2)
+                t = read_table(f, size, 3, 2)
         elif typ in {0x86, 0x87}:
             typn = "signedlogicinfo"
-            #t = readTable(f, size, 6, 2)
-            t = readTable(f, size, 3, 2)
+            #t = read_table(f, size, 6, 2)
+            t = read_table(f, size, 3, 2)
         elif typ == 0x8b:
             typn = "drpfuse"
-            t = readTable(f, size, 10, 2)
+            t = read_table(f, size, 10, 2)
         else:
             raise ValueError("Unknown type {} at {}".format(hex(typ), hex(f.tell())))
         tmap.setdefault(typn, {})[typ] = t
@@ -130,9 +122,9 @@ def render_tile(d, ttyp, device):
     h = d[ttyp]['height']
 
 
-    is5Series = device.lower().startswith("gw5a")
+    is_5_series = device.lower().startswith("gw5a")
 
-    #if is5Series:
+    #if is_5_series:
     #    h = h * 2
 
     highestnum = 0
@@ -152,7 +144,7 @@ def render_tile(d, ttyp, device):
                                 highestnum = num
                             row = num // 100
                             col = num % 100
-                            if is5Series:
+                            if is_5_series:
                                 row = num // 200
                                 col = num % 200
 
@@ -184,9 +176,9 @@ def render_bitmap(d, device):
     width = sum([d[i]['width'] for i in tiles[0]])
     height = sum([d[i[0]]['height'] for i in tiles])
 
-    is5Series = device.lower().startswith("gw5a")
+    is_5_series = device.lower().startswith("gw5a")
 
-    if is5Series:
+    if is_5_series:
         height = height * 2
 
     bitmap = bitmatrix.zeros(height, width)
@@ -227,7 +219,7 @@ def display(fname, data):
     return im
 
 def fuse_lookup(d, ttyp, fuse, device):
-    is5Series = device.lower().startswith("gw5a")
+    is_5_series = device.lower().startswith("gw5a")
 
     w = d[ttyp]['width']
     h = d[ttyp]['height']
@@ -236,7 +228,7 @@ def fuse_lookup(d, ttyp, fuse, device):
         num = d['header']['fuse'][1][fuse][ttyp]
         row = num // 100
         col = num % 100
-        if is5Series:
+        if is_5_series:
             row = num // 200
             col = num % 200
 
@@ -384,7 +376,7 @@ def exact_table_cover(t_rows, start, table=None):
         return []
 
 def scan_fuses(d, ttyp, tile, device):
-    is5Series = device.lower().startswith("gw5a")
+    is_5_series = device.lower().startswith("gw5a")
 
     w = d[ttyp]['width']
     h = d[ttyp]['height']
@@ -396,7 +388,7 @@ def scan_fuses(d, ttyp, tile, device):
             num = fuse[ttyp]
             frow = num // 100
             fcol = num % 100
-            #if is5Series:
+            #if is_5_series:
             #    frow = num // w
             #    fcol = num % w
             #    print("GO FLUFFY")

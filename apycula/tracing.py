@@ -6,7 +6,7 @@ from collections import defaultdict, deque
 from apycula.chipdb import Device, rc2tbrl, rc2tbrl_0
 from apycula.gowin_unpack import parse_tile_, tbrl2rc
 import random
-# from apycula.tiled_fuzzer import rc2tbrl
+# from apycula.chipdb_builder import tbrl2rc
 
 #Node Type
 Node: TypeAlias = tuple[int, int, str]
