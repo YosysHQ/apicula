@@ -29,6 +29,12 @@ Install the tools with pip.
 pip install apycula
 ```
 
+On platforms where the default C extension dependencies are not available, you can use pure Python alternatives instead:
+
+```bash
+pip install --no-deps apycula msgpack cattrs
+```
+
 Note that on some systems the installed binaries might not be on the path. Either add the binaries to the path, or use the path of the _installed binary_ directly. (running the source files will lead to import errors)
 
 ```bash

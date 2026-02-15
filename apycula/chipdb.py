@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Union, Any
+from typing import Dict, List, Optional, Set, Tuple, Union, Any
 from itertools import chain
 import re
 import copy
+import lzma
 from functools import reduce
 from collections import namedtuple
 from apycula.dat19 import Datfile
@@ -24,7 +25,7 @@ class Bel:
     with the specified modes mapped to bits
     and the specified portmap"""
     # there can be zero or more flags
-    flags: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
+    flags: Dict[int, Set[Coord]] = field(default_factory=dict)
     # this Bel is IOBUF and needs routing to become IBUF or OBUF
     simplified_iob: bool = field(default = False)
     # differential signal capabilities info
@@ -32,10 +33,10 @@ class Bel:
     is_true_lvds: bool = field(default = False)
     is_diff_p:    bool = field(default = False)
     # there can be only one mode, modes are exclusive
-    modes: Dict[Union[int, str], Set[Coord]] = field(default_factory=dict)
-    portmap: Dict[str, str] = field(default_factory=dict)
+    modes: Dict[str, Set[Coord]] = field(default_factory=dict)
+    portmap: Dict[str, Union[str, List[Union[str, List[str]]]]] = field(default_factory=dict)
     # where to set the fuses for the bel
-    fuse_cell_offset: Coord = field(default_factory=tuple)
+    fuse_cell_offset: Optional[Coord] = None
 
     @property
     def mode_bits(self):
@@ -70,20 +71,22 @@ class Tile:
 
 @dataclass
 class Device:
-    # a grid of tiles
-    grid: List[List[Tile]] = field(default_factory=list)
-    timing: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
+    # grid of tile type indices (ttyp) - use device[row, col] to get Tile
+    grid: List[List[int]] = field(default_factory=list)
+    # tile type to Tile mapping
+    tiles: Dict[int, Tile] = field(default_factory=dict)
+    timing: Dict[str, Dict[str, Dict[str, Union[List[float], int]]]] = field(default_factory=dict)
     # {wine_name: type_name}
     wire_delay: Dict[str, str] = field(default_factory=dict)
     packages: Dict[str, Tuple[str, str, str]] = field(default_factory=dict)
     # {variant: {package: {pin#: (pin_name, [cfgs])}}}
     pinout: Dict[str, Dict[str, Dict[str, Tuple[str, List[str]]]]] = field(default_factory=dict)
-    # {variant: {package: (net, row, col, AB, iostd)}}
-    sip_cst: Dict[str, Dict[str, Tuple[str, int, int, str, str]]] = field(default_factory=dict)
+    # {variant: {package: [(net, row, col, AB, iostd), ...]}}
+    sip_cst: Dict[str, Dict[str, List[Tuple[str, int, int, str, Optional[str]]]]] = field(default_factory=dict)
     pin_bank: Dict[str, int] = field(default_factory = dict)
     cmd_hdr: List[bytearray] = field(default_factory=list)
     cmd_ftr: List[bytearray] = field(default_factory=list)
-    template: List[List[int]] = None
+    template: Optional[List[List[int]]] = None
     # allowable values of bel attributes
     # {table_name: {(attr_id, attr_value): code}}
     logicinfo: Dict[str, Dict[Tuple[int, int], int]] = field(default_factory=dict)
@@ -100,8 +103,8 @@ class Device:
     longval: Dict[int, Dict[str, Dict[Tuple[int, int, int, int, int, int, int, int, int, int, int, int, int, int, int, int], Set[Coord]]]] = field(default_factory=dict)
     # constant fuses
     # we will use the list in case it turns out that order is important.
-    # {ttype: [bits, bits]}
-    const: Dict[int, List[int]] = field(default_factory=dict)
+    # {ttype: [(row, col), ...]}
+    const: Dict[int, List[Coord]] = field(default_factory=dict)
     # for Himbaechel arch
     # nodes - always connected wires {node_name: (wire_type, {(row, col, wire_name)})}
     nodes: Dict[str, Tuple[str, Set[Tuple[int, int, str]]]] = field(default_factory = dict)
@@ -160,6 +163,17 @@ class Device:
     spine_select_wires: Dict[str, Dict[str, List[Tuple[int, int, str, int]]]] = field(default_factory=dict)
     last_top_row: int = field(default=0)
 
+    def __getitem__(self, pos: Tuple[int, int]) -> Tile:
+        """Get tile at (row, col)."""
+        row, col = pos
+        return self.tiles[self.grid[row][col]]
+
+    def __setitem__(self, pos: Tuple[int, int], tile: Tile):
+        """Set tile at (row, col)."""
+        row, col = pos
+        self.tiles[tile.ttyp] = tile
+        self.grid[row][col] = tile.ttyp
+
     @property
     def rows(self):
         return len(self.grid)
@@ -170,11 +184,11 @@ class Device:
 
     @property
     def height(self):
-        return sum(row[0].height for row in self.grid)
+        return sum(self[row, 0].height for row in range(self.rows))
 
     @property
     def width(self):
-        return sum(tile.width for tile in self.grid[0])
+        return sum(self[0, col].width for col in range(self.cols))
 
     # Some chips have bits responsible for different banks in the same corner tile.
     # Here stores the correspondence of the bank number to the (row, col) of the tile.
@@ -184,7 +198,7 @@ class Device:
         res = {}
         for row in range(self.rows):
             for col in range(self.cols):
-                for bel in self.grid[row][col].bels.keys():
+                for bel in self[row, col].bels.keys():
                     if bel.startswith('BANK'):
                         res.update({ int(bel[4:]) : (row, col) })
         return res
@@ -196,6 +210,61 @@ class Device:
             for attrval, code in self.logicinfo[name].items():
                 table[code] = attrval
         return self.rev_li[name]
+
+
+try:
+    import msgspec
+
+    def save_chipdb(db: Device, path: str) -> None:
+        """Save a Device database to a compressed MessagePack file."""
+        data = msgspec.msgpack.encode(db)
+        with lzma.open(path, 'wb', preset=1) as f:
+            f.write(data)
+
+    def load_chipdb(path: str) -> Device:
+        """Load a Device database from a compressed MessagePack file."""
+        with lzma.open(path, 'rb') as f:
+            data = f.read()
+        return msgspec.msgpack.decode(data, type=Device)
+
+except ImportError:
+    import warnings
+    warnings.warn("Msgspec is not available, performance will be degraded.")
+    import msgpack
+    import cattrs
+
+    _converter = cattrs.Converter()
+
+    # cattrs handles most types automatically (dataclasses, List, Set, Tuple,
+    # Dict, Optional) but needs help with ambiguous unions and bytearray.
+
+    _converter.register_structure_hook(
+        bytearray, lambda v, _: bytearray(v))
+    # timing: Union[List[float], int]
+    _converter.register_structure_hook(
+        Union[List[float], int],
+        lambda v, _: v if isinstance(v, int) else list(v))
+    # portmap inner: Union[str, List[str]]
+    _converter.register_structure_hook(
+        Union[str, List[str]],
+        lambda v, _: v if isinstance(v, str) else list(v))
+    # portmap outer: Union[str, List[Union[str, List[str]]]]
+    _converter.register_structure_hook(
+        Union[str, List[Union[str, List[str]]]],
+        lambda v, _: v if isinstance(v, str) else [
+            x if isinstance(x, str) else list(x) for x in v])
+
+    def save_chipdb(db: Device, path: str) -> None:
+        raise RuntimeError("save_chipdb requires msgspec")
+
+    def load_chipdb(path: str) -> Device:
+        """Load a Device database from a compressed MessagePack file."""
+        with lzma.open(path, 'rb') as f:
+            data = f.read()
+        raw = msgpack.unpackb(data, raw=False, strict_map_key=False,
+                              use_list=False)
+        return _converter.structure(raw, Device)
+
 
 def is_GW5_family(device):
     return device in {'GW5A-25A', 'GW5AST-138C'}
@@ -608,11 +677,11 @@ def set_banks(fse, dat, db):
     # find bank tiles
     for row in range(db.rows):
         for col in range(db.cols):
-            ttyp = db.grid[row][col].ttyp
+            ttyp = db.grid[row][col]
             if ttyp in db.longval:
                 if 'BANK' in db.longval[ttyp]:
                     for rd in db.longval[ttyp]['BANK']:
-                        db.grid[row][col].bels.setdefault(f"BANK{rd[0]}", Bel())
+                        db[row, col].bels.setdefault(f"BANK{rd[0]}", Bel())
                 if 'IOBC' in  db.longval[ttyp]:
                     simplified_io_rows.add(row)
 
@@ -833,8 +902,9 @@ def dat_fill_io_cfgs(db, dat, device, pindesc):
         cfg_dict = dat.compat_dict['Cfg5']
 
     pkg_pins = { p[0]: p[1] for p in pindesc.values() }
-    for row, rd in enumerate(db.grid):
-        for col, rc in enumerate(rd):
+    for row in range(db.rows):
+        for col in range(db.cols):
+            rc = db[row, col]
             for name, bel in rc.bels.items():
                 if name.startswith('IOB'):
                     iob_idx = name[-1]
@@ -927,12 +997,13 @@ def gw5_ttyp_to_hclk_idx(ttyp):
     return _ttyp_2_hclk[ttyp]
 
 def gw5_make_hclk_pips(dev, device, fse, dat: Datfile):
-    for row, rd in enumerate(dev.grid):
-        for col, rc in enumerate(rd):
-            hclk_idx = gw5_ttyp_to_hclk_idx(rc.ttyp)
-            if hclk_idx and 48 in fse[rc.ttyp]['wire']:
-                for srcid, destid, *fuses in fse[rc.ttyp]['wire'][48]:
-                    fuses = {fuse.fuse_lookup(fse, rc.ttyp, f, device) for f in unpad(fuses)}
+    for row in range(dev.rows):
+        for col in range(dev.cols):
+            ttyp = dev.grid[row][col]
+            hclk_idx = gw5_ttyp_to_hclk_idx(ttyp)
+            if hclk_idx and 48 in fse[ttyp]['wire']:
+                for srcid, destid, *fuses in fse[ttyp]['wire'][48]:
+                    fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
                     # This is not a magic number, but simply the number of wires in a
                     # single HCLK. Their indices are the same for all HCLKs,
                     # but we renumber them for routing purposes so that each HCLK
@@ -1023,8 +1094,9 @@ def gw5_make_hclk_to_clk_gates(dev, device, fse, dat: Datfile):
                                8, 9, 10, 11, 12, 13,
                                16, 17, 18, 19, 20, 21,
                                24, 25, 26, 27, 28, 29]}
-    for row, rd in enumerate(dev.grid):
-        for col, rc in enumerate(rd):
+    for row in range(dev.rows):
+        for col in range(dev.cols):
+            rc = dev[row, col]
             for spine, spine_in in to_create.items():
                 if spine in rc.clock_pips:
                     remove_hclk_in = set()
@@ -1487,8 +1559,8 @@ def add_hclk_bels(dat, dev, device):
                     wire_type = "HCLK_CTRL" if port in ("CALIB", "RESETN") else "HCLK"
                     create_port_wire(dev, tile_row, tile_col, row-tile_row, col-tile_col, clkdiv, clkdiv_name, port, wire, wire_type)
 
-                dev.grid[tile_row][tile_col].bels[clkdiv2_name] = clkdiv2
-                dev.grid[tile_row][tile_col].bels[clkdiv_name] = clkdiv #We still create this so as not to break the PnR logic
+                dev[tile_row, tile_col].bels[clkdiv2_name] = clkdiv2
+                dev[tile_row, tile_col].bels[clkdiv_name] = clkdiv #We still create this so as not to break the PnR logic
 
                 if device == "GW1N-9C":
                     clkdiv2_in = f"HCLK{idx}_SECT{section}_IN" if section==0 else f"HCLK_IN{idx*2+section}"
@@ -1592,7 +1664,7 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
             if side in 'TB':
                 row = {'T': 0, 'B': dev.rows - 1}[side]
                 for col in range(edge[0], edge[1]):
-                    if 'IOLOGICA' in dev.grid[row][col].bels:
+                    if 'IOLOGICA' in dev[row, col].bels:
                         pips = dev.hclk_pips.setdefault((row, col), {})
                         for dst in 'AB':
                             for src in srcs:
@@ -1600,12 +1672,12 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                                 if src.startswith('HCLK'):
                                     hclks[src].add((row, col, src))
                     pll = None
-                    if 'RPLLA' in dev.grid[row][col].bels:
+                    if 'RPLLA' in dev[row, col].bels:
                         pll = 'RPLLA'
-                    elif 'PLLVR' in dev.grid[row][col].bels:
+                    elif 'PLLVR' in dev[row, col].bels:
                         pll = 'PLLVR'
                     if pll:
-                        portmap = dev.grid[row][col].bels[pll].portmap
+                        portmap = dev[row, col].bels[pll].portmap
                         pips = dev.hclk_pips.setdefault((row, col), {})
                         for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
                             for src in srcs:
@@ -1615,7 +1687,7 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
             else:
                 col = {'L': 0, 'R': dev.cols - 1}[side]
                 for row in range(edge[0], edge[1]):
-                    if 'IOLOGICA' in dev.grid[row][col].bels:
+                    if 'IOLOGICA' in dev[row, col].bels:
                         pips = dev.hclk_pips.setdefault((row, col), {})
                         for dst in 'AB':
                             for src in srcs:
@@ -1623,12 +1695,12 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                                 if src.startswith('HCLK'):
                                     hclks[src].add((row, col, src))
                     pll = None
-                    if 'RPLLA' in dev.grid[row][col].bels:
+                    if 'RPLLA' in dev[row, col].bels:
                         pll = 'RPLLA'
-                    elif 'PLLVR' in dev.grid[row][col].bels:
+                    elif 'PLLVR' in dev[row, col].bels:
                         pll = 'PLLVR'
                     if pll:
-                        portmap = dev.grid[row][col].bels[pll].portmap
+                        portmap = dev[row, col].bels[pll].portmap
                         pips = dev.hclk_pips.setdefault((row, col), {})
                         for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
                             for src in srcs:
@@ -1641,7 +1713,7 @@ def fse_create_adc(dev, device, fse, dat):
     if device not in {"GW5A-25A"}:
         return
     row, col = 0, dev.cols - 1
-    dev.grid[row][col].bels['ADC'] = Bel()
+    dev[row, col].bels['ADC'] = Bel()
     extra = dev.extra_func.setdefault((row, col), {})
     adc = extra.setdefault('adc', {})
     adc['slot_idx'] = 1 # 25A has one adc and it is placed in the slot 1
@@ -1757,7 +1829,7 @@ def fse_create_slot_plls(dev, device, fse, dat):
                 dev.nodes.setdefault(f'X{col}Y{row}/PLLA{nam}{wire}', (wire_type, set()))[1].add((wrow, wcol, wire))
             if nam.startswith('CLKOUT'):
                 dev.nodes.setdefault(f'MPLL{pll_idx}{nam}', (wire_type, set()))[1].add((row, col, f'MPLL{nam}'))
-            dev.grid[row][col].pips.setdefault(logic_wire, {}).update({portmap[nam]:set()})
+            dev[row, col].pips.setdefault(logic_wire, {}).update({portmap[nam]:set()})
         # CLKFBOUT is missing from the tables, so we create it manually.
         nam = 'CLKFBOUT'
         portmap[nam] = f'PLLA{nam}'
@@ -1950,7 +2022,7 @@ def fse_create_pll_clock_aliases(db, device):
     # we know exactly where the PLL is and therefore know which aliases to create
     for row in range(db.rows):
         for col in range(db.cols):
-            for w_dst, w_srcs in db.grid[row][col].clock_pips.items():
+            for w_dst, w_srcs in db[row, col].clock_pips.items():
                 for w_src in w_srcs.keys():
                     if device in {'GW1N-1', 'GW1NZ-1', 'GW1NS-2', 'GW1NS-4', 'GW1N-4', 'GW1N-9C', 'GW1N-9', 'GW2A-18', 'GW2A-18C'}:
                         if w_src in _pll_loc[device].keys():
@@ -2197,10 +2269,10 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
                 # one to connect the IO output to the DLLDLY input.
                 # Both are non-fuseable, but allow the router to work.
                 add_node(dev, wnames.clknames[clk_idx], "GLOBAL_CLK", row, col, 'PCLK_DUMMY')
-                dev.grid[row][col].pips['PCLK_DUMMY'] = {wnames.wirenames[wire_idx]: set(), 'DLLDLY_OUT': set()}
+                dev[row, col].pips['PCLK_DUMMY'] = {wnames.wirenames[wire_idx]: set(), 'DLLDLY_OUT': set()}
                 add_node(dev, f'X{col}Y{row}/DLLDLY_OUT', "DLLDLY_O", row, col, 'DLLDLY_OUT')
                 add_node(dev, f'X{col}Y{row}/DLLDLY_IN', "TILE_CLK", row, col, 'DLLDLY_IN')
-                dev.grid[row][col].pips['DLLDLY_IN'] = {wnames.wirenames[wire_idx]: set()}
+                dev[row, col].pips['DLLDLY_IN'] = {wnames.wirenames[wire_idx]: set()}
             else:
                 add_node(dev, wnames.clknames[clk_idx], "GLOBAL_CLK", row, col, wnames.wirenames[wire_idx])
                 add_buf_bel(dev, row, col, wnames.wirenames[wire_idx])
@@ -2210,8 +2282,9 @@ def fse_create_clocks(dev, device, dat: Datfile, fse):
     hclk_srcs = {f'HCLK{i}_BANK_OUT{j}' for i in range(4) for j in range(2)}
     dcs_inputs = {f'P{i}{j}{k}' for i in range(1, 5) for j in range(6, 8) for k in "ABCD"}
 
-    for row, rd in enumerate(dev.grid):
-        for col, rc in enumerate(rd):
+    for row in range(dev.rows):
+        for col in range(dev.cols):
+            rc = dev[row, col]
             for dest, srcs in rc.clock_pips.items():
                 for src in srcs.keys():
                     if src in spines and not dest.startswith('GT'):
@@ -2509,34 +2582,35 @@ def fse_create_5a138_clocks(dev, device, dat: Datfile, fse):
         #    #print(clk_idx, row, col, wire_idx, mk_wname(wnames.clknames[clk_idx], half))
 
         for row in row_range[half]:
-            rd = dev.grid[row]
-            for col, rc in enumerate(rd):
+            for col in range(dev.cols):
+                ttyp = dev.grid[row][col]
+                rc = dev[row, col]
                 for dest, srcs in rc.clock_pips.items():
                     for src in srcs.keys():
                         if src.startswith('SPINE') and not dest.startswith('GT'):
                             add_node(dev, src, "GLOBAL_CLK", row, col, src)
                     if dest.startswith('SPINE'):
                         # spines in clock bridge cells may only lead to bridge outs
-                        if rc.ttyp in bridge_tile_types_138:
+                        if ttyp in bridge_tile_types_138:
                             top_bottom, idx = spine_to_bridgeout(dest)
                             bridge_out_node = f'CBRIDGEOUT_{top_bottom}{idx}'
-                            print(row, col, dev.grid[row][col].ttyp, dest, 'BRIDGE', bridge_out_node)
+                            print(row, col, ttyp, dest, 'BRIDGE', bridge_out_node)
                             add_node(dev, bridge_out_node, "GLOBAL_CLK", row, col, dest)
                         else:
-                            print(row, col, dev.grid[row][col].ttyp, dest)
+                            print(row, col, ttyp, dest)
                             add_node(dev, mk_wname(dest, half), "GLOBAL_CLK", row, col, dest)
                         for src in { wire for wire in srcs.keys() if wire not in {'VCC', 'VSS'}}:
                             if src.startswith('PLL'):
                                 add_node(dev, mk_wname(src, half), "PLL_O", row, col, src)
                             else:
-                                if rc.ttyp in bridge_tile_types_138:
+                                if ttyp in bridge_tile_types_138:
                                     add_node(dev, src, "GLOBAL_CLK", row, col, src)
                                 else:
                                     if src.startswith('CBRIDGEOUT'):
                                         add_node(dev, src, "GLOBAL_CLK", row, col, src)
                                     else:
                                         add_node(dev, mk_wname(src, half), "GLOBAL_CLK", row, col, src)
-                                print("  << in ", row, col, dev.grid[row][col].ttyp, mk_wname(src, half))
+                                print("  << in ", row, col, ttyp, mk_wname(src, half))
 
     # GBx0 <- GBOx
     taps = {}
@@ -2804,7 +2878,7 @@ def fse_create_tile_types(dev, device, dat: Datfile):
                     j -= 1
                 if j == dev.cols:
                     j -= 1
-                dev.tile_types[fn].add(dev.grid[i][j].ttyp)
+                dev.tile_types[fn].add(dev.grid[i][j])
 
 def get_tile_types_by_func(dev, dat: Datfile, fse, fn):
     ttypes = set()
@@ -3028,9 +3102,10 @@ def fse_create_osc(dev, device, fse):
     if device in {'GW5AST-138C'}:
         return
     skip_nodes = False
-    for row, rd in enumerate(dev.grid):
-        for col, rc in enumerate(rd):
-            if 51 in fse[rc.ttyp]['shortval']:
+    for row in range(dev.rows):
+        for col in range(dev.cols):
+            ttyp = dev.grid[row][col]
+            if 51 in fse[ttyp]['shortval']:
                 # None of the supported chips, nor the planned TangMega138k,
                 # have more than one OSC. However, in the GW25 series, the
                 # fuses from Table 51 are found in several cells. The simplest
@@ -3039,7 +3114,7 @@ def fse_create_osc(dev, device, fse):
                 if skip_nodes:
                     dev.extra_func.setdefault((row, col), {}).update({'osc_fuses_only': {}})
                     continue
-                osc_type = list(fse_osc(device, fse, rc.ttyp).keys())[0]
+                osc_type = list(fse_osc(device, fse, ttyp).keys())[0]
                 dev.extra_func.setdefault((row, col), {}).update(
                         {'osc': {'type': osc_type}})
                 _, aliases = _osc_ports[osc_type, device]
@@ -3056,7 +3131,7 @@ def fse_create_osc(dev, device, fse):
                     # of them will be picked up by the clock MUX.
                     if port == 'OSCOUT' and device in {'GW5A-25A'}:
                         a_row, a_col, a_wire = alias
-                        for dest, srcs in dev.grid[a_row][a_col].clock_pips.items():
+                        for dest, srcs in dev[a_row, a_col].clock_pips.items():
                             if a_wire in srcs:
                                 add_node(dev, dest, "GLOBAL_CLK", a_row, a_col, dest)
                 skip_nodes = True
@@ -3589,7 +3664,8 @@ def from_fse(device, fse, dat: Datfile):
         tiles[ttyp] = tile
 
     fse_fill_logic_tables(dev, fse, device)
-    dev.grid = [[tiles[ttyp] for ttyp in row] for row in fse['header']['grid'][61]]
+    dev.tiles = tiles
+    dev.grid = fse['header']['grid'][61]  # List of lists of ttyp indices
     fse_create_clocks(dev, device, dat, fse)
     fse_create_spine_select_wires(dev, device)
     fse_create_pll_clock_aliases(dev, device)
@@ -3960,8 +4036,9 @@ def fill_GW5A_io_bels(dev):
 
     # top
     row = 0
-    for col, rc in enumerate(dev.grid[row]):
-        ttyp = rc.ttyp
+    for col in range(dev.cols):
+        ttyp = dev.grid[row][col]
+        rc = dev[row, col]
         if ttyp not in _gw5_fuse_cell_offset['top']:
             if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
                 raise Exception(f"IO bel with type {ttyp} is not in the top list.")
@@ -3970,13 +4047,14 @@ def fill_GW5A_io_bels(dev):
 
         off = _gw5_fuse_cell_offset['top'][ttyp]
         if off != (0, 0):
-            main_cell = dev.grid[0][col - off[1]]
+            main_cell = dev[0, col - off[1]]
             fix_iobb()
 
     # bottom
     row = dev.rows - 1
-    for col, rc in enumerate(dev.grid[row]):
-        ttyp = rc.ttyp
+    for col in range(dev.cols):
+        ttyp = dev.grid[row][col]
+        rc = dev[row, col]
         if ttyp not in _gw5_fuse_cell_offset['bottom']:
             if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
                 raise Exception(f"IO bel with type {ttyp} is not in the bottom list.")
@@ -3985,13 +4063,13 @@ def fill_GW5A_io_bels(dev):
 
         off = _gw5_fuse_cell_offset['bottom'][ttyp]
         if off != (0, 0):
-            main_cell = dev.grid[dev.rows - 1][col - off[1]]
+            main_cell = dev[dev.rows - 1, col - off[1]]
             fix_iobb()
 
     # left
     for row in range(1, dev.rows - 1):
-        rc = dev.grid[row][0]
-        ttyp = rc.ttyp
+        ttyp = dev.grid[row][0]
+        rc = dev[row, 0]
         if ttyp not in _gw5_fuse_cell_offset['left']:
             if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
                 raise Exception(f"IO bel with type {ttyp} is not in the left list.")
@@ -4000,13 +4078,13 @@ def fill_GW5A_io_bels(dev):
 
         off = _gw5_fuse_cell_offset['left'][ttyp]
         if off != (0, 0):
-            main_cell = dev.grid[row - off[0]][0]
+            main_cell = dev[row - off[0], 0]
             fix_iobb()
 
     # right
     for row in range(1, dev.rows - 1):
-        rc = dev.grid[row][dev.cols - 1]
-        ttyp = rc.ttyp
+        ttyp = dev.grid[row][dev.cols - 1]
+        rc = dev[row, dev.cols - 1]
         if ttyp not in _gw5_fuse_cell_offset['right']:
             if 'IOBA' in rc.bels or 'IOBB' in rc.bels:
                 raise Exception(f"IO bel with type {ttyp} is not in the right list.")
@@ -4015,7 +4093,7 @@ def fill_GW5A_io_bels(dev):
 
         off = _gw5_fuse_cell_offset['right'][ttyp]
         if off != (0, 0):
-            main_cell = dev.grid[row - off[0]][dev.cols - 1]
+            main_cell = dev[row - off[0], dev.cols - 1]
             fix_iobb()
 
     for bels in bels_to_remove:
@@ -4078,8 +4156,9 @@ def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
 
 def dat_portmap(dat, dev, device):
     wnames.select_wires(device)
-    for row, row_dat in enumerate(dev.grid):
-        for col, tile in enumerate(row_dat):
+    for row in range(dev.rows):
+        for col in range(dev.cols):
+            tile = dev[row, col]
             for name, bel in tile.bels.items():
                 if bel.portmap:
                     if not need_create_multiple_nodes(device, name):
@@ -5060,9 +5139,10 @@ def dat_portmap(dat, dev, device):
 def tile_bitmap(dev, bitmap, empty=False):
     res = {}
     y = 0
-    for idx, row in enumerate(dev.grid):
+    for idx in range(dev.rows):
         x=0
-        for jdx, td in enumerate(row):
+        for jdx in range(dev.cols):
+            td = dev[idx, jdx]
             w = td.width
             h = td.height
             tile = [row[x:x+w] for row in bitmap[y:y+h]]
@@ -5076,9 +5156,10 @@ def tile_bitmap(dev, bitmap, empty=False):
 def fuse_bitmap(db, bitmap):
     res = bitmatrix.zeros(db.height, db.width)
     y = 0
-    for idx, row in enumerate(db.grid):
+    for idx in range(db.rows):
         x=0
-        for jdx, td in enumerate(row):
+        for jdx in range(db.cols):
+            td = db[idx, jdx]
             w = td.width
             h = td.height
             bitmatrix.blit(res, y, x, bitmap[(idx, jdx)])
@@ -5090,10 +5171,10 @@ def fuse_bitmap(db, bitmap):
 def get_route_bits(db, row, col):
     """ All routing bits for the cell """
     bits = set()
-    for w in db.grid[row][col].pips.values():
+    for w in db[row, col].pips.values():
         for v in w.values():
             bits.update(v)
-    for w in db.grid[row][col].clock_pips.values():
+    for w in db[row, col].clock_pips.values():
         for v in w.values():
             bits.update(v)
     return bits

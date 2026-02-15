@@ -96,7 +96,7 @@ _tbrlre = re.compile(r"IO([TBRL])(\d+)(\w)")
 def __normalize_pin(db, pin):
     if isinstance(pin, str) and _tbrlre.match(pin):
         row,col,pin_idx = tbrl2rc(db, pin)
-        wire = db.grid[row][col].bels["IOB"+pin_idx].portmap["I"]
+        wire = db[row, col].bels["IOB"+pin_idx].portmap["I"]
         return row,col,wire
     else:
         return pin
@@ -170,7 +170,7 @@ def get_input_path_dict(tile_dict:dict[Node, Node], db:Device, source:Node|str, 
     while next_tile:
         tile_loc = next_tile.pop()
         srow, scol = tile_loc
-        tile_bels = db.grid[srow][scol].bels
+        tile_bels = db[srow, scol].bels
 
         if tile_loc not in tile_dict or not tile_wires[tile_loc]:
             continue
@@ -273,7 +273,7 @@ def get_output_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel
         _, wire_dict, _ = parse_tile_(db, *tile_loc, tile_dict[tile_loc], default=True)
 
         # Trace the output of an IOB to its input
-        tile_bels = db.grid[tile_loc[0]][tile_loc[1]].bels
+        tile_bels = db[tile_loc[0], tile_loc[1]].bels
         for iob in ("IOBA", "IOBB"):
             if iob in tile_bels:
                 portmap = tile_bels[iob].portmap
@@ -339,7 +339,7 @@ def get_path_dict(tile_dict:dict, db:Device, source:Node|str, through_bel=('lut'
 
 def io_node_to_tbrl(db, node:Node):
     row, col, wire = node
-    for bel_type, bel in db.grid[row][col].bels.items():
+    for bel_type, bel in db[row, col].bels.items():
         if bel_type.startswith("IOB") and wire in bel.portmap.values():
             tbrl_name = rc2tbrl_0(db, row, col, bel_type[-1])
             return tbrl_name
@@ -349,7 +349,7 @@ def get_io_nodes(db:Device):
     nodes = []
     for row in range(rows):
         for col in (0, cols-1):
-            bels = db.grid[row][col].bels
+            bels = db[row, col].bels
             for bel_type, bel in bels.items():
                 if bel_type.startswith("IOB"):
                     bel_input = bel.portmap["I"]
@@ -357,7 +357,7 @@ def get_io_nodes(db:Device):
 
     for col in range(cols):
         for row in (0, rows-1):
-            bels = db.grid[row][col].bels
+            bels = db[row, col].bels
             for bel_type, bel in bels.items():
                 if bel_type.startswith("IOB"):
                     bel_input = bel.portmap["I"]

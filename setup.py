@@ -17,13 +17,17 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    install_requires=[],
+    install_requires=[
+        'msgspec',
+        'numpy',
+        'crcmod',
+    ],
     extras_require={
-        'fast': ['numpy', 'crcmod'],
+        'pure': ['msgpack', 'cattrs'],
     },
     python_requires='>=3.9',
     package_data={
-        'apycula': ['*.pickle']
+        'apycula': ['*.msgpack.xz']
     },
     entry_points={
         'console_scripts': [
