@@ -24,12 +24,12 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: chipdbs
-        path: apycula/*.pickle
+        path: apycula/*.msgpack.xz
     - name: Archive stages
       uses: actions/upload-artifact@v4
       with:
         name: stages
-        path: GW*_stage*.pickle
+        path: GW*_stage*.msgpack.xz
 
   pypi:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
         python setup.py --version
         python setup.py sdist bdist_wheel
         # Validate that the resulting wheel can be executed
-        pip install dist/apycula-$(python setup.py --version)-py3-none-any.whl
+        pip install "dist/apycula-$(python setup.py --version)-py3-none-any.whl"
         gowin_pack --help
     - name: Archive artifact
       uses: actions/upload-artifact@v4
@@ -69,7 +69,7 @@ jobs:
     - name: Pack release data
       if: startsWith(github.ref, 'refs/heads/master')
       run: |
-        tar cvfz linux-x64-gowin-data.tgz apycula/*.pickle
+        tar cvfz linux-x64-gowin-data.tgz apycula/*.msgpack.xz
     - name: Upload to oss-cad-suite
       uses: ncipollo/release-action@v1
       if: hashFiles('linux-x64-gowin-data.tgz') != ''
@@ -91,10 +91,10 @@ jobs:
         include:
           - name: dev
             yosys: main
-            nextpnr: master
+            nextpnr: msgspec-serialization
           - name: stable
             yosys: v0.62
-            nextpnr: nextpnr-0.9
+            nextpnr: msgspec-serialization
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
@@ -128,7 +128,7 @@ jobs:
         make install DESTDIR=${{ github.workspace }}/staging
     - name: Build nextpnr
       run: |
-        git clone https://github.com/YosysHQ/nextpnr.git
+        git clone https://github.com/pepijndevos/nextpnr.git
         cd nextpnr
         git checkout ${{ matrix.nextpnr }}
         git submodule update --init --recursive
@@ -156,7 +156,7 @@ jobs:
         board:
           - {target: tangnano20k, dir: examples}
           - {target: primer20k, dir: examples}
-          - {target: tangnano, dir: examples}
+          - {target: tangnano, dir: examples, pure: true}
           - {target: tangnano1k, dir: examples}
           - {target: tangnano4k, dir: examples}
           - {target: tangnano9k, dir: examples}
@@ -188,7 +188,13 @@ jobs:
         name: python-dist
         path: dist
     - name: Install apycula
-      run: pip install dist/*.whl
+      run: |
+        if [ "${{ matrix.board.pure }}" = "true" ]; then
+          pip install --no-deps dist/*.whl
+          pip install msgpack cattrs
+        else
+          pip install dist/*.whl
+        fi
     - name: Build examples
       run: make -C ${{ matrix.board.dir }} -j$(nproc) ${{ matrix.board.target }}
     - name: Archive artifact
