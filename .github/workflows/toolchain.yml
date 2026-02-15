@@ -1,0 +1,136 @@
+name: Build toolchain and examples
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type: string
+      yosys:
+        required: true
+        type: string
+      nextpnr:
+        required: true
+        type: string
+
+jobs:
+  build-tools:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+    - name: Install build deps
+      run: |
+        sudo apt-get update
+        sudo apt-get install build-essential clang bison flex \
+          libreadline-dev gawk tcl-dev libffi-dev git libfl-dev \
+          graphviz xdot pkg-config python3 libboost-system-dev \
+          libboost-python-dev libboost-filesystem-dev zlib1g-dev \
+          libboost-thread-dev libboost-program-options-dev libboost-iostreams-dev libboost-dev \
+          libeigen3-dev
+    - name: Set up ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ inputs.name }}
+        max-size: 1G
+    - name: Download python package
+      uses: actions/download-artifact@v4
+      with:
+        name: python-dist
+        path: dist
+    - name: Install apycula
+      run: pip install dist/*.whl
+    - name: Build yosys
+      run: |
+        git clone https://github.com/YosysHQ/yosys.git
+        cd yosys
+        git checkout ${{ inputs.yosys }}
+        git submodule update --init --recursive
+        make config-clang
+        make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
+        make install DESTDIR=${{ github.workspace }}/staging
+    - name: Build nextpnr
+      run: |
+        git clone https://github.com/YosysHQ/nextpnr.git
+        cd nextpnr
+        git checkout ${{ inputs.nextpnr }}
+        git submodule update --init --recursive
+        cmake -B build -DBUILD_PYTHON=OFF -DARCH="himbaechel" \
+          -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        make -C build -j$(nproc)
+        make -C build install DESTDIR=${{ github.workspace }}/staging
+    - name: Package tools
+      run: tar czf tools.tar.gz -C staging/usr/local .
+    - name: Upload tools
+      uses: actions/upload-artifact@v4
+      with:
+        name: tools-${{ inputs.name }}
+        path: tools.tar.gz
+
+  example:
+    runs-on: ubuntu-latest
+    needs: [build-tools]
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - {target: tangnano20k, dir: examples}
+          - {target: primer20k, dir: examples}
+          - {target: tangnano, dir: examples, pure: true}
+          - {target: tangnano1k, dir: examples}
+          - {target: tangnano4k, dir: examples}
+          - {target: tangnano9k, dir: examples}
+          - {target: szfpga, dir: examples}
+          - {target: tec0117, dir: examples}
+          - {target: runber, dir: examples}
+          - {target: primer25k, dir: examples/gw5a}
+          - {target: tangmega138k, dir: examples/gw5a}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+    - name: Download tools
+      uses: actions/download-artifact@v4
+      with:
+        name: tools-${{ inputs.name }}
+    - name: Install runtime deps
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libboost-filesystem1.83.0 libboost-program-options1.83.0 \
+          libboost-iostreams1.83.0 libboost-thread1.83.0 libboost-system1.83.0
+    - name: Install tools
+      run: sudo tar xzf tools.tar.gz -C /usr/local && sudo ldconfig
+    - name: Download python package
+      uses: actions/download-artifact@v4
+      with:
+        name: python-dist
+        path: dist
+    - name: Install apycula
+      run: |
+        if [ "${{ matrix.board.pure }}" = "true" ]; then
+          pip install --no-deps dist/*.whl
+          pip install msgpack cattrs
+        else
+          pip install dist/*.whl
+        fi
+    - name: Build examples
+      run: make -C ${{ matrix.board.dir }} -j$(nproc) ${{ matrix.board.target }}
+    - name: Archive artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: examples-${{ inputs.name }}-${{ matrix.board.target }}
+        path: ${{ matrix.board.dir }}/*.fs
+    - name: Sanity check
+      if: matrix.board.dir == 'examples'
+      run: |
+        make -C examples -j$(nproc) ${{ matrix.board.target }}-unpacked
+        cd examples
+        for f in *-unpacked.v; do
+          yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
+        done
