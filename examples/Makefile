@@ -127,7 +127,8 @@ tec0117: \
 	ides4-tec0117.fs ivideo-tec0117.fs ides8-tec0117.fs ides10-tec0117.fs \
 	dsp-mult18x18-tec0117.fs dsp-mult36x36-tec0117.fs dsp-padd9-tec0117.fs dsp-padd18-tec0117.fs \
 	dsp-mult9x9-tec0117.fs dsp-alu54d-tec0117.fs dsp-multalu18x18-tec0117.fs \
-	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs
+	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs \
+	femto-riscv-18-test-tec0117.fs
 
 runber: \
 	blinky-runber.fs shift-runber.fs blinky-tbuf-runber.fs blinky-oddr-runber.fs \
@@ -255,6 +256,42 @@ unpacked: tangnano20k-unpacked primer20k-unpacked tangnano-unpacked tangnano1k-u
 
 clean:
 	rm -f *.json *.fs *-unpacked.v
+
+# ============================================================
+# Hardware-in-the-loop tests
+HIL_PORT ?= /dev/ttyUSB1
+HIL_SETTLE ?= 5
+HIL_TIMEOUT ?= 300
+
+# Capture one settled iteration: flush stale serial data, then
+# awk exits after tick N+1, SIGPIPE kills cat, timeout is a safety net.
+define hil_capture
+stty -F $(HIL_PORT) 115200 raw -echo && \
+dd if=$(HIL_PORT) of=/dev/null bs=4096 count=1 iflag=nonblock 2>/dev/null; \
+timeout $(HIL_TIMEOUT) cat $(HIL_PORT) | \
+awk -v n=$(HIL_SETTLE) '/--- tick ---/{c++; next} c==n{print} c==(n+1){exit}'
+endef
+
+hil-%-tec0117: %-tec0117.fs hil-references/%.txt
+	openFPGALoader -b tec0117 $< && sleep 1
+	$(hil_capture) | diff hil-references/$*.txt -
+	@echo "PASS: $*"
+
+# Mandelbrot is deterministic from start, settle after first frame
+hil-femto-riscv-18-test-tec0117: HIL_SETTLE = 1
+
+.PHONY: hil-tec0117
+hil-tec0117: \
+	hil-dsp-mult18x18-tec0117 \
+	hil-dsp-mult36x36-tec0117 \
+	hil-dsp-mult9x9-tec0117 \
+	hil-dsp-padd9-tec0117 \
+	hil-dsp-padd18-tec0117 \
+	hil-dsp-alu54d-tec0117 \
+	hil-dsp-multalu18x18-tec0117 \
+	hil-dsp-multalu36x18-tec0117 \
+	hil-dsp-multaddalu18x18-tec0117 \
+	hil-femto-riscv-18-test-tec0117
 
 # ============================================================
 # Tangnano20k

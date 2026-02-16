@@ -1,0 +1,5 @@
+node 0 = 0000000005 mode 0: ACC + 5*2 - 9
+node 1 = 00000000ca mode 2: 0xf * 0xe - 0xd + CASI // OUT register is disabled
+node 2 = 00000f03e3 mode 1: ACC + 0x10000 * 3 + CASI
+node 3 = 00001407bc mode 1: ACC - 0x10000 * 2 + CASI
+node 4 = fffffe07bc mode 2: -0x16000 * 0x10 + CASI

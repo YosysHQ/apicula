@@ -134,3 +134,17 @@ jobs:
         for f in *-unpacked.v; do
           yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
         done
+
+  hil:
+    runs-on: [self-hosted, fpga]
+    needs: [example]
+    environment: Hardware in the loop
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download tec0117 bitstreams
+      uses: actions/download-artifact@v4
+      with:
+        name: examples-${{ inputs.name }}-tec0117
+        path: examples
+    - name: Run HIL tests
+      run: make -C examples hil-tec0117

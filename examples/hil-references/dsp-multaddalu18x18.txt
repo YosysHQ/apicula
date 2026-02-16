@@ -1,0 +1,4 @@
+node 0 = 0000000844 mode 0: 5 * (0xfd + 0xaa) + 1
+node 1 = 000000139c mode 1: ACC + 5 * 0xfd + 5 * (-2)
+node 2 = 0000100eb5 mode 2: 5 * 0x30000 + 0x1000 * 0x10 + CASI
+node 3 = 00001009d4 mode 2: -2 * -3 + CASI // B1 sign register enabled

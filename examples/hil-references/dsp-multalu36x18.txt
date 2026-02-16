@@ -1,0 +1,5 @@
+node 0 = 0beedecade mode 0: 2 * 0x5f76fe56f - 0x10000
+node 1 = 0000decade mode 2: -1 * 0xbee000000 + CASI // out register is diaabled
+node 2 = 000000a000 mode 1: ACC + 0x1000 * 2
+node 3 = 0000008006 mode 2: -2 * -3 + CASI // B sign register enabled
+node 4 = 000000face mode 0: 0x1600 * 0x10 - 0x6532
