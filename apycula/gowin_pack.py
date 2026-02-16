@@ -3964,25 +3964,25 @@ def route(db, tilemap, pips):
             used_spines.update({(area, dest)})
             spine_enable_table = f'5A_PCLK_ENABLE_{wnames.clknumbers[dest]:02}'
 
-            for row in range(db.rows):
-                if row in allowed_rows:
-                    for col in range(db.cols):
-                        if col in allowed_cols:
-                            if device in {'GW5AST-138C'} and area == 'T' and row in clock_bridge_rows and col in clock_bridge_cols:
-                                continue
-                        rc = db[row, col]
-                        ttyp = db.grid[row][col]
-                        bits = set()
-                        if dest in rc.clock_pips:
-                            if src in rc.clock_pips[dest]:
-                                bits = rc.clock_pips[dest][src]
-                        if spine_enable_table in db.shortval[ttyp] and (1, 0) in db.shortval[ttyp][spine_enable_table]:
-                            bits.update(db.shortval[ttyp][spine_enable_table][(1, 0)]) # XXX move to attrs?
-                            print(f"Enable spine {dest} <- {src} ({row_}, {col_}) by {spine_enable_table} at ({row}, {col})")
-                        if bits:
-                            tile = tilemap[(row, col)]
-                            for brow, bcol in bits:
-                                tile[brow][bcol] = 1
+        for row in range(db.rows):
+            if row in allowed_rows:
+                for col in range(db.cols):
+                    if col in allowed_cols:
+                        if device in {'GW5AST-138C'} and area == 'T' and row in clock_bridge_rows and col in clock_bridge_cols:
+                            continue
+                    rc = db[row, col]
+                    ttyp = db.grid[row][col]
+                    bits = set()
+                    if dest in rc.clock_pips:
+                        if src in rc.clock_pips[dest]:
+                            bits = rc.clock_pips[dest][src]
+                    if spine_enable_table in db.shortval[ttyp] and (1, 0) in db.shortval[ttyp][spine_enable_table]:
+                        bits.update(db.shortval[ttyp][spine_enable_table][(1, 0)]) # XXX move to attrs?
+                        print(f"Enable spine {dest} <- {src} ({row_}, {col_}) by {spine_enable_table} at ({row}, {col})")
+                    if bits:
+                        tile = tilemap[(row, col)]
+                        for brow, bcol in bits:
+                            tile[brow][bcol] = 1
 
     for row, col, src, dest in pips:
         if device in {'GW5A-25A', 'GW5AST-138C'} and is_clock_pip(src, dest):
