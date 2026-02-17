@@ -56,8 +56,10 @@ dat.grid.rows[10] = [1RRRRBbbBbbBb...
 
 The tail contains a zero byte repeated index times. The theory is that the receiving mechanism in the chip is not that complex and it uses every zero byte to shift some internal position for recording further data.
 
-`0x4e` `0x80` count_lsb count_msb - number of consecutive blocks.
-Specifies data for how many 256-byte blocks follow next.
+Addressing is done differently for the GW5AST-138C. A 2738-byte line starting with command `0x98` is sent, with bit 6 in byte `2720 - 45 * start` set for the first column. This essentially means the addressing is "one-hot". This command is excluded from CRC calculation. It is also skipped if the first column is being addressed.
+
+`0x4e` `0x80` count_msb count_lsb - number of consecutive lines.
+Specifies data for how many lines follow next. In general there are 256 lines per block except for the first column of the GW5AST-138C, where there are 257 lines with an extra 0 line appended at the beginning.
 
 Next comes the actual data for the BSRAM blocks, with 256 lines per block. At the end of each line there are two CRC bytes and 6 bytes of `0xff`.
 
