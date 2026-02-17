@@ -2865,7 +2865,7 @@ def fse_create_tile_types(dev, device, dat: Datfile):
         dev.tile_types[fn] = set()
     for row, rd in enumerate(dat.grid.rows):
         for col, fn in enumerate(rd):
-            if fn == '4' and device in {'GW5A-25A'}:
+            if fn == '4' and device in {'GW5A-25A', 'GW5AST-138C'}:
                 fn = 'I'
             if fn in type_chars:
                 i = row
