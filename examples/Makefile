@@ -260,7 +260,7 @@ clean:
 
 # ============================================================
 # Hardware-in-the-loop tests
-HIL_SETTLE ?= 5
+HIL_SETTLE ?= 10
 HIL_TIMEOUT ?= 300
 
 # $(call hil_capture,UART_DEVICE_PATH)
