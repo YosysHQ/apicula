@@ -3618,8 +3618,6 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_DFF67")
         dev.chip_flags.append("HAS_CIN_MUX")
         dev.chip_flags.append("NEED_CFGPINS_INVERSION")
-        dev.chip_flags.append("NEED_BSRAM_RESET_FIX")
-        dev.chip_flags.append("NEED_SDP_FIX")
     if device in {'GW5A-25A'}:
         dev.dcs_prefix = "CLKIN"
 
