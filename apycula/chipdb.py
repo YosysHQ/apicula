@@ -3618,7 +3618,8 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_DFF67")
         dev.chip_flags.append("HAS_CIN_MUX")
         dev.chip_flags.append("NEED_CFGPINS_INVERSION")
-
+        dev.chip_flags.append("NEED_BSRAM_RESET_FIX")
+        dev.chip_flags.append("NEED_SDP_FIX")
     if device in {'GW5A-25A'}:
         dev.dcs_prefix = "CLKIN"
 
@@ -3680,7 +3681,6 @@ def from_fse(device, fse, dat: Datfile):
         dev.tile_types['D'] = set()
     if device in {'GW5AST-138C'}:
         dev.tile_types['P'] = set()
-        dev.tile_types['B'] = set()
         dev.tile_types['D'] = set()
 
     # GW5 series have DFF6 and DFF7, so leave Q6 and Q7 as is

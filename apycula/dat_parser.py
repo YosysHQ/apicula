@@ -208,6 +208,14 @@ class Datfile:
             rows.append(row)
         return Grid(grid_h, grid_w, cc_x, cc_y, rows)
 
+    def patch_grid_bram_138(self):
+        for y in range(self.grid.num_rows):
+            for x in range(self.grid.num_cols):
+                if self.grid.rows[y][x] == '3':
+                    patch_str = "BbbBbb"
+                    for j in range(len(patch_str)):
+                        self.grid.rows[y][x+j] = patch_str[j]
+
     def read_mult(self, num) -> list[tuple[int, int, int, int]]:
         ret = []
         for _ in range(num):
