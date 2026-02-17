@@ -266,7 +266,7 @@ HIL_TIMEOUT ?= 300
 # $(call hil_capture,UART_DEVICE_PATH)
 define hil_capture
 stty -F $(1) 115200 raw -echo && \
-dd if=$(1) of=/dev/null bs=4096 count=1 iflag=nonblock 2>/dev/null; \
+dd if=$(1) of=/dev/null bs=4096 iflag=nonblock 2>/dev/null; \
 timeout $(HIL_TIMEOUT) cat $(1) | \
 awk -v n=$(HIL_SETTLE) '/--- tick ---/{c++; next} c==n{print} c==(n+1){exit}'
 endef
