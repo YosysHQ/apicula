@@ -260,7 +260,7 @@ clean:
 
 # ============================================================
 # Hardware-in-the-loop tests
-HIL_SETTLE ?= 10
+HIL_SETTLE ?= 5
 HIL_TIMEOUT ?= 300
 
 # $(call hil_capture,UART_DEVICE_PATH)
@@ -270,6 +270,10 @@ dd if=$(1) of=/dev/null bs=4096 count=1 iflag=nonblock 2>/dev/null; \
 timeout $(HIL_TIMEOUT) cat $(1) | \
 awk -v n=$(HIL_SETTLE) '/--- tick ---/{c++; next} c==n{print} c==(n+1){exit}'
 endef
+
+# SOA chain needs more ticks to fully propagate across all devices
+hil-dsp-mult18x18-%: HIL_SETTLE = 10
+hil-dsp-mult9x9-%: HIL_SETTLE = 10
 
 # --- tec0117 (GW1N-9) ---
 hil-%-tec0117: %-tec0117.fs hil-references/%.txt
