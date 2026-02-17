@@ -294,7 +294,7 @@ hil-tec0117: \
 
 # --- tangnano20k (GW2A-18C) ---
 hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
-	openFPGALoader -d /dev/serial/by-id/usb-SIPEED_20K_s_FRIEND_2023030621-if00-port0 -b tangnano20k $< && sleep 1
+	openFPGALoader --ftdi-serial 2023030621 -b tangnano20k $< && sleep 1
 	$(call hil_capture,/dev/serial/by-id/usb-SIPEED_20K_s_FRIEND_2023030621-if01-port0) | diff hil-references/$*.txt -
 	@echo "PASS: $* (tangnano20k)"
 
