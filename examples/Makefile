@@ -24,7 +24,8 @@ tangnano20k: \
 	dsp-mult18x18-tangnano20k.fs dsp-mult36x36-tangnano20k.fs dsp-padd9-tangnano20k.fs dsp-padd18-tangnano20k.fs \
 	dsp-mult9x9-tangnano20k.fs dsp-alu54d-tangnano20k.fs dsp-multalu18x18-tangnano20k.fs \
 	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
-	dqce-tangnano20k.fs dcs-tangnano20k.fs
+	dqce-tangnano20k.fs dcs-tangnano20k.fs \
+	femto-riscv-18-test-tangnano20k.fs
 
 primer20k: \
 	blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
@@ -259,25 +260,23 @@ clean:
 
 # ============================================================
 # Hardware-in-the-loop tests
-HIL_PORT ?= /dev/ttyUSB1
 HIL_SETTLE ?= 5
 HIL_TIMEOUT ?= 300
 
-# Capture one settled iteration: flush stale serial data, then
-# awk exits after tick N+1, SIGPIPE kills cat, timeout is a safety net.
+# $(call hil_capture,UART_DEVICE_PATH)
 define hil_capture
-stty -F $(HIL_PORT) 115200 raw -echo && \
-dd if=$(HIL_PORT) of=/dev/null bs=4096 count=1 iflag=nonblock 2>/dev/null; \
-timeout $(HIL_TIMEOUT) cat $(HIL_PORT) | \
+stty -F $(1) 115200 raw -echo && \
+dd if=$(1) of=/dev/null bs=4096 count=1 iflag=nonblock 2>/dev/null; \
+timeout $(HIL_TIMEOUT) cat $(1) | \
 awk -v n=$(HIL_SETTLE) '/--- tick ---/{c++; next} c==n{print} c==(n+1){exit}'
 endef
 
+# --- tec0117 (GW1N-9) ---
 hil-%-tec0117: %-tec0117.fs hil-references/%.txt
-	openFPGALoader -b tec0117 $< && sleep 1
-	$(hil_capture) | diff hil-references/$*.txt -
-	@echo "PASS: $*"
+	openFPGALoader -d /dev/serial/by-id/usb-FTDI_Dual_RS232-HS-if00-port0 -b tec0117 $< && sleep 1
+	$(call hil_capture,/dev/serial/by-id/usb-FTDI_Dual_RS232-HS-if01-port0) | diff hil-references/$*.txt -
+	@echo "PASS: $* (tec0117)"
 
-# Mandelbrot is deterministic from start, settle after first frame
 hil-femto-riscv-18-test-tec0117: HIL_SETTLE = 1
 
 .PHONY: hil-tec0117
@@ -292,6 +291,30 @@ hil-tec0117: \
 	hil-dsp-multalu36x18-tec0117 \
 	hil-dsp-multaddalu18x18-tec0117 \
 	hil-femto-riscv-18-test-tec0117
+
+# --- tangnano20k (GW2A-18C) ---
+hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
+	openFPGALoader -b tangnano20k --ftdi-serial 2023030621 $< && sleep 1
+	$(call hil_capture,/dev/serial/by-id/usb-SIPEED_20K_s_FRIEND_2023030621-if01-port0) | diff hil-references/$*.txt -
+	@echo "PASS: $* (tangnano20k)"
+
+hil-femto-riscv-18-test-tangnano20k: HIL_SETTLE = 1
+
+.PHONY: hil-tangnano20k
+hil-tangnano20k: \
+	hil-dsp-mult18x18-tangnano20k \
+	hil-dsp-mult36x36-tangnano20k \
+	hil-dsp-mult9x9-tangnano20k \
+	hil-dsp-padd9-tangnano20k \
+	hil-dsp-padd18-tangnano20k \
+	hil-dsp-alu54d-tangnano20k \
+	hil-dsp-multalu18x18-tangnano20k \
+	hil-dsp-multalu36x18-tangnano20k \
+	hil-dsp-multaddalu18x18-tangnano20k \
+	hil-femto-riscv-18-test-tangnano20k
+
+.PHONY: hil-all
+hil-all: hil-tec0117 hil-tangnano20k
 
 # ============================================================
 # Tangnano20k

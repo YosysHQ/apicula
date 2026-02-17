@@ -146,5 +146,10 @@ jobs:
       with:
         name: examples-${{ inputs.name }}-tec0117
         path: examples
+    - name: Download tangnano20k bitstreams
+      uses: actions/download-artifact@v4
+      with:
+        name: examples-${{ inputs.name }}-tangnano20k
+        path: examples
     - name: Run HIL tests
-      run: make -C examples hil-tec0117
+      run: make -C examples hil-all
