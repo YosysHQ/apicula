@@ -36,3 +36,9 @@ IO_PORT "clk" BANK_VCCIO=3.3 PULL_MODE=NONE;
 
 IO_LOC  "reset" Y12;
 IO_PORT "reset" BANK_VCCIO=3.3 PULL_MODE=UP;
+
+IO_LOC  "uart_tx" U15;
+IO_PORT "uart_tx" BANK_VCCIO=3.3 PULL_MODE=UP;
+
+IO_LOC  "uart_rx" V14;
+IO_PORT "uart_rx" BANK_VCCIO=3.3 PULL_MODE=UP;
