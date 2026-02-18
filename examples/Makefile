@@ -289,7 +289,7 @@ hil-tec0117: \
 	hil-dsp-mult9x9-tec0117 \
 	hil-dsp-padd9-tec0117 \
 	hil-dsp-padd18-tec0117 \
-	hil-dsp-alu54d-tec0117 \
+	#hil-dsp-alu54d-tec0117 \
 	hil-dsp-multalu18x18-tec0117 \
 	hil-dsp-multalu36x18-tec0117 \
 	hil-dsp-multaddalu18x18-tec0117 \
@@ -311,7 +311,7 @@ hil-tangnano20k: \
 	hil-dsp-mult9x9-tangnano20k \
 	hil-dsp-padd9-tangnano20k \
 	hil-dsp-padd18-tangnano20k \
-	hil-dsp-alu54d-tangnano20k \
+	#hil-dsp-alu54d-tangnano20k \
 	hil-dsp-multalu18x18-tangnano20k \
 	hil-dsp-multalu36x18-tangnano20k \
 	hil-dsp-multaddalu18x18-tangnano20k \
