@@ -768,27 +768,27 @@ def set_pll_attrs(db, typ, idx, attrs):
                 pll_attrs['CLKOUTDIV3SEL'] = 'CLKOUTPS'
             continue
         if attr == 'DYN_IDIV_SEL':
-            if val == 'true':
+            if val == 'TRUE':
                 pll_attrs['IDIVSEL'] = 'DYN'
             continue
         if attr == 'DYN_FBDIV_SEL':
-            if val == 'true':
+            if val == 'TRUE':
                 pll_attrs['FDIVSEL'] = 'DYN'
             continue
         if attr == 'DYN_ODIV_SEL':
-            if val == 'true':
+            if val == 'TRUE':
                 pll_attrs['ODIVSEL'] = 'DYN'
             continue
         if attr == 'CLKOUT_BYPASS':
-            if val == 'true':
+            if val == 'TRUE':
                 pll_attrs['BYPCK'] = 'BYPASS'
             continue
         if attr == 'CLKOUTP_BYPASS':
-            if val == 'true':
+            if val == 'TRUE':
                 pll_attrs['BYPCKPS'] = 'BYPASS'
             continue
         if attr == 'CLKOUTD_BYPASS':
-            if val == 'true':
+            if val == 'TRUE':
                 pll_attrs['BYPCKDIV'] = 'BYPASS'
             continue
         if attr == 'IDIV_SEL':
@@ -999,7 +999,7 @@ def set_pll_attrs(db, typ, idx, attrs):
             pll_attrs['A_CLKOUT6_PE_FINE'] = pe_fine
             continue
         if attr == 'DYN_DA_EN':
-            if val == 'true':
+            if val == 'TRUE':
                 pll_attrs['DPSEL'] = 'DYN'
                 pll_attrs['DUTY'] = 0
                 pll_attrs['PHASE'] = 0
@@ -2830,22 +2830,22 @@ _iologic_default_attrs = {
         'DUMMY': {},
         'IOLOGIC': {},
         'IOLOGIC_DUMMY': {},
-        'IOLOGICI_EMPTY': {'GSREN': 'FALSE', 'LSREN': 'true'},
-        'IOLOGICO_EMPTY': {'GSREN': 'FALSE', 'LSREN': 'true'},
+        'IOLOGICI_EMPTY': {'GSREN': 'FALSE', 'LSREN': 'TRUE'},
+        'IOLOGICO_EMPTY': {'GSREN': 'FALSE', 'LSREN': 'TRUE'},
         'ODDR': { 'TXCLK_POL': '0'},
         'ODDRC': { 'TXCLK_POL': '0'},
-        'OSER4': { 'GSREN': 'FALSE', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
-        'OSER8': { 'GSREN': 'false', 'LSREN': 'true', 'TXCLK_POL': '0', 'HWL': 'false'},
-        'OSER10': { 'GSREN': 'false', 'LSREN': 'true'},
-        'OSER16': { 'GSREN': 'false', 'LSREN': 'true', 'CLKOMUX': 'ENABLE'},
-        'OVIDEO': { 'GSREN': 'false', 'LSREN': 'true'},
-        'IDES4': { 'GSREN': 'false', 'LSREN': 'true'},
-        'IDES8': { 'GSREN': 'false', 'LSREN': 'true'},
-        'IDES10': { 'GSREN': 'false', 'LSREN': 'true'},
-        'IVIDEO': { 'GSREN': 'false', 'LSREN': 'true'},
+        'OSER4': { 'GSREN': 'FALSE', 'LSREN': 'TRUE', 'TXCLK_POL': '0', 'HWL': 'FALSE'},
+        'OSER8': { 'GSREN': 'FALSE', 'LSREN': 'TRUE', 'TXCLK_POL': '0', 'HWL': 'FALSE'},
+        'OSER10': { 'GSREN': 'FALSE', 'LSREN': 'TRUE'},
+        'OSER16': { 'GSREN': 'FALSE', 'LSREN': 'TRUE', 'CLKOMUX': 'ENABLE'},
+        'OVIDEO': { 'GSREN': 'FALSE', 'LSREN': 'TRUE'},
+        'IDES4': { 'GSREN': 'FALSE', 'LSREN': 'TRUE'},
+        'IDES8': { 'GSREN': 'FALSE', 'LSREN': 'TRUE'},
+        'IDES10': { 'GSREN': 'FALSE', 'LSREN': 'TRUE'},
+        'IVIDEO': { 'GSREN': 'FALSE', 'LSREN': 'TRUE'},
         'IDDR' :  {'CLKIMUX': 'ENABLE', 'LSRIMUX_0': '0', 'LSROMUX_0': '0'},
         'IDDRC' : {'CLKIMUX': 'ENABLE', 'LSRIMUX_0': '1', 'LSROMUX_0': '0'},
-        'IDES16': { 'GSREN': 'false', 'LSREN': 'true', 'CLKIMUX': 'ENABLE'},
+        'IDES16': { 'GSREN': 'FALSE', 'LSREN': 'TRUE', 'CLKIMUX': 'ENABLE'},
         }
 def iologic_mod_attrs(attrs):
     attrs_upper(attrs)
@@ -2856,11 +2856,11 @@ def iologic_mod_attrs(attrs):
             attrs['TSHX'] = 'INV'
         del attrs['TXCLK_POL']
     if 'HWL' in attrs:
-        if attrs['HWL'] == 'true':
+        if attrs['HWL'] == 'TRUE':
             attrs['UPDATE'] = 'SAME'
         del attrs['HWL']
     if 'GSREN' in attrs:
-        if attrs['GSREN'] == 'true':
+        if attrs['GSREN'] == 'TRUE':
             attrs['GSR'] = 'ENGSR'
         del attrs['GSREN']
     # XXX ignore for now
