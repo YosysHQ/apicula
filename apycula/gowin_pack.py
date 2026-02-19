@@ -163,13 +163,13 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset = 0):
     attrs_upper(attrs)
     subtype = attrs['BSRAM_SUBTYPE']
     if bsram_init_map is None:
-        if device in {'GW5A-25A'}:
+        if device in {'GW5A-25A', 'GW5AST-138C'}:
             # 72 * bsram rows * chip bit width
             bsram_init_map = bitmatrix.zeros(72 * len(db.simplio_rows), db.width)
         else:
             # 256 * bsram rows * chip bit width
             bsram_init_map = bitmatrix.zeros(256 * len(db.simplio_rows), db.width)
-    if device in {'GW5A-25A'}:
+    if device in {'GW5A-25A', 'GW5AST-138C'}:
         # 1 BSRAM cell have width 72
         loc_map = bitmatrix.zeros(256, 72)
     else:
@@ -221,16 +221,16 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset = 0):
 
     # now put one cell init data into global space
     height = 256
-    if device in {'GW5A-25A'}:
+    if device in {'GW5A-25A', 'GW5AST-138C'}:
         height = 72
         loc_map = bitmatrix.transpose(loc_map)
     y = 0
-    for brow in db.simplio_rows:
+    for brow in sorted(db.simplio_rows):
         if row == brow:
             break
         y += height
 
-    if device in {'GW5A-25A'}:
+    if device in {'GW5A-25A', 'GW5AST-138C'}:
         x = 256 * map_offset
     else:
         x = 0
@@ -3446,17 +3446,21 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             for r, c in bits:
                 tile[r][c] = 1
         elif typ in _bsram_cell_types or typ == 'BSRAM_AUX':
+            is_aux = (typ == 'BSRAM_AUX')
             if typ == 'BSRAM_AUX':
                 typ = cell['type']
-            elif device in {'GW5A-25A'}:
+            elif device in {'GW5A-25A', 'GW5AST-138C'}:
                 bisect.insort(gw5a_bsrams, (col - 1, row - 1, typ, parms, attrs))
             else:
                 store_bsram_init_val(db, row - 1, col -1, typ, parms, attrs)
             bsram_attrs = set_bsram_attrs(db, cell, typ, parms)
-            bsrambits = get_shortval_fuses(db, tiledata.ttyp, bsram_attrs, f'BSRAM_{typ}')
-            #print(f'({row - 1}, {col - 1}) attrs:{bsram_attrs}, bits:{bsrambits}')
-            for brow, bcol in bsrambits:
-                tile[brow][bcol] = 1
+            try:
+                bsrambits = get_shortval_fuses(db, tiledata.ttyp, bsram_attrs, f'BSRAM_{typ}')
+                #print(f'({row - 1}, {col - 1}) attrs:{bsram_attrs}, bits:{bsrambits}')
+                for brow, bcol in bsrambits:
+                    tile[brow][bcol] = 1
+            except KeyError:
+                assert device == 'GW5AST-138C' and is_aux # some aux tiles have no relevant config bits
         elif typ in {'MULTADDALU18X18', 'MULTALU36X18', 'MULTALU18X18', 'MULT36X36', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9', 'ALU54D', 'MULT12X12'} or typ == 'DSP_AUX':
             if typ == 'DSP_AUX':
                 typ = cell['type']
@@ -4028,7 +4032,7 @@ def header_footer(db, bs, compress):
     checksum = res & 0xffff
     # set the checksum
     db.cmd_ftr[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
-    if device in {'GW5A-25A'}:
+    if device in {'GW5A-25A', 'GW5AST-138C'}:
         db.cmd_ftr.insert(1, bytearray(b'\x68\x00\x00\x00\x00\x00\x00\x00'))
 
 def gsr(db, tilemap, args):
@@ -4394,7 +4398,7 @@ def main():
             store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset)
 
         bsram_init_map = bitmatrix.transpose(bsram_init_map)
-        bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map, gw5a_bsrams)
+        bslib.write_bitstream(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map, gw5a_bsrams, is_gw5a_138=(device == 'GW5AST-138C'))
     elif bsram_init_map is not None:
         bslib.write_bitstream_with_bsram_init(args.output, main_map, db.cmd_hdr, db.cmd_ftr, args.compress, extra_slots, bsram_init_map)
     else:

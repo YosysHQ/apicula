@@ -20,9 +20,12 @@ primer25k: \
 	adc-temp-primer25k.fs adc-loc-left-primer25k.fs adc-glo-right-primer25k.fs attosoc-primer25k.fs
 
 tangmega138k: \
-	big-shift-tangmega138k.fs attosoc-tangmega138k.fs
+	big-shift-tangmega138k.fs attosoc-tangmega138k.fs uart-message-tangmega138k.fs
 
-all: primer25k tangmega138k
+tangconsole138k: \
+	uart-message-tangmega138k.fs
+
+all: primer25k tangmega138k tangconsole138k
 
 clean:
 	rm -f *.json *.fs *-unpacked.v
@@ -76,3 +79,16 @@ attosoc-tangmega138k.json: attosoc-tangmega138k-synth.json tangmega138k.cst
 attosoc-tangmega138k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
+uart-message-tangmega138k-synth.json: uart-message-tangconsole138k.v
+	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+
+# ============================================================
+# TangConsole138k
+%-tangconsole138k.fs: %-tangconsole138k.json
+	gowin_pack --cpu_as_gpio -d GW5AST-138C -o $@ $<
+
+%-tangconsole138k.json: %-tangconsole138k-synth.json tangconsole138k.cst
+	$(NEXTPNR) $(DEBUG) --json $< --write $@ --device GW5AST-LV138PG484AC1/I0 --vopt cst=tangconsole138k.cst
+
+uart-message-tangconsole138k-synth.json: uart-message-tangconsole138k.v
+	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"

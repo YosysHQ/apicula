@@ -3689,7 +3689,6 @@ def from_fse(device, fse, dat: Datfile):
         dev.tile_types['D'] = set()
     if device in {'GW5AST-138C'}:
         dev.tile_types['P'] = set()
-        dev.tile_types['B'] = set()
         dev.tile_types['D5A'] = dev.tile_types['D']
         dev.tile_types['D'] = set()
 

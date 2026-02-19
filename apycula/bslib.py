@@ -247,12 +247,97 @@ def write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams):
         f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
         f.write('\n')
 
+def write_gw5_138_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams):
+    # BSRAM init part. Count used columns
+    last_col = -1
+    used_blocks = 0
+    block_seq = {}   # start col of block sequence: number of blocks
+    last_block_seq = None
+    for bsram in gw5a_bsrams:
+        col, _, _, _, _ = bsram
+        if col != last_col:
+            used_blocks += 1
+            if col - last_col != 3:         # 3 cells for one BSRAM, if the columns are 3 cells apart
+                block_seq.setdefault(col // 3, 0)  #  when the BSRAMs are neighbours
+                last_block_seq = col // 3
+            block_seq[last_block_seq] += 1
+            last_col = col
+    # rearrange init map - cut unused tail blocks - we don't need zero init data after last used block
+    tail = used_blocks * 256
+    w = bitmatrix.shape(gw5a_bsram_init_map)[1]
+    bitInitMap = [[gw5a_bsram_init_map[i][w - j - 1] for j in range(w)] for i in range(tail)]
+    assert bitmatrix.shape(bitInitMap)[1] % 8 == 0
+    byteInitMap = bitmatrix.packbits(bitInitMap, axis = 1)
+
+    # write BSRAM init data
+    data_first_col = 0
+
+    ba = bytearray(b'\x12\x00\x00\x00')
+    crcdat.extend(ba)
+    f.write(''.join(_B2B[b] for b in ba))
+    f.write('\n')
+
+    for start, cnt in block_seq.items():
+        # write address if col != 0
+
+        if start != 0:
+            ba = bytearray(2738)
+            ba[0] = 0x98
+            ba[2720 - 45 * start] = (1 << 6) # onehot address: one bit set for first col
+            f.write(''.join(_B2B[b] for b in ba))
+            f.write('\n')
+             # 0x98 command is *not* included in CRC calculation
+
+        # data cols
+        ba = bytearray(b'\x4e\x80')
+        crcdat.extend(ba)
+        f.write(''.join(_B2B[b] for b in ba))
+        ba = bytearray.fromhex(f"{cnt:02x}")
+        crcdat.extend(ba)
+        f.write(''.join(_B2B[b] for b in ba))
+        ba = bytearray(b'\x01' if start == 0 else b'\x00') # 257 in first col only
+        crcdat.extend(ba)
+        f.write(''.join(_B2B[b] for b in ba))
+        f.write('\n')
+
+        # extra zero frame for first col
+        if start == 0:
+            extra_row = bytearray(len(byteInitMap[data_first_col]))
+            f.write(''.join(_B2B[b] for b in extra_row))
+            crcdat.extend(extra_row)
+            crc_ = calc.checksum(crcdat)
+            crcdat = bytearray(b'\xff'*6)
+            f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
+            f.write('1'*48)
+            f.write('\n')
+
+        # data
+        for data_row in byteInitMap[data_first_col : data_first_col + 256 * cnt]:
+            f.write(''.join(_B2B[b] for b in data_row))
+            crcdat.extend(data_row)
+            crc_ = calc.checksum(crcdat)
+            crcdat = bytearray(b'\xff'*6)
+            f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
+            f.write('1'*48)
+            f.write('\n')
+
+        data_first_col += 256 * cnt
+
+        # end of block
+        ba = bytearray(b'\xff' * 18)
+        crcdat.extend(ba)
+        f.write(''.join(_B2B[b] for b in ba))
+        crc_ = calc.checksum(crcdat)
+        crcdat = bytearray()
+        f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
+        f.write('\n')
+
 def write_bitstream_with_bsram_init(fname, bs, hdr, ftr, compress, extra_slots, bsram_init):
     new_bs = bitmatrix.vstack(bs, bsram_init)
     new_hdr = hdr.copy()
     write_bitstream(fname, new_bs, new_hdr, ftr, compress, extra_slots)
 
-def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_map = None, gw5a_bsrams = None):
+def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_map = None, gw5a_bsrams = None, is_gw5a_138 = False):
     bs = bitmatrix.fliplr(bs)
     hdr[-1][2:] = int(bitmatrix.shape(bs)[0]).to_bytes(2, 'big')
 
@@ -360,8 +445,12 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
         else:
             crcdat = bytearray()
         if gw5a_bsram_init_map is not None:
-            write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams)
-            crcdat = bytearray()
+            if is_gw5a_138:
+                write_gw5_138_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams)
+                crcdat = bytearray()
+            else:
+                write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams)
+                crcdat = bytearray()
 
         for ba in ftr[1:]:
             f.write(''.join(_B2B[b] for b in ba))
