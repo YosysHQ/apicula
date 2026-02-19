@@ -2393,14 +2393,14 @@ def set_padd9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, 
 def set_mult12x12_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx):
     attrs_upper(attrs)
     #print(f'parms:{params}, attrs:{attrs}')
-    dsp_attrs['UNK_192'] = "UNK_23"
-    dsp_attrs['CE0_MODE_XX'] = "CE0_XXX"
-    dsp_attrs['CE1_MODE_XX'] = "CE1_XXX"
+    dsp_attrs['UNK_192'] = "UNK_23" # The working theory is that the second multiplier needs to be shifted to the left by 24 bits, and perhaps this pair determines that.
+    dsp_attrs['CE0_MUX'] = "CE0_IN"
+    dsp_attrs['CE1_MUX'] = "CE1_IN"
     if idx:
         dsp_attrs['MULT12_1_EN'] = "TRUE"
     else:
         dsp_attrs['MULT12_0_EN'] = "TRUE"
-        dsp_attrs['UNK_122'] = "UNK_13"
+        dsp_attrs['ALU_OP0_MUX'] = "MULT0" # connect the first multiplier as operand 0 ALU—it will be placed in the lower bits of the result.
 
     for parm, val in params.items():
         if parm in {'AREG_CLK', 'BREG_CLK', 'PREG_CLK', 'AREG_CE', 'BREG_CE', 'PREG_CE',
