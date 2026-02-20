@@ -311,7 +311,10 @@ def get_bsram_main_cell(db, row, col, typ):
 # The DSP has 9 cells: the main one and a group of auxiliary ones.
 def get_dsp_main_cell(db, row, col, typ):
     if typ[-6:-2] == '_AUX':
-        col = 1 + (col - 1) // 9
+        if _device in {'GW5A-25A'}:
+            col = 1 + (col - 1) // 3
+        else:
+            col = 1 + (col - 1) // 9
     return row, col
 
 # noiostd --- this is the case when the function is called
@@ -387,7 +390,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             attrvals = parse_attrvals(tile, db.rev_logicinfo('BSRAM'), db.shortval[tiledata.ttyp]['BSRAM_SP'], attrids.bsram_attrids, "BSRAM")
             if not attrvals:
                 continue
-            print(row, col, name, idx, tiledata.ttyp, attrvals)
+            #print(row, col, name, idx, tiledata.ttyp, attrvals)
             bels[f'{name}{idx}'] = {}
             continue
         if name.startswith("ALU54D"):
@@ -401,6 +404,11 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
 
             if f'DSP{idx}' in db.shortval[tiledata.ttyp]:
                 attrvals = parse_attrvals(tile, db.rev_logicinfo('DSP'), db.shortval[tiledata.ttyp][f'DSP{idx}'], attrids.dsp_attrids, "DSP")
+            elif f'5A_DSP' in db.shortval[tiledata.ttyp]:
+                attrvals = parse_attrvals(tile, db.rev_logicinfo('5A_DSP'), db.shortval[tiledata.ttyp][f'5A_DSP'], attrids.dsp_5a_attrids, "5A_DSP")
+            else:
+                attrvals = None
+            if attrvals:
                 #print_sorted_dict(f'{row}, {col}, {name}, {idx}, {tiledata.ttyp} - ', attrvals)
                 for attrval in attrvals:
                     modes.add(attrval)

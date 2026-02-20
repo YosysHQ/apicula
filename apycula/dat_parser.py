@@ -364,10 +364,10 @@ class Datfile:
             ret["QuaAdcIOName_{n}"] = self.read_scaledGrid16(4, 0xf, 0x4b, 5, RSTable5ATOffset + 0x25744 + n)
         ret["AdcBank"]              = self.read_arr16_at(4, RSTable5ATOffset + 0x12b80, 0)
 
-        ret["Mult12x12In"]          = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9530, 8)
-        ret["Mult12x12Out"]         = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9560, 8)
-        ret["Mult12x12InDlt"]       = self.read_arr16_at(0x18, RSTable5ATOffset + 0x9590, 8)
-        ret["Mult12x12OutDlt"]      = self.read_arr16_at(0x18, RSTable5ATOffset + 0x95c0, 8)
+        ret["Mult12x12In"]          = self.read_arr16_at(0x30, 0, RSTable5ATOffset + 0x13598)
+        ret["Mult12x12Out"]         = self.read_arr16_at(0x30, 0, RSTable5ATOffset + 0x135f8)
+        ret["Mult12x12InDlt"]       = self.read_arr16_at(0x30, 0, RSTable5ATOffset + 0x13658)
+        ret["Mult12x12OutDlt"]      = self.read_arr16_at(0x30, 0, RSTable5ATOffset + 0x136b8)
 
         #The following are defined right next to Mult12x12 so are probably realted, but not referenced
         #ret["UNKNOWN"]              = self.read_arr16_at(0x18, RSTable5ATOffset + 0x12a6a, 0)
@@ -375,17 +375,17 @@ class Datfile:
         #ret["UNKNOWN"]              = self.read_arr16_at(0x18, RSTable5ATOffset + 0x12aca 0)
         #ret["UNKNOWN"]              = self.read_arr16_at(0x18, RSTable5ATOffset + 0x12b8a, 0)
 
-        ret["MultAddAlu12x12In"]    = self.read_arr16_at(100, RSTable5ATOffset + 0x95f0, 8)
-        ret["MultAddAlu12x12Out"]   = self.read_arr16_at(0x60, RSTable5ATOffset + 0x9658, 8)
-        ret["MultAddAlu12x12InDlt"] = self.read_arr16_at(100, RSTable5ATOffset + 0x96b8, 8)
-        ret["MultAddAlu12x12OutDlt"]= self.read_arr16_at(0x60, RSTable5ATOffset + 0x9718, 8)
+        ret["MultAddAlu12x12In"]    = self.read_arr16_at(0x64, 0, RSTable5ATOffset + 0x13718)
+        ret["MultAddAlu12x12Out"]   = self.read_arr16_at(0x60, 0, RSTable5ATOffset + 0x137e0)
+        ret["MultAddAlu12x12InDlt"] = self.read_arr16_at(0x64, 0, RSTable5ATOffset + 0x138a0)
+        ret["MultAddAlu12x12OutDlt"]= self.read_arr16_at(0x60, 0, RSTable5ATOffset + 0x13968)
 
-        ret["Multalu27x18In"]       = self.read_arr16_at(0xca, RSTable5ATOffset + 0x9778, 8)
-        ret["Multalu27x18InDlt"]    = self.read_arr16_at(0xca, RSTable5ATOffset + 0x99c0, 2)
-        ret["Multalu27x18Out"]      = self.read_arr16_at(0x7b, RSTable5ATOffset + 0x9840, 0xc)
-        ret["Multalu27x18OutDlt"]   = self.read_arr16_at(0x7b, RSTable5ATOffset + 0x9988, 6)
-        ret["MultCtrlIn"]           = self.read_arr16_at(0x6, RSTable5ATOffset + 0x9a00, 0xc)
-        ret["MultCtrlOut"]          = self.read_arr16_at(0x6, RSTable5ATOffset + 0x9a08, 8)
+        ret["Multalu27x18In"]       = self.read_arr16_at(0xca, 0, RSTable5ATOffset + 0x13a28)
+        ret["Multalu27x18InDlt"]    = self.read_arr16_at(0xca, 0, RSTable5ATOffset + 0x13bbc)
+        ret["Multalu27x18Out"]      = self.read_arr16_at(0x7b, 0, RSTable5ATOffset + 0x13cb2)
+        ret["Multalu27x18OutDlt"]   = self.read_arr16_at(0x7b, 0, RSTable5ATOffset + 0x13e46)
+        ret["MultCtrlIn"]           = self.read_arr16_at(0x6, 0, RSTable5ATOffset + 0x13f3c)
+        ret["MultCtrlInDlt"]        = self.read_arr16_at(0x6, 0, RSTable5ATOffset + 0x13f48)
 
         ret["DqsRLoc"]              = self.read_arr16_at(0x2, RSTable5ATOffset + 0x12c38, 0)
         ret["DqsCLoc"]              = self.read_arr16_at(0x2, RSTable5ATOffset + 0x12c38, 4)
