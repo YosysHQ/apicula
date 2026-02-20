@@ -3584,6 +3584,7 @@ def fse_dsp(fse, device, aux = False):
             bels['DSP0'] = Bel()  # Macro 0
             bels['MULT12X1200'] = Bel() # mult12x12 0
             bels['MULT12X1201'] = Bel() # mult12x12 1
+            bels['MULTADDALU12X1200'] = Bel() # multaddalu12x12 0
 
     return bels
 
@@ -4756,6 +4757,86 @@ def dat_portmap(dat, dev, device):
                             if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
                                 wire_type = 'TILE_CLK'
                             create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, wire_type)
+
+                elif name.startswith('MULTADDALU12X12'):
+                    for i in range(6):
+                        off = dat.gw5aStuff['MultCtrlInDlt'][i]
+                        wire_idx = dat.gw5aStuff['MultCtrlIn'][i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        nam = ["CLK", "CE", "RESET"][i // 2] + str(i % 2)
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, wire_type)
+
+                    # dat.gw5aStuff['MultAddAlu12x12InDlt'] indicates port offset in cells
+                    # Even cells describe the left multiplier, odd cells describe the right multiplier.
+                    # First 48 wire descriptions are the multipliers inputs,
+                    # followed by 48 CASI wires, 2 on ADDSUB_SEL, and one each for ACCSEL and CASISEL.
+                    multin_len = len(dat.gw5aStuff['MultAddAlu12x12In']) - 48 - 4
+                    for i in range(multin_len):
+                        off = dat.gw5aStuff['MultAddAlu12x12InDlt'][i]
+                        wire_idx = dat.gw5aStuff['MultAddAlu12x12In'][i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        nam = f'{"AB"[(i // 12) % 2]}{i // 24}{i % 12}'
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    # CASI are non-switchable implicit wires.
+                    # addsub
+                    for i in range(2):
+                        off = dat.gw5aStuff['MultAddAlu12x12InDlt'][i + multin_len + 48]
+                        wire_idx = dat.gw5aStuff['MultAddAlu12x12In'][i + multin_len + 48]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        nam = f'ADDSUB{i % 2}'
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    # accsel
+                    off = dat.gw5aStuff['MultAddAlu12x12InDlt'][multin_len + 48 + 2]
+                    wire_idx = dat.gw5aStuff['MultAddAlu12x12In'][multin_len + 48 + 2]
+                    if wire_idx < 0:
+                        continue
+                    wire = wnames.wirenames[wire_idx]
+                    nam = "ACCSEL0"
+                    create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+                    # ACCSEL is actually a pair of wires; the second wire is
+                    # not specified in the DAT file, but it is easily visible
+                    # when compiling using the IDE example where ACCSEL is
+                    # connected to the button.
+                    # Add the second wire (SEL2) manually. It is located in the
+                    # same place as the first one from the DAT file.
+                    nam = "ACCSEL1"
+                    wire = "SEL2"
+                    create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    # casisel
+                    off = dat.gw5aStuff['MultAddAlu12x12InDlt'][multin_len + 48 + 3]
+                    wire_idx = dat.gw5aStuff['MultAddAlu12x12In'][multin_len + 48 + 3]
+                    if wire_idx < 0:
+                        continue
+                    wire = wnames.wirenames[wire_idx]
+                    nam = "CASISEL"
+                    create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    # outputs
+                    # dat.gw5aStuff['MultAddAlu12x12OutDlt'] indicates port offset in cells
+                    # Even cells describe the left multiplier, odd cells describe the right multiplier.
+                    for i in range(len(dat.gw5aStuff['MultAddAlu12x12Out'])):
+                        off = dat.gw5aStuff['MultAddAlu12x12OutDlt'][i]
+                        wire_idx = dat.gw5aStuff['MultAddAlu12x12Out'][i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        # output wire sequence:
+                        # DOUT0-47, CASO0-47
+                        nam = f'DOUT{i}'
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_O")
 
                 elif name.startswith('MULTALU18X18'):
                     mac = int(name[-1])

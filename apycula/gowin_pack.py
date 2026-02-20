@@ -246,10 +246,10 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset = 0):
 
 _clkdiv_cell_types = {'CLKDIV', 'CLKDIV2'}
 _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
-_dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9', 'MULT12X12'}
+_dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9', 'MULT12X12', 'MULTADDALU12X12'}
 def get_bels(data):
     later = []
-    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULT36X36|MULT18X18|MULT12X12|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA|ADC)(\w*)")
+    belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU36X18|MULTADDALU18X18|MULTADDALU12X12|MULT36X36|MULT18X18|MULT12X12|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA|ADC)(\w*)")
 
     for cellname, cell in data['modules']['top']['cells'].items():
         if cell['type'].startswith('DUMMY_') or cell['type'] in {'OSER16', 'IDES16'} or 'NEXTPNR_BEL' not in cell['attributes']:
@@ -2419,6 +2419,54 @@ def set_mult12x12_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_o
             dsp_attrs[parm] = val
     #print('dsp_attrs', dsp_attrs)
 
+# DSP multaddalu12x12
+def set_multaddalu12x12_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
+    attrs_upper(attrs)
+    #print(f'parms:{params}, attrs:{attrs}')
+    # turn on both multipliers
+    dsp_attrs['UNK_192'] = "UNK_23" # see mult12x12
+    dsp_attrs['CE0_MUX'] = "CE0_IN"
+    dsp_attrs['CE1_MUX'] = "CE1_IN"
+    dsp_attrs['MULT12_1_EN'] = "TRUE"
+    dsp_attrs['MULT12_0_EN'] = "TRUE"
+    dsp_attrs['ALU_OP0_MUX'] = "MULT0"
+    dsp_attrs['ALU'] = "ENABLE"
+    dsp_attrs['UNK_CLK_191'] = "CLK0" # XXX find out whose clock this is
+
+    if "USE_CASCADE_OUT" in attrs:
+        dsp_attrs['CASO'] = "ENABLE"
+
+    for parm, val in params.items():
+        if parm in {'OREG_CLK', 'OREG_CE', 'OREG_RESET'}:
+            if device not in {'GW5AST-138C'}:
+                dsp_attrs[f'{parm[0]}0{parm[1:]}'] = val if val in attrids.dsp_5a_attrvals else 'UNKNOWN'
+                dsp_attrs[f'{parm[0]}1{parm[1:]}'] = val if val in attrids.dsp_5a_attrvals else 'UNKNOWN'
+        elif parm.startswith('DYN_CASI_SEL'):
+            # XXX It seems that this input requires inversion.
+            dsp_attrs[parm] = val
+            if val == 'TRUE':
+                dsp_attrs['CASISEL_PAD'] = 'INV'
+        elif parm.startswith('PREG'):
+            parm = f'P{parm[4]}REG{parm[5:]}'
+            if val in attrids.dsp_5a_attrvals:
+                dsp_attrs[parm] = val
+        elif parm.startswith('ACCSEL'):
+            dsp_attrs[f'ACCSEL_0{parm[6:]}'] = val if val in attrids.dsp_5a_attrvals else 'UNKNOWN'
+            dsp_attrs[f'ACCSEL_1{parm[6:]}'] = val if val in attrids.dsp_5a_attrvals else 'UNKNOWN'
+        elif parm == 'PRE_LOAD':
+            pre_load = str(val)
+            if len(pre_load) > 58:
+                pre_load = pre_load[-48:]
+            else:
+                pre_load = pre_load * (48 // len(val))
+            for bitnum, pre_loadbit in enumerate(pre_load[::-1]):
+                dsp_attrs[f'PRELOAD_BIT_{bitnum}'] = pre_loadbit
+        elif parm not in attrids.dsp_5a_attrids:
+            raise Exception(f"Unknown {parm} parameter for {typ}.")
+        elif val in attrids.dsp_5a_attrvals:
+            dsp_attrs[parm] = val
+    #print('dsp_attrs', dsp_attrs)
+
 # DSP mult9x9
 def set_mult9x9_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_odd, pair_idx):
     attrs_upper(attrs)
@@ -2648,6 +2696,8 @@ def set_dsp_attrs(db, typ, params, num, attrs):
         set_multalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac)
     elif typ == "MULTALU36X18":
         set_multalu36x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac)
+    elif typ == "MULTADDALU12X12":
+        set_multaddalu12x12_attrs(db, typ, params, num, attrs, dsp_attrs, mac)
     elif typ == "MULTADDALU18X18":
         set_multaddalu18x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac)
 
@@ -3461,7 +3511,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     tile[brow][bcol] = 1
             except KeyError:
                 assert device == 'GW5AST-138C' and is_aux # some aux tiles have no relevant config bits
-        elif typ in {'MULTADDALU18X18', 'MULTALU36X18', 'MULTALU18X18', 'MULT36X36', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9', 'ALU54D', 'MULT12X12'} or typ == 'DSP_AUX':
+        elif typ in {'MULTADDALU18X18', 'MULTALU36X18', 'MULTALU18X18', 'MULT36X36', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9', 'ALU54D', 'MULT12X12', 'MULTADDALU12X12'} or typ == 'DSP_AUX':
             if typ == 'DSP_AUX':
                 typ = cell['type']
             if typ in {'MULTADDALU18X18', 'MULTALU36X18', 'MULTALU18X18', 'ALU54D'}:
@@ -3472,7 +3522,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                 for mac in range(2):
                     if f'DSP{mac}' in db.shortval[tiledata.ttyp]:
                         dspbits.update(get_shortval_fuses(db, tiledata.ttyp, dsp_attrs[mac], f'DSP{mac}'))
-            elif typ == 'MULT12X12':
+            elif typ in {'MULT12X12', 'MULTADDALU12X12'}:
                 dsp_attrs = set_dsp_attrs(db, typ, parms, num, attrs)
                 dspbits = set()
                 if '5A_DSP' in db.shortval[tiledata.ttyp]:

@@ -16,7 +16,7 @@ primer25k: \
 	bsram-pROM-primer25k.fs bsram-pROMX9-primer25k.fs bsram-SP-primer25k.fs bsram-SPX9-primer25k.fs \
 	bsram-SDPB-primer25k.fs bsram-SDPX9B-primer25k.fs bsram-SDPB32-primer25k.fs \
 	femto-riscv-15-primer25k.fs femto-riscv-16-primer25k.fs femto-riscv-18-primer25k.fs \
-	dsp-mult12x12-primer25k.fs \
+	dsp-mult12x12-primer25k.fs dsp-multaddalu12x12-primer25k.fs \
 	adc-temp-primer25k.fs adc-loc-left-primer25k.fs adc-glo-right-primer25k.fs attosoc-primer25k.fs
 
 tangmega138k: \

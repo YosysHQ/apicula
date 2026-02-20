@@ -1,5 +1,5 @@
 `default_nettype none
-module idsp(input wire clk, input wire reset, 
+module idsp(input wire clk, input wire reset, input wire key,
 	output wire [63:0] product, 
 	output wire [63:0] product1, 
 	output wire [63:0] product2, 

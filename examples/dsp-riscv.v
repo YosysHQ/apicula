@@ -328,6 +328,7 @@ endmodule
 
 module top (
     input wire	     clk_i, // system clock 
+	input wire       key_i, // user key
     input wire 	     rst_i, // reset button
     output reg [5:0] led,   // system LEDs
     input wire	     RXD,   // UART receive

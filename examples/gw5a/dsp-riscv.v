@@ -329,6 +329,7 @@ endmodule
 module top (
     input wire	     clk_i, // system clock 
     input wire 	     rst_i, // reset button
+	input wire       key_i, // user key
     output reg [5:0] led,   // system LEDs
     input wire	     RXD,   // UART receive
     output wire	     TXD    // UART transmit
@@ -410,6 +411,7 @@ module top (
    idsp DSP(
 	  .clk(dsp_clk),
 	  .reset(!resetn),
+	  .key(key_i),
 	  .product(dsp_out),
 	  .product1(dsp_out1),
 	  .product2(dsp_out2),
