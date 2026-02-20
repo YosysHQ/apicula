@@ -2400,7 +2400,7 @@ def set_mult12x12_attrs(db, typ, params, num, attrs, dsp_attrs, mac, idx, even_o
         dsp_attrs['MULT12_1_EN'] = "TRUE"
     else:
         dsp_attrs['MULT12_0_EN'] = "TRUE"
-        dsp_attrs['ALU_OP0_MUX'] = "MULT0" # connect the first multiplier as operand 0 ALU—it will be placed in the lower bits of the result.
+        dsp_attrs['ALU_OP0_MUX'] = "MULT0" # connect the first multiplier as operand 0 ALU — it will be placed in the lower bits of the result.
 
     for parm, val in params.items():
         if parm in {'AREG_CLK', 'BREG_CLK', 'PREG_CLK', 'AREG_CE', 'BREG_CE', 'PREG_CE',
