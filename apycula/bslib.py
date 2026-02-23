@@ -1,7 +1,7 @@
 from math import ceil
 import array
 from apycula import bitmatrix
-from apycula.crc16 import make_crc16_calculator
+from apycula.crc16 import make_crc16_arc
 
 _B2B = [f"{i:08b}" for i in range(256)]
 
@@ -44,7 +44,7 @@ def read_bitstream(fname):
     c = 0
     is5ASeries = False
 
-    calc = make_crc16_calculator()
+    calc = make_crc16_arc()
     compressed = False
     compress_keys = {}
     with open(fname) as inp:
@@ -130,7 +130,7 @@ def read_bitstream(fname):
             if is5ASeries == False:
                 crcdat.extend(ba[:-8])
                 crc1 = (ba[-7] << 8) + ba[-8]
-                crc2 = calc.checksum(crcdat)
+                crc2 = calc(crcdat)
                 assert crc1 == crc2, f"Not equal {crc1} {crc2} for {crcdat}"
                 if crc1 != crc2:
                     print("frame: ", c, ba, len(ba))
@@ -230,7 +230,7 @@ def write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams):
         for data_row in byteInitMap[data_first_col : data_first_col + 256 * cnt]:
             f.write(''.join(_B2B[b] for b in data_row))
             crcdat.extend(data_row)
-            crc_ = calc.checksum(crcdat)
+            crc_ = calc(crcdat)
             crcdat = bytearray(b'\xff'*6)
             f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
             f.write('1'*48)
@@ -242,7 +242,7 @@ def write_gw5_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsrams):
         ba = bytearray(b'\xff' * 18)
         crcdat.extend(ba)
         f.write(''.join(_B2B[b] for b in ba))
-        crc_ = calc.checksum(crcdat)
+        crc_ = calc(crcdat)
         crcdat = bytearray()
         f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
         f.write('\n')
@@ -305,7 +305,7 @@ def write_gw5_138_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsra
             extra_row = bytearray(len(byteInitMap[data_first_col]))
             f.write(''.join(_B2B[b] for b in extra_row))
             crcdat.extend(extra_row)
-            crc_ = calc.checksum(crcdat)
+            crc_ = calc(crcdat)
             crcdat = bytearray(b'\xff'*6)
             f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
             f.write('1'*48)
@@ -315,7 +315,7 @@ def write_gw5_138_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsra
         for data_row in byteInitMap[data_first_col : data_first_col + 256 * cnt]:
             f.write(''.join(_B2B[b] for b in data_row))
             crcdat.extend(data_row)
-            crc_ = calc.checksum(crcdat)
+            crc_ = calc(crcdat)
             crcdat = bytearray(b'\xff'*6)
             f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
             f.write('1'*48)
@@ -327,7 +327,7 @@ def write_gw5_138_bsram_init_map(f, crcdat, calc, gw5a_bsram_init_map, gw5a_bsra
         ba = bytearray(b'\xff' * 18)
         crcdat.extend(ba)
         f.write(''.join(_B2B[b] for b in ba))
-        crc_ = calc.checksum(crcdat)
+        crc_ = calc(crcdat)
         crcdat = bytearray()
         f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
         f.write('\n')
@@ -372,7 +372,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
 
     crcdat = bytearray()
     preamble = 3
-    calc = make_crc16_calculator()
+    calc = make_crc16_arc()
     with open(fname, 'w') as f:
         for ba in hdr:
             if not preamble and ba[0] != 0xd2: # SPI address
@@ -388,7 +388,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
                     ba = ba[no_compress_pad_bytes : ]
             f.write(''.join(_B2B[b] for b in ba))
             crcdat.extend(ba)
-            crc_ = calc.checksum(crcdat)
+            crc_ = calc(crcdat)
             crcdat = bytearray(b'\xff'*6)
             f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
             f.write('1'*48)
@@ -437,7 +437,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
                 for ba in bs:
                     crcdat.extend(ba)
                     f.write(''.join(_B2B[b] for b in ba))
-                crc_ = calc.checksum(crcdat)
+                crc_ = calc(crcdat)
                 crcdat = bytearray(b'\xff'*2)
                 f.write(_B2B[crc_&0xff]+_B2B[crc_>>8])
                 f.write('1'*128)

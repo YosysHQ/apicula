@@ -20,7 +20,7 @@ setuptools.setup(
     install_requires=[
         'msgspec',
         'numpy',
-        'crcmod',
+        'fastcrc',
     ],
     extras_require={
         'pure': ['msgpack', 'cattrs'],
