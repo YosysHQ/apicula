@@ -10,7 +10,8 @@ def make_crc16_arc():
     """Return a function: crc16_arc(data: bytes) -> int."""
     try:
         from fastcrc import crc16
-        return crc16.arc
+        _arc = crc16.arc
+        return lambda data: _arc(bytes(data))
     except ImportError:
         pass
 
