@@ -10,24 +10,22 @@ def make_crc16_calculator():
     """Return an object with .checksum(data) -> int."""
     try:
         from fastcrc import crc16
-        return _FastcrcWrap(crc16.arc)
+        return _Checksum(crc16.arc)
     except ImportError:
         pass
 
     import warnings
     warnings.warn("fastcrc is not available, performance will be degraded.")
 
-    return _TableCRC16()
+    return _Checksum(_TableCRC16())
 
 
-class _FastcrcWrap:
-    __slots__ = ('_fn',)
+class _Checksum:
+    """Thin wrapper so callers can always use .checksum(data)."""
+    __slots__ = ('checksum',)
 
     def __init__(self, fn):
-        self._fn = fn
-
-    def checksum(self, data):
-        return self._fn(data)
+        self.checksum = fn
 
 
 class _TableCRC16:
@@ -47,7 +45,7 @@ class _TableCRC16:
             table[i] = crc
         self._table = table
 
-    def checksum(self, data):
+    def __call__(self, data):
         crc = 0
         table = self._table
         for byte in data:
