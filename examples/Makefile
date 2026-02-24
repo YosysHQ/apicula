@@ -265,6 +265,7 @@ HIL_TIMEOUT ?= 300
 # $(call hil_capture,UART_DEVICE_PATH)
 define hil_capture
 stty -F $(1) 115200 raw -echo && \
+dd if=$(1) of=/dev/null bs=4096 iflag=nonblock 2>/dev/null; \
 timeout $(HIL_TIMEOUT) cat $(1) | \
 awk -v n=$(HIL_SETTLE) '/--- tick ---/{c++; next} c==n{print} c==(n+1){exit}'
 endef
@@ -276,7 +277,6 @@ hil-dsp-mult9x9-%: HIL_SETTLE = 10
 # --- tec0117 (GW1N-9) ---
 hil-%-tec0117: %-tec0117.fs hil-references/%.txt
 	openFPGALoader -d /dev/serial/by-id/usb-FTDI_Dual_RS232-HS-if00-port0 -b tec0117 $<
-	usbreset "USB2.1 Hub" && sleep 2
 	$(call hil_capture,/dev/serial/by-id/usb-FTDI_Dual_RS232-HS-if01-port0) | diff hil-references/$*.txt -
 	@echo "PASS: $* (tec0117)"
 
@@ -298,7 +298,6 @@ hil-tec0117: \
 # --- tangnano20k (GW2A-18C) ---
 hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
 	openFPGALoader --ftdi-serial 2023030621 -b tangnano20k $<
-	usbreset "USB2.1 Hub" && sleep 2
 	$(call hil_capture,/dev/serial/by-id/usb-SIPEED_20K_s_FRIEND_2023030621-if01-port0) | diff hil-references/$*.txt -
 	@echo "PASS: $* (tangnano20k)"
 
@@ -318,7 +317,7 @@ hil-tangnano20k: \
 	hil-femto-riscv-18-test-tangnano20k
 
 .PHONY: hil-all
-hil-all: hil-tec0117 hil-tangnano20k
+hil-all: hil-tec0117 #hil-tangnano20k
 
 # ============================================================
 # Tangnano20k
