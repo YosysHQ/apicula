@@ -24,7 +24,8 @@ tangnano20k: \
 	dsp-mult18x18-tangnano20k.fs dsp-mult36x36-tangnano20k.fs dsp-padd9-tangnano20k.fs dsp-padd18-tangnano20k.fs \
 	dsp-mult9x9-tangnano20k.fs dsp-alu54d-tangnano20k.fs dsp-multalu18x18-tangnano20k.fs \
 	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
-	dqce-tangnano20k.fs dcs-tangnano20k.fs
+	dqce-tangnano20k.fs dcs-tangnano20k.fs \
+	femto-riscv-18-test-tangnano20k.fs
 
 primer20k: \
 	blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
@@ -127,7 +128,8 @@ tec0117: \
 	ides4-tec0117.fs ivideo-tec0117.fs ides8-tec0117.fs ides10-tec0117.fs \
 	dsp-mult18x18-tec0117.fs dsp-mult36x36-tec0117.fs dsp-padd9-tec0117.fs dsp-padd18-tec0117.fs \
 	dsp-mult9x9-tec0117.fs dsp-alu54d-tec0117.fs dsp-multalu18x18-tec0117.fs \
-	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs
+	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs \
+	femto-riscv-18-test-tec0117.fs
 
 runber: \
 	blinky-runber.fs shift-runber.fs blinky-tbuf-runber.fs blinky-oddr-runber.fs \
@@ -255,6 +257,67 @@ unpacked: tangnano20k-unpacked primer20k-unpacked tangnano-unpacked tangnano1k-u
 
 clean:
 	rm -f *.json *.fs *-unpacked.v
+
+# ============================================================
+# Hardware-in-the-loop tests
+HIL_SETTLE ?= 5
+HIL_TIMEOUT ?= 300
+# $(call hil_capture,UART_DEVICE_PATH)
+define hil_capture
+stty -F $(1) 115200 raw -echo && \
+dd if=$(1) of=/dev/null bs=4096 iflag=nonblock 2>/dev/null; \
+timeout $(HIL_TIMEOUT) cat $(1) | \
+awk -v n=$(HIL_SETTLE) '/--- tick ---/{c++; next} c==n{print} c==(n+1){exit}'
+endef
+
+# SOA chain needs more ticks to fully propagate across all devices
+hil-dsp-mult18x18-%: HIL_SETTLE = 10
+hil-dsp-mult9x9-%: HIL_SETTLE = 10
+
+# --- tec0117 (GW1N-9) ---
+hil-%-tec0117: %-tec0117.fs hil-references/%.txt
+	openFPGALoader -d /dev/serial/by-id/usb-FTDI_Dual_RS232-HS-if00-port0 -b tec0117 $<
+	$(call hil_capture,/dev/serial/by-id/usb-FTDI_Dual_RS232-HS-if01-port0) | diff hil-references/$*.txt -
+	@echo "PASS: $* (tec0117)"
+
+hil-femto-riscv-18-test-tec0117: HIL_SETTLE = 1
+
+.PHONY: hil-tec0117
+hil-tec0117: \
+	hil-dsp-mult18x18-tec0117 \
+	hil-dsp-mult36x36-tec0117 \
+	hil-dsp-mult9x9-tec0117 \
+	hil-dsp-padd9-tec0117 \
+	hil-dsp-padd18-tec0117 \
+	#hil-dsp-alu54d-tec0117 \
+	hil-dsp-multalu18x18-tec0117 \
+	hil-dsp-multalu36x18-tec0117 \
+	hil-dsp-multaddalu18x18-tec0117 \
+	hil-femto-riscv-18-test-tec0117
+
+# --- tangnano20k (GW2A-18C) ---
+hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
+	openFPGALoader --ftdi-serial 2023030621 -b tangnano20k $<
+	$(call hil_capture,/dev/serial/by-id/usb-SIPEED_20K_s_FRIEND_2023030621-if01-port0) | diff hil-references/$*.txt -
+	@echo "PASS: $* (tangnano20k)"
+
+hil-femto-riscv-18-test-tangnano20k: HIL_SETTLE = 1
+
+.PHONY: hil-tangnano20k
+hil-tangnano20k: \
+	hil-dsp-mult18x18-tangnano20k \
+	hil-dsp-mult36x36-tangnano20k \
+	hil-dsp-mult9x9-tangnano20k \
+	hil-dsp-padd9-tangnano20k \
+	hil-dsp-padd18-tangnano20k \
+	#hil-dsp-alu54d-tangnano20k \
+	hil-dsp-multalu18x18-tangnano20k \
+	hil-dsp-multalu36x18-tangnano20k \
+	hil-dsp-multaddalu18x18-tangnano20k \
+	hil-femto-riscv-18-test-tangnano20k
+
+.PHONY: hil-all
+hil-all: hil-tec0117 #hil-tangnano20k
 
 # ============================================================
 # Tangnano20k
