@@ -380,10 +380,10 @@ class Datfile:
         ret["MultAddAlu12x12InDlt"] = self.read_arr16_at(0x64, 0, RSTable5ATOffset + 0x138a0)
         ret["MultAddAlu12x12OutDlt"]= self.read_arr16_at(0x60, 0, RSTable5ATOffset + 0x13968)
 
-        ret["Multalu27x18In"]       = self.read_arr16_at(0xca, 0, RSTable5ATOffset + 0x13a28)
-        ret["Multalu27x18InDlt"]    = self.read_arr16_at(0xca, 0, RSTable5ATOffset + 0x13bbc)
-        ret["Multalu27x18Out"]      = self.read_arr16_at(0x7b, 0, RSTable5ATOffset + 0x13cb2)
-        ret["Multalu27x18OutDlt"]   = self.read_arr16_at(0x7b, 0, RSTable5ATOffset + 0x13e46)
+        ret["MultAlu27x18In"]       = self.read_arr16_at(0xca, 0, RSTable5ATOffset + 0x13a28)
+        ret["MultAlu27x18InDlt"]    = self.read_arr16_at(0xca, 0, RSTable5ATOffset + 0x13cb2)
+        ret["MultAlu27x18Out"]      = self.read_arr16_at(0x7b, 0, RSTable5ATOffset + 0x13bbc)
+        ret["MultAlu27x18OutDlt"]   = self.read_arr16_at(0x7b, 0, RSTable5ATOffset + 0x13e46)
         ret["MultCtrlIn"]           = self.read_arr16_at(0x6, 0, RSTable5ATOffset + 0x13f3c)
         ret["MultCtrlInDlt"]        = self.read_arr16_at(0x6, 0, RSTable5ATOffset + 0x13f48)
 

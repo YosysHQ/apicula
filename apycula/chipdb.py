@@ -3584,7 +3584,9 @@ def fse_dsp(fse, device, aux = False):
             bels['DSP0'] = Bel()  # Macro 0
             bels['MULT12X1200'] = Bel() # mult12x12 0
             bels['MULT12X1201'] = Bel() # mult12x12 1
+            bels['MULTALU27X1800'] = Bel() # multalu27x18 0
             bels['MULTADDALU12X1200'] = Bel() # multaddalu12x12 0
+            bels['MULT27X3600'] = Bel() # mult27x36 0
 
     return bels
 
@@ -4582,6 +4584,103 @@ def dat_portmap(dat, dev, device):
                             nam = f'DOUT{i - 36}'
                         else:
                             continue
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_O")
+                elif name.startswith('MULTALU27X18'):
+                    # control
+                    for i in range(6):
+                        off = dat.gw5aStuff['MultCtrlInDlt'][i]
+                        wire_idx = dat.gw5aStuff['MultCtrlIn'][i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        nam = ["CLK", "CE", "RESET"][i // 2] + str(i % 2)
+                        # for aux cells create Himbaechel nodes
+                        wire_type = 'DSP_I'
+                        if wire.startswith('CLK') or wire.startswith('CE') or wire.startswith('LSR'):
+                            wire_type = 'TILE_CLK'
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, wire_type)
+
+                    # dat.gw5aStuff['MultAlu27x18InDlt'] indicates port offset in cells
+                    # pins sequence:
+                    # 27 A
+                    # 18 B
+                    # 26 D
+                    # 48 C
+                    # 27 SIA
+                    # followed by 48 CASI wires,
+                    # 2 on ADDSUB_SEL, and one each for ACCSEL and CASISEL.
+                    start = 0
+                    for port, q in [('A', 27), ('B', 18), ('D', 26), ('C', 48)]:
+                        for i in range(q):
+                            off = dat.gw5aStuff['MultAlu27x18InDlt'][start + i]
+                            wire_idx = dat.gw5aStuff['MultAlu27x18In'][start + i]
+                            if wire_idx < 0:
+                                continue
+                            wire = wnames.wirenames[wire_idx]
+                            nam = port + str(i)
+                            create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+                        start += q
+
+                    # SIA are non-switchable implicit wires.
+                    # CASI are non-switchable implicit wires.
+                    # addsub
+                    start = 27 + 18 + 26 + 48 + 27 + 48
+                    for i in range(2):
+                        off = dat.gw5aStuff['MultAlu27x18InDlt'][i + start]
+                        wire_idx = dat.gw5aStuff['MultAlu27x18In'][i + start]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        nam = f'ADDSUB{i % 2}'
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    # csel
+                    off = dat.gw5aStuff['MultAlu27x18InDlt'][start + 2]
+                    wire_idx = dat.gw5aStuff['MultAlu27x18In'][start + 2]
+                    if wire_idx < 0:
+                        continue
+                    wire = wnames.wirenames[wire_idx]
+                    nam = "CSEL"
+                    create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    # accsel
+                    off = dat.gw5aStuff['MultAlu27x18InDlt'][start + 3]
+                    wire_idx = dat.gw5aStuff['MultAlu27x18In'][start + 3]
+                    if wire_idx < 0:
+                        continue
+                    wire = wnames.wirenames[wire_idx]
+                    nam = "ACCSEL0"
+                    create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+                    # ACCSEL is actually a pair of wires; the second wire is
+                    # not specified in the DAT file, but it is easily visible
+                    # when compiling using the IDE example where ACCSEL is
+                    # connected to the button.
+                    # Add the second wire (SEL2) manually. It is located in the
+                    # same place as the first one from the DAT file.
+                    nam = "ACCSEL1"
+                    wire = "SEL2"
+                    create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    start += 4
+                    for i, nam in enumerate(['CASISEL', 'ASEL', 'PSEL', 'PADDSUB']):
+                        off = dat.gw5aStuff['MultAlu27x18InDlt'][start + i]
+                        wire_idx = dat.gw5aStuff['MultAlu27x18In'][start + i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_I")
+
+                    # outputs
+                    # dat.gw5aStuff['MultAlu27x18OutDlt'] indicates port offset in cells
+                    # skip 27 SOA
+                    start = 27
+                    for i in range(48):
+                        off = dat.gw5aStuff['MultAlu27x18OutDlt'][start + i]
+                        wire_idx = dat.gw5aStuff['MultAlu27x18Out'][start + i]
+                        if wire_idx < 0:
+                            continue
+                        wire = wnames.wirenames[wire_idx]
+                        nam = f'DOUT{i}'
                         create_port_wire(dev, row, col, 0, off, bel, name, nam, wire, "DSP_O")
                 elif name.startswith('ALU54D'):
                     mac = int(name[-1])
