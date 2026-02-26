@@ -114,7 +114,7 @@ def parse_bram(data):
         'clka_dia_hold', # 0x40
         'clka_di_hold', # 0x44
         'clka_ada_hold', # 0x48
-        'clka_blkset_hold', # 0x4c
+        'clka_blksel_hold', # 0x4c
         'clkb_resetb_set', # 0x50
         'clkb_oceb_set', # 0x54
         'clkb_ceb_set', # 0x58
@@ -122,7 +122,7 @@ def parse_bram(data):
         'clkb_wreb_set', # 0x60
         'clkb_dib_set', # 0x64
         'clkb_adb_set', # 0x68
-        'clkb_blkset_set', # 0x6c
+        'clkb_blksel_set', # 0x6c
         'clkb_resetb_hold', # 0x70
         'clkb_oceb_hold', # 0x74
         'clkb_ceb_hold', # 0x78
