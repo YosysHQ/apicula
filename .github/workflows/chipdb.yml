@@ -68,7 +68,7 @@ jobs:
     with:
       name: dev
       yosys: main
-      nextpnr: master
+      nextpnr: main
 
   stable:
     needs: [build]
