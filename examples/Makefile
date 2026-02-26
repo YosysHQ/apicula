@@ -261,7 +261,7 @@ clean:
 # ============================================================
 # Hardware-in-the-loop tests
 HIL_SETTLE ?= 5
-HIL_TIMEOUT ?= 300
+HIL_TIMEOUT ?= 120
 # $(call hil_capture,UART_DEVICE_PATH)
 define hil_capture
 stty -F $(1) 115200 raw -echo && \
@@ -289,7 +289,6 @@ hil-tec0117: \
 	hil-dsp-mult9x9-tec0117 \
 	hil-dsp-padd9-tec0117 \
 	hil-dsp-padd18-tec0117 \
-	#hil-dsp-alu54d-tec0117 \
 	hil-dsp-multalu18x18-tec0117 \
 	hil-dsp-multalu36x18-tec0117 \
 	hil-dsp-multaddalu18x18-tec0117 \
@@ -297,8 +296,8 @@ hil-tec0117: \
 
 # --- tangnano20k (GW2A-18C) ---
 hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
-	openFPGALoader --ftdi-serial 2023030621 -b tangnano20k $<
-	$(call hil_capture,/dev/serial/by-id/usb-SIPEED_20K_s_FRIEND_2023030621-if01-port0) | diff hil-references/$*.txt -
+	openFPGALoader --ftdi-serial 2025030317 -b tangnano20k $<
+	$(call hil_capture,/dev/serial/by-id/usb-SIPEED_USB_Debugger_2025030317-if01-port0) | diff hil-references/$*.txt -
 	@echo "PASS: $* (tangnano20k)"
 
 hil-femto-riscv-18-test-tangnano20k: HIL_SETTLE = 1
@@ -310,7 +309,6 @@ hil-tangnano20k: \
 	hil-dsp-mult9x9-tangnano20k \
 	hil-dsp-padd9-tangnano20k \
 	hil-dsp-padd18-tangnano20k \
-	#hil-dsp-alu54d-tangnano20k \
 	hil-dsp-multalu18x18-tangnano20k \
 	hil-dsp-multalu36x18-tangnano20k \
 	hil-dsp-multaddalu18x18-tangnano20k \
@@ -398,7 +396,7 @@ pll-nanolcd-tangnano1k.fs: pll-nanolcd-tangnano1k.json
 
 pll-nanolcd-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -noalu -json $@ ${YOSYS_FLAGS}"
-	
+
 bsram-%-tangnano1k-synth.json: pll/GW1NZ-1-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
 
@@ -419,7 +417,7 @@ emcu-%-tangnano4k.fs: emcu-%-tangnano4k.json
 
 %-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh %-pll-vr.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -nolutram -json $@ ${YOSYS_FLAGS}"
-	
+
 
 # ============================================================
 # Tangnano9k (GW1N-9C)
@@ -448,7 +446,7 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chann
 # szfpga miniboard (GW1N-9)
 %-miniszfpga.fs: %-miniszfpga.json
 	gowin_pack -c -d GW1N-9 -o $@ $<
- 
+
 %-miniszfpga.json: %-miniszfpga-synth.json miniszfpga.cst
 	$(NEXTPNR) --json $< --write $@ --device GW1N-LV9QN48C6/I5 --vopt family=GW1N-9 --vopt cst=miniszfpga.cst
 
@@ -465,7 +463,7 @@ bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh io565.vh display-480x272.v %-im
 # szfpga (GW1N-9)
 %-szfpga.fs: %-szfpga.json
 	gowin_pack -c -d GW1N-9 -o $@ $<
- 
+
 %-szfpga.json: %-szfpga-synth.json szfpga.cst
 	$(NEXTPNR) --seed=3 --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --vopt family=GW1N-9 --vopt cst=szfpga.cst
 
@@ -513,7 +511,7 @@ blinky-pll-runber-synth.json: pll/GW1N-4-dyn.vh blinky-pll.v
 
 %-tangnano1k-unpacked.v: %-tangnano1k.fs
 	gowin_unpack -d GW1NZ-1 -o $@ $^
-	
+
 %-tangnano4k-unpacked.v: %-tangnano4k.fs
 	gowin_unpack -d GW1NS-4 -o $@ $^
 
@@ -534,4 +532,3 @@ blinky-pll-runber-synth.json: pll/GW1N-4-dyn.vh blinky-pll.v
 
 %-primer20k-unpacked.v: %-primer20k.fs
 	gowin_unpack -d GW2A-18 -o $@ $^
-
