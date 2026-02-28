@@ -296,8 +296,8 @@ hil-tec0117: \
 
 # --- tangnano20k (GW2A-18C) ---
 hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
-	openFPGALoader --ftdi-serial 2025030317 -b tangnano20k $<
-	$(call hil_capture,/dev/serial/by-id/usb-SIPEED_USB_Debugger_2025030317-if01-port0) | diff hil-references/$*.txt -
+	openFPGALoader -c dirtyJtag -b tangnano20k $<
+	$(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_0200-if01) | diff hil-references/$*.txt -
 	@echo "PASS: $* (tangnano20k)"
 
 hil-femto-riscv-18-test-tangnano20k: HIL_SETTLE = 1
@@ -315,7 +315,7 @@ hil-tangnano20k: \
 	hil-femto-riscv-18-test-tangnano20k
 
 .PHONY: hil-all
-hil-all: hil-tec0117 #hil-tangnano20k
+hil-all: hil-tec0117 hil-tangnano20k
 
 # ============================================================
 # Tangnano20k
