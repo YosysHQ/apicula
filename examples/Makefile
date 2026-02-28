@@ -315,7 +315,7 @@ hil-tangnano20k: \
 	hil-femto-riscv-18-test-tangnano20k
 
 .PHONY: hil-all
-hil-all: hil-tec0117 hil-tangnano20k
+hil-all: hil-tangnano20k hil-tec0117
 
 # ============================================================
 # Tangnano20k
