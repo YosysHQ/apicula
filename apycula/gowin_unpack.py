@@ -159,6 +159,42 @@ _dff_types = {
    ('SET',   'LSRMUX', 'INV', '') :      'DFFNS',
 }
 
+# {(REGSET, LSRONMUX, CLKMUX_CLK, SRMODE) : latch_type}
+_latch_types = {
+   ('RESET', '',       'SIG', '') :      'DL',
+   ('RESET', '',       'INV', '') :      'DLN',
+   ('RESET', 'LSRMUX', 'SIG', 'ASYNC') : 'DLC',
+   ('RESET', 'LSRMUX', 'INV', 'ASYNC') : 'DLNC',
+   ('SET',   'LSRMUX', 'SIG', 'ASYNC') : 'DLP',
+   ('SET',   'LSRMUX', 'INV', 'ASYNC') : 'DLNP',
+}
+
+def get_latch_type(dff_idx, in_attrs):
+    def get_attrval_name(val):
+        for nam, vl in attrids.cls_attrvals.items():
+            if vl == val:
+                return nam
+        return None
+
+    attrs = {}
+    if 'LSRONMUX' in in_attrs.keys():
+        attrs['LSRONMUX'] = get_attrval_name(in_attrs['LSRONMUX'])
+    else:
+        attrs['LSRONMUX'] = ''
+    if 'CLKMUX_CLK' in in_attrs.keys():
+        attrs['CLKMUX_CLK'] = get_attrval_name(in_attrs['CLKMUX_CLK'])
+    else:
+        attrs['CLKMUX_CLK'] = 'SIG'
+    if 'SRMODE' in in_attrs.keys():
+        attrs['SRMODE'] = get_attrval_name(in_attrs['SRMODE'])
+    else:
+        attrs['SRMODE'] = ''
+    if f'REG{dff_idx % 2}_REGSET' in in_attrs.keys():
+        attrs['REGSET'] = get_attrval_name(in_attrs[f'REG{dff_idx % 2}_REGSET'])
+    else:
+        attrs['REGSET'] = 'SET'
+    return _latch_types.get((attrs['REGSET'], attrs['LSRONMUX'], attrs['CLKMUX_CLK'], attrs['SRMODE']))
+
 def get_dff_type(dff_idx, in_attrs):
     def get_attrval_name(val):
         for nam, vl in attrids.cls_attrvals.items():
@@ -462,6 +498,11 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             # skip ALU and unsupported modes
             if attrvals.get('MODE') == attrids.cls_attrvals['SSRAM']:
                 continue
+            if attrvals.get('REGMODE') == attrids.cls_attrvals['LATCH']:
+                latch_type = get_latch_type(idx, attrvals)
+                if latch_type:
+                    bels[f'{name}'] = {latch_type}
+                continue
             dff_type = get_dff_type(idx, attrvals)
             if dff_type:
                 bels[f'{name}'] = {dff_type}
@@ -619,6 +660,14 @@ dffmap = {
     "DFFNR": "RESET",
     "DFFNP": "PRESET",
     "DFFNC": "CLEAR",
+}
+latchmap = {
+    "DL": None,
+    "DLN": None,
+    "DLC": "CLEAR",
+    "DLNC": "CLEAR",
+    "DLP": "PRESET",
+    "DLNP": "PRESET",
 }
 iobmap = {
     "IBUF": {"wires": ["O"], "inputs": ["I"]},
@@ -1088,21 +1137,39 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             kind, = flags # DFF only have one flag
             if kind == "RAM": continue
             idx = int(idx)
-            port = dffmap[kind]
-            name = f"R{row}C{col}_{typ}E_{idx}"
-            dff = codegen.Primitive(kind+"E", name)
-            dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx//2}"
-            if sd:
-                dff.portmap['D'] = f"R{row}C{col}_SEL{idx}"
+            if kind in latchmap:
+                # Latch: gate signal uses CLK physical pin, adds E suffix for clock enable
+                port = latchmap[kind]
+                name = f"R{row}C{col}_DLE_{idx}"
+                latch = codegen.Primitive(kind+"E", name)
+                latch.portmap['CLK'] = f"R{row}C{col}_CLK{idx//2}"
+                if sd:
+                    latch.portmap['D'] = f"R{row}C{col}_SEL{idx}"
+                else:
+                    latch.portmap['D'] = f"R{row}C{col}_F{idx}"
+                latch.portmap['Q'] = f"R{row}C{col}_Q{idx}"
+                latch.portmap['CE'] = f"R{row}C{col}_CE{idx//2}"
+                if port:
+                    latch.portmap[port] = f"R{row}C{col}_LSR{idx//2}"
+                mod.wires.update(latch.portmap.values())
+                mod.primitives[name] = latch
+                cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
             else:
-                dff.portmap['D'] = f"R{row}C{col}_F{idx}"
-            dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
-            dff.portmap['CE'] = f"R{row}C{col}_CE{idx//2}"
-            if port:
-                dff.portmap[port] = f"R{row}C{col}_LSR{idx//2}"
-            mod.wires.update(dff.portmap.values())
-            mod.primitives[name] = dff
-            cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
+                port = dffmap[kind]
+                name = f"R{row}C{col}_{typ}E_{idx}"
+                dff = codegen.Primitive(kind+"E", name)
+                dff.portmap['CLK'] = f"R{row}C{col}_CLK{idx//2}"
+                if sd:
+                    dff.portmap['D'] = f"R{row}C{col}_SEL{idx}"
+                else:
+                    dff.portmap['D'] = f"R{row}C{col}_F{idx}"
+                dff.portmap['Q'] = f"R{row}C{col}_Q{idx}"
+                dff.portmap['CE'] = f"R{row}C{col}_CE{idx//2}"
+                if port:
+                    dff.portmap[port] = f"R{row}C{col}_LSR{idx//2}"
+                mod.wires.update(dff.portmap.values())
+                mod.primitives[name] = dff
+                cst.cells[name] = (row, col, int(idx) // 2, _sides[int(idx) % 2])
         elif typ == "IOB":
             try:
                 kind, = flags.intersection(iobmap.keys())
