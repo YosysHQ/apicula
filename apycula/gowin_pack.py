@@ -3266,6 +3266,28 @@ def place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals):
         if mode in {'DFFNC', 'DFFNP', 'DFFC', 'DFFP'}:
             dff_attrs.update({'SRMODE': 'ASYNC'})
 
+def place_latch(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals):
+        latch_attrs = slice_attrvals.setdefault((row, col, int(num) // 2), {})
+        latch_attrs.update({'REGMODE': 'LATCH'})
+        # XXX always net for now
+        latch_attrs.update({'CEMUX_1': 'UNKNOWN', 'CEMUX_CE': 'SIG'})
+        # REG0_REGSET and REG1_REGSET: reset for DL/DLN/DLC/DLNC, set for DLP/DLNP
+        if mode in {'DL', 'DLN', 'DLC', 'DLNC'}:
+            latch_attrs.update({f'REG{int(num) % 2}_REGSET': 'RESET'})
+        else:
+            latch_attrs.update({f'REG{int(num) % 2}_REGSET': 'SET'})
+        # are set/reset/clear/preset ports needed?
+        if mode not in {'DL', 'DLN'}:
+            latch_attrs.update({'LSRONMUX': 'LSRMUX'})
+        # Gate polarity (G pin uses CLK physical pin)
+        if mode.startswith('DLN'):
+            latch_attrs.update({'CLKMUX_CLK': 'INV'})
+        else:
+            latch_attrs.update({'CLKMUX_CLK': 'SIG'})
+        # async option (clear/preset are async)
+        if mode in {'DLC', 'DLNC', 'DLP', 'DLNP'}:
+            latch_attrs.update({'SRMODE': 'ASYNC'})
+
 _mipi_aux_attrs = {
         'A': {('IO_TYPE', 'LVDS25'), ('LPRX_A2', 'ENABLE'), ('ODMUX', 'TRIMUX'), ('OPENDRAIN', 'OFF'),
               ('DIFFRESISTOR', 'OFF'), ('BANK_VCCIO', '2.5')},
@@ -3441,6 +3463,9 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                 for r, c in bits:
                     tile[r][c] = 1
 
+        elif typ.startswith("DL") and not typ.startswith("DLL"):
+            mode = typ.rstrip('E')
+            place_latch(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals)
         elif typ.startswith("DFF"):
             mode = typ.strip('E')
             place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals)
