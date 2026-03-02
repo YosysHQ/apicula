@@ -412,6 +412,7 @@ dsp_5a_attrids = {
         'CE1_PAD':              94,
         'CLK0_PAD':             95,
         'CLK1_PAD':             96,
+        'MULT27X36':            97,
         'MULT12_1_EN':          98,
         'MULT12X12_EN':         99,
         'MULT_RESET_MODE':     100,

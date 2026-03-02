@@ -73,6 +73,9 @@ class Tile:
 class Device:
     # grid of tile type indices (ttyp) - use device[row, col] to get Tile
     grid: List[List[int]] = field(default_factory=list)
+    # special center cell (DSPs have gap there, also place for some clock MUX)
+    center_row: int = field (default = 0)
+    center_col: int = field (default = 0)
     # tile type to Tile mapping
     tiles: Dict[int, Tile] = field(default_factory=dict)
     timing: Dict[str, Dict[str, Dict[str, Union[List[float], int]]]] = field(default_factory=dict)
@@ -3638,6 +3641,8 @@ def set_chip_flags(dev, device):
 def from_fse(device, fse, dat: Datfile):
     wnames.select_wires(device)
     dev = Device()
+    dev.center_row = dat.grid.center_y - 1
+    dev.center_col = dat.grid.center_x - 1
     fse_create_simplio_rows(dev, dat)
     ttypes = {t for row in fse['header']['grid'][61] for t in row}
     tiles = {}
