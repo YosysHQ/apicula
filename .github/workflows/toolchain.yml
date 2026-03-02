@@ -139,17 +139,16 @@ jobs:
     runs-on: [self-hosted, fpga]
     needs: [example]
     environment: Hardware in the loop
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [tec0117, tangnano20k]
     steps:
     - uses: actions/checkout@v4
-    - name: Download tec0117 bitstreams
+    - name: Download bitstreams
       uses: actions/download-artifact@v4
       with:
-        name: examples-${{ inputs.name }}-tec0117
-        path: examples
-    - name: Download tangnano20k bitstreams
-      uses: actions/download-artifact@v4
-      with:
-        name: examples-${{ inputs.name }}-tangnano20k
+        name: examples-${{ inputs.name }}-${{ matrix.board }}
         path: examples
     - name: Run HIL tests
-      run: make -C examples hil-all
+      run: make -C examples hil-${{ matrix.board }}
