@@ -2434,7 +2434,33 @@ def set_multalu27x18_attrs(db, typ, params, num, attrs, dsp_attrs, mac):
     if "USE_CASCADE_OUT" in attrs:
         dsp_attrs['CASO'] = "ENABLE"
 
-    for parm, val in params.items():
+    # Mult27x36
+    mult27x36_params = {}
+    if "MULT27X36_MAIN" in attrs or "MULT27X36_AUX" in attrs:
+        mult27x36_params = {
+                'C_IREG_CLK': "BYPASS", 'C_IREG_CE': "CE0", 'C_IREG_RESET': "RESET0",
+                'C_PREG_CLK': "BYPASS", 'C_PREG_CE': "CE0", 'C_PREG_RESET': "RESET0",
+                'ADDSUB0_IREG_CLK': "BYPASS", 'ADDSUB0_IREG_CE': "CE0", 'ADDSUB0_IREG_RESET': "RESET0",
+                'ADDSUB1_IREG_CLK': "BYPASS", 'ADDSUB1_IREG_CE': "CE0", 'ADDSUB1_IREG_RESET': "RESET0",
+                'CSEL_IREG_CLK': "BYPASS", 'CSEL_IREG_CE': "CE0", 'CSEL_IREG_RESET': "RESET0",
+                'CASISEL_IREG_CLK': "BYPASS", 'CASISEL_IREG_CE': "CE0", 'CASISEL_IREG_RESET': "RESET0",
+                'ACCSEL_IREG_CLK': "BYPASS", 'ACCSEL_IREG_CE': "CE0", 'ACCSEL_IREG_RESET': "RESET0",
+                'ADDSUB0_PREG_CLK': "BYPASS", 'ADDSUB0_PREG_CE': "CE0", 'ADDSUB0_PREG_RESET': "RESET0",
+                'ADDSUB1_PREG_CLK': "BYPASS", 'ADDSUB1_PREG_CE': "CE0", 'ADDSUB1_PREG_RESET': "RESET0",
+                'CSEL_PREG_CLK': "BYPASS", 'CSEL_PREG_CE': "CE0", 'CSEL_PREG_RESET': "RESET0",
+                'CASISEL_PREG_CLK': "BYPASS", 'CASISEL_PREG_CE': "CE0", 'CASISEL_PREG_RESET': "RESET0",
+                'ACCSEL_PREG_CLK': "BYPASS", 'ACCSEL_PREG_CE': "CE0", 'ACCSEL_PREG_RESET': "RESET0",
+                'FB_PREG_EN': "FALSE", 'SOA_PREG_EN': "FALSE", 'PRE_LOAD': "0",
+                'DYN_A_SEL': "FALSE", 'A_SEL': "0", 'DYN_ADD_SUB_0': "FALSE", 'ADD_SUB_0': "0",
+                'DYN_ADD_SUB_1': "FALSE", 'ADD_SUB_1': "0", 'DYN_C_SEL': "FALSE", 'C_SEL': "0",
+                'DYN_CASI_SEL': "FALSE", 'CASI_SEL': "0", 'MULT12X12_EN': "FALSE",
+                }
+        if "MULT27X36_MAIN" in attrs:
+            dsp_attrs['MULT27X36'] = 'ENABLE'
+        else:
+            mult27x36_params['CASI_SEL'] = "1"
+
+    for parm, val in itertools.chain(params.items(), mult27x36_params.items()):
         if parm in {'OREG_CLK', 'OREG_CE', 'OREG_RESET'}:
             if device not in {'GW5AST-138C'}:
                 dsp_attrs[f'{parm[0]}0{parm[1:]}'] = val if val in attrids.dsp_5a_attrvals else 'UNKNOWN'
