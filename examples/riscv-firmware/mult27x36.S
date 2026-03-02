@@ -191,11 +191,11 @@ main:
 
 	j .L1
 
-hello_str:	.asciz "Apicula. MULTALU27X18.\n"
+hello_str:	.asciz "Apicula. MULT27X36.\n"
 iter_str:   .asciz "--- tick ---\n"
-m0_str:		.asciz "MultAlu27x12 = 0x"
-m1_str:		.asciz "MultAlu27x12 = 0x"
-m2_str:		.asciz "MultAlu27x12 = 0x"
-m3_str:		.asciz "MultAlu27x12 = 0x"
-m4_str:		.asciz "MultAlu27x12 = 0x"
+m0_str:		.asciz "Mult27x36 = 0x"
+m1_str:		.asciz "Mult27x36 = 0x"
+m2_str:		.asciz "Mult27x36 = 0x"
+m3_str:		.asciz "Mult27x36 = 0x"
+m4_str:		.asciz "Mult27x36 = 0x"
 
