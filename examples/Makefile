@@ -10,6 +10,7 @@ YOSYS_FLAGS = -setundef
 .PHONY: clean
 
 tangnano20k: \
+	latch-tangnano20k.fs \
 	blinky-tangnano20k.fs shift-tangnano20k.fs blinky-tbuf-tangnano20k.fs blinky-oddr-tangnano20k.fs \
 	blinky-osc-tangnano20k.fs tlvds-tangnano20k.fs elvds-tangnano20k.fs oddr-tlvds-tangnano20k.fs \
 	blinky-clkdiv-tangnano20k.fs dvi-example-tangnano20k.fs blinky-clkdiv-dhcen-tangnano20k.fs \
@@ -25,9 +26,11 @@ tangnano20k: \
 	dsp-mult9x9-tangnano20k.fs dsp-alu54d-tangnano20k.fs dsp-multalu18x18-tangnano20k.fs \
 	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
 	dqce-tangnano20k.fs dcs-tangnano20k.fs \
-	femto-riscv-18-test-tangnano20k.fs
+	femto-riscv-18-test-tangnano20k.fs \
+	hil-latch-tangnano20k.fs
 
 primer20k: \
+	latch-primer20k.fs \
 	blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
 	blinky-osc-primer20k.fs tlvds-primer20k.fs elvds-primer20k.fs oddr-tlvds-primer20k.fs \
 	blinky-clkdiv-primer20k.fs dvi-example-primer20k.fs blinky-clkdiv-dhcen-primer20k.fs \
@@ -45,6 +48,7 @@ primer20k: \
 	dqce-primer20k.fs dcs-primer20k.fs
 
 tangnano: \
+	latch-tangnano.fs \
 	blinky-tangnano.fs shift-tangnano.fs blinky-tbuf-tangnano.fs blinky-oddr-tangnano.fs \
 	blinky-osc-tangnano.fs elvds-tangnano.fs oddr-elvds-tangnano.fs pll-nanolcd-tangnano.fs \
 	blinky-clkdiv-tangnano.fs blinky-clkdiv-dhcen-tangnano.fs \
@@ -56,6 +60,7 @@ tangnano: \
 	bsram-SPX9-tangnano.fs bsram-DPX9B-tangnano.fs
 
 tangnano1k: \
+	latch-tangnano1k.fs \
 	blinky-tangnano1k.fs shift-tangnano1k.fs blinky-tbuf-tangnano1k.fs blinky-oddr-tangnano1k.fs \
 	blinky-osc-tangnano1k.fs elvds-tangnano1k.fs oddr-elvds-tangnano1k.fs pll-nanolcd-tangnano1k.fs \
 	blinky-clkdiv-tangnano1k.fs blinky-clkdiv-dhcen-tangnano1k.fs \
@@ -68,6 +73,7 @@ tangnano1k: \
 	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs bandgap-tangnano1k.fs
 
 tangnano4k: \
+	latch-tangnano4k.fs \
 	blinky-tangnano4k.fs shift-tangnano4k.fs blinky-tbuf-tangnano4k.fs blinky-oddr-tangnano4k.fs \
 	blinky-osc-tangnano4k.fs tlvds-tangnano4k.fs elvds-tangnano4k.fs oddr-tlvds-tangnano4k.fs \
 	blinky-clkdiv-tangnano4k.fs blinky-clkdiv-dhcen-tangnano4k.fs \
@@ -84,6 +90,7 @@ tangnano4k: \
 	emcu-with-apb-spi-tangnano4k.fs i3c-tangnano4k.fs mipi-out-tangnano4k.fs
 
 tangnano9k: \
+	latch-tangnano9k.fs \
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
 	blinky-clkdiv-tangnano9k.fs dvi-example-tangnano9k.fs \
 	blinky-osc-tangnano9k.fs tlvds-tangnano9k.fs elvds-tangnano9k.fs oddr-tlvds-tangnano9k.fs \
@@ -103,6 +110,7 @@ tangnano9k: \
 	i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs
 
 szfpga: \
+	latch-szfpga.fs \
 	blinky-szfpga.fs shift-szfpga.fs blinky-tbuf-szfpga.fs blinky-oddr-szfpga.fs \
 	blinky-osc-szfpga.fs tlvds-szfpga.fs elvds-szfpga.fs oddr-tlvds-szfpga.fs \
 	blinky-clkdiv-szfpga.fs blinky-clkdiv-dhcen-szfpga.fs \
@@ -119,6 +127,7 @@ szfpga: \
 	dsp-multalu36x18-szfpga.fs dsp-multaddalu18x18-szfpga.fs
 
 tec0117: \
+	latch-tec0117.fs \
 	blinky-tec0117.fs shift-tec0117.fs blinky-tbuf-tec0117.fs blinky-oddr-tec0117.fs \
 	blinky-osc-tec0117.fs tlvds-tec0117.fs elvds-tec0117.fs oddr-tlvds-tec0117.fs \
 	blinky-clkdiv-tec0117.fs blinky-clkdiv-dhcen-tec0117.fs \
@@ -129,9 +138,11 @@ tec0117: \
 	dsp-mult18x18-tec0117.fs dsp-mult36x36-tec0117.fs dsp-padd9-tec0117.fs dsp-padd18-tec0117.fs \
 	dsp-mult9x9-tec0117.fs dsp-alu54d-tec0117.fs dsp-multalu18x18-tec0117.fs \
 	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs \
-	femto-riscv-18-test-tec0117.fs
+	femto-riscv-18-test-tec0117.fs \
+	hil-latch-tec0117.fs
 
 runber: \
+	latch-runber.fs \
 	blinky-runber.fs shift-runber.fs blinky-tbuf-runber.fs blinky-oddr-runber.fs \
 	blinky-osc-runber.fs tlvds-runber.fs elvds-runber.fs oddr-tlvds-runber.fs \
 	blinky-clkdiv-runber.fs \
@@ -292,7 +303,8 @@ hil-tec0117: \
 	hil-dsp-multalu18x18-tec0117 \
 	hil-dsp-multalu36x18-tec0117 \
 	hil-dsp-multaddalu18x18-tec0117 \
-	hil-femto-riscv-18-test-tec0117
+	hil-femto-riscv-18-test-tec0117 \
+	hil-latch-tec0117
 
 # --- tangnano20k (GW2A-18C) ---
 hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
@@ -312,7 +324,8 @@ hil-tangnano20k: \
 	hil-dsp-multalu18x18-tangnano20k \
 	hil-dsp-multalu36x18-tangnano20k \
 	hil-dsp-multaddalu18x18-tangnano20k \
-	hil-femto-riscv-18-test-tangnano20k
+	hil-femto-riscv-18-test-tangnano20k \
+	hil-latch-tangnano20k
 
 .PHONY: hil-all
 hil-all: hil-tangnano20k hil-tec0117
