@@ -295,6 +295,7 @@ hil-femto-riscv-18-test-tec0117: HIL_SETTLE = 1
 
 .PHONY: hil-tec0117
 hil-tec0117: \
+	hil-latch-tec0117 \
 	hil-dsp-mult18x18-tec0117 \
 	hil-dsp-mult36x36-tec0117 \
 	hil-dsp-mult9x9-tec0117 \
@@ -303,8 +304,7 @@ hil-tec0117: \
 	hil-dsp-multalu18x18-tec0117 \
 	hil-dsp-multalu36x18-tec0117 \
 	hil-dsp-multaddalu18x18-tec0117 \
-	hil-femto-riscv-18-test-tec0117 \
-	hil-latch-tec0117
+	hil-femto-riscv-18-test-tec0117
 
 # --- tangnano20k (GW2A-18C) ---
 hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
@@ -316,6 +316,7 @@ hil-femto-riscv-18-test-tangnano20k: HIL_SETTLE = 1
 
 .PHONY: hil-tangnano20k
 hil-tangnano20k: \
+	hil-latch-tangnano20k \
 	hil-dsp-mult18x18-tangnano20k \
 	hil-dsp-mult36x36-tangnano20k \
 	hil-dsp-mult9x9-tangnano20k \
@@ -324,8 +325,7 @@ hil-tangnano20k: \
 	hil-dsp-multalu18x18-tangnano20k \
 	hil-dsp-multalu36x18-tangnano20k \
 	hil-dsp-multaddalu18x18-tangnano20k \
-	hil-femto-riscv-18-test-tangnano20k \
-	hil-latch-tangnano20k
+	hil-femto-riscv-18-test-tangnano20k
 
 .PHONY: hil-all
 hil-all: hil-tec0117 #hil-tangnano20k
