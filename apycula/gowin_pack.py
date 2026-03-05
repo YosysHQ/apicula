@@ -4583,7 +4583,7 @@ def main():
         pil_available = False
     parser = argparse.ArgumentParser(description='Pack Gowin bitstream')
     parser.add_argument('netlist')
-    parser.add_argument('-d', '--device', required=True)
+    parser.add_argument('-d', '--device', default='')
     parser.add_argument('-o', '--output', default='pack.fs')
     parser.add_argument('-c', '--compress', action='store_true')
     parser.add_argument('-s', '--cst', default = None)
@@ -4600,6 +4600,10 @@ def main():
 
     args = parser.parse_args()
     device = args.device
+
+    # if not forced try to load from json
+    if device == '':
+        device = pnr['modules']['top']['settings']['packer.partno']
 
     with open(args.netlist) as f:
         pnr = json.load(f)
