@@ -3244,9 +3244,9 @@ def place_alu(db, tiledata, tile, parms, num, row, col, slice_attrvals):
     elif 'ALU_CIN_MUX' not in alu_mode_attrs:
         alu_mode_attrs.update({'ALU_CIN_MUX': 'ALU_5A_CIN_COUT'})
 
-def place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals):
+def place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals, is_latch=False):
         dff_attrs = slice_attrvals.setdefault((row, col, int(num) // 2), {})
-        dff_attrs.update({'REGMODE': 'FF'})
+        dff_attrs.update({'REGMODE': 'LATCH' if is_latch else 'FF'})
         # XXX always net for now
         dff_attrs.update({'CEMUX_1': 'UNKNOWN', 'CEMUX_CE': 'SIG'})
         # REG0_REGSET and REG1_REGSET select set/reset or preset/clear options for each DFF individually
@@ -3443,7 +3443,8 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
 
         elif typ.startswith("DFF"):
             mode = typ.strip('E')
-            place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals)
+            is_latch = attrs.get('LATCH', '') == '00000000000000000000000000000001'
+            place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals, is_latch)
         elif typ.startswith('LUT'):
             place_lut(db, tiledata, tile, parms, num, row, col, slice_attrvals)
 
