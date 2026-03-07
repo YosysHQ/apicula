@@ -48,6 +48,8 @@ jobs:
         git clone https://github.com/YosysHQ/yosys.git
         cd yosys
         git checkout ${{ inputs.yosys }}
+        git config user.email "ci@localhost"
+        git config user.name "CI"
         git fetch origin pull/5717/head:zaun-latch
         git merge --no-edit zaun-latch
         git submodule update --init --recursive
@@ -59,6 +61,8 @@ jobs:
         git clone https://github.com/YosysHQ/nextpnr.git
         cd nextpnr
         git checkout ${{ inputs.nextpnr }}
+        git config user.email "ci@localhost"
+        git config user.name "CI"
         git fetch origin pull/1652/head:zaun-latch
         git merge --no-edit zaun-latch
         git submodule update --init --recursive
