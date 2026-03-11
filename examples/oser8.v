@@ -1,7 +1,7 @@
 `default_nettype none
 /*
-* This example allows you to generate several OSER10 primitives and then check
-* them with a logic analyzer. The PCLK, FCLK and Q outputs of the primitives
+* This example allows you to generate OSER8 primitive and then check
+* it with a logic analyzer. The PCLK, FCLK and Q outputs of the primitives
 * are connected to the board pins.
 */
 module top(input wire clk, 
