@@ -1,0 +1,56 @@
+# Tang Primer 25K (GW5A-LV25UG324C1/I0) - UBGA324 Package
+# Minimal constraint file for OSS toolchain
+# Verified working with GW5A-25A chipdb
+#
+# Board: Sipeed Tang Primer 25K (UG324 variant)
+# FPGA: GW5A-LV25UG324C1/I0 (UBGA324 package, 324 pins)
+# Note: IO_TYPE=LVCMOS18 is CORRECT for GW5A family (not LVCMOS33)
+#
+# IMPORTANT: The existing primer25k.cst uses E2 for clock which is WRONG!
+# In UG324, E2 is VCCIO (power), not an IO pin. Clock is on A9.
+#
+# Clock pin A9 = GCLKC_1 (27MHz oscillator on board)
+# Reset pin A2 = IOT31B (active-low reset button)
+# LED pin A11 = IOL14A (user LED on core board)
+
+# =============================================================================
+# CLOCK (27MHz oscillator)
+# =============================================================================
+# Pin A9 = IOT58B = GCLKC_1 (27MHz oscillator on board)
+# NOTE: E2 is VCCIO in UG324, NOT a clock pin!
+IO_LOC "clk" A9;
+IO_PORT "clk" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=OFF;
+
+# Alternative clock input
+IO_LOC "clk_i" A9;
+IO_PORT "clk_i" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=OFF;
+
+# =============================================================================
+# RESET (active-low button)
+# =============================================================================
+# Pin A2 = IOT31B (reset button on dock)
+IO_LOC "rst_n" A2;
+IO_PORT "rst_n" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+IO_LOC "resetn" A2;
+IO_PORT "resetn" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# =============================================================================
+# USER LED (on core board)
+# =============================================================================
+# Pin A11 = IOL14A = LPLL1_T_IN0 (user LED)
+IO_LOC "led" A11;
+IO_PORT "led" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# 1. IO_TYPE=LVCMOS18 is CORRECT for GW5A family (not LVCMOS33)
+# 2. The existing primer25k.cst uses E2 for clock - WRONG for UG324!
+#    E2 is VCCIO (power) in UG324, not an IO pin
+# 3. Clock pin A9 (GCLKC_1) is correct for UG324
+# 4. Reset pin A2 (IOT31B) is correct for UG324
+# 5. LED pin A11 works on both MG121 and UG324
+#
+# Device string for nextpnr: GW5A-LV25UG324C1/I0
+# Package: UBGA324

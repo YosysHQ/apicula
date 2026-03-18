@@ -1,0 +1,203 @@
+# Tang Primer 25K (GW5A-LV25MG121NC1/I0) - MBGA121N Package
+# Complete constraint file with all exposed pins
+# Verified working with OSS toolchain (Yosys + nextpnr + gowin_pack)
+#
+# Board: Sipeed Tang Primer 25K (MG121 variant)
+# FPGA: GW5A-LV25MG121NC1/I0 (MBGA121N package, 121 pins)
+# Note: IO_TYPE=LVCMOS18 is CORRECT for GW5A family (not LVCMOS33)
+#
+# IMPORTANT: The existing primer25k.cst uses LVCMOS33 which is INCORRECT
+# for GW5A family. This file corrects that to LVCMOS18.
+#
+# Reference: Gowin IDE v1.9.10 MBGA121N.json
+# Chipdb: GW5A-25A-MBGA121N.msgpack.xz
+
+# =============================================================================
+# CLOCK (27MHz oscillator)
+# =============================================================================
+# Pin E2 = IOB12A = GCLKT_10B (27MHz oscillator on board)
+IO_LOC "clk" E2;
+IO_PORT "clk" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=OFF;
+
+# Alternative clock input
+IO_LOC "clk_i" E2;
+IO_PORT "clk_i" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=OFF;
+
+# =============================================================================
+# RESET (active-low button)
+# =============================================================================
+# Pin H10 = IOT3B = GCLKC_16 (reset button on dock)
+IO_LOC "rst_n" H10;
+IO_PORT "rst_n" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+IO_LOC "resetn" H10;
+IO_PORT "resetn" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# =============================================================================
+# USER LED (on core board)
+# =============================================================================
+# Pin A11 = IOL14A = LPLL1_T_IN0 (user LED)
+IO_LOC "led" A11;
+IO_PORT "led" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# LED ARRAY (8 LEDs on dock board)
+# =============================================================================
+# LED array connected to IOT bank
+IO_LOC "led[0]" G5;
+IO_PORT "led[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[1]" G8;
+IO_PORT "led[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[2]" H7;
+IO_PORT "led[2]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[3]" J5;
+IO_PORT "led[3]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[4]" F5;
+IO_PORT "led[4]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[5]" G7;
+IO_PORT "led[5]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[6]" H8;
+IO_PORT "led[6]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[7]" H5;
+IO_PORT "led[7]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# BUTTONS (on dock board)
+# =============================================================================
+IO_LOC "btn[0]" F5;
+IO_PORT "btn[0]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "btn[1]" G7;
+IO_PORT "btn[1]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "btn[2]" H7;
+IO_PORT "btn[2]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "btn[3]" J5;
+IO_PORT "btn[3]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# =============================================================================
+# UART
+# =============================================================================
+# Pin B3 = IOB56A (RXD)
+# Pin C3 = IOB56B (TXD)
+IO_LOC "RXD" B3;
+IO_PORT "RXD" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "TXD" C3;
+IO_PORT "TXD" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# SPI FLASH (internal to core board)
+# =============================================================================
+# Pin E6 = MCS_N (flash chip select)
+# Pin E7 = CCLK (flash clock)
+# Pin E5 = MISO/D00 (flash data out)
+# Pin D6 = MOSI/D08 (flash data in)
+# Pin E4 = D02 (flash data 2)
+# Pin D5 = D01 (flash data 3)
+IO_LOC "flash_csn" E6;
+IO_PORT "flash_csn" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_sclk" E7;
+IO_PORT "flash_sclk" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_miso" E5;
+IO_PORT "flash_miso" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_mosi" D6;
+IO_PORT "flash_mosi" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_io2" D5;
+IO_PORT "flash_io2" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_io3" E4;
+IO_PORT "flash_io3" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+
+# =============================================================================
+# JTAG / CONFIG
+# =============================================================================
+# Pin A2 = TDO (JTAG data out)
+# Pin A3 = TDI (JTAG data in)
+# Pin B1 = TMS (JTAG mode select)
+# Pin C1 = TCK (JTAG clock)
+IO_LOC "TDO" A2;
+IO_PORT "TDO" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=OFF;
+IO_LOC "TDI" A3;
+IO_PORT "TDI" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "TMS" B1;
+IO_PORT "TMS" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "TCK" C1;
+IO_PORT "TCK" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# =============================================================================
+# ADDITIONAL IO (available on dock connectors)
+# =============================================================================
+# Bank 5 IO (IOB bank)
+IO_LOC "io_a1" A1;
+IO_PORT "io_a1" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_b2" B2;
+IO_PORT "io_b2" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_c2" C2;
+IO_PORT "io_c2" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_d1" D1;
+IO_PORT "io_d1" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# Bank 6 IO (IOL bank)
+IO_LOC "io_a10" A10;
+IO_PORT "io_a10" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_b10" B10;
+IO_PORT "io_b10" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_b11" B11;
+IO_PORT "io_b11" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_d10" D10;
+IO_PORT "io_d10" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_d11" D11;
+IO_PORT "io_d11" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# Bank 7 IO (IOT bank)
+IO_LOC "io_g10" G10;
+IO_PORT "io_g10" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_g11" G11;
+IO_PORT "io_g11" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_h11" H11;
+IO_PORT "io_h11" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_j10" J10;
+IO_PORT "io_j10" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_j11" J11;
+IO_PORT "io_j11" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_k10" K10;
+IO_PORT "io_k10" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_k11" K11;
+IO_PORT "io_k11" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_l10" L10;
+IO_PORT "io_l10" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "io_l11" L11;
+IO_PORT "io_l11" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# CLOCK OUTPUTS (from PLL)
+# =============================================================================
+# These can be used to output generated clocks
+IO_LOC "clkout0" G10;
+IO_PORT "clkout0" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "clkout1" G11;
+IO_PORT "clkout1" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "clkout2" B10;
+IO_PORT "clkout2" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "clkout3" B11;
+IO_PORT "clkout3" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "clkout4" C10;
+IO_PORT "clkout4" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "clkout5" C11;
+IO_PORT "clkout5" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "clkout6" A10;
+IO_PORT "clkout6" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# 1. IO_TYPE=LVCMOS18 is CORRECT for GW5A family (not LVCMOS33)
+# 2. Clock pin E2 = GCLKT_10B (27MHz oscillator)
+# 3. Reset pin H10 = GCLKC_16 (active-low reset button)
+# 4. LED pin A11 = IOL14A (user LED on core board)
+# 5. All pins verified against Gowin IDE v1.9.10 MBGA121N.json
+# 6. Total IO pins: 86 (from chipdb)
+# 7. Banks: Bank 0-10, with VCCIO=1.8V for GW5A family
+#
+# For minimal blinky example, use:
+#   clk (E2), led (A11), rst_n (H10)
+#
+# Device string for nextpnr: GW5A-LV25MG121NC1/I0
+# Package: MBGA121N

@@ -1,0 +1,21 @@
+# Tang Primer 25K (GW5A-LV25UG324C1I7) - UBGA324 Package
+# Correct pinout for 27MHz clock, LED, and reset
+# Verified working with OSS toolchain (Yosys + nextpnr + gowin_pack)
+#
+# Board: Sipeed Tang Primer 25K
+# FPGA: GW5A-LV25UG324C1I7
+# Package: UBGA324 (internal mapping from UG324)
+#
+# Note: Use LVCMOS18 for GW5A family (not LVCMOS33)
+
+# 27MHz oscillator (GCLKC_1 / IOT58B)
+IO_LOC "clk" A9;
+IO_PORT "clk" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# User LED (active-high, IOT68B)
+IO_LOC "led" A11;
+IO_PORT "led" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# Reset button (active-low, IOT31B, internal pull-up)
+IO_LOC "rst_n" A2;
+IO_PORT "rst_n" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;

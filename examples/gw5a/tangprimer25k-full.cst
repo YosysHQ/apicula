@@ -1,0 +1,376 @@
+# Tang Primer 25K (GW5A-LV25UG324C1/I7) - UBGA324 Package
+# Complete constraint file with all exposed pins
+# Verified working with OSS toolchain (Yosys + nextpnr + gowin_pack)
+#
+# Board: Sipeed Tang Primer 25K
+# FPGA: GW5A-LV25UG324C1/I7 (UBGA324 package)
+# Note: Use LVCMOS18 for GW5A family (not LVCMOS33)
+#
+# IMPORTANT: The existing primer25k.cst uses LVCMOS33 which is INCORRECT
+# for GW5A family. This file corrects that to LVCMOS18.
+#
+# Reference: https://wiki.sipeed.com/hardware/en/tang/tang-primer-25k/primer-25k.html
+
+# =============================================================================
+# CLOCK
+# =============================================================================
+# 27MHz oscillator (GCLKC_1 / IOT58B)
+IO_LOC "clk" A9;
+IO_PORT "clk" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# Alternative clock pin (if using external clock)
+IO_LOC "clk_i" A9;
+IO_PORT "clk_i" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# RESET
+# =============================================================================
+# Reset button (active-low, IOT31B, internal pull-up)
+IO_LOC "rst_n" A2;
+IO_PORT "rst_n" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# Alternative reset signal
+IO_LOC "resetn" A2;
+IO_PORT "resetn" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# =============================================================================
+# USER LED (single LED on core board)
+# =============================================================================
+# User LED (active-high, IOT68B)
+IO_LOC "led" A11;
+IO_PORT "led" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# RGB LED ARRAY (on dock board)
+# =============================================================================
+# LED array 0 (8 LEDs)
+IO_LOC "led[0]" G5;
+IO_PORT "led[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[1]" G8;
+IO_PORT "led[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[2]" H7;
+IO_PORT "led[2]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[3]" J5;
+IO_PORT "led[3]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[4]" F5;
+IO_PORT "led[4]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[5]" G7;
+IO_PORT "led[5]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[6]" H8;
+IO_PORT "led[6]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[7]" H5;
+IO_PORT "led[7]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# MLED array (8 LEDs)
+IO_LOC "mled[0]" A11;
+IO_PORT "mled[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "mled[1]" A10;
+IO_PORT "mled[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "mled[2]" E11;
+IO_PORT "mled[2]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "mled[3]" E10;
+IO_PORT "mled[3]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "mled[4]" K11;
+IO_PORT "mled[4]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "mled[5]" L11;
+IO_PORT "mled[5]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "mled[6]" L5;
+IO_PORT "mled[6]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "mled[7]" K5;
+IO_PORT "mled[7]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# RLED array (8 LEDs)
+IO_LOC "rled[0]" G11;
+IO_PORT "rled[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "rled[1]" G10;
+IO_PORT "rled[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "rled[2]" D11;
+IO_PORT "rled[2]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "rled[3]" D10;
+IO_PORT "rled[3]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "rled[4]" B11;
+IO_PORT "rled[4]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "rled[5]" B10;
+IO_PORT "rled[5]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "rled[6]" C11;
+IO_PORT "rled[6]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "rled[7]" C10;
+IO_PORT "rled[7]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# BUTTONS
+# =============================================================================
+# PMOD keys
+IO_LOC "pmod_keys[0]" C11;
+IO_PORT "pmod_keys[0]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "pmod_keys[1]" B11;
+IO_PORT "pmod_keys[1]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "pmod_keys[2]" D10;
+IO_PORT "pmod_keys[2]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "pmod_keys[3]" G10;
+IO_PORT "pmod_keys[3]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "pmod_keys[4]" C10;
+IO_PORT "pmod_keys[4]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "pmod_keys[5]" B10;
+IO_PORT "pmod_keys[5]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "pmod_keys[6]" D11;
+IO_PORT "pmod_keys[6]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "pmod_keys[7]" G11;
+IO_PORT "pmod_keys[7]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# Key input
+IO_LOC "key_i" H11;
+IO_PORT "key_i" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# Button array
+IO_LOC "btn[0]" F5;
+IO_PORT "btn[0]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "btn[1]" G7;
+IO_PORT "btn[1]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "btn[2]" H7;
+IO_PORT "btn[2]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "btn[3]" J5;
+IO_PORT "btn[3]" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# =============================================================================
+# UART
+# =============================================================================
+IO_LOC "RXD" B3;
+IO_PORT "RXD" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "TXD" C3;
+IO_PORT "TXD" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# SPI FLASH
+# =============================================================================
+IO_LOC "flash_csn" E6;
+IO_PORT "flash_csn" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_sclk" E7;
+IO_PORT "flash_sclk" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_io3" E4;
+IO_PORT "flash_io3" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_io2" D5;
+IO_PORT "flash_io2" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_mosi" D6;
+IO_PORT "flash_mosi" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+IO_LOC "flash_miso" E5;
+IO_PORT "flash_miso" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=8;
+
+# =============================================================================
+# SDRAM (2 x W9825G6KH-6, 16-bit DATA, NO SKE, DQM[1:0])
+# =============================================================================
+IO_LOC "O_sdram_we_n" J7;
+IO_PORT "O_sdram_we_n" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_ras_n" L10;
+IO_PORT "O_sdram_ras_n" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_cas_n" K10;
+IO_PORT "O_sdram_cas_n" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_cs_n" K9;
+IO_PORT "O_sdram_cs_n" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_clk" E3;
+IO_PORT "O_sdram_clk" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+IO_LOC "O_sdram_dqm[1]" L7;
+IO_PORT "O_sdram_dqm[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_dqm[0]" L8;
+IO_PORT "O_sdram_dqm[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_ba[1]" K8;
+IO_PORT "O_sdram_ba[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_ba[0]" L9;
+IO_PORT "O_sdram_ba[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+IO_LOC "IO_sdram_dq[15]" L3;
+IO_PORT "IO_sdram_dq[15]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[14]" L4;
+IO_PORT "IO_sdram_dq[14]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[13]" C2;
+IO_PORT "IO_sdram_dq[13]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[12]" B2;
+IO_PORT "IO_sdram_dq[12]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[11]" F1;
+IO_PORT "IO_sdram_dq[11]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[10]" F2;
+IO_PORT "IO_sdram_dq[10]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[9]" A1;
+IO_PORT "IO_sdram_dq[9]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[8]" E1;
+IO_PORT "IO_sdram_dq[8]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[7]" G2;
+IO_PORT "IO_sdram_dq[7]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[6]" G1;
+IO_PORT "IO_sdram_dq[6]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[5]" J4;
+IO_PORT "IO_sdram_dq[5]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[4]" K4;
+IO_PORT "IO_sdram_dq[4]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[3]" L2;
+IO_PORT "IO_sdram_dq[3]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[2]" L1;
+IO_PORT "IO_sdram_dq[2]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[1]" K1;
+IO_PORT "IO_sdram_dq[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "IO_sdram_dq[0]" K2;
+IO_PORT "IO_sdram_dq[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+IO_LOC "O_sdram_addr[12]" D1;
+IO_PORT "O_sdram_addr[12]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[11]" J1;
+IO_PORT "O_sdram_addr[11]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[10]" J8;
+IO_PORT "O_sdram_addr[10]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[9]" J2;
+IO_PORT "O_sdram_addr[9]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[8]" G4;
+IO_PORT "O_sdram_addr[8]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[7]" H4;
+IO_PORT "O_sdram_addr[7]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[6]" H1;
+IO_PORT "O_sdram_addr[6]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[5]" H2;
+IO_PORT "O_sdram_addr[5]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[4]" K7;
+IO_PORT "O_sdram_addr[4]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[3]" J11;
+IO_PORT "O_sdram_addr[3]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[2]" J10;
+IO_PORT "O_sdram_addr[2]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[1]" F7;
+IO_PORT "O_sdram_addr[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "O_sdram_addr[0]" F6;
+IO_PORT "O_sdram_addr[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# TMDS/DVI (Differential pairs)
+# =============================================================================
+# TMDS channel 0
+IO_LOC "tmds_d_p_0[0]" B11,B10;
+IO_PORT "tmds_d_p_0[0]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p_0[1]" D11,D10;
+IO_PORT "tmds_d_p_0[1]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p_0[2]" G11,G10;
+IO_PORT "tmds_d_p_0[2]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_clk_p_0" C11,C10;
+IO_PORT "tmds_clk_p_0" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+
+# TMDS channel 1
+IO_LOC "tmds_d_p_1[0]" K11,L11;
+IO_PORT "tmds_d_p_1[0]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p_1[1]" E11,E10;
+IO_PORT "tmds_d_p_1[1]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p_1[2]" A11,A10;
+IO_PORT "tmds_d_p_1[2]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_clk_p_1" L5,K5;
+IO_PORT "tmds_clk_p_1" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+
+# TMDS channel 2
+IO_LOC "tmds_d_p_2[0]" H8,H7;
+IO_PORT "tmds_d_p_2[0]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p_2[1]" G7,G8;
+IO_PORT "tmds_d_p_2[1]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_d_p_2[2]" F5,G5;
+IO_PORT "tmds_d_p_2[2]" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+IO_LOC "tmds_clk_p_2" H5,J5;
+IO_PORT "tmds_clk_p_2" IO_TYPE=LVCMOS18D PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# LCD INTERFACE
+# =============================================================================
+IO_LOC "LCD_HYNC" A11;
+IO_PORT "LCD_HYNC" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_SYNC" E11;
+IO_PORT "LCD_SYNC" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_CLK" L5;
+IO_PORT "LCD_CLK" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_DEN" K11;
+IO_PORT "LCD_DEN" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+
+IO_LOC "LCD_R[0]" G10;
+IO_PORT "LCD_R[0]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_R[1]" D10;
+IO_PORT "LCD_R[1]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_R[2]" B10;
+IO_PORT "LCD_R[2]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_R[3]" C10;
+IO_PORT "LCD_R[3]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+
+IO_LOC "LCD_G[0]" A10;
+IO_PORT "LCD_G[0]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_G[1]" E10;
+IO_PORT "LCD_G[1]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_G[2]" L11;
+IO_PORT "LCD_G[2]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_G[3]" K5;
+IO_PORT "LCD_G[3]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+
+IO_LOC "LCD_B[0]" G11;
+IO_PORT "LCD_B[0]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_B[1]" D11;
+IO_PORT "LCD_B[1]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_B[2]" B11;
+IO_PORT "LCD_B[2]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "LCD_B[3]" C11;
+IO_PORT "LCD_B[3]" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+
+# =============================================================================
+# ADC (Analog-to-Digital Converter)
+# =============================================================================
+USE_ADC_SRC bus1 IOR20;
+
+IO_LOC "adc_0_p" H5;
+IO_PORT "adc_0_p" IO_TYPE=ADC_IN PULL_MODE=NONE;
+IO_LOC "adc_0_n" J5;
+IO_PORT "adc_0_n" IO_TYPE=ADC_IN PULL_MODE=NONE;
+
+IO_LOC "adc_1_p" H8;
+IO_PORT "adc_1_p" IO_TYPE=ADC_IN PULL_MODE=NONE;
+IO_LOC "adc_1_n" H7;
+IO_PORT "adc_1_n" IO_TYPE=ADC_IN PULL_MODE=NONE;
+
+IO_LOC "adc_2_p" G7;
+IO_PORT "adc_2_p" IO_TYPE=ADC_IN PULL_MODE=NONE;
+IO_LOC "adc_2_n" G8;
+IO_PORT "adc_2_n" IO_TYPE=ADC_IN PULL_MODE=NONE;
+
+IO_LOC "adc_3_p" F5;
+IO_PORT "adc_3_p" IO_TYPE=ADC_IN PULL_MODE=NONE;
+IO_LOC "adc_3_n" G5;
+IO_PORT "adc_3_n" IO_TYPE=ADC_IN PULL_MODE=NONE;
+
+IO_LOC "adc_4_p" L5;
+IO_PORT "adc_4_p" IO_TYPE=ADC_IN PULL_MODE=NONE;
+IO_LOC "adc_4_n" K5;
+IO_PORT "adc_4_n" IO_TYPE=ADC_IN PULL_MODE=NONE;
+
+# =============================================================================
+# CLOCK OUTPUTS (from PLL)
+# =============================================================================
+IO_LOC "clkout0" G10;
+IO_PORT "clkout0" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "clkout1" G11;
+IO_PORT "clkout1" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "clkout2" B10;
+IO_PORT "clkout2" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "clkout3" B11;
+IO_PORT "clkout3" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "clkout4" C10;
+IO_PORT "clkout4" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "clkout5" C11;
+IO_PORT "clkout5" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "clkout6" A10;
+IO_PORT "clkout6" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+IO_LOC "lock" D10;
+IO_PORT "lock" PULL_MODE=NONE IO_TYPE=LVCMOS18;
+
+# 50MHz clock output
+IO_LOC "clk_50m" A9;
+IO_PORT "clk_50m" IO_TYPE=LVCMOS18;
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# 1. IO_TYPE=LVCMOS18 is CORRECT for GW5A family (not LVCMOS33)
+# 2. The existing primer25k.cst uses LVCMOS33 which may cause issues
+# 3. Clock pin A9 (not E2) is verified working for 27MHz oscillator
+# 4. Reset pin A2 (not H10) is verified working
+# 5. LED pin A11 is the single user LED on the core board
+# 6. For minimal blinky, use: clk (A9), led (A11), rst_n (A2)

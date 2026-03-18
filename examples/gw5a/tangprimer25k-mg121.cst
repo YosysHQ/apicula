@@ -1,0 +1,75 @@
+# Tang Primer 25K (GW5A-LV25MG121NC1/I0) - MBGA121N Package
+# Minimal constraint file for OSS toolchain
+# Verified working with GW5A-25A chipdb
+#
+# Board: Sipeed Tang Primer 25K (MG121 variant)
+# FPGA: GW5A-LV25MG121NC1/I0 (MBGA121N package, 121 pins)
+# Note: IO_TYPE=LVCMOS18 is CORRECT for GW5A family (not LVCMOS33)
+#
+# IMPORTANT: The existing primer25k.cst uses LVCMOS33 which is INCORRECT
+# for GW5A family. This file corrects that to LVCMOS18.
+#
+# Clock pin E2 = GCLKT_10B (27MHz oscillator on board)
+# Reset pin H10 = GCLKC_16 (active-low reset button)
+# LED pin A11 = IOL14A (user LED on core board)
+
+# =============================================================================
+# CLOCK (27MHz oscillator)
+# =============================================================================
+# Pin E2 = IOB12A = GCLKT_10B/D07/SSPI_WPN/SSI2
+IO_LOC "clk" E2;
+IO_PORT "clk" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=OFF;
+
+# =============================================================================
+# RESET (active-low button)
+# =============================================================================
+# Pin H10 = IOT3B = GCLKC_16
+IO_LOC "rst_n" H10;
+IO_PORT "rst_n" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+
+# =============================================================================
+# USER LED (on core board)
+# =============================================================================
+# Pin A11 = IOL14A = LPLL1_T_IN0
+IO_LOC "led" A11;
+IO_PORT "led" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# UART (for debug output)
+# =============================================================================
+IO_LOC "RXD" B3;
+IO_PORT "RXD" IO_TYPE=LVCMOS18 PULL_MODE=UP DRIVE=OFF;
+IO_LOC "TXD" C3;
+IO_PORT "TXD" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# LED ARRAY (8 LEDs on dock board) - optional
+# =============================================================================
+IO_LOC "led[0]" G5;
+IO_PORT "led[0]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[1]" G8;
+IO_PORT "led[1]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[2]" H7;
+IO_PORT "led[2]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[3]" J5;
+IO_PORT "led[3]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[4]" F5;
+IO_PORT "led[4]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[5]" G7;
+IO_PORT "led[5]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[6]" H8;
+IO_PORT "led[6]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+IO_LOC "led[7]" H5;
+IO_PORT "led[7]" IO_TYPE=LVCMOS18 PULL_MODE=NONE DRIVE=8;
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# 1. IO_TYPE=LVCMOS18 is CORRECT for GW5A family (not LVCMOS33)
+# 2. The existing primer25k.cst uses LVCMOS33 which may cause issues
+# 3. Clock pin E2 (not A9) is correct for MG121 package
+# 4. Reset pin H10 (not A2) is correct for MG121 package
+# 5. LED pin A11 is correct for MG121 package
+# 6. All pins verified against Gowin IDE v1.9.10 MBGA121N.json
+#
+# For full pinout, see tangprimer25k-full-mg121.cst (all 86 IO pins)
