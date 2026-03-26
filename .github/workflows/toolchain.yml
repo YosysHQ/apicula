@@ -50,8 +50,8 @@ jobs:
         git checkout ${{ inputs.yosys }}
         git config user.email "ci@localhost"
         git config user.name "CI"
-        git fetch origin pull/5717/head:zaun-latch
-        git merge --no-edit zaun-latch
+        #git fetch origin pull/5717/head:zaun-latch
+        #git merge --no-edit zaun-latch
         git submodule update --init --recursive
         make config-clang
         make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
@@ -63,8 +63,8 @@ jobs:
         git checkout ${{ inputs.nextpnr }}
         git config user.email "ci@localhost"
         git config user.name "CI"
-        git fetch origin pull/1652/head:zaun-latch
-        git merge --no-edit zaun-latch
+        #git fetch origin pull/1652/head:zaun-latch
+        #git merge --no-edit zaun-latch
         git submodule update --init --recursive
         cmake -B build -DBUILD_PYTHON=OFF -DARCH="himbaechel" \
           -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" \
