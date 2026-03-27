@@ -11,24 +11,7 @@ YOSYS_FLAGS = -setundef
 .PHONY: clean
 
 tangnano20k: \
-	blinky-latch-tangnano20k.fs \
-	blinky-tangnano20k.fs shift-tangnano20k.fs blinky-tbuf-tangnano20k.fs blinky-oddr-tangnano20k.fs \
-	blinky-osc-tangnano20k.fs tlvds-tangnano20k.fs elvds-tangnano20k.fs oddr-tlvds-tangnano20k.fs \
-	blinky-clkdiv-tangnano20k.fs dvi-example-tangnano20k.fs blinky-clkdiv-dhcen-tangnano20k.fs \
-	oddr-elvds-tangnano20k.fs pll-nanolcd-tangnano20k.fs attosoc-tangnano20k.fs \
-	oser4-tangnano20k.fs ovideo-tangnano20k.fs oser8-tangnano20k.fs oser10-tangnano20k.fs \
-	iddr-tangnano20k.fs iddrc-tangnano20k.fs iodelay-tangnano20k.fs \
-	ides4-tangnano20k.fs ivideo-tangnano20k.fs ides8-tangnano20k.fs ides10-tangnano20k.fs \
-	bsram-pROM-tangnano20k.fs bsram-SDPB-tangnano20k.fs bsram-SP-tangnano20k.fs \
-	bsram-DPB-tangnano20k.fs bsram-pROMX9-tangnano20k.fs bsram-SDPX9B-tangnano20k.fs \
-	bsram-SPX9-tangnano20k.fs bsram-DPX9B-tangnano20k.fs femto-riscv-memtest-tangnano20k.fs \
-	femto-riscv-15-tangnano20k.fs femto-riscv-16-tangnano20k.fs femto-riscv-18-tangnano20k.fs \
-	dsp-mult18x18-tangnano20k.fs dsp-mult36x36-tangnano20k.fs dsp-padd9-tangnano20k.fs dsp-padd18-tangnano20k.fs \
-	dsp-mult9x9-tangnano20k.fs dsp-alu54d-tangnano20k.fs dsp-multalu18x18-tangnano20k.fs \
-	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
-	dqce-tangnano20k.fs dcs-tangnano20k.fs \
-	femto-riscv-18-test-tangnano20k.fs \
-	latch-tangnano20k.fs
+	dsp-padd9-tangnano20k.fs
 
 primer20k: \
 	blinky-latch-primer20k.fs \
