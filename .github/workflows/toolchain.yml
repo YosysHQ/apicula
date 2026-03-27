@@ -128,7 +128,7 @@ jobs:
           pip install dist/*.whl
         fi
     - name: Build examples
-      run: make -C ${{ matrix.board.dir }} -j$(nproc) ${{ matrix.board.target }}
+      run: make -C ${{ matrix.board.dir }} -j1 ${{ matrix.board.target }}
     - name: Archive artifact
       uses: actions/upload-artifact@v4
       with:
