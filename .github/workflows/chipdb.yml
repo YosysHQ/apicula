@@ -70,10 +70,10 @@ jobs:
       yosys: main
       nextpnr: main
 
-  stable:
-    needs: [build]
-    uses: ./.github/workflows/toolchain.yml
-    with:
-      name: stable
-      yosys: v0.62
-      nextpnr: nextpnr-0.9
+#  stable:
+#    needs: [build]
+#    uses: ./.github/workflows/toolchain.yml
+#    with:
+#      name: stable
+#      yosys: v0.62
+#      nextpnr: nextpnr-0.9

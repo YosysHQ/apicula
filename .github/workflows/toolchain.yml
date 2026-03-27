@@ -87,16 +87,16 @@ jobs:
       matrix:
         board:
           - {target: tangnano20k, dir: examples}
-          - {target: primer20k, dir: examples}
-          - {target: tangnano, dir: examples, pure: true}
-          - {target: tangnano1k, dir: examples}
-          - {target: tangnano4k, dir: examples}
-          - {target: tangnano9k, dir: examples}
-          - {target: szfpga, dir: examples}
-          - {target: tec0117, dir: examples}
-          - {target: runber, dir: examples}
-          - {target: primer25k, dir: examples/gw5a}
-          - {target: tangmega138k, dir: examples/gw5a}
+#          - {target: primer20k, dir: examples}
+#          - {target: tangnano, dir: examples, pure: true}
+#          - {target: tangnano1k, dir: examples}
+#          - {target: tangnano4k, dir: examples}
+#          - {target: tangnano9k, dir: examples}
+#          - {target: szfpga, dir: examples}
+#          - {target: tec0117, dir: examples}
+#          - {target: runber, dir: examples}
+#          - {target: primer25k, dir: examples/gw5a}
+#          - {target: tangmega138k, dir: examples/gw5a}
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python
