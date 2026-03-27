@@ -1,6 +1,6 @@
 YOSYS ?= yosys
 NEXTPNR ?= nextpnr-himbaechel
-NEXTPNR_FLAGS ?= --timing-allow-fail -v --debug
+NEXTPNR_FLAGS ?= --timing-allow-fail -r
 YOSYS_FLAGS = -setundef
 
 .DEFAULT_GOAL := all
