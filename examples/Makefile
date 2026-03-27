@@ -337,7 +337,7 @@ hil-all: hil-tangnano20k hil-tec0117
 	gowin_pack -c -d GW2A-18C -o $@ $<
 
 %-tangnano20k.json: %-tangnano20k-synth.json tangnano20k.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --seed 1 --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=tangnano20k.cst
+	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=tangnano20k.cst
 
 %-tangnano20k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=1 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -D RISCV_MEM_88K -p "read_verilog $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
