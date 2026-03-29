@@ -337,7 +337,7 @@ hil-all: hil-tangnano20k hil-tec0117
 	gowin_pack -c -d GW2A-18C -o $@ $<
 
 %-tangnano20k.json: %-tangnano20k-synth.json tangnano20k.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=tangnano20k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=tangnano20k.cst
 
 %-tangnano20k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=1 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -D RISCV_MEM_88K -p "read_verilog $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
@@ -360,7 +360,7 @@ dvi-example-tangnano20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chan
 	gowin_pack -c -d GW2A-18 -o $@ $<
 
 %-primer20k.json: %-primer20k-synth.json primer20k.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW2A-LV18PG256C8/I7 --vopt family=GW2A-18 --vopt cst=primer20k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW2A-LV18PG256C8/I7 --vopt family=GW2A-18 --vopt cst=primer20k.cst
 
 %-primer20k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
@@ -383,7 +383,7 @@ dvi-example-primer20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channe
 	gowin_pack -c -d GW1N-1 -o $@ $^
 
 %-tangnano.json: %-tangnano-synth.json tangnano.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW1N-LV1QN48C6/I5 --vopt cst=tangnano.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW1N-LV1QN48C6/I5 --vopt cst=tangnano.cst
 
 %-tangnano-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCH -D INV_BTN=0 -D NUM_HCLK=2 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
@@ -400,7 +400,7 @@ bsram-%-tangnano-synth.json: pll/GW1N-1-dyn.vh io565.vh display-480x272.v %-imag
 	gowin_pack -c -d GW1NZ-1 -o $@ $^
 
 %-tangnano1k.json: %-tangnano1k-synth.json tangnano1k.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW1NZ-LV1QN48C6/I5 --vopt cst=tangnano1k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW1NZ-LV1QN48C6/I5 --vopt cst=tangnano1k.cst
 
 %-tangnano1k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=3 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D NUM_HCLK=4 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
@@ -424,7 +424,7 @@ emcu-%-tangnano4k.fs: emcu-%-tangnano4k.json
 	gowin_pack -d GW1NS-4 --mspi_as_gpio -o $@ $^
 
 %-tangnano4k.json: %-tangnano4k-synth.json tangnano4k.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --vopt cst=tangnano4k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW1NSR-LV4CQN48PC7/I6 --vopt cst=tangnano4k.cst
 
 %-tangnano4k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=2 -D RISCV_MEM_16K -p "read_verilog $^; synth_gowin -nolutram -nowidelut -json $@ ${YOSYS_FLAGS}"
@@ -439,7 +439,7 @@ emcu-%-tangnano4k.fs: emcu-%-tangnano4k.json
 	gowin_pack -c -d GW1N-9C -o $@ $^
 
 %-tangnano9k.json: %-tangnano9k-synth.json tangnano9k.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=tangnano9k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW1NR-LV9QN88PC6/I5 --vopt family=GW1N-9C --vopt cst=tangnano9k.cst
 
 %-tangnano9k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -D HAS_FLASH608K -D RISCV_MEM_48K -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
@@ -462,7 +462,7 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-chann
 	gowin_pack -c -d GW1N-9 -o $@ $<
 
 %-miniszfpga.json: %-miniszfpga-synth.json miniszfpga.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW1N-LV9QN48C6/I5 --vopt family=GW1N-9 --vopt cst=miniszfpga.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW1N-LV9QN48C6/I5 --vopt family=GW1N-9 --vopt cst=miniszfpga.cst
 
 %-miniszfpga-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
@@ -479,7 +479,7 @@ bsram-%-miniszfpga-synth.json: pll/GW1N-9-dyn.vh io565.vh display-480x272.v %-im
 	gowin_pack -c -d GW1N-9 -o $@ $<
 
 %-szfpga.json: %-szfpga-synth.json szfpga.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --seed=3 --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --vopt family=GW1N-9 --vopt cst=szfpga.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --seed=3 --json $< --write $@ --device GW1NR-LV9LQ144PC6/I5 --vopt family=GW1N-9 --vopt cst=szfpga.cst
 
 %-szfpga-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
@@ -496,7 +496,7 @@ bsram-%-szfpga-synth.json: pll/GW1N-9-dyn.vh io565.vh display-480x272.v %-image-
 	gowin_pack -c -d GW1N-9 -o $@ $<
 
 %-tec0117.json: %-tec0117-synth.json tec0117.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --vopt family=GW1N-9 --vopt cst=tec0117.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW1NR-LV9QN88C6/I5 --vopt family=GW1N-9 --vopt cst=tec0117.cst
 
 %-tec0117-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=12 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
@@ -510,7 +510,7 @@ blinky-pll-tec0117-synth.json: pll/GW1N-9-dyn.vh blinky-pll.v
 	gowin_pack -c -d GW1N-4 -o $@ $<
 
 %-runber.json: %-runber-synth.json runber.cst
-	$(NEXTPNR) $(NEXTPNR_FLAGS) --json $< --write $@ --device GW1N-UV4LQ144C6/I5 --vopt cst=runber.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW1N-UV4LQ144C6/I5 --vopt cst=runber.cst
 
 %-runber-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=12 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
