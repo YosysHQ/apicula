@@ -165,6 +165,12 @@ class Device:
     # { 'top'/'bottom' : { spine : [(row, col, wire, 1/0), (row, col, wire, 1/0)...]}}
     spine_select_wires: Dict[str, Dict[str, List[Tuple[int, int, str, int]]]] = field(default_factory=dict)
     last_top_row: int = field(default=0)
+    # Which HCLK block can be used for an IOLOGIC located at the specified IO coordinates
+    # hclk idx : {(row, col), }
+    io2hclk: Dict[int, Set[Tuple[int, int]]] = field(default_factory=dict)
+    # Where are the CLKDIV2s associated with a specific HCLK located
+    # hclk idx : {(row, col, div2_idx), }
+    hclk_div2: Dict[int, Set[Tuple[int, int, int]]] = field(default_factory=dict)
 
     def __getitem__(self, pos: Tuple[int, int]) -> Tile:
         """Get tile at (row, col)."""
@@ -348,6 +354,7 @@ _wire_tables = {
         'GENERAL'          :  2,
         'ALONE_NODE_6'     :  6,
         'CLOCK_MUX'        : 38,
+        'HCLK'             : 48,
         'ALONE_NODE'       : 69,
         'CLOCK_MUX_TOP'    : 90,
         'CLOCK_MUX_BOTTOM' : 91,
@@ -989,36 +996,213 @@ def fse_fill_logic_tables(dev, fse, device):
                 for f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, *fuses in fse[ttyp]['longval'][ltable]:
                     table[(f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15)] = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
 
-# In the cell, the table [‘wire’][48] describes the fuses for the HCLK wires.
-# The problem is that the wire numbers used in these tables are the same for
-# all 4 HCLKs. This function returns the HCLK index by cell type.
-_ttyp_2_hclk = { 242: 0, 411: 0, 422: 0, 466: 0,
-                48: 1,  60: 1, 274: 1, 437: 1,
-                50: 2, 272: 2, 403: 2,
-                49: 3, 220: 3, 392: 3, 407: 3}
-def gw5_ttyp_to_hclk_idx(ttyp):
-    if ttyp not in _ttyp_2_hclk:
-        return None
-    return _ttyp_2_hclk[ttyp]
+def gw5_hclk_idx(dev, device, row, col):
+    if device == 'GW5A-25A':
+        if row == 0:
+            if col < 28:
+                return 2
+            return 0
+        if row == dev.rows - 1:
+            if col < 64:
+                return 1
+            return 3
+        if col == 0:
+            return 2
+        return 3
+    return -1
+
+# Table 48 describes the HCLK wire connections, but the problem is that it also
+# includes HCLK->GlobalCLK connections and HCLK->unknown-purpose-wire
+# connections.
+# Inter-hclk wires have unique wire numbers, whereas the HCLK wires are the
+# same for all HCLK and are determined by the layout of Table 48 itself.
+def gw5_hclk_wire_offset(device):
+    return {'GW5A-25A': 187, 'GW5AST-138C': 187}[device]
+
+def gw5_ihclk_wire_num(device):
+    return {'GW5A-25A': 65}[device]
+
+def gw5_get_num_of_hclks(device):
+    if device == 'GW5A-25A':
+        return 4;
+    return 6
+
+# These cells do contain IOLOGIC
+def gw5_create_hclk_iol_pip(dev, device, row, col):
+    if device == 'GW5A-25A':
+        if row == 0:
+            return col not in {46, 59, 64, 81, 92}
+        if row == dev.rows - 1:
+            return col not in {0, 27, 46, 63}
+        if col == 0:
+            return row not in {10, 18}
+        if col == dev.cols - 1:
+            return row not in {2, 10, 27}
+    return False
+
+def gw5_logic_to_hclk_wires(device):
+    if device == 'GW5A-25A':
+        return {0: (0, 64), 1: (36, 27), 2: (1, 0), 3: (34, 91)}
+    return {}
+
+def make_hclk_pip(dev, hclk_idx, row, col, src, dest, fuses = set()):
+    dev.hclk_pips.setdefault((row, col), {}).setdefault(dest, {}).update({src: fuses})
+    # make hclk_nodes
+    add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, src)
+    add_node(dev, f'HCLK{hclk_idx}_{dest}', "GLOBAL_CLK", row, col, dest)
 
 def gw5_make_hclk_pips(dev, device, fse, dat: Datfile):
+    hclk_off = gw5_hclk_wire_offset(device)
+    ihclk_wire_num = gw5_ihclk_wire_num(device)
+
+    def mk_hclk_pip(hclk_idx, row, col, src, dest, fuses = set()):
+        make_hclk_pip(dev, hclk_idx, row, col, src, dest, fuses)
+
+    # make logic to hclk nodes
+    for hclk_idx in range(gw5_get_num_of_hclks(device)):
+        row, col = gw5_logic_to_hclk_wires(device)[hclk_idx]
+        for idx in range(4):
+            src = ["CLK0", "CLK1", "CLK2", "LSR2"][idx]
+            dest = wnames.hclknames[30 + idx + hclk_idx * hclk_off]
+            add_node(dev, f'HCLK{hclk_idx}_{dest}', "GLOBAL_CLK", row, col, src)
+
     for row in range(dev.rows):
         for col in range(dev.cols):
             ttyp = dev.grid[row][col]
-            hclk_idx = gw5_ttyp_to_hclk_idx(ttyp)
-            if hclk_idx and 48 in fse[ttyp]['wire']:
-                for srcid, destid, *fuses in fse[ttyp]['wire'][48]:
-                    fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
-                    # This is not a magic number, but simply the number of wires in a
-                    # single HCLK. Their indices are the same for all HCLKs,
-                    # but we renumber them for routing purposes so that each HCLK
-                    # has unique wire numbering.
-                    src = wnames.hclknames[srcid + 187]
-                    dest = wnames.hclknames[destid + 187]
-                    dev.hclk_pips.setdefault((row, col), {}).setdefault(dest, {}).update({src: fuses})
-                    # make hclk_nodes
-                    add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, src)
-                    add_node(dev, f'HCLK{hclk_idx}_{dest}', "GLOBAL_CLK", row, col, dest)
+            hclk_idx = gw5_hclk_idx(dev, device, row, col)
+            if hclk_idx >= 0:
+                if 48 in fse[ttyp]['wire']:
+                    for srcid, destid, *fuses in fse[ttyp]['wire'][48]:
+                        fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
+                        # HCLK wires
+                        if srcid < hclk_off and destid < hclk_off:
+                            # skip HCLK->GCLK gates
+                            if srcid in {28, 25, 29, 27} and destid in range(169, 185):
+                                continue
+                            src = wnames.hclknames[srcid + hclk_idx * hclk_off]
+                            dest = wnames.hclknames[destid + hclk_idx * hclk_off]
+                            mk_hclk_pip(hclk_idx, row, col, src, dest, fuses)
+                        elif srcid in range(hclk_off, hclk_off + 4 * ihclk_wire_num) and destid in range(hclk_off, hclk_off + 4 * ihclk_wire_num):
+                            src = wnames.hclknames[srcid + 5 * hclk_off]
+                            dest = wnames.hclknames[destid + 5 * hclk_off]
+                            mk_hclk_pip('_IHCLK', row, col, src, dest, fuses)
+
+                if gw5_create_hclk_iol_pip(dev, device, row, col):
+                    dev.io2hclk.setdefault(hclk_idx, set()).add((row, col))
+                    # Each IOLOGIC can use four HCLK lines for FCLK, and
+                    # the connection is established by setting the
+                    # functional fuses in the IOLOGIC, not the routing
+                    # fuses.
+                    # However, for simplicity, we create PIPs such as HCLK0 -> FCLK_A, etc.
+                    # In other words, the FCLK_A|B wires do not exist, the
+                    # PIP does not exist, and the HCLK0|1|2|3 themselves
+                    # are present in the cell only virtually, so we also
+                    # create a node.
+                    fuses = set()
+                    for i in range(2):
+                        dest = f'FCLK{"AB"[i]}'
+                        for j in range(4):
+                            src = f'HCLK{hclk_idx}{j}'
+                            dev.hclk_pips.setdefault((row, col), {}).setdefault(dest, {}).update({src: fuses})
+                            add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, src)
+
+    # default PIPs - The tables for the GW5A series do not include
+    # descriptions of the default PIPs. So we add them manually by placing
+    # them in cell (0, 0) — this works because the default PIP has no fuse.
+    # XXX This section will need to be modified for the 138C—it has more HCLKs
+    row = 0
+    col = 0
+    for hclk_idx in range(4):
+        for j in range(4):
+            # make pip HCLKxy <- HCLK_MUX_ALPHAxy
+            src = f'HCLK_MUX_ALPHA{hclk_idx}{j}'
+            dest = f'HCLK{hclk_idx}{j}'
+            mk_hclk_pip(hclk_idx, row, col, src, dest)
+
+            # make internal pip for buffer
+            for buf_idx in "AB":
+                src =  f'HCLK_BUF_{buf_idx}I{hclk_idx}{j}'
+                dest = f'HCLK_BUF_{buf_idx}O{hclk_idx}{j}'
+                mk_hclk_pip(hclk_idx, row, col, src, dest)
+
+            # make default pip for inter-hclk output
+            src =  f'HCLK_FROM_IHCLK{hclk_idx}{j}'
+            dest = f'HCLK_MUX_DELTA{hclk_idx}{j}'
+            mk_hclk_pip(hclk_idx, row, col, src, dest)
+
+            # make default pip for inter-hclk input
+            src =  f'HCLK_GCLK_MUX{hclk_idx}{[0, 2, 1, 3][j]}'
+            dest = f'HCLK_TO_IHCLK{hclk_idx}{j}'
+            mk_hclk_pip(hclk_idx, row, col, src, dest)
+
+            # make default pip from mux gamma
+            if j % 2 == 1:
+                src = f'HCLK_MUX_GAMMA{hclk_idx}{j}'
+                dest = f'HCLK_BUF_{buf_idx}I{hclk_idx}{j}'
+                mk_hclk_pip(hclk_idx, row, col, src, dest)
+
+    # Inter-hclk outs
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT00', 'HCLK_FROM_IHCLK00')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT01', 'HCLK_FROM_IHCLK02')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT02', 'HCLK_FROM_IHCLK31')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT03', 'HCLK_FROM_IHCLK33')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT10', 'HCLK_FROM_IHCLK30')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT11', 'HCLK_FROM_IHCLK32')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT12', 'HCLK_FROM_IHCLK11')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT13', 'HCLK_FROM_IHCLK13')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT20', 'HCLK_FROM_IHCLK10')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT21', 'HCLK_FROM_IHCLK12')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT22', 'HCLK_FROM_IHCLK21')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT23', 'HCLK_FROM_IHCLK23')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT30', 'HCLK_FROM_IHCLK20')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT31', 'HCLK_FROM_IHCLK22')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT32', 'HCLK_FROM_IHCLK01')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT33', 'HCLK_FROM_IHCLK03')
+
+    # Inter-hclk muxes
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX00', 'HCLK_IHCLK_OUT00')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX00', 'HCLK_IHCLK_OUT02')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX01', 'HCLK_IHCLK_OUT01')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX01', 'HCLK_IHCLK_OUT03')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX10', 'HCLK_IHCLK_OUT10')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX10', 'HCLK_IHCLK_OUT12')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX11', 'HCLK_IHCLK_OUT11')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX11', 'HCLK_IHCLK_OUT13')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX20', 'HCLK_IHCLK_OUT20')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX20', 'HCLK_IHCLK_OUT22')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX21', 'HCLK_IHCLK_OUT21')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX21', 'HCLK_IHCLK_OUT23')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX30', 'HCLK_IHCLK_OUT30')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX30', 'HCLK_IHCLK_OUT32')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX31', 'HCLK_IHCLK_OUT31')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_MUX31', 'HCLK_IHCLK_OUT33')
+
+    # Inter-hclk outs
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK00', 'HCLK_IHCLK_IN00')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK02', 'HCLK_IHCLK_IN01')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK31', 'HCLK_IHCLK_IN02')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK33', 'HCLK_IHCLK_IN03')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK30', 'HCLK_IHCLK_IN10')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK32', 'HCLK_IHCLK_IN11')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK11', 'HCLK_IHCLK_IN12')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK13', 'HCLK_IHCLK_IN13')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK10', 'HCLK_IHCLK_IN20')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK12', 'HCLK_IHCLK_IN21')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK21', 'HCLK_IHCLK_IN22')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK23', 'HCLK_IHCLK_IN23')
+
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK20', 'HCLK_IHCLK_IN30')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK22', 'HCLK_IHCLK_IN31')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK01', 'HCLK_IHCLK_IN32')
+    mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK03', 'HCLK_IHCLK_IN33')
 
 
 # So far, there is only one match (as the clock is soldered in TangPrimer25k),
@@ -1064,25 +1248,21 @@ def gw5_make_hclk_to_clk_gates(dev, device, fse, dat: Datfile):
                  'T': { 'row':  0, 'col': 59, 'ttyp': 410, 'hclk_idx': 0},
                  'R': { 'row': 27, 'col': 91, 'ttyp': 187, 'hclk_idx': 3},
                  'L': { 'row': 10, 'col':  0, 'ttyp': 257, 'hclk_idx': 2},}
+    hclk_off = gw5_hclk_wire_offset(device)
     def make_node_and_gate_pip(row, col, side, clk_name):
         node_name = f'HCLK_GATE{side}{clk_name}'
         node_name = add_node(dev, node_name, "GLOBAL_CLK", row, col, clk_name)
-        add_node(dev, node_name, "GLOBAL_CLK", spec_ttyp[side]['row'], spec_ttyp[side]['col'],
-                 wnames.hclknames[wnames.clknumbers[clk_name]])
+        add_node(dev, node_name, "GLOBAL_CLK", spec_ttyp[side]['row'], spec_ttyp[side]['col'], clk_name)
         # extract HCLK->GCLK fuses, make wire and pip
         clk_wire_idx = wnames.clknumbers[clk_name]
         for srcid, destid, *fuses in fse[spec_ttyp[side]['ttyp']]['wire'][48]:
-            if destid != clk_wire_idx:
+            if destid != clk_wire_idx or srcid not in {28, 25, 29, 27}:
                 continue
             fuses = {fuse.fuse_lookup(fse, spec_ttyp[side]['ttyp'], f, device) for f in unpad(fuses)}
-            # This is not a magic number, but simply the number of wires in a
-            # single HCLK. Their indices are the same for all HCLKs,
-            # but we renumber them for routing purposes so that each HCLK
-            # has unique wire numbering.
-            src = wnames.hclknames[srcid + 187 * spec_ttyp[side]['hclk_idx']]
-            dest = wnames.hclknames[destid]
+            src = wnames.hclknames[srcid + hclk_off * spec_ttyp[side]['hclk_idx']]
+            dest = wnames.clknames[destid]
             dev.hclk_pips.setdefault((spec_ttyp[side]['row'], spec_ttyp[side]['col']), {}).setdefault(dest, {}).update({src: fuses})
-            # expose HCLK src wire as node
+            # HCLK src wire as node
             add_node(dev, f"HCLK{spec_ttyp[side]['hclk_idx']}_{src}", "GLOBAL_CLK",
                      spec_ttyp[side]['row'], spec_ttyp[side]['col'], src)
 
@@ -1111,6 +1291,37 @@ def gw5_make_hclk_to_clk_gates(dev, device, fse, dat: Datfile):
                             remove_hclk_in.add(hclk_in)
                     for hclk_in in remove_hclk_in:
                         to_create[spine].discard(hclk_in)
+
+# The GW5A series has a different CLKDIV/CLKDIV2 configuration—each of the four
+# wires in a single HCLK block has its own dedicated CLKDIV/CLKDIV2. The inputs
+# for CLKDIV2 are HCLK_BUF_BO.
+_gw5a_hclk_locs = { 'GW5A-25A': { 0: (0, 64), 1: (36, 27), 2: (1, 0), 3: (34, 91)} }
+def gw5_add_hclk_bels(dat, dev, device):
+    for hclk_idx, hclk_loc in _gw5a_hclk_locs[device].items():
+        row, col = hclk_loc
+        extra = dev.extra_func.setdefault((row, col), {}).setdefault('clkdiv2', {})
+        extra['hclk_idx'] = hclk_idx
+        for i in range(4):
+            # XXX skip for now
+            if i in {1, 3}:
+                continue
+            dev.hclk_div2.setdefault(hclk_idx, set()).add((row, col, i))
+            clkdiv2 = extra.setdefault('bels', {}).setdefault(i, {})
+            # XXX not creating Bels — in this case, the creation of the CLKDIV
+            # mechanism for pre-5A chips in nextpnr will not be triggered
+            #dev[row, col].bels[f'CLKDIV2{i}'] = Bel()
+            portmap = clkdiv2.setdefault('inputs', {})
+            portmap['RESETN'] = f'B{i + 2}'  # GW5A-25A 0-B2, 1-B3, 2-B4, 3-B5
+            portmap['HCLKIN'] = f'CLKDIV2_HCLKIN{hclk_idx}{i}'
+            src = f'HCLK_BUF_BO{hclk_idx}{i}'
+            dest = portmap['HCLKIN']
+            add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, src)
+            add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, dest)
+
+            portmap = clkdiv2.setdefault('outputs', {})
+            portmap['CLKOUT'] = f'CLKDIV2_O{hclk_idx}{i}'
+            make_hclk_pip(dev, hclk_idx, row, col, portmap['CLKOUT'], f'HCLK_MUX_ALPHA{hclk_idx}{i}')
+    return
 
 # HCLK for Himbaechel
 #
@@ -1491,9 +1702,11 @@ def _iter_edge_coords(dev):
     for y in range(Y-1,-1,-1):
         yield (y, 0)
 
-
 def add_hclk_bels(dat, dev, device):
     #Stub for parts that don't have HCLK bel support yet
+    if device in {'GW5A-25A'}:
+        gw5_add_hclk_bels(dat, dev, device)
+        return
     if device not in ("GW2A-18", "GW2A-18C", "GW1N-9", "GW1N-9C", "GW1N-1", "GW1NZ-1", "GW1NS-4", "GW1N-4"):
         to_connect = ['HCLK0_SECT0_IN', 'HCLK0_SECT1_IN', 'HCLK1_SECT0_IN', 'HCLK1_SECT1_IN']
         for x in range(dev.cols):
@@ -2066,7 +2279,9 @@ def fse_iologic(device, fse, ttyp):
         return bels
     if device in {'GW1NS-4'} and ttyp in {86, 87, 135, 136, 137, 138}:
         return bels
-    if device in {'GW5A-25A'}:
+    if device in {'GW5A-25A'} and ttyp in {48, 51, 263, 392, 399}:
+        return bels
+    if device in {'GW5AST-138AC'}:
         return bels
     if 'shortval' in fse[ttyp].keys():
         if 21 in fse[ttyp]['shortval'].keys():
@@ -3628,6 +3843,7 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("NEED_BSRAM_RESET_FIX")
         dev.chip_flags.append("NEED_SDP_FIX")
         dev.chip_flags.append("HAS_5A_DSP")
+        dev.chip_flags.append("HAS_5A_HCLK")
     if device in {'GW5AST-138C'}:
         dev.chip_flags.append("HAS_PINCFG")
         dev.chip_flags.append("HAS_DFF67")
@@ -3971,7 +4187,7 @@ def need_create_multiple_nodes(device, name):
         return True
     if name == "BSRAM" or name.startswith("MULT") or name.startswith("PADD") or name.startswith("ALU54D"):
         return True
-    if name.startswith('IOB') and device in {'GW5A-25A', 'GW5AST-138C'}:
+    if (name.startswith('IOB') or name.startswith('IOLOGIC')) and device in {'GW5A-25A', 'GW5AST-138C'}:
         return True
     return False
 
@@ -4208,20 +4424,69 @@ def dat_portmap(dat, dev, device):
                             bel.portmap['BOTTOM_IO_PORT_B'] = dev.bottom_io[1]
                 elif name.startswith("IOLOGIC"):
                     buf = name[-1]
-                    for idx, nam in _iologic_inputs:
-                        w_idx = dat.portmap[f'Iologic{buf}In'][idx]
-                        if w_idx >= 0:
-                            bel.portmap[nam] = wnames.wirenames[w_idx]
-                        elif nam == 'FCLK':
-                            # dummy Input, we'll make a special pips for it
-                            bel.portmap[nam] = "FCLK"
-                    # these inputs for IEM window selection
-                    bel.portmap['WINSIZE0'] = {'A':"C6", 'B':"C7"}[buf]
-                    bel.portmap['WINSIZE1'] = {'A':"D6", 'B':"D7"}[buf]
-                    for idx, nam in _iologic_outputs:
-                        w_idx = dat.portmap[f'Iologic{buf}Out'][idx]
-                        if w_idx >= 0:
-                            bel.portmap[nam] = wnames.wirenames[w_idx]
+                    if not is_GW5_family(device):
+                        for idx, nam in _iologic_inputs:
+                            w_idx = dat.portmap[f'Iologic{buf}In'][idx]
+                            if w_idx >= 0:
+                                bel.portmap[nam] = wnames.wirenames[w_idx]
+                            elif nam == 'FCLK':
+                                # dummy Input, we'll make a special pips for it
+                                bel.portmap[nam] = "FCLK"
+                        # these inputs for IEM window selection
+                        bel.portmap['WINSIZE0'] = {'A':"C6", 'B':"C7"}[buf]
+                        bel.portmap['WINSIZE1'] = {'A':"D6", 'B':"D7"}[buf]
+                        for idx, nam in _iologic_outputs:
+                            w_idx = dat.portmap[f'Iologic{buf}Out'][idx]
+                            if w_idx >= 0:
+                                bel.portmap[nam] = wnames.wirenames[w_idx]
+                    else:
+                        # We move the IOB bels into a single cell, making it
+                        # very easy to determine whether we are dealing with
+                        # the main IOLOGIC cell—if there are IOB bels, then it
+                        # is the main one.
+                        if 'IOBB' in tile.bels:
+                            r_off, c_off = tile.bels['IOBB'].fuse_cell_offset
+                            for idx, nam in _iologic_inputs:
+                                w_idx = dat.compat_dict[f'Iologic{buf}In'][idx]
+                                if w_idx >= 0:
+                                    wire = wnames.wirenames[w_idx]
+                                    if buf == 'B':
+                                        node_wire = wire
+                                        wire = f'IOLOGIC{wire}'
+                                        node_name = f'X{row + r_off}Y{col + c_off}/{node_wire}'
+                                        add_node(dev, node_name, "IO_I", row, col, wire)
+                                        add_node(dev, node_name, "IO_I", row + r_off, col + c_off, node_wire)
+                                    bel.portmap[nam] = wire
+                                elif nam == 'FCLK':
+                                    # dummy Input, we'll make a special pips for it
+                                    bel.portmap[nam] = "FCLK"
+                            for idx, nam in _iologic_outputs:
+                                w_idx = dat.compat_dict[f'Iologic{buf}Out'][idx]
+                                if w_idx >= 0:
+                                    wire = wnames.wirenames[w_idx]
+                                    if buf == 'B':
+                                        node_wire = wire
+                                        wire = f'IOLOGIC{wire}'
+                                        node_name = f'X{row + r_off}Y{col + c_off}/{node_wire}'
+                                        add_node(dev, node_name, "IO_I", row, col, wire)
+                                        add_node(dev, node_name, "IO_I", row + r_off, col + c_off, node_wire)
+                                    bel.portmap[nam] = wire
+                            # D8-D15 are placed in paired cell
+                            pair = {'A': 'B', 'B': 'A'}[buf]
+                            for idx, nam in _iologic_inputs:
+                                if nam not in {'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'}:
+                                    continue
+                                w_idx = dat.compat_dict[f'Iologic{pair}In'][idx]
+                                if w_idx >= 0:
+                                    wire = wnames.wirenames[w_idx]
+                                    if buf == 'A':
+                                        node_wire = wire
+                                        wire = f'IOLOGIC{wire}'
+                                        node_name = f'X{row + r_off}Y{col + c_off}/{node_wire}'
+                                        add_node(dev, node_name, "IO_I", row, col, wire)
+                                        add_node(dev, node_name, "IO_I", row + r_off, col + c_off, node_wire)
+                                    bel.portmap[f'D{int(nam[-1]) + 8}'] = wire
+
                 elif name.startswith("OSER16"):
                     for idx, nam in _oser16_inputs:
                         w_idx = dat.portmap[f'IologicAIn'][idx]
@@ -4231,7 +4496,7 @@ def dat_portmap(dat, dev, device):
                             # dummy Input, we'll make a special pips for it
                             bel.portmap[nam] = "FCLK"
                     for idx, nam in _oser16_outputs:
-                        w_idx = dat.portmap[f'IologicAOut'][idx]
+                        w_idx = dat.portmap[f'IologicAOut'][idx] if not is_GW5_family(device) else dat.compat_dict[f'Iologic{buf}Out'][idx]
                         if w_idx >= 0:
                             bel.portmap[nam] = wnames.wirenames[w_idx]
                     bel.portmap.update(_oser16_fixed_inputs)

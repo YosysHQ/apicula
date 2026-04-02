@@ -2956,11 +2956,16 @@ def bin_str_to_dec(str_val):
         return str(dec_num)
     return None
 
-
+def set_5a_hclk_attrs(db, params, num, typ, cell_name):
+    #print(f'HCLK:', cell_name)
+    return {}
 
 _hclk_default_params ={"GSREN": "FALSE", "DIV_MODE":"2"}
 def set_hclk_attrs(db, params, num, typ, cell_name):
     attrs_upper(params)
+    if device in {'GW5A-25A'}:
+        return set_5a_hclk_attrs(db, params, num, typ, cell_name)
+
     name_pattern = r'^_HCLK([0,1])_SECT([0,1])$'
     params = dict(_hclk_default_params | params)
     attrs = {}
@@ -3015,6 +3020,13 @@ _iologic_default_attrs = {
         'IDDRC' : {'CLKIMUX': 'ENABLE', 'LSRIMUX_0': '1', 'LSROMUX_0': '0'},
         'IDES16': { 'GSREN': 'FALSE', 'LSREN': 'TRUE', 'CLKIMUX': 'ENABLE'},
         }
+
+_iologic_5a_default_attrs = {
+        'TSHX': 'UNKNOWN', 'UPDATE': 'UNKNOWN', 'TSMUX_1': '1', 'GSR': 'ENABLE', 'CEMUX_CE': 'SIG',
+        'CLKMUX_CLK': 'SIG', 'CLKIMUX_1': '1', 'CLKOMUX_1': '1',
+        'LSRMUX_LSR': '0', 'LSRIMUX_0': '0', 'LSROMUX_0': '0',
+        }
+
 def iologic_mod_attrs(attrs):
     attrs_upper(attrs)
     if 'TXCLK_POL' in attrs:
@@ -3054,49 +3066,71 @@ def make_iodelay_attrs(in_attrs, param):
             in_attrs[f'DELAY_DEL{i - 1}'] = '1'
     in_attrs.pop('C_STATIC_DLY', None);
 
-def set_iologic_attrs(db, attrs, param):
-    attrs_upper(attrs)
-    in_attrs = _iologic_default_attrs[param['IOLOGIC_TYPE']].copy()
-    in_attrs.update(attrs)
-    iologic_mod_attrs(in_attrs)
-    fin_attrs = set()
-    if 'OUTMODE' in attrs:
-        if param['IOLOGIC_TYPE'] == 'IOLOGICO_EMPTY':
-            in_attrs.pop('OUTMODE', None);
-        else:
+def set_iologic_fclk(in_attrs, attrs, param, out = True):
+    if device not in {'GW5A-25A', 'GW5AST-138C'}:
+        if out:
             if attrs['OUTMODE'] != 'ODDRX1':
                 in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
-            if attrs['OUTMODE'] != 'ODDRX1' or param['IOLOGIC_TYPE'] == 'ODDRC':
-                in_attrs['LSROMUX_0'] = '1'
-            else:
-                in_attrs['LSROMUX_0'] = '0'
             in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
             if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
                 in_attrs['CLKODDRMUX_ECLK'] = 'ECLK1'
             elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
                 in_attrs['CLKODDRMUX_ECLK'] = 'ECLK0'
-            if attrs['OUTMODE'] == 'ODDRX8' or attrs['OUTMODE'] == 'DDRENABLE16':
-                in_attrs['LSROMUX_0'] = '0'
-            if attrs['OUTMODE'] == 'DDRENABLE16':
-                in_attrs['OUTMODE'] = 'DDRENABLE'
-                in_attrs['ISI'] = 'ENABLE'
-            if attrs['OUTMODE'] == 'DDRENABLE':
-                in_attrs['ISI'] = 'ENABLE'
-            in_attrs['LSRIMUX_0'] = '0'
-            in_attrs['CLKOMUX'] = 'ENABLE'
-            # in_attrs['LSRMUX_LSR'] = 'INV'
-
-    if 'INMODE' in attrs:
-        if param['IOLOGIC_TYPE'] == 'IOLOGICI_EMPTY':
-            in_attrs.pop('INMODE', None);
-        elif param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
-            #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
-            in_attrs['CLKOMUX_1'] = '1'
-            in_attrs['CLKODDRMUX_ECLK'] = 'UNKNOWN'
+        else:
             if param['IOLOGIC_FCLK'] in {'SPINE12', 'SPINE13'}:
                 in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK1'
             elif param['IOLOGIC_FCLK'] in {'SPINE10', 'SPINE11'}:
                 in_attrs['CLKIDDRMUX_ECLK'] = 'ECLK0'
+    else:
+        if out:
+            if param['IOLOGIC_FCLK'] != 'UNKNOWN':
+                in_attrs['WRFCLKSEL'] = 'UNK102'
+            if param['IOLOGIC_FCLK'] == 'SPINE10':
+                in_attrs['FCLKSEL0'] = 'HCLK0'
+                in_attrs['FCLKSEL1'] = 'HCLK0'
+                in_attrs['FCLKSEL2'] = 'HCLK0_'
+                in_attrs['FCLKSEL3'] = 'HCLK0'
+            elif param['IOLOGIC_FCLK'] == 'SPINE11':
+                in_attrs['FCLKSEL0'] = 'HCLK1'
+                in_attrs['FCLKSEL1'] = 'HCLK1'
+                in_attrs['FCLKSEL2'] = 'HCLK1_'
+                in_attrs['FCLKSEL4'] = 'HCLK1'
+            elif param['IOLOGIC_FCLK'] == 'SPINE12':
+                in_attrs['FCLKSEL0'] = 'HCLK2'
+                in_attrs['FCLKSEL1'] = 'HCLK2'
+                in_attrs['FCLKSEL2'] = 'HCLK2_'
+                in_attrs['FCLKSEL3'] = 'HCLK2'
+            elif param['IOLOGIC_FCLK'] == 'SPINE13':
+                in_attrs['FCLKSEL0'] = 'HCLK3'
+                in_attrs['FCLKSEL1'] = 'HCLK3'
+                in_attrs['FCLKSEL2'] = 'HCLK3_'
+                in_attrs['FCLKSEL4'] = 'HCLK3'
+        else:
+            raise Exception(f"Implement IN IOLOGIC.")
+
+
+def set_iologic_attrs(db, attrs, param):
+    def set_pre5a_out_attrs():
+        if attrs['OUTMODE'] != 'ODDRX1' or param['IOLOGIC_TYPE'] == 'ODDRC':
+            in_attrs['LSROMUX_0'] = '1'
+        else:
+            in_attrs['LSROMUX_0'] = '0'
+        if attrs['OUTMODE'] == 'ODDRX8' or attrs['OUTMODE'] == 'DDRENABLE16':
+            in_attrs['LSROMUX_0'] = '0'
+        if attrs['OUTMODE'] == 'DDRENABLE16':
+            in_attrs['OUTMODE'] = 'DDRENABLE'
+            in_attrs['ISI'] = 'ENABLE'
+        if attrs['OUTMODE'] == 'DDRENABLE':
+            in_attrs['ISI'] = 'ENABLE'
+        in_attrs['LSRIMUX_0'] = '0'
+        in_attrs['CLKOMUX'] = 'ENABLE'
+        # in_attrs['LSRMUX_LSR'] = 'INV'
+        return
+
+    def set_pre5a_in_attrs():
+        if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
+            #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
+            in_attrs['CLKOMUX_1'] = '1'
             in_attrs['LSRIMUX_0'] = '1'
             if attrs['INMODE'] == 'IDDRX8' or attrs['INMODE'] == 'DDRENABLE16':
                 in_attrs['LSROMUX_0'] = '0'
@@ -3107,8 +3141,76 @@ def set_iologic_attrs(db, attrs, param):
                 in_attrs['ISI'] = 'ENABLE'
             in_attrs['LSROMUX_0'] = '0'
             in_attrs['CLKIMUX'] = 'ENABLE'
-    make_iodelay_attrs(in_attrs, param);
-    #print(in_attrs)
+        return
+
+    def set_5a_out_attrs():
+        if 'HWL' in in_attrs:
+            if in_attrs['HWL'] != 'TRUE':
+                del in_attrs['HWL']
+        if 'TXCLK_POL' in in_attrs:
+            if int(in_attrs['TXCLK_POL']) == 0:
+                in_attrs['TXCLK_POL'] = '0'
+            else:
+                in_attrs['TXCLK_POL'] = '1'
+        if in_attrs['OUTMODE'] in {'ODDRX1', 'ODDRX2', 'ODDRX4'}:
+            in_attrs['CLKOMUX'] = 'ENABLE'
+            in_attrs['OCLKCE'] = 'CE'
+        elif in_attrs['OUTMODE'] in {'ODDRX5'}: # main cell
+            in_attrs['HWL'] = 'TRUE'
+            in_attrs['CLKOMUX'] = 'ENABLE'
+            in_attrs['CLKOMUX_CLK'] = 'SIG'
+            in_attrs['LSROMUX_0'] = 'UNKNOWN'
+            in_attrs['OCLKCE'] = 'CE'
+        elif in_attrs['OUTMODE'] in {'DDRENABLE'}: # aux cell
+            if in_attrs['MAIN_CELL_OUTMODE'] == 'VIDEOTX':
+                in_attrs['OUTMODE'] = 'LVDSOUT'
+                in_attrs['CLKOMUX'] = 'ENABLE'
+                in_attrs['OCLKCE'] = 'CE'
+            else:
+                in_attrs['OUTMODE'] = 'UNKNOWN'
+                in_attrs['CLKOMUX'] = 'ENABLE'
+                in_attrs['CLKOMUX_CLK'] = 'SIG'
+                in_attrs['LSROMUX_0'] = 'UNKNOWN'
+                in_attrs['OUTCLK'] = 'ENABLE'
+                in_attrs['OCLKCE'] = 'CE'
+        elif in_attrs['OUTMODE'] == 'VIDEOTX':
+            in_attrs['OUTMODE'] = 'LVDSOUT'
+            in_attrs['CLKOMUX'] = 'ENABLE'
+            in_attrs['OCLKCE'] = 'CE'
+        in_attrs.pop('MAIN_CELL_OUTMODE', None)
+        return
+
+    attrs_upper(attrs)
+    if device in {'GW5A-25A'}:
+        in_attrs = _iologic_5a_default_attrs.copy()
+        in_attrs.update(attrs)
+    else:
+        in_attrs = _iologic_default_attrs[param['IOLOGIC_TYPE']].copy()
+        in_attrs.update(attrs)
+        iologic_mod_attrs(in_attrs)
+    fin_attrs = set()
+    if 'OUTMODE' in attrs:
+        if param['IOLOGIC_TYPE'] == 'IOLOGICO_EMPTY':
+            in_attrs.pop('OUTMODE', None);
+        else:
+            if device not in {'GW5A-25A'}:
+                set_pre5a_out_attrs();
+            else:
+                set_5a_out_attrs();
+            set_iologic_fclk(in_attrs, attrs, param)
+
+    if 'INMODE' in attrs:
+        if param['IOLOGIC_TYPE'] == 'IOLOGICI_EMPTY':
+            in_attrs.pop('INMODE', None);
+        else:
+            if device not in {'GW5A-25A'}:
+                set_pre5a_in_attrs();
+            else:
+                set_5a_in_attrs();
+            set_iologic_fclk(in_attrs, attrs, param, False)
+
+    if device not in {'GW5A-25A'}:
+        make_iodelay_attrs(in_attrs, param);
 
     for k, val in in_attrs.items():
         if k not in attrids.iologic_attrids:
@@ -3357,6 +3459,8 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                 num = num[:-1]
             if typ == 'IOLOGIC_DUMMY':
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
+                if device in {'GW5A-25A'}:
+                    parms['MAIN_CELL_OUTMODE'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['parameters']['OUTMODE']
             attrs['IOLOGIC_TYPE'] = typ
             if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC', 'IOLOGICI_EMPTY', 'IOLOGICO_EMPTY'}:
                 # We clearly distinguish between the HCLK wires and clock
@@ -3570,7 +3674,15 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             iologic_attrs = set_iologic_attrs(db, parms, attrs)
             bits = set()
             table_type = f'IOLOGIC{num}'
-            bits = get_shortval_fuses(db, tiledata.ttyp, iologic_attrs, table_type)
+            fuse_ttyp = tiledata.ttyp
+            off = tiledata.bels[f'IOB{num}'].fuse_cell_offset
+            fuse_row, fuse_col, fuse_ttyp = row - 1, col - 1, tiledata.ttyp
+            if off:
+                fuse_row += off[0]
+                fuse_col += off[1]
+                fuse_ttyp = db.grid[fuse_row][fuse_col]
+            bits = get_shortval_fuses(db, fuse_ttyp, iologic_attrs, table_type)
+            tile = tilemap[(fuse_row, fuse_col)]
             for r, c in bits:
                 tile[r][c] = 1
         elif typ in _bsram_cell_types or typ == 'BSRAM_AUX':
@@ -3880,7 +3992,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     bits = get_longval_fuses(db, tiledata.ttyp, iob_attrs, f'IOB{iob_idx}')
                 else:
                     #print(row, col, f'mode:{mode_for_attrs}, idx:{iob_idx}, {atr} = {iob_attrs}')
-                    if mode_for_attrs in {'OBUF', 'IOBUF'}:
+                    if mode_for_attrs in {'OBUF', 'IOBUF', 'TBUF'}:
                         add_attr_val(db, 'IOB', iob_attrs, attrids.iob_attrids['IOB_UNKNOWN51'], attrids.iob_attrvals['TRIMUX'])
                     elif mode_for_attrs == 'IBUF':
                         if 'HCLK' in iob.flags:
@@ -4027,6 +4139,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             tile[row_][col_] = 1
 
 # hclk interbank requires to set some non-route fuses
+_used_ihclk_wires = set()
 def do_hclk_banks(db, row, col, src, dest):
     res = set()
     if dest in {'HCLK_BANK_OUT0', 'HCLK_BANK_OUT1'}:
@@ -4036,7 +4149,30 @@ def do_hclk_banks(db, row, col, src, dest):
         ttyp = db.grid[row][col]
         if 'HCLK' in db.shortval[ttyp]:
             res = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK")
+    if dest.startswith('HCLK_TO_IHCLK'):
+        _used_ihclk_wires.add(dest)
     return res
+
+def do_gw5_ihclk(db, tilemap):
+    if device not in {'GW5A-25A', 'GW5AST-138C'}:
+        return
+    if not _used_ihclk_wires:
+        return
+    for row in range(db.rows):
+        for col in range(db.cols):
+            ttyp = db.grid[row][col]
+            if ttyp in db.shortval and 'HCLK' in db.shortval[ttyp]:
+                for wire in _used_ihclk_wires:
+                    hclk_idx = chipdb.gw5_hclk_idx(db, device, row, col)
+                    if hclk_idx != int(wire[-2]):
+                        continue
+                    print(f'Enable gate {wire} ({row}, {col})')
+                    fin_attrs = set()
+                    add_attr_val(db, 'HCLK', fin_attrs, attrids.hclk_attrids[f'TO_IHCLK{"0213"[int(wire[-1])]}'], attrids.hclk_attrvals['ENABLE'])
+                    bits = get_shortval_fuses(db, ttyp, fin_attrs, "HCLK")
+                    tile = tilemap[row, col]
+                    for row_, col_ in bits:
+                        tile[row_][col_] = 1
 
 def route(db, tilemap, pips):
     # The mux for clock wires can be "spread" across several cells. Here we determine whether pip is such a candidate.
@@ -4116,6 +4252,20 @@ def route(db, tilemap, pips):
                         for brow, bcol in bits:
                             tile[brow][bcol] = 1
 
+    def set_5a_hclk_wire_fuses(src, dest):
+        fuse_set = False
+        for row in range(db.rows):
+            for col in range(db.cols):
+                if (row, col) in db.hclk_pips and dest in db.hclk_pips[row, col] and src in db.hclk_pips[row, col][dest]:
+                    fuse_set = True
+                    bits = db.hclk_pips[row, col][dest][src]
+                    #print(f'set hclk pip fuse {bits} at ({row}, {col}) {src}->{dest}')
+                    bits.update(do_hclk_banks(db, row, col, src, dest))
+                    tile = tilemap[(row, col)]
+                    for r, c in bits:
+                        tile[r][c] = 1
+        return fuse_set
+
     for row, col, src, dest in pips:
         if device in {'GW5A-25A', 'GW5AST-138C'} and is_clock_pip(src, dest):
             set_clock_fuses(row, col, src, dest)
@@ -4126,11 +4276,10 @@ def route(db, tilemap, pips):
 
         try:
             # XXX consider use set_clock_fuses
-            if device not in {'GW5A-25A'} and dest in tiledata.clock_pips:
+            if device not in {'GW5A-25A', 'GW5AST-138C'} and dest in tiledata.clock_pips:
                 bits = tiledata.clock_pips[dest][src]
-            elif (row - 1, col - 1) in db.hclk_pips and dest in db.hclk_pips[row - 1, col - 1] and src in db.hclk_pips[row - 1, col - 1][dest]:
-                bits = db.hclk_pips[row - 1, col - 1][dest][src]
-                bits.update(do_hclk_banks(db, row - 1, col - 1, src, dest))
+            elif dest in {'FCLKA', 'FCLKB'} or set_5a_hclk_wire_fuses(src, dest):
+                continue
             else:
                 bits = tiledata.pips[dest][src]
                 # check if we have 'not conencted to' situation
@@ -4451,6 +4600,7 @@ def main():
     cst = codegen.Constraints()
     pips = get_pips(pnr)
     route(db, tilemap, pips)
+    do_gw5_ihclk(db, tilemap)
     isolate_segments(pnr, db, tilemap)
     bels = get_bels(pnr)
     gsr(db, tilemap, args)

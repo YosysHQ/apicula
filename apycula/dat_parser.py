@@ -622,6 +622,12 @@ class Datfile:
         ret["Cfg5"]["LB"]        = self.read_arr32_at(150, 1100, RSTable5ATOffset)
         ret["Cfg5"]["RB"]        = self.read_arr32_at(150, 1250, RSTable5ATOffset)
 
+        self._cur = RSTable5ATOffset + 0x3678;
+        ret["IologicAIn"]  = self.read_arr16(62)
+        ret["IologicBIn"]  = self.read_arr16(62)
+        ret["IologicAOut"] = self.read_arr16(39)
+        ret["IologicBOut"] = self.read_arr16(39)
+
         return ret
 
     def read_something(self):

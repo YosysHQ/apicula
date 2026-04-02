@@ -374,19 +374,113 @@ hclknames_5a25a[375] = 'VCC'
 hclknames_5a25a[561] = 'VSS'
 hclknames_5a25a[562] = 'VCC'
 
-hclknames_5a25a.update({n: f"HCLK_UNK{n}" for n in range(2, 701)})
+hclknames_5a25a.update({n: f"HCLK_UNK{n}" for n in range(2, 6 * 187 + 4 * 65)})
 
-# HCLK->CLK
-hclknames_5a25a.update({n: f"HCLK_TO_GCLK0{i}" for i, n in enumerate([25, 27, 28, 29])})
-hclknames_5a25a.update({n: f"HCLK_TO_GCLK1{i}" for i, n in enumerate([212, 214, 215, 216])})
-hclknames_5a25a.update({n: f"HCLK_TO_GCLK2{i}" for i, n in enumerate([399, 401, 402, 403])})
-hclknames_5a25a.update({n: f"HCLK_TO_GCLK3{i}" for i, n in enumerate([586, 588, 589, 590])})
+# CLKDIV2 outputs
+for i in range(4):
+    hclknames_5a25a[88 + i]   = f'CLKDIV2_O0{i}'
+    hclknames_5a25a[275 + i]  = f'CLKDIV2_O1{i}'
+    hclknames_5a25a[462 + i]  = f'CLKDIV2_O2{i}'
+    hclknames_5a25a[646 + i]  = f'CLKDIV2_O3{i}'
+
+# from logic to HCLK
+for i in range(4):
+    hclknames_5a25a[30 + i]   = f'L2HCLK0{i}'
+    hclknames_5a25a[217 + i]  = f'L2HCLK1{i}'
+    hclknames_5a25a[404 + i]  = f'L2HCLK2{i}'
+    hclknames_5a25a[591 + i]  = f'L2HCLK3{i}'
+
+# HCLK for IO logic
+for i in range(4):
+    hclknames_5a25a[96 + i]  = f'HCLK0{i}'
+    hclknames_5a25a[283 + i] = f'HCLK1{i}'
+    hclknames_5a25a[470 + i] = f'HCLK2{i}'
+    hclknames_5a25a[657 + i] = f'HCLK3{i}'
+
+# HCLK muxes
+for i in range(4):
+    hclknames_5a25a[92 + i]   = f'HCLK_MUX_ALPHA0{i}'
+    hclknames_5a25a[279 + i]  = f'HCLK_MUX_ALPHA1{i}'
+    hclknames_5a25a[466 + i]  = f'HCLK_MUX_ALPHA2{i}'
+    hclknames_5a25a[653 + i]  = f'HCLK_MUX_ALPHA3{i}'
+
+    hclknames_5a25a[34 + i]   = f'HCLK_MUX_BETA0{i}'
+    hclknames_5a25a[221 + i]  = f'HCLK_MUX_BETA1{i}'
+    hclknames_5a25a[408 + i]  = f'HCLK_MUX_BETA2{i}'
+    hclknames_5a25a[595 + i]  = f'HCLK_MUX_BETA3{i}'
+
+    hclknames_5a25a[24 + i]   = f'HCLK_MUX_GAMMA0{i}'
+    hclknames_5a25a[211 + i]  = f'HCLK_MUX_GAMMA1{i}'
+    hclknames_5a25a[398 + i]  = f'HCLK_MUX_GAMMA2{i}'
+    hclknames_5a25a[585 + i]  = f'HCLK_MUX_GAMMA3{i}'
+
+    hclknames_5a25a[139 + i]  = f'HCLK_MUX_DELTA0{i}'
+    hclknames_5a25a[326 + i]  = f'HCLK_MUX_DELTA1{i}'
+    hclknames_5a25a[513 + i]  = f'HCLK_MUX_DELTA2{i}'
+    hclknames_5a25a[700 + i]  = f'HCLK_MUX_DELTA3{i}'
+
+# From inter-hclk bridge
+for i in range(4):
+    hclknames_5a25a[169 + i]  = f'HCLK_FROM_IHCLK0{i}'
+    hclknames_5a25a[356 + i]  = f'HCLK_FROM_IHCLK1{i}'
+    hclknames_5a25a[543 + i]  = f'HCLK_FROM_IHCLK2{i}'
+    hclknames_5a25a[730 + i]  = f'HCLK_FROM_IHCLK3{i}'
+
+# To inter-hclk bridge
+for i in range(4):
+    hclknames_5a25a[177 + i]  = f'HCLK_TO_IHCLK0{i}'
+    hclknames_5a25a[364 + i]  = f'HCLK_TO_IHCLK1{i}'
+    hclknames_5a25a[551 + i]  = f'HCLK_TO_IHCLK2{i}'
+    hclknames_5a25a[738 + i]  = f'HCLK_TO_IHCLK3{i}'
+
+# HCLK buffers
+for i in range(4):
+    hclknames_5a25a[76 + 2 * i]  = f'HCLK_BUF_AO0{i}'
+    hclknames_5a25a[52 + i]      = f'HCLK_BUF_AI0{i}'
+    hclknames_5a25a[77 + 2 * i]  = f'HCLK_BUF_BO0{i}'
+    hclknames_5a25a[56 + i]      = f'HCLK_BUF_BI0{i}'
+
+    hclknames_5a25a[263 + 2 * i] = f'HCLK_BUF_AO1{i}'
+    hclknames_5a25a[239 + i]     = f'HCLK_BUF_AI1{i}'
+    hclknames_5a25a[264 + 2 * i] = f'HCLK_BUF_BO1{i}'
+    hclknames_5a25a[243 + i]     = f'HCLK_BUF_BI1{i}'
+
+    hclknames_5a25a[450 + 2 * i] = f'HCLK_BUF_AO2{i}'
+    hclknames_5a25a[426 + i]     = f'HCLK_BUF_AI2{i}'
+    hclknames_5a25a[451 + 2 * i] = f'HCLK_BUF_BO2{i}'
+    hclknames_5a25a[430 + i]     = f'HCLK_BUF_BI2{i}'
+
+    hclknames_5a25a[637 + 2 * i] = f'HCLK_BUF_AO3{i}'
+    hclknames_5a25a[613 + i]     = f'HCLK_BUF_AI3{i}'
+    hclknames_5a25a[638 + 2 * i] = f'HCLK_BUF_BO3{i}'
+    hclknames_5a25a[617 + i]     = f'HCLK_BUF_BI3{i}'
+
+# HCLK GCLK muxes
+for i in range(4):
+    hclknames_5a25a[165 + i]  = f'HCLK_GCLK_MUX0{i}'
+    hclknames_5a25a[352 + i]  = f'HCLK_GCLK_MUX1{i}'
+    hclknames_5a25a[539 + i]  = f'HCLK_GCLK_MUX2{i}'
+    hclknames_5a25a[726 + i]  = f'HCLK_GCLK_MUX3{i}'
+
 
 # GCLK pins
 hclknames_5a25a.update({n: f"HCLK_GCLK0{i}" for i, n in enumerate(range(123, 131))})
 hclknames_5a25a.update({n: f"HCLK_GCLK1{i}" for i, n in enumerate(range(310, 318))})
 hclknames_5a25a.update({n: f"HCLK_GCLK2{i}" for i, n in enumerate(range(497, 505))})
 hclknames_5a25a.update({n: f"HCLK_GCLK3{i}" for i, n in enumerate(range(684, 692))})
+
+# Inter-hclk bridge
+for i in range(4):
+    hclknames_5a25a[1130 + i * 65]   = f'HCLK_IHCLK_MUX{i}0'
+    hclknames_5a25a[1131 + i * 65]   = f'HCLK_IHCLK_MUX{i}1'
+    hclknames_5a25a[1155 + i * 65]   = f'HCLK_IHCLK_IN{i}0'
+    hclknames_5a25a[1156 + i * 65]   = f'HCLK_IHCLK_IN{i}1'
+    hclknames_5a25a[1157 + i * 65]   = f'HCLK_IHCLK_IN{i}2'
+    hclknames_5a25a[1158 + i * 65]   = f'HCLK_IHCLK_IN{i}3'
+    hclknames_5a25a[1163 + i * 65]   = f'HCLK_IHCLK_OUT{i}0'
+    hclknames_5a25a[1164 + i * 65]   = f'HCLK_IHCLK_OUT{i}1'
+    hclknames_5a25a[1165 + i * 65]   = f'HCLK_IHCLK_OUT{i}2'
+    hclknames_5a25a[1166 + i * 65]   = f'HCLK_IHCLK_OUT{i}3'
 
 hclknumbers_5a25a = {v: k for k, v in hclknames_5a25a.items()}
 
