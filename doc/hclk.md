@@ -33,19 +33,19 @@ The numbers in the boxes are the wire numbers in the first HCLK block, as listed
 
 ## The first wire of HCLK block 0:
 
-![HCLK 0 diagram](fig/hclk-0.png)
+![HCLK 0 diagram](fig/hclk_0.png)
 
 ## The first wire of HCLK block 1:
 
-![HCLK 1 diagram](fig/hclk-1.png)
+![HCLK 1 diagram](fig/hclk_1.png)
 
 ## The first wire of HCLK block 2:
 
-![HCLK 2 diagram](fig/hclk-2.png)
+![HCLK 2 diagram](fig/hclk_2.png)
 
 ## The first wire of HCLK block 3:
 
-![HCLK 3 diagram](fig/hclk-3.png)
+![HCLK 3 diagram](fig/hclk_3.png)
 
 ## Inter-HCLK connections
 
