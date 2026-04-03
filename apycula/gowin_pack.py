@@ -3043,6 +3043,8 @@ def iologic_mod_attrs(attrs):
         if attrs['GSREN'] == 'TRUE':
             attrs['GSR'] = 'ENGSR'
         del attrs['GSREN']
+    if 'OUTMODE' in attrs and attrs['OUTMODE'] == 'VIDEOTX':
+        attrs['OUTMODE'] = 'VIDEORX'
     # XXX ignore for now
     attrs.pop('LSREN', None)
     attrs.pop('Q0_INIT', None)
