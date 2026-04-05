@@ -3,7 +3,6 @@ import os
 import copy
 import argparse
 import pickle
-import gzip
 from pathlib import Path
 from apycula import codegen
 from apycula import pindef
@@ -461,15 +460,9 @@ def main():
     # the reverse logicinfo does not make sense to store in the database
     db.rev_li = {}
 
-    # Save output (msgpack for new nextpnr)
+    # Save output
     output = args.output or f"apycula/{device}.msgpack.xz"
     save_chipdb(db, output)
-
-    # Also emit gzip+pickle for backward compat with nextpnr stable (nextpnr-0.9)
-    if not args.output:
-        pickle_path = f"apycula/{device}.pickle"
-        with gzip.open(pickle_path, 'wb') as f:
-            pickle.dump(db, f)
 
 if __name__ == "__main__":
     main()

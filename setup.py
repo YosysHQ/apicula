@@ -27,7 +27,7 @@ setuptools.setup(
     },
     python_requires='>=3.9',
     package_data={
-        'apycula': ['*.msgpack.xz', '*.pickle']
+        'apycula': ['*.msgpack.xz']
     },
     entry_points={
         'console_scripts': [

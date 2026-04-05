@@ -17,4 +17,4 @@ apycula/%.msgpack.xz: $(BUILDER_DEPS)
 	python3 -m apycula.chipdb_builder $*
 
 clean:
-	rm -f apycula/*.msgpack.xz apycula/*.pickle
+	rm -f apycula/*.msgpack.xz
