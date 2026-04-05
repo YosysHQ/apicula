@@ -1075,17 +1075,25 @@ def gw5_make_hclk_pips(dev, device, fse, dat: Datfile):
                     for srcid, destid, *fuses in fse[ttyp]['wire'][48]:
                         fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
                         # HCLK wires
-                        if srcid < hclk_off and destid < hclk_off:
-                            # skip HCLK->GCLK gates
-                            if srcid in {28, 25, 29, 27} and destid in range(169, 185):
+                        if srcid < hclk_off:
+                            if srcid in range(104, 108): # CLKDIV outputs
+                                src = wnames.hclknames[srcid + hclk_idx * hclk_off]
+                                dest = wnames.clknames[destid]
+                                dev.hclk_pips.setdefault((row, col), {}).setdefault(dest, {}).update({src: fuses})
+                                add_node(dev, f"HCLK{hclk_idx}_{src}", "HCLK", row, col, src)
+                                add_node(dev, dest, "GLOBAL_CLK", row, col, dest)
                                 continue
-                            src = wnames.hclknames[srcid + hclk_idx * hclk_off]
-                            dest = wnames.hclknames[destid + hclk_idx * hclk_off]
-                            mk_hclk_pip(hclk_idx, row, col, src, dest, fuses)
-                        elif srcid in range(hclk_off, hclk_off + 4 * ihclk_wire_num) and destid in range(hclk_off, hclk_off + 4 * ihclk_wire_num):
-                            src = wnames.hclknames[srcid + 5 * hclk_off]
-                            dest = wnames.hclknames[destid + 5 * hclk_off]
-                            mk_hclk_pip('_IHCLK', row, col, src, dest, fuses)
+                            if destid < hclk_off:
+                                # skip HCLK->GCLK gates
+                                if srcid in {28, 25, 29, 27} and destid in range(169, 185):
+                                    continue
+                                src = wnames.hclknames[srcid + hclk_idx * hclk_off]
+                                dest = wnames.hclknames[destid + hclk_idx * hclk_off]
+                                mk_hclk_pip(hclk_idx, row, col, src, dest, fuses)
+                            elif srcid in range(hclk_off, hclk_off + 4 * ihclk_wire_num) and destid in range(hclk_off, hclk_off + 4 * ihclk_wire_num):
+                                src = wnames.hclknames[srcid + 5 * hclk_off]
+                                dest = wnames.hclknames[destid + 5 * hclk_off]
+                                mk_hclk_pip('_IHCLK', row, col, src, dest, fuses)
 
                 if gw5_create_hclk_iol_pip(dev, device, row, col):
                     dev.io2hclk.setdefault(hclk_idx, set()).add((row, col))
@@ -1125,21 +1133,40 @@ def gw5_make_hclk_pips(dev, device, fse, dat: Datfile):
                 dest = f'HCLK_BUF_{buf_idx}O{hclk_idx}{j}'
                 mk_hclk_pip(hclk_idx, row, col, src, dest)
 
+            # make default pip from mux gamma
+            if j % 2 == 1:
+                src = f'HCLK_MUX_GAMMA{hclk_idx}{j}'
+                dest = f'HCLK_BUF_BI{hclk_idx}{j}'
+                mk_hclk_pip(hclk_idx, row, col, src, dest)
+
             # make default pip for inter-hclk output
             src =  f'HCLK_FROM_IHCLK{hclk_idx}{j}'
             dest = f'HCLK_MUX_DELTA{hclk_idx}{j}'
             mk_hclk_pip(hclk_idx, row, col, src, dest)
+
 
             # make default pip for inter-hclk input
             src =  f'HCLK_GCLK_MUX{hclk_idx}{[0, 2, 1, 3][j]}'
             dest = f'HCLK_TO_IHCLK{hclk_idx}{j}'
             mk_hclk_pip(hclk_idx, row, col, src, dest)
 
-            # make default pip from mux gamma
-            if j % 2 == 1:
-                src = f'HCLK_MUX_GAMMA{hclk_idx}{j}'
-                dest = f'HCLK_BUF_{buf_idx}I{hclk_idx}{j}'
-                mk_hclk_pip(hclk_idx, row, col, src, dest)
+
+    # Epsilon defaults
+    for i in range(4):
+        mk_hclk_pip(i, row, col, f'HCLK_MUX_EPSILON{i}0', f'HCLK_BUF_AI{i}0')
+        mk_hclk_pip(i, row, col, f'HCLK_MUX_EPSILON{i}2', f'HCLK_BUF_AI{i}1')
+        mk_hclk_pip(i, row, col, f'HCLK_MUX_EPSILON{i}4', f'HCLK_BUF_AI{i}2')
+        mk_hclk_pip(i, row, col, f'HCLK_MUX_EPSILON{i}6', f'HCLK_BUF_AI{i}3')
+        mk_hclk_pip(i, row, col, f'HCLK_MUX_EPSILON{i}0', f'HCLK_MUX_GAMMA{i}0')
+        mk_hclk_pip(i, row, col, f'HCLK_MUX_EPSILON{i}4', f'HCLK_MUX_GAMMA{i}2')
+
+        # make default hub conenction
+        src =  f'HCLK_MUX_GAMMA{i}0'
+        dest = f'HCLK_HUB{i}0'
+        mk_hclk_pip(i, row, col, src, dest)
+        src =  f'HCLK_MUX_GAMMA{i}2'
+        dest = f'HCLK_HUB{i}1'
+        mk_hclk_pip(i, row, col, src, dest)
 
     # Inter-hclk outs
     mk_hclk_pip('_IHCLK', row, col, 'HCLK_IHCLK_OUT00', 'HCLK_FROM_IHCLK00')
@@ -1226,12 +1253,14 @@ def gw5_make_pin_to_hclk(dev):
     # default connections (without fuses).
     # And at the moment, only pin E2 is described, which is soldered to the
     # external quartz on the TangPrime25k board.
+    """
     row, col = 36, 11
     add_node(dev, f"HCLK1_{wnames.hclknames[211]}", "GLOBAL_CLK", row, col, 'DUMMY_HCLK211')
     add_node(dev, f"HCLK1_{wnames.hclknames[215]}", "GLOBAL_CLK", row, col, 'DUMMY_HCLK215')
     dev.hclk_pips.setdefault((row, col), {}).setdefault('DUMMY_HCLK215', {}).update({'DUMMY_HCLK211': set()})
     row, col = 36, 27
     dev.hclk_pips.setdefault((row, col), {}).setdefault(wnames.hclknames[211], {}).update({wnames.hclknames[318]: set()})
+    """
 
 
 # HCLK to global clock network gates
@@ -1299,14 +1328,18 @@ _gw5a_hclk_locs = { 'GW5A-25A': { 0: (0, 64), 1: (36, 27), 2: (1, 0), 3: (34, 91
 def gw5_add_hclk_bels(dat, dev, device):
     for hclk_idx, hclk_loc in _gw5a_hclk_locs[device].items():
         row, col = hclk_loc
-        extra = dev.extra_func.setdefault((row, col), {}).setdefault('clkdiv2', {})
-        extra['hclk_idx'] = hclk_idx
+        extra = dev.extra_func.setdefault((row, col), {})
+        extra_clkdiv2 = extra.setdefault('clkdiv2', {})
+        extra_clkdiv = extra.setdefault('clkdiv', {})
+        extra_clkdiv2['hclk_idx'] = hclk_idx
+        extra_clkdiv['hclk_idx'] = hclk_idx
         for i in range(4):
             # XXX skip for now
             if i in {1, 3}:
                 continue
+            # CLKDIV2
             dev.hclk_div2.setdefault(hclk_idx, set()).add((row, col, i))
-            clkdiv2 = extra.setdefault('bels', {}).setdefault(i, {})
+            clkdiv2 = extra_clkdiv2.setdefault('bels', {}).setdefault(i, {})
             # XXX not creating Bels — in this case, the creation of the CLKDIV
             # mechanism for pre-5A chips in nextpnr will not be triggered
             #dev[row, col].bels[f'CLKDIV2{i}'] = Bel()
@@ -1321,6 +1354,20 @@ def gw5_add_hclk_bels(dat, dev, device):
             portmap = clkdiv2.setdefault('outputs', {})
             portmap['CLKOUT'] = f'CLKDIV2_O{hclk_idx}{i}'
             make_hclk_pip(dev, hclk_idx, row, col, portmap['CLKOUT'], f'HCLK_MUX_ALPHA{hclk_idx}{i}')
+
+            # CLKDIV
+            clkdiv = extra_clkdiv.setdefault('bels', {}).setdefault(i, {})
+            portmap = clkdiv.setdefault('inputs', {})
+            portmap['HCLKIN'] = f'CLKDIV_I{hclk_idx}{i}'
+            portmap['RESETN'] = f'C{i + 4}'  # GW5A-25A 0-C4, 1-C5, 2-C6, 3-C7
+            portmap['CALIB']  = ['B6', 'B7', 'C0', 'C1'][i]  # GW5A-25A
+            make_hclk_pip(dev, hclk_idx, row, col, f'HCLK_MUX_ALPHA{hclk_idx}{i}', portmap['HCLKIN'])
+
+            portmap = clkdiv.setdefault('outputs', {})
+            portmap['CLKOUT'] = f'CLKDIV_O{hclk_idx}{i}'
+            src = portmap['CLKOUT']
+            add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, src)
+
     return
 
 # HCLK for Himbaechel

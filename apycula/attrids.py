@@ -1560,6 +1560,8 @@ hclk_attrids = {
         'DLYMUX':          26,
         'HCLKDIV_DIV':     27,
         'HCLKDIV_RST':     28,
+        'HCLKDIV2_DIV':    29,
+        'HCLKDIV3_DIV':    31,
         'TO_IHCLK0':       68,
         'TO_IHCLK2':       69,
         'TO_IHCLK1':       70,
@@ -1594,6 +1596,10 @@ hclk_attrvals = {
         'DIVCIBRST':       24,
         'NEG_80':          25,
         '80':              26,
+        '1':               27,
+        '3':               28,
+        '6':               29,
+        '7':               30,
     }
 
 
