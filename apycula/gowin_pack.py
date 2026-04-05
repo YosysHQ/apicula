@@ -2957,8 +2957,16 @@ def bin_str_to_dec(str_val):
     return None
 
 def set_5a_hclk_attrs(db, params, num, typ, cell_name):
-    #print(f'HCLK:', cell_name)
-    return {}
+    attrs = {}
+    if typ == "CLKDIV":
+        attrs[f"HCLKDIV{num[-1]}_DIV"] = params["DIV_MODE"]
+    #print(f'HCLK:{cell_name} {num} {attrs}')
+    fin_attrs = set()
+    for attr, val in attrs.items():
+        if isinstance(val, str):
+            val = attrids.hclk_attrvals[val]
+        add_attr_val(db, 'HCLK', fin_attrs, attrids.hclk_attrids[attr], val)
+    return fin_attrs
 
 _hclk_default_params ={"GSREN": "FALSE", "DIV_MODE":"2"}
 def set_hclk_attrs(db, params, num, typ, cell_name):
@@ -3802,6 +3810,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
         elif typ.startswith("CLKDIV"):
             hclk_attrs = set_hclk_attrs(db, parms, num, typ, cellname)
             bits = get_shortval_fuses(db, tiledata.ttyp, hclk_attrs, "HCLK")
+            #print(hclk_attrs, bits)
             for r, c in bits:
                 tile[r][c] = 1
         elif typ == 'DQCE':

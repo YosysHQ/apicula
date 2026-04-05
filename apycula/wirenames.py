@@ -292,14 +292,18 @@ clknames_5a25a.update({n: f"UNK{n}" for n in range(153, 170)})
 
 # HCLK
 clknames_5a25a.update({
-    169: 'TBDHCLK0', 170: 'TBDHCLK1', 171: 'TBDHCLK2', 172: 'TBDHCLK3',
-    173: 'RBDHCLK0', 174: 'RBDHCLK1', 175: 'RBDHCLK2', 176: 'RBDHCLK3',
-    177: 'BBDHCLK0', 178: 'BBDHCLK1', 179: 'BBDHCLK2', 180: 'BBDHCLK3',
-    181: 'LBDHCLK0', 182: 'LBDHCLK1', 183: 'LBDHCLK2', 184: 'LBDHCLK3',
+    169: 'TBDHCLK0',  170: 'TBDHCLK1',  171: 'TBDHCLK2',  172: 'TBDHCLK3',
+    173: 'RBDHCLK0',  174: 'RBDHCLK1',  175: 'RBDHCLK2',  176: 'RBDHCLK3',
+    177: 'BBDHCLK0',  178: 'BBDHCLK1',  179: 'BBDHCLK2',  180: 'BBDHCLK3',
+    181: 'LBDHCLK0',  182: 'LBDHCLK1',  183: 'LBDHCLK2',  184: 'LBDHCLK3',
+    185: 'HCLKDIV00', 186: 'HCLKDIV01', 187: 'HCLKDIV02', 188: 'HCLKDIV03',
+    189: 'HCLKDIV30', 190: 'HCLKDIV31', 191: 'HCLKDIV32', 192: 'HCLKDIV33',
+    193: 'HCLKDIV10', 194: 'HCLKDIV11', 195: 'HCLKDIV12', 196: 'HCLKDIV13',
+    197: 'HCLKDIV20', 198: 'HCLKDIV21', 199: 'HCLKDIV22', 200: 'HCLKDIV23',
 })
 
 
-clknames_5a25a.update({n: f"UNK{n}" for n in range(185, 277)})
+clknames_5a25a.update({n: f"UNK{n}" for n in range(201, 277)})
 clknames_5a25a[277] = 'VCC'
 clknames_5a25a.update({n: f"UNK{n}" for n in range(278, 281)})
 
@@ -383,6 +387,17 @@ for i in range(4):
     hclknames_5a25a[462 + i]  = f'CLKDIV2_O2{i}'
     hclknames_5a25a[646 + i]  = f'CLKDIV2_O3{i}'
 
+# CLKDIV pins
+for i in range(4):
+    hclknames_5a25a[143 + i]  = f'CLKDIV_I0{i}'
+    hclknames_5a25a[330 + i]  = f'CLKDIV_I1{i}'
+    hclknames_5a25a[517 + i]  = f'CLKDIV_I2{i}'
+    hclknames_5a25a[704 + i]  = f'CLKDIV_I3{i}'
+    hclknames_5a25a[104 + i]  = f'CLKDIV_O0{i}'
+    hclknames_5a25a[291 + i]  = f'CLKDIV_O1{i}'
+    hclknames_5a25a[478 + i]  = f'CLKDIV_O2{i}'
+    hclknames_5a25a[665 + i]  = f'CLKDIV_O3{i}'
+
 # from logic to HCLK
 for i in range(4):
     hclknames_5a25a[30 + i]   = f'L2HCLK0{i}'
@@ -418,6 +433,22 @@ for i in range(4):
     hclknames_5a25a[326 + i]  = f'HCLK_MUX_DELTA1{i}'
     hclknames_5a25a[513 + i]  = f'HCLK_MUX_DELTA2{i}'
     hclknames_5a25a[700 + i]  = f'HCLK_MUX_DELTA3{i}'
+
+    hclknames_5a25a[131 + i]  = f'HCLK_MUX_EPSILON0{i}'
+    hclknames_5a25a[135 + i]  = f'HCLK_MUX_EPSILON0{i + 4}'
+    hclknames_5a25a[318 + i]  = f'HCLK_MUX_EPSILON1{i}'
+    hclknames_5a25a[412 + i]  = f'HCLK_MUX_EPSILON1{i + 4}'
+    hclknames_5a25a[505 + i]  = f'HCLK_MUX_EPSILON2{i}'
+    hclknames_5a25a[509 + i]  = f'HCLK_MUX_EPSILON2{i + 4}'
+    hclknames_5a25a[692 + i]  = f'HCLK_MUX_EPSILON3{i}'
+    hclknames_5a25a[696 + i]  = f'HCLK_MUX_EPSILON3{i + 4}'
+
+# Hub
+for i in range(2):
+    hclknames_5a25a[28 + i]  = f'HCLK_HUB0{i}'
+    hclknames_5a25a[215 + i] = f'HCLK_HUB1{i}'
+    hclknames_5a25a[402 + i] = f'HCLK_HUB2{i}'
+    hclknames_5a25a[589 + i] = f'HCLK_HUB3{i}'
 
 # From inter-hclk bridge
 for i in range(4):
