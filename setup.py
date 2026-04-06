@@ -21,7 +21,6 @@ setuptools.setup(
         'msgspec',
         'numpy',
         'fastcrc',
-        'pillow',
     ],
     extras_require={
         'pure': ['msgpack', 'cattrs'],
