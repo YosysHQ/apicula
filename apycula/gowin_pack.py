@@ -3116,8 +3116,28 @@ def set_iologic_fclk(in_attrs, attrs, param, out = True):
                 in_attrs['FCLKSEL2'] = 'HCLK3_'
                 in_attrs['FCLKSEL4'] = 'HCLK3'
         else:
-            raise Exception(f"Implement IN IOLOGIC.")
-
+            if in_attrs['INMODE'] == 'DDRENABLE':
+                return
+            if param['IOLOGIC_FCLK'] == 'SPINE10':
+                in_attrs['FCLKSEL5'] = 'HCLK0'
+                in_attrs['FCLKSEL6'] = 'HCLK0'
+                in_attrs['FCLKSEL7'] = 'HCLK0_'
+                in_attrs['FCLKSEL3'] = 'HCLK0'
+            elif param['IOLOGIC_FCLK'] == 'SPINE11':
+                in_attrs['FCLKSEL5'] = 'HCLK1'
+                in_attrs['FCLKSEL6'] = 'HCLK1'
+                in_attrs['FCLKSEL7'] = 'HCLK1_'
+                in_attrs['FCLKSEL4'] = 'HCLK1'
+            elif param['IOLOGIC_FCLK'] == 'SPINE12':
+                in_attrs['FCLKSEL5'] = 'HCLK2'
+                in_attrs['FCLKSEL6'] = 'HCLK2'
+                in_attrs['FCLKSEL7'] = 'HCLK2_'
+                in_attrs['FCLKSEL3'] = 'HCLK2'
+            elif param['IOLOGIC_FCLK'] == 'SPINE13':
+                in_attrs['FCLKSEL5'] = 'HCLK3'
+                in_attrs['FCLKSEL6'] = 'HCLK3'
+                in_attrs['FCLKSEL7'] = 'HCLK3_'
+                in_attrs['FCLKSEL4'] = 'HCLK3'
 
 def set_iologic_attrs(db, attrs, param):
     def set_pre5a_out_attrs():
@@ -3140,10 +3160,10 @@ def set_iologic_attrs(db, attrs, param):
     def set_pre5a_in_attrs():
         if param['IOLOGIC_TYPE'] not in {'IDDR', 'IDDRC'}:
             #in_attrs['CLKODDRMUX_WRCLK'] = 'ECLK0'
-            in_attrs['CLKOMUX_1'] = '1'
+            in_attrs['CLKIMUX_1'] = '1'
             in_attrs['LSRIMUX_0'] = '1'
             if attrs['INMODE'] == 'IDDRX8' or attrs['INMODE'] == 'DDRENABLE16':
-                in_attrs['LSROMUX_0'] = '0'
+                in_attrs['LSRIMUX_0'] = '0'
             if attrs['INMODE'] == 'DDRENABLE16':
                 in_attrs['INMODE'] = 'DDRENABLE'
                 in_attrs['ISI'] = 'ENABLE'
@@ -3188,6 +3208,16 @@ def set_iologic_attrs(db, attrs, param):
             in_attrs['CLKOMUX'] = 'ENABLE'
             in_attrs['OCLKCE'] = 'CE'
         in_attrs.pop('MAIN_CELL_OUTMODE', None)
+        return
+
+    def set_5a_in_attrs():
+        in_attrs['LSRMUX_LSR'] = 'SIG'
+        if in_attrs['INMODE'] in {'IDDRX1', 'IDDRX2', 'IDDRX4', 'IDDRX5'}:
+            in_attrs['CLKIMUX'] = 'ENABLE'
+        elif in_attrs['INMODE'] == 'VIDEORX':
+            in_attrs['INMODE'] = 'LVDSIN'
+            in_attrs['CLKIMUX'] = 'ENABLE'
+        in_attrs.pop('MAIN_CELL_INMODE', None)
         return
 
     attrs_upper(attrs)
@@ -3470,7 +3500,11 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
             if typ == 'IOLOGIC_DUMMY':
                 attrs['IOLOGIC_FCLK'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['attributes']['IOLOGIC_FCLK']
                 if device in {'GW5A-25A'}:
-                    parms['MAIN_CELL_OUTMODE'] = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['parameters']['OUTMODE']
+                    main_cell_params = pnr['modules']['top']['cells'][attrs['MAIN_CELL']]['parameters']
+                    if 'OUTMODE' in main_cell_params:
+                        parms['MAIN_CELL_OUTMODE'] = main_cell_params['OUTMODE']
+                    elif 'INMODE' in main_cell_params:
+                        parms['MAIN_CELL_INMODE'] = main_cell_params['INMODE']
             attrs['IOLOGIC_TYPE'] = typ
             if typ not in {'IDDR', 'IDDRC', 'ODDR', 'ODDRC', 'IOLOGICI_EMPTY', 'IOLOGICO_EMPTY'}:
                 # We clearly distinguish between the HCLK wires and clock

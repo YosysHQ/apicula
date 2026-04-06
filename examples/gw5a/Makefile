@@ -20,7 +20,9 @@ primer25k: \
 	dsp-mult12x12-primer25k.fs dsp-multaddalu12x12-primer25k.fs dsp-multalu27x18-primer25k.fs \
 	dsp-mult27x36-primer25k.fs \
 	adc-temp-primer25k.fs adc-loc-left-primer25k.fs adc-glo-right-primer25k.fs attosoc-primer25k.fs \
-	oddr-tlvds-primer25k.fs oser4-primer25k.fs oser8-primer25k.fs oser10-primer25k.fs ovideo-primer25k.fs 
+	oddr-tlvds-primer25k.fs oser4-primer25k.fs oser8-primer25k.fs oser10-primer25k.fs ovideo-primer25k.fs \
+	iddr-primer25k.fs iddrc-primer25k.fs ides4-primer25k.fs ivideo-primer25k.fs \
+	ides8-primer25k.fs ides10-primer25k.fs
 
 tangmega138k: \
 	big-shift-tangmega138k.fs attosoc-tangmega138k.fs uart-message-tangmega138k.fs
