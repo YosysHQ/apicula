@@ -456,6 +456,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             attrvals = parse_attrvals(tile, db.rev_logicinfo('IOLOGIC'), db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids, "IOLOGIC")
             if not attrvals:
                 continue
+            #print_sorted_dict(f'{row}, {col}, {name}, {idx}, {tiledata.ttyp} - ', attrvals)
             # additional IOLOGIC components
             # XXX delays and FFs in IO
             # main component
