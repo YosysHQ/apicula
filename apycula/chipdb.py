@@ -1082,8 +1082,10 @@ def gw5_make_hclk_pips(dev, device, fse, dat: Datfile):
                                 dev.hclk_pips.setdefault((row, col), {}).setdefault(dest, {}).update({src: fuses})
                                 add_node(dev, f"HCLK{hclk_idx}_{src}", "HCLK", row, col, src)
                                 add_node(dev, dest, "GLOBAL_CLK", row, col, dest)
+                            elif srcid in {84, 85}:
+                                # XXX unknown CLKDIV2 inputs, skip for now
                                 continue
-                            if destid < hclk_off:
+                            elif destid < hclk_off:
                                 # skip HCLK->GCLK gates
                                 if srcid in {28, 25, 29, 27} and destid in range(169, 185):
                                     continue
@@ -1137,6 +1139,14 @@ def gw5_make_hclk_pips(dev, device, fse, dat: Datfile):
             if j % 2 == 1:
                 src = f'HCLK_MUX_GAMMA{hclk_idx}{j}'
                 dest = f'HCLK_BUF_BI{hclk_idx}{j}'
+                mk_hclk_pip(hclk_idx, row, col, src, dest)
+
+                # make CLKDIV2 inputs
+                src = f'HCLK_BUF_BO{hclk_idx}{j}'
+                dest = f'CLKDIV2_I{hclk_idx}{j}'
+                mk_hclk_pip(hclk_idx, row, col, src, dest)
+                src = f'CLKDIV2_I{hclk_idx}{j}'
+                dest = f'HCLK_MUX_ALPHA{hclk_idx}{j}'
                 mk_hclk_pip(hclk_idx, row, col, src, dest)
 
             # make default pip for inter-hclk output
@@ -1334,9 +1344,6 @@ def gw5_add_hclk_bels(dat, dev, device):
         extra_clkdiv2['hclk_idx'] = hclk_idx
         extra_clkdiv['hclk_idx'] = hclk_idx
         for i in range(4):
-            # XXX skip for now
-            if i in {1, 3}:
-                continue
             # CLKDIV2
             dev.hclk_div2.setdefault(hclk_idx, set()).add((row, col, i))
             clkdiv2 = extra_clkdiv2.setdefault('bels', {}).setdefault(i, {})
@@ -1346,10 +1353,15 @@ def gw5_add_hclk_bels(dat, dev, device):
             portmap = clkdiv2.setdefault('inputs', {})
             portmap['RESETN'] = f'B{i + 2}'  # GW5A-25A 0-B2, 1-B3, 2-B4, 3-B5
             portmap['HCLKIN'] = f'CLKDIV2_HCLKIN{hclk_idx}{i}'
-            src = f'HCLK_BUF_BO{hclk_idx}{i}'
-            dest = portmap['HCLKIN']
-            add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, src)
-            add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, dest)
+            if i % 2 == 0:
+                src = f'HCLK_BUF_BO{hclk_idx}{i}'
+                dest = portmap['HCLKIN']
+                add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, src)
+                add_node(dev, f'HCLK{hclk_idx}_{src}', "GLOBAL_CLK", row, col, dest)
+            else:
+                src = f'CLKDIV2_I{hclk_idx}{i}'
+                dest = portmap['HCLKIN']
+                make_hclk_pip(dev, hclk_idx, row, col, src, dest)
 
             portmap = clkdiv2.setdefault('outputs', {})
             portmap['CLKOUT'] = f'CLKDIV2_O{hclk_idx}{i}'

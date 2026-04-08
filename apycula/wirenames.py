@@ -380,6 +380,10 @@ hclknames_5a25a[562] = 'VCC'
 
 hclknames_5a25a.update({n: f"HCLK_UNK{n}" for n in range(2, 6 * 187 + 4 * 65)})
 
+# CLKDIV2 inputs
+for i in range(2):
+    hclknames_5a25a[86 + i]   = f'CLKDIV2_I{1 + i * 2 }{1 + i}'
+
 # CLKDIV2 outputs
 for i in range(4):
     hclknames_5a25a[88 + i]   = f'CLKDIV2_O0{i}'
