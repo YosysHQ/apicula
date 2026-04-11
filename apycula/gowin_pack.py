@@ -69,15 +69,15 @@ def iob_is_connected_to_HCLK_GCLK(connections):
 # row, col - zero based
 def rc2tbrl(db, row, col, num):
     edge = 'T'
-    idx = col
-    if row == db.rows:
+    idx = col + 1
+    if row == db.rows - 1:
         edge = 'B'
-    elif col == 1:
+    elif col == 0:
         edge = 'L'
-        idx = row
-    elif col == db.cols:
+        idx = row + 1
+    elif col == db.cols - 1:
         edge = 'R'
-        idx = row
+        idx = row + 1
     return f"IO{edge}{idx}{num}"
 
 _verilog_name = re.compile(r"^[A-Za-z_0-9][A-Za-z_0-9$]*$")
@@ -4020,6 +4020,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                 in_iob_b_attrs = in_iob_attrs.copy()
 
             for iob_idx, atr in [(idx, in_iob_attrs), ('B', in_iob_b_attrs)]:
+                _banks[bank].bels.add(rc2tbrl(db, row, col, iob_idx))
                 iob_attrs = set()
                 for k, val in atr.items():
                     if k not in attrids.iob_attrids:
@@ -4100,6 +4101,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
         if bank in _banks:
             # skip used
             if bel in _banks[bank].bels:
+                #print(_banks[bank].bels, bel)
                 continue
         else:
             if device not in {'GW5A-25A', 'GW5AST-138C'}:
