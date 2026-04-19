@@ -20,3 +20,4 @@ generic/blinky.png
 generic/blinky.posp
 generic/blinky.vm
 .vscode
+.DS_Store

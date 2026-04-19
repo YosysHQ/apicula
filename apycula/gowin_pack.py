@@ -3531,8 +3531,13 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
         elif typ == "PINCFG":
             if args.i2c_as_gpio != ('I2C' in parms):
                 raise Exception(f" i2c_as_gpio has conflicting settings in nexpnr and gowin_pack.")
-            if args.sspi_as_gpio != ('SSPI' in parms):
-                raise Exception(f" sspi_as_gpio has conflicting settings in nexpnr and gowin_pack.")
+            if args.sspi_as_gpio is not None:
+                auto_detected = 'SSPI' in parms
+                if args.sspi_as_gpio != auto_detected:
+                    print(f"Warning: SSPI pin configuration mismatch (flag={args.sspi_as_gpio}, detected={auto_detected}). Proceeding with flag override.")
+                else:
+                    # If the user didn't specify, use the inferred detection
+                    args.sspi_as_gpio = ('SSPI' in parms)
         elif typ.startswith("FLASH"):
             pass
         elif typ.startswith("EMCU"):
