@@ -133,6 +133,9 @@ class ChipDB:
     def get_pips(self, tiledata: Tile) -> dict[str, dict[str, set[Coord]]]:
         return tiledata.pips
 
+    def get_alonenode(self, tiledata: Tile) -> dict[str, list[tuple[set[str], set[Coord]]]]:
+        return tiledata.alonenode
+
     # debug
     def __repr__(self):
         return f'db name:{self.device_name}'
@@ -153,15 +156,36 @@ class Device:
         """ Return fuses for the simple PIP """
         return self.chipdb.get_pips(tiledata)[dest][src]
 
-    def get_all_pips_fuses(self, pips: Iterator[PipDesc]):
+    def get_simple_clock_pip_fuses(self, tiledata: Tile, src: str, dest: str) -> set[Coord]:
+        """ Return fuses for the simple clock PIP """
+        return self.chipdb.get_clock_pips(tiledata)[dest][src]
+
+    def get_alonenode_fuses(self, tiledata: Tile, src: str, dest: str) -> set[Coord]:
+        """ Return fuses if pip's dest is not connected to srcs listen in the alonenode table """
+        fuses = set()
+        alonenode = self.chipdb.get_alonenode(tiledata)
+        if dest in alonenode:
+            for srcs_bits in alonenode[dest]:
+                srcs, bits = srcs_bits
+                if src not in srcs:
+                    fuses |= bits
+        return fuses
+
+    def get_all_pips_fuses(self, pips: Iterator[PipDesc]) -> list[CellFuseBits]:
         """ Return fuses for all PIPs """
+        fuses = []
         for pip in pips:
-            print(pip)
             tiledata = self.chipdb.get_tiledata(pip.x, pip.y)
             if self.is_clock_pip(tiledata, pip.src, pip.dest):
-                print("Clock pip. Skip")
-                continue
-            fuses = CellFuseBits(pip.x, pip.y, self.get_simple_pip_fuses(tiledata, pip.src, pip.dest))
+                bits = self.get_simple_clock_pip_fuses(tiledata, pip.src, pip.dest)
+                if bits:
+                    fuses.append(CellFuseBits(pip.x, pip.y, bits))
+            else:
+                bits = self.get_simple_pip_fuses(tiledata, pip.src, pip.dest)
+                bits |= self.get_alonenode_fuses(tiledata, pip.src, pip.dest)
+                if bits:
+                    fuses.append(CellFuseBits(pip.x, pip.y, bits))
+        return fuses
 
     # debug
     def __repr__(self):
