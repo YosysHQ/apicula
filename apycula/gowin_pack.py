@@ -3,7 +3,8 @@ import importlib.resources
 import json
 import re
 
-from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, get_bank_fuses, get_bank_io_fuses, get_long_fuses, load_chipdb
+from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, \
+                           get_bank_fuses, get_bank_io_fuses, get_long_fuses, load_chipdb, Tile, Coord
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -57,6 +58,23 @@ class PipDesc:
     src: str
     dest: str
 
+    # debug
+    def __repr__(self):
+        return f'x:{self.x}, y:{self.y}, src:{self.src}, dest:{self.dest}'
+
+################################################################
+@dataclass(frozen = True)
+class CellFuseBits:
+    """ Bits to set in one cell """
+    x: int
+    y: int
+    bits: list[Coord]
+
+    def __init__(self, x: int, y: int, bits: set[Coord]):
+        object.__setattr__(self, 'x', x)
+        object.__setattr__(self, 'y', y)
+        object.__setattr__(self, 'bits', list(bits))
+
 ################################################################
 class Netlist:
     """ P&R json file """
@@ -87,7 +105,10 @@ class Netlist:
                 res = pipre.fullmatch(pip) # ignore alias
                 if res:
                     col, row, dest, src = res.groups()
-                    yield PipDesc(row, col, src, dest)
+                    # nextpnr creates the passtrough LUTs by itself, so skip such pips
+                    if dest.startswith('XD') and src.startswith('F'):
+                        continue
+                    yield PipDesc(int(col), int(row), src, dest)
                 elif pip and "DUMMY" not in pip:
                     raise Exception("Invalid pip:", pip)
 
@@ -103,22 +124,44 @@ class ChipDB:
         with importlib.resources.path('apycula', f'{self.device_name}.msgpack.xz') as path:
             self.db = load_chipdb(path)
 
+    def get_tiledata(self, x: int, y: int) -> Tile:
+        return self.db[y, x]
+
+    def get_clock_pips(self, tiledata: Tile) -> dict[str, dict[str, set[Coord]]]:
+        return tiledata.clock_pips
+
+    def get_pips(self, tiledata: Tile) -> dict[str, dict[str, set[Coord]]]:
+        return tiledata.pips
+
     # debug
     def __repr__(self):
         return f'db name:{self.device_name}'
 
 ################################################################
 class Device:
-    """ Base chip """
+    """ Base chip. The fuses for a specific chip are set in a class that inherits from this one. """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         device_name = cli_args.get_device()
         if not device_name:
             device_name = pnr.get_device()
         self.chipdb = ChipDB(device_name)
 
-    def get_pip_fuses(self, pips: list[PipDesc]):
+    def is_clock_pip(self, tiledata: Tile, src: str, dest: str) -> bool:
+        return dest in self.chipdb.get_clock_pips(tiledata)
+
+    def get_simple_pip_fuses(self, tiledata: Tile, src: str, dest: str) -> set[Coord]:
+        """ Return fuses for the simple PIP """
+        return self.chipdb.get_pips(tiledata)[dest][src]
+
+    def get_all_pips_fuses(self, pips: Iterator[PipDesc]):
+        """ Return fuses for all PIPs """
         for pip in pips:
-            print(pip.x, pip.y, pip.src, pip.dest)
+            print(pip)
+            tiledata = self.chipdb.get_tiledata(pip.x, pip.y)
+            if self.is_clock_pip(tiledata, pip.src, pip.dest):
+                print("Clock pip. Skip")
+                continue
+            fuses = CellFuseBits(pip.x, pip.y, self.get_simple_pip_fuses(tiledata, pip.src, pip.dest))
 
     # debug
     def __repr__(self):
@@ -133,7 +176,7 @@ class Pack:
 
     def route(self):
         """ Set fuses for all pips """
-        fuses = self.device.get_pip_fuses(self.pnr.get_pips())
+        fuses = self.device.get_all_pips_fuses(self.pnr.get_pips())
 
     # debug
     def __repr__(self):
@@ -149,9 +192,10 @@ def main():
     device = create_device(cli_args, pnr)
 
     pack = Pack(cli_args, pnr, device)
+    import ipdb; ipdb.set_trace()
     pack.route()
 
-    import ipdb; ipdb.set_trace()
+    #import ipdb; ipdb.set_trace()
 
 if __name__ == '__main__':
     main()
