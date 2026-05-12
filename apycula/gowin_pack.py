@@ -266,9 +266,27 @@ class Bitstream:
             for row, col in cell.bits:
                 tile[row][col] = 1
 
+    def fill_header_footer(self, bs):
+        """
+        Generate fs header and footer
+        Currently limited to checksum with
+        CRC_check and security_bit_enable set
+        """
+        # configuration data checksum is computed on all
+        # data in 16bit format
+        bs = bitmatrix.fliplr(bs)
+        bs = bitmatrix.packbits(bs)
+
+        res = int(bitmatrix.bsum(bs[0::2]) * pow(2,8) + bitmatrix.bsum(bs[1::2]))
+        checksum = res & 0xffff
+        # set the checksum
+        self.footer[1] = bytearray.fromhex(f"{0x0A << 56 | checksum:016x}")
+
     def write(self):
         """ Write bitsream to file """
         main_map = self.device.fuse_bitmap(self.main_tilemap)
+        self.fill_header_footer(main_map)
+
         bslib.write_bitstream(self.output_name, main_map, self.header, self.footer, self.compress, extra_slots = {})
 
     # debug
