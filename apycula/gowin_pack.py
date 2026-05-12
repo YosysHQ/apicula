@@ -3,6 +3,9 @@ import importlib.resources
 import json
 import re
 
+from apycula import bitmatrix
+from apycula import bslib
+from apycula import chipdb
 from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, \
                            get_bank_fuses, get_bank_io_fuses, get_long_fuses, load_chipdb, Tile, Coord
 from collections.abc import Iterator
@@ -46,6 +49,12 @@ class CliArgs:
         """ Parsed chip name """
         return self.device
 
+    def get_compress(self) -> bool:
+        return self.args.compress
+
+    def get_output_filename(self) -> str:
+        return self.args.output
+
     # debug
     def __repr__(self):
         return f'args:{self.args}, device:{self.device}'
@@ -53,6 +62,7 @@ class CliArgs:
 ################################################################
 @dataclass(frozen = True)
 class PipDesc:
+    """ One PIP  """
     x: int
     y: int
     src: str
@@ -124,7 +134,24 @@ class ChipDB:
         with importlib.resources.path('apycula', f'{self.device_name}.msgpack.xz') as path:
             self.db = load_chipdb(path)
 
+    def get_hdr(self):
+        """ Bitstream header """
+        return self.db.cmd_hdr
+
+    def get_ftr(self):
+        """ Bitstream footer """
+        return self.db.cmd_ftr
+
+    def create_main_tilemap(self) -> dict:
+        """ Return chip tilemap """
+        return chipdb.tile_bitmap(self.db, bitmatrix.zeros(self.db.height, self.db.width), empty=True)
+
+    def fuse_bitmap(self, tilemap) -> dict:
+        """ Tilemap -> Bitmap """
+        return chipdb.fuse_bitmap(self.db, tilemap)
+
     def get_tiledata(self, x: int, y: int) -> Tile:
+        """ Get one cell description """
         return self.db[y, x]
 
     def get_clock_pips(self, tiledata: Tile) -> dict[str, dict[str, set[Coord]]]:
@@ -136,9 +163,17 @@ class ChipDB:
     def get_alonenode(self, tiledata: Tile) -> dict[str, list[tuple[set[str], set[Coord]]]]:
         return tiledata.alonenode
 
+    @property
+    def rows(self):
+        return self.db.rows
+
+    @property
+    def cols(self):
+        return self.db.cols
+
     # debug
     def __repr__(self):
-        return f'db name:{self.device_name}'
+        return f'db name:{self.device_name}, rows:{self.rows}, cols:{self.cols}'
 
 ################################################################
 class Device:
@@ -149,8 +184,27 @@ class Device:
             device_name = pnr.get_device()
         self.chipdb = ChipDB(device_name)
 
+    def get_hdr(self):
+        """ Bitstream header """
+        return self.chipdb.get_hdr()
+
+    def get_ftr(self):
+        """ Bitstream footer """
+        return self.chipdb.get_ftr()
+
+    def create_main_tilemap(self) -> dict:
+        """ Return chip tilemap """
+        return self.chipdb.create_main_tilemap()
+
+    def fuse_bitmap(self, tilemap) -> dict:
+        """ Tilemap -> Bitmap """
+        return self.chipdb.fuse_bitmap(tilemap)
+
     def is_clock_pip(self, tiledata: Tile, src: str, dest: str) -> bool:
         return dest in self.chipdb.get_clock_pips(tiledata)
+
+    def is_hclk_pip(self, tiledata: Tile, src: str, dest: str) -> bool:
+        return dest in {'FCLKA', 'FCLKB'}
 
     def get_simple_pip_fuses(self, tiledata: Tile, src: str, dest: str) -> set[Coord]:
         """ Return fuses for the simple PIP """
@@ -176,6 +230,8 @@ class Device:
         fuses = []
         for pip in pips:
             tiledata = self.chipdb.get_tiledata(pip.x, pip.y)
+            if self.is_hclk_pip(tiledata, pip.src, pip.dest):
+                continue
             if self.is_clock_pip(tiledata, pip.src, pip.dest):
                 bits = self.get_simple_clock_pip_fuses(tiledata, pip.src, pip.dest)
                 if bits:
@@ -192,15 +248,48 @@ class Device:
         return f'db:{self.chipdb}'
 
 ################################################################
+class Bitstream:
+    """ Output bitstream. Base class """
+    def __init__(self, cli_args: CliArgs, device: Device):
+        self.output_name = cli_args.get_output_filename()
+        self.compress = cli_args.get_compress()
+        self.device = device
+        self.main_tilemap = device.create_main_tilemap()
+        self.header = device.get_hdr()
+        self.footer = device.get_ftr()
+        self.init_bsram = False
+
+    def set_fuses(self, fuses: list[CellFuseBits]):
+        """ Set bits in all cells """
+        for cell in fuses:
+            tile = self.main_tilemap[cell.y, cell.x]
+            for row, col in cell.bits:
+                tile[row][col] = 1
+
+    def write(self):
+        """ Write bitsream to file """
+        main_map = self.device.fuse_bitmap(self.main_tilemap)
+        bslib.write_bitstream(self.output_name, main_map, self.header, self.footer, self.compress, extra_slots = {})
+
+    # debug
+    def __repr__(self):
+        return f'output_name:{self.output_name}, compress:{self.compress}, init_bsram:{self.init_bsram}, header:{self.header}, footer:{self.footer}'
+
+################################################################
 class Pack:
     """ The packing process """
     def __init__(self, cli_args: CliArgs, pnr: Netlist, device: Device):
         self.device = device
         self.pnr = pnr
+        self.fuses = []
 
     def route(self):
         """ Set fuses for all pips """
-        fuses = self.device.get_all_pips_fuses(self.pnr.get_pips())
+        self.fuses += self.device.get_all_pips_fuses(self.pnr.get_pips())
+
+    def get_fuses(self) -> list[CellFuseBits]:
+        """ Return generated fuses """
+        return self.fuses
 
     # debug
     def __repr__(self):
@@ -210,16 +299,23 @@ class Pack:
 def create_device(cli_args: CliArgs, pnr: Netlist) -> Device:
     return Device(cli_args, pnr)
 
+def create_output_bitstream(cli_args: CliArgs, device: Device) -> Bitstream:
+    return Bitstream(cli_args, device)
+
 def main():
     cli_args = CliArgs()
     pnr = Netlist(cli_args)
     device = create_device(cli_args, pnr)
+    output = create_output_bitstream(cli_args, device)
 
     pack = Pack(cli_args, pnr, device)
-    import ipdb; ipdb.set_trace()
     pack.route()
 
-    #import ipdb; ipdb.set_trace()
+    fuses = pack.get_fuses()
+    output.set_fuses(fuses)
+    import ipdb; ipdb.set_trace()
+    output.write()
+
 
 if __name__ == '__main__':
     main()
