@@ -75,5 +75,5 @@ jobs:
     uses: ./.github/workflows/toolchain.yml
     with:
       name: stable
-      yosys: v0.64
+      yosys: v0.65
       nextpnr: nextpnr-0.10
