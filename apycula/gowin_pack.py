@@ -75,6 +75,18 @@ class PipDesc:
 
 ################################################################
 @dataclass(frozen = True)
+class WireDesc:
+    """ One wire """
+    x: int
+    y: int
+    name: str
+
+    # debug
+    def __repr__(self):
+        return f'x:{self.x}, y:{self.y}, name:{self.name}'
+
+################################################################
+@dataclass(frozen = True)
 class CellFuseBits:
     """ Bits to set in one cell """
     x: int
@@ -123,6 +135,24 @@ class Netlist:
                 elif pip and "DUMMY" not in pip:
                     raise Exception("Invalid pip:", pip)
 
+    def get_wires_to_isolate(self) -> Iterator[WireDesc]:
+        """ Segment wires to isolate generator """
+        wire_re = re.compile(r"X(\d+)Y(\d+)/([\w]+)")
+        for net in self.in_file['modules'][self.top_module_name]['netnames'].values():
+            if 'SEG_WIRES_TO_ISOLATE' not in net['attributes']:
+                continue
+            val = net['attributes']['SEG_WIRES_TO_ISOLATE']
+            wires = val.split(';')
+            for wire_ex in wires:
+                if not wire_ex:
+                    continue
+                res = wire_re.fullmatch(wire_ex)
+                if res:
+                    col, row, wire = res.groups()
+                    yield WireDesc(int(col), int(row), wire)
+                else:
+                    raise Exception(f"Invalid isolated wire:{wire_ex}")
+
     # debug
     def __repr__(self):
         return f'in_file:{self.in_file}, top_module_name:{self.top_module_name}'
@@ -163,6 +193,9 @@ class ChipDB:
 
     def get_alonenode(self, tiledata: Tile) -> dict[str, list[tuple[set[str], set[Coord]]]]:
         return tiledata.alonenode
+
+    def get_alonenode6(self, tiledata: Tile) -> dict[str, list[tuple[set[str], set[Coord]]]]:
+        return tiledata.alonenode_6
 
     def get_const_fuses(self, x: int, y: int) -> set[Coord]:
         return self.db.const.get(self.db.grid[y][x], set())
@@ -246,6 +279,21 @@ class Device:
                     fuses.append(CellFuseBits(pip.x, pip.y, bits))
         return fuses
 
+    def get_isolated_wires(self, wires: Iterator[WireDesc]) -> list[CellFuseBits]:
+        """ Return fuses for all isolated wires """
+        fuses = []
+        for wire in wires:
+            tiledata = self.chipdb.get_tiledata(wire.x, wire.y)
+            alonenode6 = self.chipdb.get_alonenode6(tiledata)
+            if wire.name not in alonenode6:
+                raise Exception(f"Wire X{wire.x}Y{wire.y}/{wire.name} is not in alonenode fuse table")
+            if len(alonenode6[wire.name]) != 1:
+                raise Exception(f"Incorrect alonenode fuse table for X{wire.x}Y{wire.y}/{wire.name}")
+            bits = alonenode6[wire.name][0][1]
+            if bits:
+                fuses.append(CellFuseBits(wire.x, wire.y, bits))
+        return fuses
+
     def get_all_cons_fuses(self) -> list[CellFuseBits]:
         """ Always set fuses """
         fuses = []
@@ -316,6 +364,8 @@ class Pack:
     def route(self):
         """ Set fuses for all pips """
         self.fuses += self.device.get_all_pips_fuses(self.pnr.get_pips())
+        # isolate segment wires used
+        self.fuses += self.device.get_isolated_wires(self.pnr.get_wires_to_isolate())
 
     def set_const_fuses(self):
         """ Set fuses that must always be in place """
