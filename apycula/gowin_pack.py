@@ -1,5 +1,6 @@
 import argparse
 import importlib.resources
+import itertools
 import json
 import re
 
@@ -163,6 +164,9 @@ class ChipDB:
     def get_alonenode(self, tiledata: Tile) -> dict[str, list[tuple[set[str], set[Coord]]]]:
         return tiledata.alonenode
 
+    def get_const_fuses(self, x: int, y: int) -> set[Coord]:
+        return self.db.const.get(self.db.grid[y][x], set())
+
     @property
     def rows(self):
         return self.db.rows
@@ -218,11 +222,10 @@ class Device:
         """ Return fuses if pip's dest is not connected to srcs listen in the alonenode table """
         fuses = set()
         alonenode = self.chipdb.get_alonenode(tiledata)
-        if dest in alonenode:
-            for srcs_bits in alonenode[dest]:
-                srcs, bits = srcs_bits
-                if src not in srcs:
-                    fuses |= bits
+        for srcs_bits in alonenode.get(dest, []):
+            srcs, bits = srcs_bits
+            if src not in srcs:
+                fuses |= bits
         return fuses
 
     def get_all_pips_fuses(self, pips: Iterator[PipDesc]) -> list[CellFuseBits]:
@@ -241,6 +244,15 @@ class Device:
                 bits |= self.get_alonenode_fuses(tiledata, pip.src, pip.dest)
                 if bits:
                     fuses.append(CellFuseBits(pip.x, pip.y, bits))
+        return fuses
+
+    def get_all_cons_fuses(self) -> list[CellFuseBits]:
+        """ Always set fuses """
+        fuses = []
+        for x, y in itertools.product(range(self.chipdb.cols), range(self.chipdb.rows)):
+            bits = self.chipdb.get_const_fuses(x, y)
+            if bits:
+                fuses.append(CellFuseBits(x, y, bits))
         return fuses
 
     # debug
@@ -305,6 +317,10 @@ class Pack:
         """ Set fuses for all pips """
         self.fuses += self.device.get_all_pips_fuses(self.pnr.get_pips())
 
+    def set_const_fuses(self):
+        """ Set fuses that must always be in place """
+        self.fuses += self.device.get_all_cons_fuses()
+
     def get_fuses(self) -> list[CellFuseBits]:
         """ Return generated fuses """
         return self.fuses
@@ -328,6 +344,7 @@ def main():
 
     pack = Pack(cli_args, pnr, device)
     pack.route()
+    pack.set_const_fuses()
 
     fuses = pack.get_fuses()
     output.set_fuses(fuses)
