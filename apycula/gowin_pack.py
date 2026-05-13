@@ -292,6 +292,7 @@ def get_bels(data):
         yield (cell['type'], int(row), int(col), num,
                 cell['parameters'], cell['attributes'], sanitize_name(cellname), cell)
 
+_ff_sd_0 = set()
 _pip_bels = []
 def get_pips(data):
     pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
@@ -305,6 +306,10 @@ def get_pips(data):
                 # XD - input of the DFF
                 if src.startswith('XD'):
                     if dest.startswith('F'):
+                        continue
+                    if dest.startswith('SEL'):
+                        # route from SEL to FF input (set SD to 1)
+                        _ff_sd_0.add((int(col) + 1, int(row) + 1, int(dest[-1])))
                         continue
                     # pass-though LUT
                     num = dest[1]
@@ -3399,6 +3404,9 @@ def place_dff(db, tiledata, tile, parms, num, mode, row, col, slice_attrvals, ha
             dff_attrs.update({f'REG{int(num) % 2}_REGSET': 'RESET'})
         else:
             dff_attrs.update({f'REG{int(num) % 2}_REGSET': 'SET'})
+        # is input from LUT output or SEL input
+        if (row, col, int(num)) in _ff_sd_0:
+            dff_attrs.update({f'REG{int(num) % 2}_SD': '0'})
         # are set/reset/clear/preset port needed?
         if mode not in {'DFF', 'DFFN'}:
             dff_attrs.update({'LSRONMUX': 'LSRMUX'})
