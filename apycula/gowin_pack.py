@@ -87,6 +87,32 @@ class WireDesc:
 
 ################################################################
 @dataclass(frozen = True)
+class CellDesc:
+    """ One Cell """
+    name: str
+    typ: str
+    parms: dict[str, str]
+    attrs: dict[str, str]
+
+    # debug
+    def __repr__(self):
+        return f'name:{self.name}, typ:{self.typ}, parms:{self.parms}, attrs:{self.attrs}'
+
+################################################################
+@dataclass(frozen = True)
+class BelDesc:
+    """ One Bel """
+    x: int
+    y: int
+    idx: str
+    cell: CellDesc
+
+    # debug
+    def __repr__(self):
+        return f'x:{self.x}, y:{self.y}, idx:{self.idx}, cell:{self.cell}'
+
+################################################################
+@dataclass(frozen = True)
 class CellFuseBits:
     """ Bits to set in one cell """
     x: int
@@ -118,8 +144,20 @@ class Netlist:
         """ The chip specified in the netlist """
         return self.in_file['modules'][self.top_module_name]['settings']['packer.chipdb']
 
+    def get_cell_data(self, name: str) -> dict:
+        """ Return cell data values """
+        return self.in_file['modules'][self.top_module_name]['cells'][name]
+
+    def fill_cell_desc(self, name: str, cell_data: dict) -> CellDesc:
+        """ Fill cell description """
+        return CellDesc(name, cell_data['type'], cell_data['parameters'], cell_data['attributes'])
+
+    def get_cell(self, name: str) -> CellDesc:
+        """ Get cell desc by name """
+        return self.fill_cell_desc(name, self.et_cell_data(name))
+
     def get_pips(self) -> Iterator[PipDesc]:
-        """ Pips generator """
+        """ Pip generator """
         pipre = re.compile(r"X(\d+)Y(\d+)/([\w_]+)/([\w_]+)")
         for net in self.in_file['modules'][self.top_module_name]['netnames'].values():
             routing = net['attributes']['ROUTING']
@@ -135,13 +173,43 @@ class Netlist:
                 elif pip and "DUMMY" not in pip:
                     raise Exception("Invalid pip:", pip)
 
+    def is_gnd_vcc_bel(self, bel_attr: str) -> bool:
+        return bel_attr in {"VCC", "GND"} or bel_attr[-4:] in {"/GND", "/VCC"}
+
+    def get_bels(self) -> Iterator[BelDesc]:
+        """ Bel generator """
+        # differencial IOs do not define the IOSTD for the bank; they merely modify it.
+        # Therefore, we will postpone their generation until after normal IOs, once the standard has been clarified.
+        yield_later = []
+
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU27X18|MULTALU36X18|MULTADDALU18X18|MULTADDALU12X12|MULT36X36|MULT18X18|MULT12X12|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA|ADC)(\w*)")
+        for cell_name, cell_data in self.in_file['modules'][self.top_module_name]['cells'].items():
+            cell = self.fill_cell_desc(cell_name, cell_data)
+            bel_attr = cell.attrs.get('NEXTPNR_BEL')
+            if not bel_attr or self.is_gnd_vcc_bel(bel_attr):
+                continue
+            bel_groups = belre.match(bel_attr)
+            if not bel_groups:
+                raise Exception(f"Unknown bel:{bel_attr} for cell {cell.name}")
+            col, row, idx = bel_groups.groups()
+            x = int(col)
+            y = int(row)
+            bel = BelDesc(x, y, idx, cell)
+            if 'DIFF' in cell.attrs:
+                yield_later.append(bel)
+            else:
+                yield bel
+
+        for bel in yield_later:
+            yield bel
+
     def get_wires_to_isolate(self) -> Iterator[WireDesc]:
-        """ Segment wires to isolate generator """
+        """ Generate segment wires to isolate """
         wire_re = re.compile(r"X(\d+)Y(\d+)/([\w]+)")
         for net in self.in_file['modules'][self.top_module_name]['netnames'].values():
-            if 'SEG_WIRES_TO_ISOLATE' not in net['attributes']:
+            val = net['attributes'].get('SEG_WIRES_TO_ISOLATE')
+            if not val:
                 continue
-            val = net['attributes']['SEG_WIRES_TO_ISOLATE']
             wires = val.split(';')
             for wire_ex in wires:
                 if not wire_ex:
@@ -367,6 +435,11 @@ class Pack:
         # isolate segment wires used
         self.fuses += self.device.get_isolated_wires(self.pnr.get_wires_to_isolate())
 
+    def place(self):
+        """ Set fuses for Bels """
+        for bel in self.pnr.get_bels():
+            print(bel)
+
     def set_const_fuses(self):
         """ Set fuses that must always be in place """
         self.fuses += self.device.get_all_cons_fuses()
@@ -395,6 +468,7 @@ def main():
     pack = Pack(cli_args, pnr, device)
     pack.route()
     pack.set_const_fuses()
+    pack.place()
 
     fuses = pack.get_fuses()
     output.set_fuses(fuses)
