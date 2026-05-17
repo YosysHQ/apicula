@@ -371,6 +371,62 @@ class Device:
                 fuses.append(CellFuseBits(x, y, bits))
         return fuses
 
+    def mod_bels(self, bels: Iterator[BelDesc]) -> Iterator[BelDesc]:
+        """ Add/Remove/Modify bels """
+        yield from bels
+
+    # The `get_xxx_fuses` methods are responsible for packing specific cell types.
+    # They are invoked by retrieving a class attribute formed by combining the
+    # type name with prefixi and suffix.
+    # For diagnostic purposes, the base implementation should include handlers
+    # for all cell types, even if they consist solely of outputting an error
+    # message.
+    # It’s not always possible to generate the necessary fuses right
+    # away — sometimes you need to process the entire design while collecting
+    # certain data. That’s why, in these methods, we generate what we can, and
+    # handle the rest in the `get_final_fuses()` method, which is called last.
+    def error_not_supported_cell_type(self, bel: BelDesc):
+        #raise Exception(f"Not supported cell type '{bel.cell.typ}'. Cell '{bel.cell.name}'.")
+        print(f"Not supported cell type '{bel.cell.typ}'. Cell '{bel.cell.name}'.")
+        return []
+
+    # LUTs
+    def get_LUT4_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.error_not_supported_cell_type(bel)
+
+    def get_LUT2_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.get_LUT4_fuses(bel)
+
+    def get_LUT1_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.get_LUT4_fuses(bel)
+
+    # DFFs
+    def get_DFFE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.error_not_supported_cell_type(bel)
+
+    # ALU
+    def get_ALU_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.error_not_supported_cell_type(bel)
+
+    # Misc
+    def get_BUFG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.error_not_supported_cell_type(bel)
+
+    def get_GSR_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        """ Global Set/Reset """
+        return self.error_not_supported_cell_type(bel)
+
+    # IO
+    def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.error_not_supported_cell_type(bel)
+
+    def get_IBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.error_not_supported_cell_type(bel)
+
+    def get_final_fuses(self) -> list[CellFuseBits]:
+        """ Delayed fuse generation """
+        return []
+
     # debug
     def __repr__(self):
         return f'db:{self.chipdb}'
@@ -437,8 +493,8 @@ class Pack:
 
     def place(self):
         """ Set fuses for Bels """
-        for bel in self.pnr.get_bels():
-            print(bel)
+        for bel in self.device.mod_bels(self.pnr.get_bels()):
+            self.fuses += getattr(self.device, f'get_{bel.cell.typ}_fuses')(bel)
 
     def set_const_fuses(self):
         """ Set fuses that must always be in place """
