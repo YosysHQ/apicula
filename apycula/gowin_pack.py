@@ -253,6 +253,10 @@ class ChipDB:
         """ Get one cell description """
         return self.db[y, x]
 
+    def get_lut_data(self, x: int, y: int, idx: int) -> dict[int, set[Coord]]:
+        """ Return LUT encoding """
+        return self.get_tiledata(x, y).bels[f'LUT{idx}'].flags
+
     def get_clock_pips(self, tiledata: Tile) -> dict[str, dict[str, set[Coord]]]:
         return tiledata.clock_pips
 
@@ -392,12 +396,28 @@ class Device:
 
     # LUTs
     def get_LUT4_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        return self.error_not_supported_cell_type(bel)
+        init = str(bel.cell.parms['INIT'])
+        if len(init) > 16:
+            init = init[-16:]
+        else:
+            init = init*(16//len(init))
+
+        fuses = []
+        lutmap = self.chipdb.get_lut_data(bel.x, bel.y, bel.idx)
+        for bitnum, lutbit in enumerate(init[::-1]):
+            if lutbit == '0':
+                bits = lutmap[bitnum]
+                if bits:
+                    fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
+
+    def get_LUT1_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.get_LUT4_fuses(bel)
 
     def get_LUT2_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.get_LUT4_fuses(bel)
 
-    def get_LUT1_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+    def get_LUT3_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.get_LUT4_fuses(bel)
 
     # DFFs
