@@ -62,6 +62,16 @@ class CliArgs:
 
 ################################################################
 @dataclass(frozen = True)
+class AttrVal:
+    attr: str
+    val: str
+
+    # debug
+    def __repr__(self):
+        return f'attr:{self.attr}, val:{self.val}'
+
+################################################################
+@dataclass(frozen = True)
 class PipDesc:
     """ One PIP  """
     x: int
@@ -104,12 +114,12 @@ class BelDesc:
     """ One Bel """
     x: int
     y: int
-    idx: str
+    idx_str: str
     cell: CellDesc
 
     # debug
     def __repr__(self):
-        return f'x:{self.x}, y:{self.y}, idx:{self.idx}, cell:{self.cell}'
+        return f'x:{self.x}, y:{self.y}, idx_str:{self.idx_str}, cell:{self.cell}'
 
 ################################################################
 @dataclass(frozen = True)
@@ -394,7 +404,7 @@ class Device:
         print(f"Not supported cell type '{bel.cell.typ}'. Cell '{bel.cell.name}'.")
         return []
 
-    # LUTs
+    #========== LUTs
     def get_LUT4_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         init = str(bel.cell.parms['INIT'])
         if len(init) > 16:
@@ -403,7 +413,7 @@ class Device:
             init = init*(16//len(init))
 
         fuses = []
-        lutmap = self.chipdb.get_lut_data(bel.x, bel.y, bel.idx)
+        lutmap = self.chipdb.get_lut_data(bel.x, bel.y, int(bel.idx_str))
         for bitnum, lutbit in enumerate(init[::-1]):
             if lutbit == '0':
                 bits = lutmap[bitnum]
@@ -420,15 +430,31 @@ class Device:
     def get_LUT3_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.get_LUT4_fuses(bel)
 
-    # DFFs
-    def get_DFFE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        return self.error_not_supported_cell_type(bel)
+    #========== DFFs
+    def get_common_ff_fuses(self, bel: BelDesc, attr_vals: list[AttrVal]) -> list[CellFuseBits]:
+        attr_vals.append(AttrVal('REGMODE', 'LATCH' if int(bel.cell.attrs.get('LATCH', '0')) else 'FF'))
+        print(bel, attr_vals)
+        return []
 
-    # ALU
+    def get_DFFE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), # RESET
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFRE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    #========== ALU
     def get_ALU_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.error_not_supported_cell_type(bel)
 
-    # Misc
+    #========== Misc
     def get_BUFG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.error_not_supported_cell_type(bel)
 
@@ -436,13 +462,14 @@ class Device:
         """ Global Set/Reset """
         return self.error_not_supported_cell_type(bel)
 
-    # IO
+    #========== IO
     def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.error_not_supported_cell_type(bel)
 
     def get_IBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.error_not_supported_cell_type(bel)
 
+    #========== Finalize
     def get_final_fuses(self) -> list[CellFuseBits]:
         """ Delayed fuse generation """
         return []
