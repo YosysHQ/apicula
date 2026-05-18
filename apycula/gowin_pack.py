@@ -436,6 +436,20 @@ class Device:
         print(bel, attr_vals)
         return []
 
+    def get_DFF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), # RESET
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFN_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), # RESET
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
     def get_DFFE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
                      AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), # RESET
@@ -443,10 +457,130 @@ class Device:
                      ]
         return self.get_common_ff_fuses(bel, attr_vals)
 
+    def get_DFFNE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), # RESET
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFR_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFNR_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
     def get_DFFRE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
                      AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
                      AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFNRE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFS_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'SET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFNS_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'SET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFSE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'SET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFNSE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'SET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFC_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('SRMODE', 'ASYNC'),
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFNC_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('SRMODE', 'ASYNC'),
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFCE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('SRMODE', 'ASYNC'),
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFNCE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'RESET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('SRMODE', 'ASYNC'),
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFP_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'SET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('SRMODE', 'ASYNC'),
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFNP_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'SET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('SRMODE', 'ASYNC'),
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFPE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'SET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('SRMODE', 'ASYNC'),
+                     AttrVal('CLKMUX_CLK', 'SIG') # CLOCK
+                     ]
+        return self.get_common_ff_fuses(bel, attr_vals)
+
+    def get_DFFNPE_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = [AttrVal('CEMUX_1', 'UNKNOWN'), AttrVal('CEMUX_CE', 'SIG'), # CE port is used
+                     AttrVal(f'REG{int(bel.idx_str) % 2}_REGSET', 'SET'), AttrVal('LSRONMUX', 'LSRMUX'), # RESET
+                     AttrVal('SRMODE', 'ASYNC'),
+                     AttrVal('CLKMUX_CLK', 'INV') # CLOCK
                      ]
         return self.get_common_ff_fuses(bel, attr_vals)
 
