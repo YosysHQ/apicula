@@ -279,6 +279,9 @@ class ChipDB:
         """ Return LUT encoding """
         return self.get_tiledata(x, y).bels[f'LUT{idx}'].flags
 
+    def get_alu_modes(self, x: int, y: int, idx: int) -> dict[int, set[Coord]]:
+        return self.get_tiledata(x, y).bels[f'ALU{idx}'].modes
+
     def get_clock_pips(self, tiledata: Tile) -> dict[str, dict[str, set[Coord]]]:
         return tiledata.clock_pips
 
@@ -313,21 +316,28 @@ class ChipDB:
         return f'db name:{self.device_name}, rows:{self.rows}, cols:{self.cols}'
 
 ################################################################
-class UsedBels:
-    """ Tracking used Bels for processing at the final stage """
+class UsedSlices:
+    """ Tracking used slices for processing at the final stage.
+        Slice or two LUTs and two DFFs have fuses that are set if some
+        attribute is not specified, making it difficult to obtain the fuse bits
+        immediately — you have to assemble the complete slices and only then
+        request the fuse bits once all the necessary attributes are set.  """
     def __init__(self):
-        self.backet = set()
+        # {(x, y, slice_idx): (has_dff0, has_dff1, [AttrVal])}
+        # We use a simple tuple as the key for performance reasons—LUTs and
+        # DFFs make up the bulk of the design, so the dictionary will be large
+        # and the key needs to be simple.
+        self.backet = {}
 
-    def add_bel(self, x: int, y: int, idx):
-        """ Mark bel as used. Idx can be int or str """
-        self.backet.add((x, y, idx))
-
-    def is_in_backet(self, x: int, y: int, idx):
-        return (x, y, idx) in self.backet
+    def add_slice_attrs(self, x: int, y: int, idx: int, has_dff_0: bool, has_dff_1: bool, attr_vals: list[AttrVal]):
+        """ Set slice attributes """
+        has_dff0, has_dff1, sl_attrvals = self.backet.setdefault((x, y, idx), (False, False, []))
+        sl_attrvals += attr_vals
+        self.backet[x, y, idx] = (has_dff0 or has_dff_0, has_dff1 or has_dff_1, sl_attrvals)
 
     def enumerate(self):
-        for bel in self.backet:
-            yield bel
+        for x_y_idx, attr_vals in self.backet.items():
+            yield (x_y_idx, attr_vals)
 
     # debug
     def __repr__(self):
@@ -341,8 +351,24 @@ class Device:
         if not device_name:
             device_name = pnr.get_device()
         self.chipdb = ChipDB(device_name)
-        self.used_dffs = UsedBels()
-        self.used_luts = UsedBels()
+        self.used_slices = UsedSlices()
+        # default slice attributes
+        self.default_slice_attrvals = {}
+        for name, attrval in zip(
+                ["no_dff", "no_dff", "no_dff0", "no_dff1"],
+                [AttrVal('LSRONMUX', '0'), AttrVal('CLKMUX_1', '1'), AttrVal('REG0_REGSET', 'RESET'),
+                AttrVal('REG1_REGSET', 'RESET')]):
+            av = self.default_slice_attrvals.setdefault(name, set())
+            self.chipdb.get_slice_attr_val(attrval, av)
+
+        # default SSRAM slice attributes
+        self.default_ssram_slice_attrvals = set()
+        for attrval in [AttrVal('REG0_REGSET', 'UNKNOWN'), AttrVal('REG1_REGSET', 'UNKNOWN')]:
+            self.chipdb.get_slice_attr_val(attrval, self.default_ssram_slice_attrvals)
+        # MODE=SSRAM for quick test
+        av = set()
+        self.chipdb.get_slice_attr_val(AttrVal('MODE', 'SSRAM'), av)
+        self.mode_eq_ssram = next(iter(av))
 
     def get_hdr(self):
         """ Bitstream header """
@@ -446,12 +472,24 @@ class Device:
         return []
 
     #========== LUTs
-    def get_slice_fuses(self, x: int, y: int, idx: int, attr_vals: list[AttrVal]) -> list[CellFuseBits]:
+    def get_slice_fuses(self, x: int, y: int, idx: int, has_dff_0: bool, has_dff_1: bool, attr_vals: list[AttrVal]) -> list[CellFuseBits]:
+        """ Add default attributes """
         av =  set()
         for attrval in attr_vals:
             self.chipdb.get_slice_attr_val(attrval, av)
+
+        # defaults
+        if self.mode_eq_ssram in av:
+            av.update(self.default_ssram_slice_attrvals)
+        elif not (has_dff_0 or has_dff_1):
+            av.update(self.default_slice_attrvals['no_dff'])
+        if not has_dff_0:
+            av.update(self.default_slice_attrvals['no_dff0'])
+        if not has_dff_1:
+            av.update(self.default_slice_attrvals['no_dff1'])
+
         fuses = []
-        bits = self.chipdb.get_slice_fuses(x, y, idx // 2, av)
+        bits = self.chipdb.get_slice_fuses(x, y, idx, av)
         if bits:
             fuses.append(CellFuseBits(x, y, bits))
         return fuses
@@ -459,15 +497,12 @@ class Device:
     def get_final_slice_fuses(self) -> list[CellFuseBits]:
         """ Fuses for LUT-DFF combinations that were not detected """
         attr_vals = []
-        for x, y, idx in self.used_luts.enumerate():
-            if not self.used_dffs.is_in_backet(x, y, idx):
-                attr_vals.append(AttrVal(f'REG{idx}_REGSET', 'RESET'))
-                other_idx = 1 - (idx % 2)
-                if not self.used_dffs.is_in_backet(x, y, other_idx):
-                    attr_vals.append(AttrVal(f'REG{other_idx}_REGSET', 'RESET'))
-                    attr_vals.append(AttrVal('LSRONMUX', '0'))
-                    attr_vals.append(AttrVal('CLKMUX_1', '1'))
-        return self.get_slice_fuses(x, y, idx, attr_vals)
+        fuses = []
+        for x_y_idx, dffs_attr_vals in self.used_slices.enumerate():
+            x, y, idx = x_y_idx
+            has_dff_0, has_dff_1, attr_vals = dffs_attr_vals
+            fuses += self.get_slice_fuses(x, y, idx, has_dff_0, has_dff_1, attr_vals)
+        return fuses
 
     def get_LUT4_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         init = str(bel.cell.parms['INIT'])
@@ -477,16 +512,14 @@ class Device:
             init = init*(16//len(init))
 
         fuses = []
+        bits = set()
         lutmap = self.chipdb.get_lut_data(bel.x, bel.y, bel.idx_int)
         for bitnum, lutbit in enumerate(init[::-1]):
             if lutbit == '0':
-                bits = lutmap[bitnum]
-                if bits:
-                    fuses.append(CellFuseBits(bel.x, bel.y, bits))
-        # check if there is used DFF in the same slice
-        if not self.used_dffs.is_in_backet(bel.x, bel.y, bel.idx_int):
-            # no DFF so far, remember LUT for final processing
-            self.used_luts.add_bel(bel.x, bel.y, bel.idx_int)
+                bits.update(lutmap[bitnum])
+        fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        if bel.idx_int < 6:
+            self.used_slices.add_slice_attrs(bel.x, bel.y, bel.idx_int // 2, False, False, [])
         return fuses
 
     def get_LUT1_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
@@ -501,8 +534,8 @@ class Device:
     #========== DFFs
     def get_common_ff_fuses(self, bel: BelDesc, attr_vals: list[AttrVal]) -> list[CellFuseBits]:
         attr_vals.append(AttrVal('REGMODE', 'LATCH' if int(bel.cell.attrs.get('LATCH', '0')) else 'FF'))
-        self.used_dffs.add_bel(bel.x, bel.y, bel.idx_int)
-        return self.get_slice_fuses(bel.x, bel.y, bel.idx_int, attr_vals)
+        self.used_slices.add_slice_attrs(bel.x, bel.y, bel.idx_int // 2, bel.idx_int % 2 == 0, bel.idx_int % 2 == 1, attr_vals)
+        return []
 
     def get_DFF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         attr_vals = [AttrVal('CEMUX_1', '1'), # CE port is connected to VCC
@@ -654,7 +687,31 @@ class Device:
 
     #========== ALU
     def get_ALU_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        return self.error_not_supported_cell_type(bel)
+        fuses = []
+        init = bel.cell.parms.get('RAW_ALU_LUT')
+        if init:
+            if len(init) > 16:
+                init = init[-16:]
+            else:
+                init = init*(16//len(init))
+
+            lutmap = self.chipdb.get_lut_data(bel.x, bel.y, bel.idx_int)
+            bits = set()
+            for bitnum, lutbit in enumerate(init[::-1]):
+                if lutbit == '0':
+                    bits.update(lutmap[bitnum])
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        else:
+            mode = str(bel.cell.parms['ALU_MODE'])
+            alu_modes = self.chipdb.get_alu_modes(bel.x, bel.y, bel.idx_int)
+            bits = alu_modes.get(mode)
+            if not bits:
+                bits = alu_modes[str(int(mode, 2))]
+            if bits:
+                fuses.append(CellFuseBits(bel.x, bel.y, bits))
+
+        self.used_slices.add_slice_attrs(bel.x, bel.y, bel.idx_int // 2, False, False, [AttrVal('MODE', 'ALU')])
+        return fuses
 
     #========== Misc
     def get_BUFG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
@@ -679,7 +736,7 @@ class Device:
 
     # debug
     def __repr__(self):
-        return f'db:{self.chipdb}'
+        return f'db:{self.chipdb}, default_slice_attrvals:{self.default_slice_attrvals}, default_ssram_slice_attrvals:{self.default_ssram_slice_attrvals}, mode_eq_ssram:{self.mode_eq_ssram}'
 
 ################################################################
 class Bitstream:
@@ -752,6 +809,7 @@ class Pack:
 
     def get_fuses(self) -> list[CellFuseBits]:
         """ Return generated fuses """
+        self.fuses += self.device.get_final_fuses()
         return self.fuses
 
     # debug
