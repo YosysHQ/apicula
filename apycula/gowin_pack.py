@@ -147,6 +147,13 @@ class CellFuseBits:
         object.__setattr__(self, 'bits', list(bits))
 
 ################################################################
+def _convert_legacy_io_cell_attr(attr: str, val: str) -> tuple[str, str]:
+    """ Convert legacy '&IO_TYPE=LVCMOS33' style attributes to name-value pairs """
+    if attr[0] != '&':
+        return (attr, val)
+    name_val = attr.split('=')
+    return (name_val[0][1:], name_val[1])
+
 class Netlist:
     """ P&R json file """
     def __init__(self, cli_args: CliArgs):
@@ -176,7 +183,7 @@ class Netlist:
 
     def get_cell(self, name: str) -> CellDesc:
         """ Get cell desc by name """
-        return self.fill_cell_desc(name, self.et_cell_data(name))
+        return self.fill_cell_desc(name, self.get_cell_data(name))
 
     def get_pips(self) -> Iterator[PipDesc]:
         """ Pip generator """
@@ -417,6 +424,20 @@ class Device:
 
         # IO init
         self.io_banks = None # This is a list, but None ensures that subclasses must initialize the IO banks.
+
+    def normalize_io_cell_attr(self, cell: CellDesc) -> CellDesc:
+        """ Modify IO attrs """
+        refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE', 'OPEN_DRAIN': 'OPENDRAIN'}
+        new_attrs = {}
+        for attr, val in cell.attrs.items():
+            new_attr, new_val = _convert_legacy_io_cell_attr(attr, val)
+            new_name = refine_attrs.get(new_attr, new_attr)
+            new_attrs[new_name] = new_val
+        return CellDesc(cell.name, cell.typ, cell.parms, new_attrs)
+
+    def normalize_io_bel_attr(self, bel: BelDesc) -> BelDesc:
+        """ Modify IO attrs """
+        return BelDesc(bel.x, bel.y, bel.idx_str, self.normalize_io_cell_attr(bel.cell))
 
     def get_hdr(self):
         """ Bitstream header """
@@ -782,7 +803,8 @@ class Device:
 
     #========== IO
     def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
+        mod_bel = self.normalize_io_bel_attr(bel)
+        self.io_banks[self.get_bel_bank(bel)].add_io_bel(mod_bel)
         return []
 
     def get_IBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
