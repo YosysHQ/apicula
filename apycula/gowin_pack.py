@@ -255,6 +255,9 @@ class ChipDB:
         with importlib.resources.path('apycula', f'{self.device_name}.msgpack.xz') as path:
             self.db = load_chipdb(path)
 
+    def get_ttyp(self, x: int, y: int) -> int:
+        return self.db.grid[y][x]
+
     def get_hdr(self):
         """ Bitstream header """
         return self.db.cmd_hdr
@@ -302,6 +305,18 @@ class ChipDB:
 
     def get_slice_fuses(self, x: int, y: int, idx: int, av: set[tuple[int, int]]) -> set[Coord]:
         return get_shortval_fuses(self.db, self.db.grid[y][x], av, f'CLS{idx}')
+
+    def get_gsr_attr_val(self, attrval: AttrVal, av: set[tuple[int, int]]):
+        add_attr_val(self.db, 'GSR', av, attrids.gsr_attrids[attrval.attr], attrids.gsr_attrvals[attrval.val])
+
+    def get_gsr_fuses(self, x: int, y: int, av: set[tuple[int, int]]) -> set[Coord]:
+        return get_shortval_fuses(self.db, self.db.grid[y][x], av, 'GSR')
+
+    def get_cfg_attr_val(self, attrval: AttrVal, av: set[tuple[int, int]]):
+        add_attr_val(self.db, 'CFG', av, attrids.cfg_attrids[attrval.attr], attrids.cfg_attrvals[attrval.val])
+
+    def get_cfg_fuses(self, x: int, y: int, av: set[tuple[int, int]]) -> set[Coord]:
+        return get_shortval_fuses(self.db, self.db.grid[y][x], av, 'CFG')
 
     @property
     def rows(self):
@@ -355,9 +370,11 @@ class Device:
         # default slice attributes
         self.default_slice_attrvals = {}
         for name, attrval in zip(
-                ["no_dff", "no_dff", "no_dff0", "no_dff1"],
-                [AttrVal('LSRONMUX', '0'), AttrVal('CLKMUX_1', '1'), AttrVal('REG0_REGSET', 'RESET'),
-                AttrVal('REG1_REGSET', 'RESET')]):
+                ["no_dff", "no_dff", "no_dff", "no_dff", "no_dff0", "no_dff1"],
+                [AttrVal('LSRONMUX', '0'), AttrVal('CLKMUX_1', '1'),
+                 AttrVal('REG0_REGSET', 'RESET'), AttrVal('REG1_REGSET', 'RESET'),
+                 AttrVal('REG0_REGSET', 'RESET'), AttrVal('REG1_REGSET', 'RESET'),
+                 ]):
             av = self.default_slice_attrvals.setdefault(name, set())
             self.chipdb.get_slice_attr_val(attrval, av)
 
@@ -483,10 +500,11 @@ class Device:
             av.update(self.default_ssram_slice_attrvals)
         elif not (has_dff_0 or has_dff_1):
             av.update(self.default_slice_attrvals['no_dff'])
-        if not has_dff_0:
-            av.update(self.default_slice_attrvals['no_dff0'])
-        if not has_dff_1:
-            av.update(self.default_slice_attrvals['no_dff1'])
+        else:
+            if not has_dff_0:
+                av.update(self.default_slice_attrvals['no_dff0'])
+            if not has_dff_1:
+                av.update(self.default_slice_attrvals['no_dff1'])
 
         fuses = []
         bits = self.chipdb.get_slice_fuses(x, y, idx, av)
@@ -717,6 +735,9 @@ class Device:
     def get_BUFG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.error_not_supported_cell_type(bel)
 
+    def get_BANDGAP_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.error_not_supported_cell_type(bel)
+
     def get_GSR_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         """ Global Set/Reset """
         return self.error_not_supported_cell_type(bel)
@@ -737,6 +758,70 @@ class Device:
     # debug
     def __repr__(self):
         return f'db:{self.chipdb}, default_slice_attrvals:{self.default_slice_attrvals}, default_ssram_slice_attrvals:{self.default_ssram_slice_attrvals}, mode_eq_ssram:{self.mode_eq_ssram}'
+
+################################################################
+class GW1N(Device):
+    """ GW1N series """
+    def __init__(self, cli_args: CliArgs, pnr: Netlist):
+        super().__init__(cli_args, pnr)
+
+    #========== Misc
+    def get_GSR_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        """ Global Set/Reset """
+        gsr_attr_vals = [AttrVal('GSRMODE', 'ACTIVE_LOW')]
+        cfg_attr_vals = [AttrVal('GSR', 'USED'), AttrVal('GOE', 'F0'), AttrVal('GSR', 'F0'),
+                         AttrVal('DONE', 'F0'), AttrVal('GWD', 'F0')]
+
+        # The configuration fuses are described in the ['shortval'][60] table, global set/reset is
+        # described in the ['shortval'][20] table. Look for cells with type with these tables
+        gsr_types = [50, 83]
+        cfg_types = [50, 51]
+        fuses = []
+        for x, y in itertools.product(range(self.chipdb.cols), range(self.chipdb.rows)):
+            ttyp = self.chipdb.get_ttyp(x, y)
+            bits = set()
+            if ttyp in gsr_types:
+                av = set()
+                for attrval in gsr_attr_vals:
+                    self.chipdb.get_gsr_attr_val(attrval, av)
+                bits = self.chipdb.get_gsr_fuses(x, y, av)
+            if ttyp in cfg_types:
+                av = set()
+                for attrval in cfg_attr_vals:
+                    self.chipdb.get_cfg_attr_val(attrval, av)
+                bits.update(self.chipdb.get_cfg_fuses(x, y, av))
+            if bits:
+                fuses.append(CellFuseBits(x, y, bits))
+        print(fuses)
+        return fuses
+
+    # debug
+    def __repr__(self):
+        return super().__repr__() + ""
+
+################################################################
+class GW1NZ_1(GW1N):
+    """ GW1NZ-1 chip. Tangnano1k board """
+    def __init__(self, cli_args: CliArgs, pnr: Netlist):
+        super().__init__(cli_args, pnr)
+
+    #========== Misc
+    def get_BANDGAP_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.error_not_supported_cell_type(bel)
+
+    # debug
+    def __repr__(self):
+        return super().__repr__() + ""
+
+################################################################
+class GW2A(Device):
+    """ GW2A series """
+    def __init__(self, cli_args: CliArgs, pnr: Netlist):
+        super().__init__(cli_args, pnr)
+
+    # debug
+    def __repr__(self):
+        return super().__repr__() + ""
 
 ################################################################
 class Bitstream:
@@ -818,7 +903,9 @@ class Pack:
 
 ################################################################
 def create_device(cli_args: CliArgs, pnr: Netlist) -> Device:
-    return Device(cli_args, pnr)
+    return {
+            'GW1NZ-1': GW1NZ_1(cli_args, pnr)
+    } [cli_args.get_device()]
 
 def create_output_bitstream(cli_args: CliArgs, device: Device) -> Bitstream:
     return Bitstream(cli_args, device)
