@@ -318,6 +318,12 @@ class ChipDB:
     def get_cfg_fuses(self, x: int, y: int, av: set[tuple[int, int]]) -> set[Coord]:
         return get_shortval_fuses(self.db, self.db.grid[y][x], av, 'CFG')
 
+    def get_loc_bank(self, x: int, y: int) -> int:
+        try:
+            return chipdb.loc2bank(self.db, y, x)
+        except KeyError:
+            return -1
+
     @property
     def rows(self):
         return self.db.rows
@@ -359,6 +365,28 @@ class UsedSlices:
         return f'backet:{self.backet}'
 
 ################################################################
+class BankDesc:
+    """ IO bank """
+    _vcc_ios = {'LVCMOS10': '1.0', 'LVCMOS12': '1.2', 'LVCMOS15': '1.5', 'LVCMOS18': '1.8', 'LVCMOS25': '2.5',
+                'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3', 'MIPI': '1.2',
+                'SSTL15': '1.5', 'SSTL18_I': '1.8', 'SSTL18_II': '1.8', 'SSTL25_I': '2.5', 'SSTL25_II': '2.5',
+                'SSTL33_I': '3.3', 'SSTL33_II': '3.3', 'SSTL15D': '1.5', 'SSTL18D_I': '1.8', 'SSTL18D_II': '1.8',
+                'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3'}
+    def __init__(self):
+        self.attrs = {}
+        self.bels = []
+        # For diagnostic messages, we record the I/O pin that caused a voltage to be applied to the bank.
+        self.VCCIO_bel = None
+        self.IO_TYPE_bel = None
+
+    def add_io_bel(self, bel: BelDesc):
+        self.bels.append(bel)
+
+    # debug
+    def __repr__(self):
+        return f'attrs:{self.attrs}, VCCIO_bel:{self.VCCIO_bel}, IO_TYPE_bel:{self.IO_TYPE_bel}, bels:{self.bels}'
+
+################################################################
 class Device:
     """ Base chip. The fuses for a specific chip are set in a class that inherits from this one. """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
@@ -387,6 +415,9 @@ class Device:
         self.chipdb.get_slice_attr_val(AttrVal('MODE', 'SSRAM'), av)
         self.mode_eq_ssram = next(iter(av))
 
+        # IO init
+        self.io_banks = None # This is a list, but None ensures that subclasses must initialize the IO banks.
+
     def get_hdr(self):
         """ Bitstream header """
         return self.chipdb.get_hdr()
@@ -402,6 +433,13 @@ class Device:
     def fuse_bitmap(self, tilemap) -> dict:
         """ Tilemap -> Bitmap """
         return self.chipdb.fuse_bitmap(tilemap)
+
+    def get_bel_bank(self, bel: BelDesc) -> int:
+        """ Get bank for IO bel """
+        bank = self.chipdb.get_loc_bank(bel.x, bel.y)
+        if bank < 0:
+            raise Exception(f"IO bel {bel} is not allowed for a given package.")
+        return bank
 
     def is_clock_pip(self, tiledata: Tile, src: str, dest: str) -> bool:
         return dest in self.chipdb.get_clock_pips(tiledata)
@@ -744,7 +782,8 @@ class Device:
 
     #========== IO
     def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        return self.error_not_supported_cell_type(bel)
+        self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
+        return []
 
     def get_IBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return self.error_not_supported_cell_type(bel)
@@ -753,11 +792,11 @@ class Device:
     def get_final_fuses(self) -> list[CellFuseBits]:
         """ Delayed fuse generation """
         fuses = self.get_final_slice_fuses()
-        return []
+        return fuses
 
     # debug
     def __repr__(self):
-        return f'db:{self.chipdb}, default_slice_attrvals:{self.default_slice_attrvals}, default_ssram_slice_attrvals:{self.default_ssram_slice_attrvals}, mode_eq_ssram:{self.mode_eq_ssram}'
+        return f'db:{self.chipdb}, default_slice_attrvals:{self.default_slice_attrvals}, default_ssram_slice_attrvals:{self.default_ssram_slice_attrvals}, mode_eq_ssram:{self.mode_eq_ssram}, io_banks:[{len(self.io_banks)}]{self.io_banks}'
 
 ################################################################
 class GW1N(Device):
@@ -792,7 +831,6 @@ class GW1N(Device):
                 bits.update(self.chipdb.get_cfg_fuses(x, y, av))
             if bits:
                 fuses.append(CellFuseBits(x, y, bits))
-        print(fuses)
         return fuses
 
     # debug
@@ -804,6 +842,7 @@ class GW1NZ_1(GW1N):
     """ GW1NZ-1 chip. Tangnano1k board """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
+        self.io_banks = [BankDesc() for _ in range(2)]
 
     #========== Misc
     def get_BANDGAP_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
