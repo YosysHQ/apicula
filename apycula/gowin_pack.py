@@ -384,33 +384,30 @@ class BankDesc:
         self.attrs = {}
         self.bels = []
         # For diagnostic messages, we record the I/O pin that caused a voltage to be applied to the bank.
-        self.BANK_VCCIO_bel = None
-        self.IO_TYPE_bel = None
+        # { attr: bel }
+        self.set_attr_bels = {}
+
+    def check_or_set_attr(self, bel: BelDesc, attr: str):
+        """ Set bank attr or check for conflict """
+        new_val = bel.cell.attrs.get(attr)
+        if new_val:
+            if not self.set_attr_bels.get(attr):
+                self.set_attr_bels[attr] = bel
+                self.attrs[attr] = new_val
+            else:
+                cur_val = self.attrs.get(attr)
+                if new_val and new_val != cur_val:
+                    set_bel = self.set_attr_bels[attr]
+                    raise Exception(f"{attr} conflict: X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) is trying to set {new_val} but X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) already set {cur_val}")
 
     def add_io_bel(self, bel: BelDesc):
         self.bels.append(bel)
-        new_io_type = bel.cell.attrs.get('IO_TYPE')
-        if new_io_type:
-            if not self.IO_TYPE_bel:
-                self.IO_TYPE_bel = bel
-                self.attrs['IO_TYPE'] = new_io_type
-            else:
-                cur_io_type = self.attrs.get('IO_TYPE')
-                if new_io_type and new_io_type != cur_io_type:
-                    raise Exception(f"IO_TYPE conflict: X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) is trying to set {new_io_type} but X{self.IO_TYPE_bel.x}Y{self.IO_TYPE_bel.y}/IOB{self.IO_TYPE_bel.idx_str} ({self.IO_TYPE_bel.cell.name}) already set {cur_io_type}")
-        new_bank_vccio = bel.cell.attrs.get("BANK_VCCIO")
-        if new_bank_vccio:
-            if not self.BANK_VCCIO_bel:
-                self.BANK_VCCIO_bel = bel
-                self.attrs['BANK_VCCIO'] = new_bank_vccio
-            else:
-                cur_bank_vccio = self.attrs.get('BANK_VCCIO')
-                if new_bank_vccio and new_bank_vccio != cur_bank_vccio:
-                    raise Exception(f"BANK_VCCIO conflict: X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) is trying to set {new_bank_vccio} but X{self.BANK_VCCIO_bel.x}Y{self.BANK_VCCIO_bel.y}/IOB{self.BANK_VCCIO_bel.idx_str} ({self.BANK_VCCIO_bel.cell.name}) already set {cur_bank_vccio}")
+        self.check_or_set_attr(bel, 'IO_TYPE')
+        self.check_or_set_attr(bel, 'BANK_VCCIO')
 
     # debug
     def __repr__(self):
-        return f'attrs:{self.attrs}, BANK_VCCIO_bel:{self.BANK_VCCIO_bel}, IO_TYPE_bel:{self.IO_TYPE_bel}, bels:{self.bels}'
+        return f'attrs:{self.attrs}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
 
 ################################################################
 class Device:
