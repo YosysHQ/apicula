@@ -379,19 +379,38 @@ class BankDesc:
                 'SSTL15': '1.5', 'SSTL18_I': '1.8', 'SSTL18_II': '1.8', 'SSTL25_I': '2.5', 'SSTL25_II': '2.5',
                 'SSTL33_I': '3.3', 'SSTL33_II': '3.3', 'SSTL15D': '1.5', 'SSTL18D_I': '1.8', 'SSTL18D_II': '1.8',
                 'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3'}
+
     def __init__(self):
         self.attrs = {}
         self.bels = []
         # For diagnostic messages, we record the I/O pin that caused a voltage to be applied to the bank.
-        self.VCCIO_bel = None
+        self.BANK_VCCIO_bel = None
         self.IO_TYPE_bel = None
 
     def add_io_bel(self, bel: BelDesc):
         self.bels.append(bel)
+        new_io_type = bel.cell.attrs.get('IO_TYPE')
+        if new_io_type:
+            if not self.IO_TYPE_bel:
+                self.IO_TYPE_bel = bel
+                self.attrs['IO_TYPE'] = new_io_type
+            else:
+                cur_io_type = self.attrs.get('IO_TYPE')
+                if new_io_type and new_io_type != cur_io_type:
+                    raise Exception(f"IO_TYPE conflict: X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) is trying to set {new_io_type} but X{self.IO_TYPE_bel.x}Y{self.IO_TYPE_bel.y}/IOB{self.IO_TYPE_bel.idx_str} ({self.IO_TYPE_bel.cell.name}) already set {cur_io_type}")
+        new_bank_vccio = bel.cell.attrs.get("BANK_VCCIO")
+        if new_bank_vccio:
+            if not self.BANK_VCCIO_bel:
+                self.BANK_VCCIO_bel = bel
+                self.attrs['BANK_VCCIO'] = new_bank_vccio
+            else:
+                cur_bank_vccio = self.attrs.get('BANK_VCCIO')
+                if new_bank_vccio and new_bank_vccio != cur_bank_vccio:
+                    raise Exception(f"BANK_VCCIO conflict: X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) is trying to set {new_bank_vccio} but X{self.BANK_VCCIO_bel.x}Y{self.BANK_VCCIO_bel.y}/IOB{self.BANK_VCCIO_bel.idx_str} ({self.BANK_VCCIO_bel.cell.name}) already set {cur_bank_vccio}")
 
     # debug
     def __repr__(self):
-        return f'attrs:{self.attrs}, VCCIO_bel:{self.VCCIO_bel}, IO_TYPE_bel:{self.IO_TYPE_bel}, bels:{self.bels}'
+        return f'attrs:{self.attrs}, BANK_VCCIO_bel:{self.BANK_VCCIO_bel}, IO_TYPE_bel:{self.IO_TYPE_bel}, bels:{self.bels}'
 
 ################################################################
 class Device:
