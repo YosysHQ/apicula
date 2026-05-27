@@ -147,6 +147,19 @@ class CellFuseBits:
         object.__setattr__(self, 'bits', list(bits))
 
 ################################################################
+@dataclass(frozen = True)
+class IoCfg:
+    """ Alternate IO configurations """
+    x: int
+    y: int
+    idx_str: str
+    cfgs: set[str]
+
+    # debug
+    def __repr__(self):
+        return f'x:{self.x}, y:{self.y}, idx_str:{self.idx_str}, cfgs:{self.cfgs}'
+
+################################################################
 def _convert_legacy_io_cell_attr(attr: str, val: str) -> tuple[str, str]:
     """ Convert legacy '&IO_TYPE=LVCMOS33' style attributes to name-value pairs """
     if attr[0] != '&':
@@ -154,6 +167,7 @@ def _convert_legacy_io_cell_attr(attr: str, val: str) -> tuple[str, str]:
     name_val = attr.split('=')
     return (name_val[0][1:], name_val[1])
 
+################################################################
 class Netlist:
     """ P&R json file """
     def __init__(self, cli_args: CliArgs):
@@ -262,6 +276,24 @@ class ChipDB:
         with importlib.resources.path('apycula', f'{self.device_name}.msgpack.xz') as path:
             self.db = load_chipdb(path)
 
+    def io_loc_from_str_to_xyidx(self, io_loc: str) -> tuple[int, int, str]:
+        side = io_loc[2]
+        num = io_loc[3:-1]
+        idx_str = io_loc[-1]
+        if side == 'T':
+            row = 0
+            col = int(num) - 1
+        elif side == 'B':
+            row = self.rows - 1
+            col = int(num) - 1
+        elif side == 'L':
+            row = int(num) - 1
+            col = 0
+        elif side == 'R':
+            row = int(num) - 1
+            col = self.cols - 1
+        return (col, row, idx_str)
+
     def get_ttyp(self, x: int, y: int) -> int:
         return self.db.grid[y][x]
 
@@ -338,6 +370,18 @@ class ChipDB:
         the coexistence of banks and I/O. """
         return get_bank_io_fuses(self.db, self.db.grid[y][x], av)
 
+    def get_iob_attr_val(self, attrval: AttrVal, av: set[tuple[int, int]]):
+        add_attr_val(self.db, 'IOB', av, attrids.iob_attrids[attrval.attr], attrids.iob_attrvals[attrval.val])
+
+    def get_iob_fuses(self, x: int, y: int, av: set[tuple[int, int]], idx_str: str) -> set[Coord]:
+        return get_longval_fuses(self.db, self.db.grid[y][x], av, f'IOB{idx_str}')
+
+    def get_io_cfgs(self) -> Iterator[IoCfg]:
+        """ Alternate IO configuration iterator """
+        for loc, cfgs in self.db.io_cfg.items():
+            x, y, idx_str = self.io_loc_from_str_to_xyidx(loc)
+            yield IoCfg(x, y, idx_str, cfgs)
+
     def get_loc_bank(self, x: int, y: int) -> int:
         """ Bank for IO location  """
         try:
@@ -346,6 +390,7 @@ class ChipDB:
             return -1
 
     def get_bank_x_y(self, bank_idx: int) -> tuple[int, int]:
+        """ Get x and y of the bank cell """
         # swap row, col to x, y
         tile = self.db.bank_tiles[bank_idx]
         return (tile[1], tile[0])
@@ -468,6 +513,14 @@ class BankDesc:
     def get_attrs(self) -> Iterator[AttrVal]:
         for attr, val in self.attrs.items():
             yield AttrVal(attr, val)
+
+    def is_io_bel_used(self, x: int, y: int, idx_str: str) -> bool:
+        used = False
+        for bel in self.bels:
+            if x == bel.x and y == bel.y and idx_str == bel.idx_str:
+                used = True
+                break
+        return used
 
     # debug
     def __repr__(self):
@@ -882,13 +935,45 @@ class Device:
         return self.error_not_supported_cell_type(bel)
 
     #========== IO
-    def set_unused_io_attrs(self):
-        return
+    def get_default_io_type(self) -> str:
+        """ Default IO_TYPE """
+        return "LVCMOS12"
 
-    def get_io_bank_fuses(self) -> list[CellFuseBits]:
-        self.set_unused_io_attrs()
+    def get_default_unused_io_type(self) -> str:
+        """ Default IO_TYPE for unused IO """
+        return "LVCMOS18"
+
+    def get_unused_io_attrvals(self) -> list[AttrVal]:
+        """ Attributes for unused IO """
+        return []
+
+    def get_unused_io_fuses(self) -> list[CellFuseBits]:
+        """ Set attributes for unused banks and return fuses for all unused IOs """
+        for bank_desc in self.io_banks:
+            if not bank_desc.is_used:
+                bank_desc.set_attr("IO_TYPE", self.get_default_unused_io_type())
+                bank_desc.set_bank_vccio_by_io_type(self.get_default_unused_io_type())
 
         fuses = []
+        unused_io_attrvals = self.get_unused_io_attrvals()
+        for io_cfg in self.chipdb.get_io_cfgs():
+            bank_desc = self.io_banks[self.chipdb.get_loc_bank(io_cfg.x, io_cfg.y)]
+            # skip used IO
+            if bank_desc.is_io_bel_used(io_cfg.x, io_cfg.y, io_cfg.idx_str):
+                continue
+            av = set()
+            for attrval in unused_io_attrvals:
+                self.chipdb.get_io_attr_val(attrval, av)
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
+            self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
+            bits = self.chipdb.get_iob_fuses(io_cfg.x, io_cfg.y, av, io_cfg.idx_str)
+            if bits:
+                fuses.append(CellFuseBits(io_cfg.x, io_cfg.y, bits))
+        return fuses
+
+    def get_io_bank_fuses(self) -> list[CellFuseBits]:
+        fuses = self.get_unused_io_fuses()
+
         # Bank fuses
         for bank, bank_desc in enumerate(self.io_banks):
             av = set()
@@ -897,12 +982,8 @@ class Device:
             bits = self.chipdb.get_bank_fuses(bank_desc.x, bank_desc.y, av, bank)
             bits.update(self.chipdb.get_bank_io_fuses(bank_desc.x, bank_desc.y, av))
             if bits:
-                fuses.append(CellFuseBits(ban_desc.x, bank_desc.y, bits))
+                fuses.append(CellFuseBits(bank_desc.x, bank_desc.y, bits))
         return fuses
-
-    def get_default_io_type(self) -> str:
-        """ Default IO_TYPE """
-        return "LVCMOS12"
 
     def check_io_banks(self):
         """ Check BANK IO_TYPE and VCCIO """
@@ -912,7 +993,7 @@ class Device:
                if not bank_desc.io_type:
                    default_io_type = self.get_default_io_type()
                    bank_desc.set_attr("IO_TYPE", default_io_type)
-                   bank_desc.set_bank_vccio_by_io_type(default_io_type)
+               bank_desc.set_bank_vccio_by_io_type(bank_desc.io_type)
 
     def add_io_to_bank(self, bel: BelDesc):
         self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
@@ -940,7 +1021,7 @@ class Device:
 
     # debug
     def __repr__(self):
-        return f'db:{self.chipdb}, default_slice_attrvals:{self.default_slice_attrvals}, default_ssram_slice_attrvals:{self.default_ssram_slice_attrvals}, mode_eq_ssram:{self.mode_eq_ssram}, io_banks:[{len(self.io_banks)}]{self.io_banks}'
+        return f'db:{self.chipdb},\ndefault_slice_attrvals:{self.default_slice_attrvals},\ndefault_ssram_slice_attrvals:{self.default_ssram_slice_attrvals},\nmode_eq_ssram:{self.mode_eq_ssram}, \nio_banks:[{len(self.io_banks)}]{self.io_banks}'
 
 ################################################################
 class GW1N(Device):
