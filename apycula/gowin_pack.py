@@ -325,11 +325,30 @@ class ChipDB:
     def get_cfg_fuses(self, x: int, y: int, av: set[tuple[int, int]]) -> set[Coord]:
         return get_shortval_fuses(self.db, self.db.grid[y][x], av, 'CFG')
 
+    def get_bank_attr_val(self, attrval: AttrVal, av: set[tuple[int, int]]):
+        add_attr_val(self.db, 'IOB', av, attrids.iob_attrids[attrval.attr], attrids.iob_attrvals[attrval.val])
+
+    def get_bank_fuses(self, x: int, y: int, av: set[tuple[int, int]], bank_idx: int) -> set[Coord]:
+        return get_bank_fuses(self.db, self.db.grid[y][x], av, 'BANK', bank_idx)
+
+    def get_bank_io_fuses(self, x: int, y: int, av: set[tuple[int, int]]) -> set[Coord]:
+        """ XXX Prior to the 5A series, I/O could not be located in the same
+        cell as bank control bits, but this has changed in the 5A
+        series. The feature remains for now, but further research is needed on
+        the coexistence of banks and I/O. """
+        return get_bank_io_fuses(self.db, self.db.grid[y][x], av)
+
     def get_loc_bank(self, x: int, y: int) -> int:
+        """ Bank for IO location  """
         try:
             return chipdb.loc2bank(self.db, y, x)
         except KeyError:
             return -1
+
+    def get_bank_x_y(self, bank_idx: int) -> tuple[int, int]:
+        # swap row, col to x, y
+        tile = self.db.bank_tiles[bank_idx]
+        return (tile[1], tile[0])
 
     @property
     def rows(self):
@@ -381,11 +400,35 @@ class BankDesc:
                 'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3'}
 
     def __init__(self):
+        self.x, self.y = None, None
         self.attrs = {}
         self.bels = []
         # For diagnostic messages, we record the I/O pin that caused a voltage to be applied to the bank.
         # { attr: bel }
         self.set_attr_bels = {}
+
+    @property
+    def is_used(self) -> bool:
+        return bool(self.bels)
+
+    @property
+    def io_type(self) -> str:
+        return self.attrs.get("IO_TYPE")
+
+    @property
+    def bank_vccio(self) -> str:
+        return self.attrs.get("BANK_VCCIO")
+
+    def set_x_y(self, x: int, y: int):
+        """ Set bank cell location """
+        self.x = x
+        self.y = y
+
+    def set_attr(self, attr: str, val: str):
+        self.attrs[attr] = val
+
+    def set_bank_vccio_by_io_type(self, io_type: str):
+        self.attrs['BANK_VCCIO'] = self._vcc_ios[io_type]
 
     def check_or_set_attr(self, bel: BelDesc, attr: str):
         """ Set bank attr or check for conflict """
@@ -400,14 +443,35 @@ class BankDesc:
                     set_bel = self.set_attr_bels[attr]
                     raise Exception(f"{attr} conflict: X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) is trying to set {new_val} but X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) already set {cur_val}")
 
+    def check_for_vccio_conflict(self, default_io_type: str):
+        """ This function is called after all I/Os have been added to the bank. It checks for conflicts between the IO_TYPE and BANK_VCC_IO attributes. If IO_TYPE has not been specified, the default value is used.
+        """
+        io_type_bel = self.set_attr_bels.get('IO_TYPE')
+        if io_type_bel:
+            io_type = self.io_type
+        else:
+            io_type = default_io_type
+        if self.bank_vccio:
+            if self._vcc_ios[io_type] != self.bank_vccio:
+                set_bel = self.set_attr_bels['BANK_VCCIO']
+                if io_type_bel:
+                    raise Exception(f"IO_TYPE and BANK_VCCIO conflict: X{io_type_bel.x}Y{io_type_bel.y}/IOB{io_type_bel.idx_str} ({io_type_bel.cell.name}) is trying to set {io_type} but X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) already set {self.bank_vccio}")
+                else:
+                    raise Exception(f"Default IO_TYPE ({io_type}) and BANK_VCCIO conflict: X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) set {self.bank_vccio}")
+
     def add_io_bel(self, bel: BelDesc):
+        """ Add IO to the bank """
         self.bels.append(bel)
         self.check_or_set_attr(bel, 'IO_TYPE')
         self.check_or_set_attr(bel, 'BANK_VCCIO')
 
+    def get_attrs(self) -> Iterator[AttrVal]:
+        for attr, val in self.attrs.items():
+            yield AttrVal(attr, val)
+
     # debug
     def __repr__(self):
-        return f'attrs:{self.attrs}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
+        return f'x:{self.x}, y:{self.y}, attrs:{self.attrs}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
 
 ################################################################
 class Device:
@@ -818,18 +882,60 @@ class Device:
         return self.error_not_supported_cell_type(bel)
 
     #========== IO
+    def set_unused_io_attrs(self):
+        return
+
+    def get_io_bank_fuses(self) -> list[CellFuseBits]:
+        self.set_unused_io_attrs()
+
+        fuses = []
+        # Bank fuses
+        for bank, bank_desc in enumerate(self.io_banks):
+            av = set()
+            for attrval in bank_desc.get_attrs():
+                self.chipdb.get_bank_attr_val(attrval, av)
+            bits = self.chipdb.get_bank_fuses(bank_desc.x, bank_desc.y, av, bank)
+            bits.update(self.chipdb.get_bank_io_fuses(bank_desc.x, bank_desc.y, av))
+            if bits:
+                fuses.append(CellFuseBits(ban_desc.x, bank_desc.y, bits))
+        return fuses
+
+    def get_default_io_type(self) -> str:
+        """ Default IO_TYPE """
+        return "LVCMOS12"
+
+    def check_io_banks(self):
+        """ Check BANK IO_TYPE and VCCIO """
+        for bank_desc in self.io_banks:
+            if bank_desc.is_used:
+               bank_desc.check_for_vccio_conflict(self.get_default_io_type())
+               if not bank_desc.io_type:
+                   default_io_type = self.get_default_io_type()
+                   bank_desc.set_attr("IO_TYPE", default_io_type)
+                   bank_desc.set_bank_vccio_by_io_type(default_io_type)
+
+    def add_io_to_bank(self, bel: BelDesc):
+        self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
+
     def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         mod_bel = self.normalize_io_bel_attr(bel)
-        self.io_banks[self.get_bel_bank(bel)].add_io_bel(mod_bel)
+        self.add_io_to_bank(mod_bel)
         return []
 
     def get_IBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        mod_bel = self.normalize_io_bel_attr(bel)
+        self.add_io_to_bank(mod_bel)
         return self.error_not_supported_cell_type(bel)
 
     #========== Finalize
     def get_final_fuses(self) -> list[CellFuseBits]:
         """ Delayed fuse generation """
         fuses = self.get_final_slice_fuses()
+
+        # finalize IO
+        self.check_io_banks()
+
+        fuses += self.get_io_bank_fuses()
         return fuses
 
     # debug
@@ -881,10 +987,13 @@ class GW1NZ_1(GW1N):
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
         self.io_banks = [BankDesc() for _ in range(2)]
+        for bank_idx, bank_desc in enumerate(self.io_banks):
+            x, y = self.chipdb.get_bank_x_y(bank_idx)
+            bank_desc.set_x_y(x, y)
 
     #========== Misc
     def get_BANDGAP_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        return self.error_not_supported_cell_type(bel)
+        return []
 
     # debug
     def __repr__(self):
