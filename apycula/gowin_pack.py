@@ -12,6 +12,7 @@ from apycula.chipdb import add_attr_val, get_shortval_fuses, get_longval_fuses, 
                            get_bank_fuses, get_bank_io_fuses, get_long_fuses, load_chipdb, Tile, Coord
 from collections.abc import Iterator
 from dataclasses import dataclass
+from types import FunctionType
 
 ################################################################
 class CliArgs:
@@ -557,6 +558,21 @@ class Device:
 
         # IO init
         self.io_banks = None # This is a list, but None ensures that subclasses must initialize the IO banks.
+        self.default_ibuf_attrs = [('PADDI', 'PADDI'), ('HYSTERESIS', 'NONE'), ('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
+                 ('DRIVE', '0'), ('CLAMP', 'OFF'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('VREF', 'OFF'), ('LVDS_OUT', 'OFF')]
+        self.default_obuf_attrs = [('ODMUX_1', '1'), ('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('BANK_VCCIO', '1.8'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('OPENDRAIN', 'OFF')]
+        self.default_tbuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('BANK_VCCIO', '1.8'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('OPENDRAIN', 'OFF')]
+        self.default_iobuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('BANK_VCCIO', '1.8'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('PADDI', 'PADDI'), ('OPENDRAIN', 'OFF')]
 
     def normalize_io_cell_attr(self, cell: CellDesc) -> CellDesc:
         """ Modify IO attrs """
@@ -998,15 +1014,72 @@ class Device:
     def add_io_to_bank(self, bel: BelDesc):
         self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
 
-    def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+    # Second pass IO functions
+    def process_OBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        av = set()
+        for attr, val in self.default_obuf_attrs:
+            override_val = bel.cell.attrs.get(attr)
+            if override_val:
+                val = override_val
+            self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
+
+        fuses = []
+        self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
+        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
+        bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        print(fuses)
+        return fuses
+
+    def process_IBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        av = set()
+        for attr, val in self.default_ibuf_attrs:
+            override_val = bel.cell.attrs.get(attr)
+            if override_val:
+                val = override_val
+            self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
+
+        fuses = []
+        self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
+        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
+        bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        print(fuses)
+        return fuses
+
+    def get_io_fuses(self) -> list[CellFuseBits]:
+        """ Second IO pass """
+        fuses = []
+        for bank_desc in self.io_banks:
+            if bank_desc.is_used:
+                for bel in bank_desc.bels:
+                    fuses += getattr(self, f'process_{bel.cell.typ}')(bank_desc, bel)
+        return fuses
+
+    def common_io_handler(self, bel: BelDesc):
         mod_bel = self.normalize_io_bel_attr(bel)
         self.add_io_to_bank(mod_bel)
+
+    # These are general functions; the fuses for I/O cannot be determined until
+    # data on all of them has been collected. Therefore, the fuses will
+    # actually be configured by the process_XXX functions.
+    def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        self.common_io_handler(bel)
         return []
 
     def get_IBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        mod_bel = self.normalize_io_bel_attr(bel)
-        self.add_io_to_bank(mod_bel)
-        return self.error_not_supported_cell_type(bel)
+        self.common_io_handler(bel)
+        return []
+
+    def get_TBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        self.common_io_handler(bel)
+        return []
+
+    def get_IOBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        self.common_io_handler(bel)
+        return []
 
     #========== Finalize
     def get_final_fuses(self) -> list[CellFuseBits]:
@@ -1017,6 +1090,7 @@ class Device:
         self.check_io_banks()
 
         fuses += self.get_io_bank_fuses()
+        fuses += self.get_io_fuses()
         return fuses
 
     # debug
