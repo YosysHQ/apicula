@@ -1079,7 +1079,7 @@ class Device:
     # data on all of them has been collected. Therefore, the fuses will
     # actually be configured by the process_XXX functions.
     def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        self.common_io_handler(self.set_io_bel_flags(bel, {'IO_OUTPUT': 1}))
+        self.common_io_handler(self.set_io_bel_flags(bel, {'IS_OUTPUT': 1}))
         return []
 
     def get_IBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
@@ -1091,7 +1091,7 @@ class Device:
         return []
 
     def get_IOBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        self.common_io_handler(self.set_io_bel_flags(bel, {'IO_OUTPUT': 1}))
+        self.common_io_handler(self.set_io_bel_flags(bel, {'IS_OUTPUT': 1}))
         return []
 
     #========== Finalize
