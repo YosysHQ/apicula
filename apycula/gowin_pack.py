@@ -447,6 +447,8 @@ class BankDesc:
 
     def __init__(self):
         self.x, self.y = None, None
+        # Bank has regular output bels such as OBUF, IOBUF etc (not LVDS)
+        self.has_outputs = False
         self.attrs = {}
         self.bels = []
         # For diagnostic messages, we record the I/O pin that caused a voltage to be applied to the bank.
@@ -509,7 +511,9 @@ class BankDesc:
         """ Add IO to the bank """
         self.bels.append(bel)
         self.check_or_set_attr(bel, 'IO_TYPE')
-        self.check_or_set_attr(bel, 'BANK_VCCIO')
+        if 'IS_OUTPUT' in bel.cell.parms:
+            self.check_or_set_attr(bel, 'BANK_VCCIO')
+            self.has_outputs = True
 
     def get_attrs(self) -> Iterator[AttrVal]:
         for attr, val in self.attrs.items():
@@ -587,6 +591,13 @@ class Device:
     def normalize_io_bel_attr(self, bel: BelDesc) -> BelDesc:
         """ Modify IO attrs """
         return BelDesc(bel.x, bel.y, bel.idx_str, self.normalize_io_cell_attr(bel.cell))
+
+    def set_io_bel_flags(self, bel: BelDesc, flags_dict: dict[str, any]) -> BelDesc:
+        """ Set flags like 'is Output' """
+        cell = bel.cell
+        new_parms = cell.parms.copy()
+        new_parms.update(flags_dict)
+        return BelDesc(bel.x, bel.y, bel.idx_str, CellDesc(cell.name, cell.typ, new_parms, cell.attrs))
 
     def get_hdr(self):
         """ Bitstream header """
@@ -1009,7 +1020,10 @@ class Device:
                if not bank_desc.io_type:
                    default_io_type = self.get_default_io_type()
                    bank_desc.set_attr("IO_TYPE", default_io_type)
-               bank_desc.set_bank_vccio_by_io_type(bank_desc.io_type)
+               if bank_desc.has_outputs:
+                   bank_desc.set_bank_vccio_by_io_type(bank_desc.io_type)
+               else:
+                   bank_desc.set_bank_vccio_by_io_type(self.get_default_io_type())
 
     def add_io_to_bank(self, bel: BelDesc):
         self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
@@ -1042,7 +1056,6 @@ class Device:
 
         fuses = []
         self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
-        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
         if bits:
             fuses.append(CellFuseBits(bel.x, bel.y, bits))
@@ -1066,7 +1079,7 @@ class Device:
     # data on all of them has been collected. Therefore, the fuses will
     # actually be configured by the process_XXX functions.
     def get_OBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        self.common_io_handler(bel)
+        self.common_io_handler(self.set_io_bel_flags(bel, {'IO_OUTPUT': 1}))
         return []
 
     def get_IBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
@@ -1078,7 +1091,7 @@ class Device:
         return []
 
     def get_IOBUF_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        self.common_io_handler(bel)
+        self.common_io_handler(self.set_io_bel_flags(bel, {'IO_OUTPUT': 1}))
         return []
 
     #========== Finalize
