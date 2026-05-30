@@ -1056,6 +1056,7 @@ class Device:
 
         fuses = []
         self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
+        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
         if bits:
             fuses.append(CellFuseBits(bel.x, bel.y, bits))
