@@ -22,8 +22,16 @@ always @(posedge clk)
 assign ctr_d = ctr_q + 1'b1;
 assign i_tick = |ctr_q[24:23];
 
+/*
 ELVDS_TBUF diff_buf(
 		.OEN(~key),
+        .O(elvds_p),
+        .OB(elvds_n),
+        .I(i_tick)
+    );
+*/
+
+ELVDS_OBUF diff_buf(
         .O(elvds_p),
         .OB(elvds_n),
         .I(i_tick)

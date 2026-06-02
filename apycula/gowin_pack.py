@@ -598,6 +598,11 @@ class Device:
                  ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
                  ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('PADDI', 'PADDI'), ('OPENDRAIN', 'OFF')]
+        self.default_elvds_obuf_attrs = [('ODMUX_1', '0'), ('PULLMODE', 'NONE'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', '8'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('TRIMUX_PADDT', '1'),
+                 ('OPENDRAIN', 'OFF')]
         self.default_elvds_tbuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'), ('SLEWRATE', 'FAST'),
                  ('DRIVE', 'UNKNOWN'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
@@ -1133,7 +1138,8 @@ class Device:
         return fuses
 
     # Differential IO functions
-    def process_ELVDS_TBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+    def check_elvds_placement(self, bel: BelDesc):
+        """ Check Emulation vs True LVDS, postive vs negative pins etc """
         io_diff_cfg = self.chipdb.get_io_diff_cfg(bel.x, bel.y, bel.idx_str)
         if not io_diff_cfg:
             raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - location is not a LVDS pin")
@@ -1142,6 +1148,24 @@ class Device:
         if io_diff_cfg.positive != (bel.cell.parms.get('DIFF') == 'P'):
             raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - pin P must be IOBA, pin N must be IOBB")
 
+    def process_ELVDS_OBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        self.check_elvds_placement(bel)
+
+        av = self.set_io_attrvals(bel, self.default_elvds_obuf_attrs)
+        fuses = []
+        io_type = bel.cell.attrs.get('IO_TYPE')
+        if io_type:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
+        else:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_elvds_default_io_type()), av)
+        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
+        bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
+
+    def process_ELVDS_TBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        self.check_elvds_placement(bel)
 
         av = self.set_io_attrvals(bel, self.default_elvds_tbuf_attrs)
         fuses = []
@@ -1151,7 +1175,6 @@ class Device:
         else:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_elvds_default_io_type()), av)
         self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
-        print(av)
         bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
         if bits:
             fuses.append(CellFuseBits(bel.x, bel.y, bits))
@@ -1163,7 +1186,6 @@ class Device:
         for bank_desc in self.io_banks:
             if bank_desc.is_used:
                 for bel in bank_desc.bels:
-                    print(bel)
                     fuses += getattr(self, f'process_{bel.cell.typ}')(bank_desc, bel)
         return fuses
 
