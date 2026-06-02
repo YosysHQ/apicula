@@ -1,14 +1,14 @@
 /* Using an oscilloscope you can see on pins tlvds_p and tlvds_n the signal with changing polarity.
 * You can also use a 100 Ohm resistor and two LEDs connected in opposite directions between these pins.
 */
+`define LEDS_NR 3
+`define INV_BTN 0
 module top (
     input clk,
-    output elvds_p,
-    output elvds_n,
-	input key_i
+    input elvds_p,
+    input elvds_n,
+	output [2:0] led
 );
-
-wire key = key_i ^ `INV_BTN;
 
 reg [24:0] ctr_q;
 wire [24:0] ctr_d;
@@ -22,19 +22,10 @@ always @(posedge clk)
 assign ctr_d = ctr_q + 1'b1;
 assign i_tick = |ctr_q[24:23];
 
-/*
-ELVDS_TBUF diff_buf(
-		.OEN(~key),
-        .O(elvds_p),
-        .OB(elvds_n),
-        .I(i_tick)
-    );
-*/
-
-ELVDS_OBUF diff_buf(
-        .O(elvds_p),
-        .OB(elvds_n),
-        .I(i_tick)
+ELVDS_IBUF diff_buf(
+        .I(elvds_p),
+        .IB(elvds_n),
+        .O(led[0])
     );
 
 endmodule
