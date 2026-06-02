@@ -15,9 +15,9 @@ IO_LOC  "clk" 47;
 IO_PORT "clk" IO_TYPE=LVCMOS33;
 
 IO_LOC  "elvds_p" 40;
-IO_PORT "elvds_p" IO_TYPE=LVDS25;
+IO_PORT "elvds_p" IO_TYPE=LVCMOS33D;
 IO_LOC  "elvds_n" 39;
-IO_PORT "elvds_n" IO_TYPE=LVDS25;
+IO_PORT "elvds_n" IO_TYPE=LVCMOS33D;
 
 IO_LOC  "led[3]" 24;
 IO_PORT "led[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;

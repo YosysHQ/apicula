@@ -4078,6 +4078,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                 print(f'XXX BANK: add {k} key handle')
             else:
                 if k in {'BANK_VCCIO', 'IO_TYPE', 'LVDS_OUT', 'DRIVE', 'OPENDRAIN', 'PULL_STRENGTH'}:
+                    print('bank:', bank, k, val)
                     add_attr_val(db, 'IOB', bank_attrs, attrids.iob_attrids[k], attrids.iob_attrvals[val])
 
         bits = get_bank_fuses(db, tiledata.ttyp, bank_attrs, 'BANK', bank)

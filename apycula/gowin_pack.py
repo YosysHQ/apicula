@@ -130,6 +130,9 @@ class BelDesc:
         except ValueError:
             object.__setattr__(self, 'idx_int', -1)
 
+    def is_diff_io(self) -> bool:
+        return 'DIFF' in self.cell.parms
+
     # debug
     def __repr__(self):
         return f'x:{self.x}, y:{self.y}, idx_str:{self.idx_str}, idx_int:{self.idx_int}, cell:{self.cell}'
@@ -159,6 +162,17 @@ class IoCfg:
     # debug
     def __repr__(self):
         return f'x:{self.x}, y:{self.y}, idx_str:{self.idx_str}, cfgs:{self.cfgs}'
+
+################################################################
+@dataclass(frozen = True)
+class IoDiffCfg:
+    """ Differential IO configuration """
+    positive: bool
+    true_lvds: bool
+
+    # debug
+    def __repr__(self):
+        return f'positive:{self.positive}, true_lvds:{self.true_lvds}'
 
 ################################################################
 def _convert_legacy_io_cell_attr(attr: str, val: str) -> tuple[str, str]:
@@ -374,6 +388,12 @@ class ChipDB:
     def get_iob_attr_val(self, attrval: AttrVal, av: set[tuple[int, int]]):
         add_attr_val(self.db, 'IOB', av, attrids.iob_attrids[attrval.attr], attrids.iob_attrvals[attrval.val])
 
+    def get_io_diff_cfg(self, x: int, y: int, idx_str: str) -> IoDiffCfg:
+        bel = self.get_tiledata(x, y).bels[f'IOB{idx_str}']
+        if not bel.is_diff:
+            return None
+        return IoDiffCfg(bool(bel.is_diff_p), bool(bel.is_true_lvds))
+
     def get_iob_fuses(self, x: int, y: int, av: set[tuple[int, int]], idx_str: str) -> set[Coord]:
         return get_longval_fuses(self.db, self.db.grid[y][x], av, f'IOB{idx_str}')
 
@@ -510,7 +530,8 @@ class BankDesc:
     def add_io_bel(self, bel: BelDesc):
         """ Add IO to the bank """
         self.bels.append(bel)
-        self.check_or_set_attr(bel, 'IO_TYPE')
+        if not bel.is_diff_io():
+            self.check_or_set_attr(bel, 'IO_TYPE')
         if 'IS_OUTPUT' in bel.cell.parms:
             self.check_or_set_attr(bel, 'BANK_VCCIO')
             self.has_outputs = True
@@ -577,6 +598,30 @@ class Device:
                  ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
                  ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('PADDI', 'PADDI'), ('OPENDRAIN', 'OFF')]
+        self.default_elvds_tbuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', 'UNKNOWN'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('TRIMUX_PADDT', '0'),
+                 ('OPENDRAIN', 'OFF')]
+        self.io_type_alias = {
+                frozenset({"BLVDS25E"}): "BLVDS_E",
+                frozenset({"LVTTL33"}): "LVCMOS33",
+                frozenset({"LVCMOS12D", "LVCMOS15D", "LVCMOS18D", "LVCMOS25D", "LVCMOS33D", }): "LVCMOS_D",
+                frozenset({"HSTL15", "HSTL18_I", "HSTL18_II"}): "HSTL",
+                frozenset({"SSTL15", "SSTL18_I", "SSTL18_II", "SSTL25_I", "SSTL25_II", "SSTL33_I", "SSTL33_II"}): "SSTL",
+                frozenset({"MLVDS25E"}): "MLVDS_E",
+                frozenset({"SSTL15D", "SSTL18D_I", "SSTL18D_II", "SSTL25D_I", "SSTL25D_II", "SSTL33D_I", "SSTL33D_II"}): "SSTL_D",
+                frozenset({"HSTL15D", "HSTL18D_I", "HSTL18D_II"}): "HSTL_D",
+                frozenset({"RSDS"}): "RSDS25",
+                frozenset({"RSDS25E"}): "RSDS_E",
+                }
+
+    def get_io_type_alias(self, io_type: str) -> str:
+        for k, v in self.io_type_alias.items():
+            if io_type in k:
+                io_type = v
+                break
+        return io_type
 
     def normalize_io_cell_attr(self, cell: CellDesc) -> CellDesc:
         """ Modify IO attrs """
@@ -586,7 +631,17 @@ class Device:
             new_attr, new_val = _convert_legacy_io_cell_attr(attr, val)
             new_name = refine_attrs.get(new_attr, new_attr)
             new_attrs[new_name] = new_val
-        return CellDesc(cell.name, cell.typ, cell.parms, new_attrs)
+
+        new_io_type = new_attrs.get('IO_TYPE')
+        if new_io_type:
+            new_attrs['IO_TYPE'] = self.get_io_type_alias(new_io_type)
+
+        # change type for differential IO
+        new_typ = cell.typ
+        diff_type = cell.parms.get('DIFF_TYPE')
+        if diff_type:
+            new_typ = diff_type
+        return CellDesc(cell.name, new_typ, cell.parms, new_attrs)
 
     def normalize_io_bel_attr(self, bel: BelDesc) -> BelDesc:
         """ Modify IO attrs """
@@ -966,6 +1021,15 @@ class Device:
         """ Default IO_TYPE """
         return "LVCMOS12"
 
+    def get_default_elvds_io_type(self) -> str:
+        """ Default IO_TYPE """
+        return "LVCMOS_D"
+
+    def get_default_tlvds_io_type(self) -> str:
+        """ Default IO_TYPE """
+        return "LVDS25"
+
+
     def get_default_unused_io_type(self) -> str:
         """ Default IO_TYPE for unused IO """
         return "LVCMOS18"
@@ -1029,38 +1093,68 @@ class Device:
         self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
 
     # Second pass IO functions
-    def process_OBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+    def set_io_attrvals(self, bel: BelDesc, default_attrs: list[tuple[str, str]]) -> set[int]:
         av = set()
-        for attr, val in self.default_obuf_attrs:
+        for attr, val in default_attrs:
             override_val = bel.cell.attrs.get(attr)
             if override_val:
                 val = override_val
             self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
+        return av
 
+    def process_OBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        av = self.set_io_attrvals(bel, self.default_obuf_attrs)
         fuses = []
         self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
         self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
         if bits:
             fuses.append(CellFuseBits(bel.x, bel.y, bits))
-        print(fuses)
         return fuses
 
     def process_IBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
-        av = set()
-        for attr, val in self.default_ibuf_attrs:
-            override_val = bel.cell.attrs.get(attr)
-            if override_val:
-                val = override_val
-            self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
-
+        av = self.set_io_attrvals(bel, self.default_ibuf_attrs)
         fuses = []
         self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
         self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
         if bits:
             fuses.append(CellFuseBits(bel.x, bel.y, bits))
-        print(fuses)
+        return fuses
+
+    def process_TBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        av = self.set_io_attrvals(bel, self.default_tbuf_attrs)
+        fuses = []
+        self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
+        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
+        bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
+
+    # Differential IO functions
+    def process_ELVDS_TBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        io_diff_cfg = self.chipdb.get_io_diff_cfg(bel.x, bel.y, bel.idx_str)
+        if not io_diff_cfg:
+            raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - location is not a LVDS pin")
+        if io_diff_cfg.true_lvds:
+            raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - location is a True LVDS pin")
+        if io_diff_cfg.positive != (bel.cell.parms.get('DIFF') == 'P'):
+            raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - pin P must be IOBA, pin N must be IOBB")
+
+
+        av = self.set_io_attrvals(bel, self.default_elvds_tbuf_attrs)
+        fuses = []
+        io_type = bel.cell.attrs.get('IO_TYPE')
+        if io_type:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
+        else:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_elvds_default_io_type()), av)
+        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
+        print(av)
+        bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
         return fuses
 
     def get_io_fuses(self) -> list[CellFuseBits]:
@@ -1069,6 +1163,7 @@ class Device:
         for bank_desc in self.io_banks:
             if bank_desc.is_used:
                 for bel in bank_desc.bels:
+                    print(bel)
                     fuses += getattr(self, f'process_{bel.cell.typ}')(bank_desc, bel)
         return fuses
 
@@ -1274,6 +1369,7 @@ def main():
     pack = Pack(cli_args, pnr, device)
     pack.route()
     pack.set_const_fuses()
+    import ipdb; ipdb.set_trace()
     pack.place()
 
     fuses = pack.get_fuses()
