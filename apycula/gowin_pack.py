@@ -612,6 +612,10 @@ class Device:
                  ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
                  ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('TRIMUX_PADDT', '0'),
                  ('OPENDRAIN', 'OFF')]
+        self.default_tlvds_ibuf_attrs = [('PADDI', 'PADDI'), ('HYSTERESIS', 'NA'),
+                 ('SLEWRATE', 'SLOW'), ('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'),
+                 ('DRIVE', '0'), ('CLAMP', 'OFF'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('VREF', 'OFF'), ('LVDS_OUT', 'OFF')]
         self.io_type_alias = {
                 frozenset({"BLVDS25E"}): "BLVDS_E",
                 frozenset({"LVTTL33"}): "LVCMOS33",
@@ -1102,12 +1106,20 @@ class Device:
         self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
 
     # Second pass IO functions
+    def set_input_resistor(self, val: str, bel: BelDesc, av: set[int]):
+        """ Set additional atribute for input resistor """
+        if val != 'OFF' and bel.cell.typ in {'IBUF', 'IOBUF', 'TLVDS_IBUF', 'TLVDS_IOBUF', 'ELVDS_IBUF', 'ELVDS_IOBUF'}:
+            self.chipdb.get_iob_attr_val(AttrVal('DDR_DYNTERM', 'ON'), av)
+
     def set_io_attrvals(self, bel: BelDesc, default_attrs: list[tuple[str, str]]) -> set[int]:
         av = set()
         for attr, val in default_attrs:
             override_val = bel.cell.attrs.get(attr)
             if override_val:
                 val = override_val
+            # Check for input resistor
+            if attr == 'SINGLERESISTOR':
+                self.set_input_resistor(val, bel, av)
             self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
         return av
 
@@ -1152,6 +1164,32 @@ class Device:
         if io_diff_cfg.positive != (bel.cell.parms.get('DIFF') == 'P'):
             raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - pin P must be IOBA, pin N must be IOBB")
 
+    def check_tlvds_placement(self, bel: BelDesc):
+        """ Check Emulation vs True LVDS, postive vs negative pins etc """
+        io_diff_cfg = self.chipdb.get_io_diff_cfg(bel.x, bel.y, bel.idx_str)
+        if not io_diff_cfg:
+            raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - location is not a LVDS pin")
+        if not io_diff_cfg.true_lvds:
+            raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - location is a Emulated LVDS pin")
+        if io_diff_cfg.positive != (bel.cell.parms.get('DIFF') == 'P'):
+            raise Exception(f"X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) cannot be placed - pin P must be IOBA, pin N must be IOBB")
+
+    def process_TLVDS_IBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        self.check_tlvds_placement(bel)
+
+        av = self.set_io_attrvals(bel, self.default_tlvds_ibuf_attrs)
+        fuses = []
+        io_type = bel.cell.attrs.get('IO_TYPE')
+        if io_type:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
+        else:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_tlvds_io_type()), av)
+
+        bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
+
     def process_ELVDS_IBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
         self.check_elvds_placement(bel)
 
@@ -1161,7 +1199,7 @@ class Device:
         if io_type:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
         else:
-            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_elvds_default_io_type()), av)
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_elvds_io_type()), av)
         # A vs B pullup
         if bel.idx_str == 'A':
             self.chipdb.get_iob_attr_val(AttrVal("PULLMODE", "UP"), av)
@@ -1182,7 +1220,7 @@ class Device:
         if io_type:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
         else:
-            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_elvds_default_io_type()), av)
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_elvds_io_type()), av)
         self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
         if bits:
@@ -1198,7 +1236,7 @@ class Device:
         if io_type:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
         else:
-            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_elvds_default_io_type()), av)
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_elvds_io_type()), av)
         self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
         if bits:
@@ -1302,10 +1340,6 @@ class GW1N_1(GW1N):
             x, y = self.chipdb.get_bank_x_y(bank_idx)
             bank_desc.set_x_y(x, y)
 
-    #========== Misc
-    def get_BANDGAP_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        return []
-
     #========== IO
     def process_ELVDS_IOBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
         raise Exception("The GW1N-1 does not support ELVDS IOBUF")
@@ -1338,6 +1372,21 @@ class GW1NZ_1(GW1N):
     # debug
     def __repr__(self):
         return super().__repr__() + ""
+
+################################################################
+class GW1N_9C(GW1N):
+    """ GW1N-9C chip. Tangnano9k board """
+    def __init__(self, cli_args: CliArgs, pnr: Netlist):
+        super().__init__(cli_args, pnr)
+        self.io_banks = [BankDesc() for _ in range(4)]
+        for bank_idx, bank_desc in enumerate(self.io_banks):
+            x, y = self.chipdb.get_bank_x_y(bank_idx)
+            bank_desc.set_x_y(x, y)
+
+    # debug
+    def __repr__(self):
+        return super().__repr__() + ""
+
 
 ################################################################
 class GW2A(Device):
@@ -1432,6 +1481,7 @@ def create_device(cli_args: CliArgs, pnr: Netlist) -> Device:
     return {
             'GW1N-1' : GW1N_1(cli_args, pnr),
             'GW1NZ-1': GW1NZ_1(cli_args, pnr),
+            'GW1N-9C': GW1N_9C(cli_args, pnr),
     } [cli_args.get_device()]
 
 def create_output_bitstream(cli_args: CliArgs, device: Device) -> Bitstream:

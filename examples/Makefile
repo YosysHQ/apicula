@@ -51,7 +51,7 @@ primer20k: \
 tangnano: \
 	blinky-latch-tangnano.fs \
 	blinky-tangnano.fs shift-tangnano.fs blinky-tbuf-tangnano.fs blinky-oddr-tangnano.fs \
-	blinky-osc-tangnano.fs elvds-tangnano.fs oddr-elvds-tangnano.fs pll-nanolcd-tangnano.fs \
+	blinky-osc-tangnano.fs tlvds-tangnano.fs oddr-elvds-tangnano.fs pll-nanolcd-tangnano.fs \
 	blinky-clkdiv-tangnano.fs blinky-clkdiv-dhcen-tangnano.fs \
 	oser4-tangnano.fs ovideo-tangnano.fs oser8-tangnano.fs oser10-tangnano.fs \
 	iddr-tangnano.fs iddrc-tangnano.fs iodelay-tangnano.fs \
