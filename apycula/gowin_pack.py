@@ -467,8 +467,11 @@ class BankDesc:
 
     def __init__(self):
         self.x, self.y = None, None
-        # Bank has regular output bels such as OBUF, IOBUF etc (not LVDS)
+        # Bank has output bels such as OBUF, IOBUF etc
         self.has_outputs = False
+        self.has_lvds_outputs = False
+        # if have LVDS outputs when BANK_VCCIO must be >= this
+        self.lvds_BANK_VCCIO = None
         self.attrs = {}
         self.bels = []
         # For diagnostic messages, we record the I/O pin that caused a voltage to be applied to the bank.
@@ -520,21 +523,32 @@ class BankDesc:
         else:
             io_type = default_io_type
         if self.bank_vccio:
+            set_bel = self.set_attr_bels['BANK_VCCIO']
             if self._vcc_ios[io_type] != self.bank_vccio:
-                set_bel = self.set_attr_bels['BANK_VCCIO']
                 if io_type_bel:
                     raise Exception(f"IO_TYPE and BANK_VCCIO conflict: X{io_type_bel.x}Y{io_type_bel.y}/IOB{io_type_bel.idx_str} ({io_type_bel.cell.name}) is trying to set {io_type} but X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) already set {self.bank_vccio}")
                 else:
                     raise Exception(f"Default IO_TYPE ({io_type}) and BANK_VCCIO conflict: X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) set {self.bank_vccio}")
+            if self.has_lvds_outputs:
+                if float(self.bank_vccio) < float(self.lvds_BANK_VCCIO):
+                    raise Exception(f"BANK_VCCIO conflict: X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) set {self.bank_vccio} but LVDS set {self.lvds_BANK_VCCIO}")
+        elif self.has_lvds_outputs:
+            self.attrs['BANK_VCCIO'] = self.lvds_BANK_VCCIO;
 
     def add_io_bel(self, bel: BelDesc):
         """ Add IO to the bank """
         self.bels.append(bel)
         if not bel.is_diff_io():
             self.check_or_set_attr(bel, 'IO_TYPE')
-        if 'IS_OUTPUT' in bel.cell.parms:
-            self.check_or_set_attr(bel, 'BANK_VCCIO')
-            self.has_outputs = True
+            if 'IS_OUTPUT' in bel.cell.parms:
+                self.check_or_set_attr(bel, 'BANK_VCCIO')
+                self.has_outputs = True
+        else: # LVDS
+            if 'IS_OUTPUT' in bel.cell.parms:
+                if 'IO_TYPE' not in bel.cell.attrs:
+                    raise Exception(f"LVDS bel X{bel.x}Y{bel.y}/IOB{bel.idx_str} must have IO_TYPE.")
+                self.lvds_BANK_VCCIO = self._vcc_ios[bel.cell.attrs['IO_TYPE']]
+                self.has_lvds_outputs = True
 
     def get_attrs(self) -> Iterator[AttrVal]:
         for attr, val in self.attrs.items():
@@ -550,7 +564,7 @@ class BankDesc:
 
     # debug
     def __repr__(self):
-        return f'x:{self.x}, y:{self.y}, attrs:{self.attrs}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
+        return f'x:{self.x}, y:{self.y}, attrs:{self.attrs}, has_outputs:{self.has_outputs}, has_lvds_outputs:{self.has_lvds_outputs}, lvds_BANK_VCCIO:{self.lvds_BANK_VCCIO}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
 
 ################################################################
 class Device:
@@ -616,6 +630,11 @@ class Device:
                  ('SLEWRATE', 'SLOW'), ('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'),
                  ('DRIVE', '0'), ('CLAMP', 'OFF'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('VREF', 'OFF'), ('LVDS_OUT', 'OFF')]
+        self.default_tlvds_tbuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', '0'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'ON'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('TRIMUX_PADDT', '0'),
+                 ('OPENDRAIN', 'OFF')]
         self.io_type_alias = {
                 frozenset({"BLVDS25E"}): "BLVDS_E",
                 frozenset({"LVTTL33"}): "LVCMOS33",
@@ -1095,12 +1114,15 @@ class Device:
             if bank_desc.is_used:
                bank_desc.check_for_vccio_conflict(self.get_default_io_type())
                if not bank_desc.io_type:
+                   # BANK_VCCIO wasn't set
                    default_io_type = self.get_default_io_type()
                    bank_desc.set_attr("IO_TYPE", default_io_type)
-               if bank_desc.has_outputs:
-                   bank_desc.set_bank_vccio_by_io_type(bank_desc.io_type)
-               else:
-                   bank_desc.set_bank_vccio_by_io_type(self.get_default_io_type())
+               if not bank_desc.bank_vccio:
+                   # BANK_VCCIO may be set without IO_TYPE - in case of LVDS for example
+                   if bank_desc.has_outputs:
+                       bank_desc.set_bank_vccio_by_io_type(bank_desc.io_type)
+                   else:
+                       bank_desc.set_bank_vccio_by_io_type(self.get_default_io_type())
 
     def add_io_to_bank(self, bel: BelDesc):
         self.io_banks[self.get_bel_bank(bel)].add_io_bel(bel)
@@ -1185,6 +1207,22 @@ class Device:
         else:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_tlvds_io_type()), av)
 
+        bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
+
+    def process_TLVDS_TBUF(self, bank_desc: BankDesc, bel: BelDesc) -> list[CellFuseBits]:
+        self.check_tlvds_placement(bel)
+
+        av = self.set_io_attrvals(bel, self.default_tlvds_tbuf_attrs)
+        fuses = []
+        io_type = bel.cell.attrs.get('IO_TYPE')
+        if io_type:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
+        else:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_tlvds_io_type()), av)
+        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         bits = self.chipdb.get_iob_fuses(bel.x, bel.y, av, bel.idx_str)
         if bits:
             fuses.append(CellFuseBits(bel.x, bel.y, bits))
