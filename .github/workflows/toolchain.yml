@@ -58,7 +58,7 @@ jobs:
         #make install DESTDIR=${{ github.workspace }}/staging
         cmake -B build . -DCMAKE_BUILD_TYPE=Release
         cmake --build build --config Release --parallel $(nproc)
-        cmake --install build --prefix ${{ github.workspace }}/staging --strip
+        cmake --install build --prefix ${{ github.workspace }}/staging/usr/local --strip
     - name: Build nextpnr
       run: |
         git clone https://github.com/YosysHQ/nextpnr.git
