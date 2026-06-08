@@ -43,7 +43,7 @@ jobs:
         path: dist
     - name: Install apycula
       run: pip install dist/*.whl
-    - name: Build yosys
+    - name: Get yosys
       run: |
         git clone https://github.com/YosysHQ/yosys.git
         cd yosys
@@ -53,12 +53,21 @@ jobs:
         #git fetch origin pull/5717/head:zaun-latch
         #git merge --no-edit zaun-latch
         git submodule update --init --recursive
-        #make config-clang
-        #make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
-        #make install DESTDIR=${{ github.workspace }}/staging
+    - name: Build DEV yosys    
+      if: ${{ inputs.name == 'dev' }}
+      run: |
         cmake -B build . -DCMAKE_BUILD_TYPE=Release
         cmake --build build --config Release --parallel $(nproc)
         cmake --install build --prefix ${{ github.workspace }}/staging/usr/local --strip
+        #make config-clang
+        #make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
+        #make install DESTDIR=${{ github.workspace }}/staging
+    - name: Build STABLE yosys    
+      if: ${{ inputs.name == 'stable' }}
+      run: |
+        make config-clang
+        make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
+        make install DESTDIR=${{ github.workspace }}/staging
     - name: Build nextpnr
       run: |
         git clone https://github.com/YosysHQ/nextpnr.git
