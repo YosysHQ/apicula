@@ -56,15 +56,14 @@ jobs:
     - name: Build DEV yosys    
       if: ${{ inputs.name == 'dev' }}
       run: |
+        cd yosys
         cmake -B build . -DCMAKE_BUILD_TYPE=Release
         cmake --build build --config Release --parallel $(nproc)
         cmake --install build --prefix ${{ github.workspace }}/staging/usr/local --strip
-        #make config-clang
-        #make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
-        #make install DESTDIR=${{ github.workspace }}/staging
     - name: Build STABLE yosys    
       if: ${{ inputs.name == 'stable' }}
       run: |
+        cd yosys
         make config-clang
         make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
         make install DESTDIR=${{ github.workspace }}/staging
