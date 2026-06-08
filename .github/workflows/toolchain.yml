@@ -53,9 +53,12 @@ jobs:
         #git fetch origin pull/5717/head:zaun-latch
         #git merge --no-edit zaun-latch
         git submodule update --init --recursive
-        make config-clang
-        make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
-        make install DESTDIR=${{ github.workspace }}/staging
+        #make config-clang
+        #make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
+        #make install DESTDIR=${{ github.workspace }}/staging
+        cmake -B build . -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --config Release --parallel $(nproc)
+        cmake --install build --prefix ${{ github.workspace }}/staging --strip
     - name: Build nextpnr
       run: |
         git clone https://github.com/YosysHQ/nextpnr.git
