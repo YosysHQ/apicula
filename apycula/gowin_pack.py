@@ -244,10 +244,23 @@ def store_bsram_init_val(db, row, col, typ, parms, attrs, map_offset = 0):
             x0 += 1
         y += 1
 
+def is_ram_pin(db, r, c, idx):
+    """ Internal SDRAM/HyperRAM pins do not have an IO standard, so we will ignore them """
+    partno = pnr['modules']['top']['settings'].get('packer.partno', '')
+    pkg, series, _ = db.packages[partno]
+    if not db.sip_cst or pkg not in db.sip_cst[series]:
+        return False
+    row = int(r) - 1
+    col = int(c) - 1
+    for pin_desc in db.sip_cst[series][pkg]:
+        if row == pin_desc[1] and col == pin_desc[2] and idx == pin_desc[3]:
+            return True
+    return False
+
 _clkdiv_cell_types = {'CLKDIV', 'CLKDIV2'}
 _bsram_cell_types = {'DP', 'SDP', 'SP', 'ROM'}
 _dsp_cell_types = {'ALU54D', 'MULT36X36', 'MULTALU36X18', 'MULTADDALU18X18', 'MULTALU18X18', 'MULT18X18', 'MULT9X9', 'PADD18', 'PADD9', 'MULT12X12', 'MULTALU27X18', 'MULTADDALU12X12'}
-def get_bels(data):
+def get_bels(db, data):
     later = []
     belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU27X18|MULTALU36X18|MULTADDALU18X18|MULTADDALU12X12|MULT36X36|MULT18X18|MULT12X12|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA|ADC)(\w*)")
 
@@ -269,7 +282,7 @@ def get_bels(data):
         # The differential buffer is pushed to the end of the queue for processing
         # because it does not have an independent iostd, but adjusts to the normal pins
         # in the bank, if any are found
-        if 'DIFF' in cell['attributes']:
+        if 'DIFF' in cell['attributes'] or is_ram_pin(db, row, col, num):
             later.append((cellname, cell, row, col, num))
             continue
         cell_type = cell['type']
@@ -3911,7 +3924,7 @@ def place(db, tilemap, bels, cst, args, slice_attrvals, extra_slots):
                     if iob.attrs['BANK_VCCIO'] != _vcc_ios[iob.attrs['IO_TYPE']]:
                         raise Exception(f"Conflict bank VCC at {iob_name}.")
                 if not vccio:
-                    if not iob.attrs['IO_TYPE'].startswith('LVDS'):
+                    if not (iob.attrs['IO_TYPE'].startswith('LVDS') or is_ram_pin(db, row, col, num)):
                         iostd = iob.attrs['IO_TYPE']
                         vccio = _vcc_ios[iostd]
                 elif vccio != _vcc_ios[iob.attrs['IO_TYPE']] and not iob.attrs['IO_TYPE'].startswith('LVDS'):
@@ -4656,7 +4669,7 @@ def main():
     route(db, tilemap, pips)
     do_gw5_ihclk(db, tilemap)
     isolate_segments(pnr, db, tilemap)
-    bels = get_bels(pnr)
+    bels = get_bels(db, pnr)
     gsr(db, tilemap, args)
     # LUT/RAM/ALU/DFF use shortval[][CLS0/1/2/3]
     # Their fuses corresponding to attributes can be set independently, but the
