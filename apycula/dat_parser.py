@@ -35,8 +35,13 @@ class Datfile:
 
         if partType == 0:       # 1/2 Series
             self.compat_dict.update(self.read_something())
-        elif partType == 1:
-            raise Exception(f"PartType {partType} is not supported")
+        elif partType == 1:     # GW1N-2 / GW1N-1P5 family (FNIRSI 2C53T die)
+            # Same base .dat layout as partType 0 (all sections are at fixed absolute
+            # offsets below 0x7b4a8, guarded by asserts that would fire on misalign).
+            # partType 1 only *appends* a ~33 KB extended table at 0x7b4a8 (0x7b4a4
+            # for these files is 538638 B vs 505000 B for partType 0) which we do not
+            # parse yet — base grid/IO/logic parse identically. See docs/02.
+            self.compat_dict.update(self.read_something())
         elif partType == 2:  # 5 Series
             self.gw5aStuff = self.read_5Astuff()
             self.compat_dict.update(self.read_something())
