@@ -941,7 +941,14 @@ def dat_fill_io_cfgs(db, dat, device, pindesc):
                             #print(package_cfg, _io_cfg[cfg_code])
                             db.io_cfg[io_name] = _io_cfg[cfg_code]
                         elif cfg_code:
-                            raise Exception(f"unknown pin configuration {cfg_code} at {io_name}")
+                            if device == 'GW1N-2':
+                                # GW1N-2 bring-up: a few special-function pin config codes
+                                # (e.g. 45) aren't in _io_cfg yet. Don't crash — record a
+                                # placeholder so the grid/IO build completes. TODO: map these.
+                                print(f"WARNING: unknown pin configuration {cfg_code} at {io_name} (GW1N-2 WIP)")
+                                db.io_cfg[io_name] = [f'UNKNOWN_CFG_{cfg_code}']
+                            else:
+                                raise Exception(f"unknown pin configuration {cfg_code} at {io_name}")
                     #print(io_name, db.io_cfg[io_name])
     return
 
@@ -3299,6 +3306,10 @@ _osc_ports = {('OSCZ', 'GW1NZ-1'): ({}, {'OSCOUT' : (0, 5, 'OF3'), 'OSCEN': (0, 
               ('OSC',  'GW2A-18'):  ({'OSCOUT': 'Q4'}, {}),
               ('OSC',  'GW2A-18C'):  ({'OSCOUT': 'Q4'}, {}),
               ('OSCA', 'GW5A-25A'):  ({}, {'OSCOUT': (19, 91, 'MPLL3CLKIN2'), 'OSCEN': (19, 90, 'SEL4')}),
+              # GW1N-2 bring-up: the GW1N-2/GW1N-1P5 die exposes an 'OSCO' oscillator.
+              # Its port->wire aliases are not yet fuzzed; empty stub lets the grid/IO
+              # build proceed (the OSC is a hard block, mapped later). TODO: map OSCO.
+              ('OSCO', 'GW1N-2'):  ({}, {}),
               }
 
 # from logic to global clocks. An interesting piece of dat['CmuxIns'], it was
@@ -4070,7 +4081,7 @@ def add_attr_val(dev, logic_table, attrs, attr, val):
         attrs.add(attrval)
 
 def get_pins(device):
-    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A", "GW5AST-138C"}:
+    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW1N-1P5C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A", "GW5AST-138C"}:
         raise Exception(f"unsupported device {device}")
     pkgs = pindef.all_packages(device)
     res = {}
@@ -4172,10 +4183,19 @@ def json_pinout(device):
         return (res, {
             "GW5AST-138C": pins,
         }, res_bank_pins)
+    elif device == "GW1N-2":
+        # GW1N-2 uses the GW1N-1P5C vendor data (same die). Key the pinout under the
+        # vendor name (downstream dat_fill_io_cfgs/pindef expect params['device']),
+        # and also under GW1N-2 for nextpnr compatibility.
+        pkgs, pins, bank_pins = get_pins("GW1N-1P5C")
+        return (pkgs, {
+            "GW1N-1P5C": pins,
+            "GW1N-2": pins,
+        }, bank_pins)
     else:
         raise Exception("unsupported device")
 
-_adc_inputs = [(0, 'CLK'), (2, 'VSENCTL0'), (3, 'VSENCTL1'), (4, 'VSENCTL2'), (5, 'ADCMODE'),
+_adc_inputs =[(0, 'CLK'), (2, 'VSENCTL0'), (3, 'VSENCTL1'), (4, 'VSENCTL2'), (5, 'ADCMODE'),
                (6, 'DRSTN'), (7, 'ADCREQI'), (8, 'MDRP_CLK'), (10, 'MDRP_WDATA0'), (11, 'MDRP_WDATA1'),
                (12, 'MDRP_WDATA2'), (13, 'MDRP_WDATA3'), (14, 'MDRP_WDATA4'), (15, 'MDRP_WDATA5'),
                (16, 'MDRP_WDATA6'), (17, 'MDRP_WDATA7'), (18, 'MDRP_A_INC'), (20, 'MDRP_OPCODE0'),
