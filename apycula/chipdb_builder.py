@@ -456,8 +456,14 @@ def main():
         db[27, 88].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'LSR0'
     elif device in {'GW5AST-138C'}:
         db[108, 165].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'D7'
-    elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1', 'GW1N-2'}:
+    elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
         db[0, 0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
+    elif device in {'GW1N-2'}:
+        # GW1N-2 / GW1N-1P5: the GSR routes to wire C4 at [0, 1] (R1C2), not the
+        # [0, 0] corner. Verified by diff-fuzzing a GSR primitive through Gowin for
+        # GW1N-UV1P5: the GSRI route is invariant at tile [0, 1] across reset-pin
+        # placement, terminating on C4 (pip-fuse match).
+        db[0, 1].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
     else:
         raise Exception(f"No GSR for {device}")
 
