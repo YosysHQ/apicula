@@ -109,6 +109,9 @@ def read_bitstream(fname):
                     elif ba == b'\x06\x00\x00\x00\x01\x00h\x1b':      # GW1NZ-1
                         padding = 0
                         compress_padding = 0
+                    elif ba == b'\x06\x00\x00\x00\x01\x20h\x1b':      # GW1N-2 (IDCODE 0x0120681B) -- GW1N-2 support WIP
+                        padding = 0          # TODO: confirm empirically (copied from GW1NZ-1, closest relative)
+                        compress_padding = 0 # TODO: only matters for compressed streams; verify against a real GW1N-2 .fs
                     elif ba == b'\x06\x00\x00\x00\x01\x00\x98\x1b':   # GW1NS-4
                         padding = 0
                         compress_padding = 8
