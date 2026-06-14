@@ -16,6 +16,15 @@ from apycula import tracing
 from apycula import gowin_unpack
 
 DEVICE_PARAMS = {
+    "GW1N-2": {
+        # GW1N-2 support (FNIRSI 2C53T scope die, IDCODE 0x0120681B). The Education
+        # edition ships no GW1N-2 vendor folder, but GW1N-1P5C is the *same die*
+        # (shared .fse family per doc/device_grouping.md). Verified: synthesizing for
+        # this partnumber emits device-ID 06 00 00 00 01 20 68 1b == 0x0120681B.
+        "package": "QFN48XF",
+        "device": "GW1N-1P5C",
+        "partnumber": "GW1N-UV1P5QN48XFC7/I6",
+    },
     "GW1NS-4": {
         "package": "QFN48P",
         "device": "GW1NSR-4C",
@@ -220,6 +229,7 @@ def gen_ftr():
 _chip_id = {
         'GW1N-1'      : b'\x06\x00\x00\x00\x09\x00\x28\x1b',
         'GW1NZ-1'     : b'\x06\x00\x00\x00\x01\x00\x68\x1b',
+        'GW1N-2'      : b'\x06\x00\x00\x00\x01\x20\x68\x1b',
         'GW1NS-2'     : b'\x06\x00\x00\x00\x03\x00\x08\x1b',
         'GW1N-4'      : b'\x06\x00\x00\x00\x01\x00\x38\x1b',
         'GW1NS-4'     : b'\x06\x00\x00\x00\x01\x00\x98\x1b',
@@ -448,6 +458,12 @@ def main():
         db[108, 165].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'D7'
     elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
         db[0, 0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
+    elif device in {'GW1N-2'}:
+        # GW1N-2 / GW1N-1P5: the GSR routes to wire C4 at [0, 1] (R1C2), not the
+        # [0, 0] corner. Verified by diff-fuzzing a GSR primitive through Gowin for
+        # GW1N-UV1P5: the GSRI route is invariant at tile [0, 1] across reset-pin
+        # placement, terminating on C4 (pip-fuse match).
+        db[0, 1].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
     else:
         raise Exception(f"No GSR for {device}")
 
