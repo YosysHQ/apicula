@@ -248,7 +248,7 @@ def is_ram_pin(db, r, c, idx):
     """ Internal SDRAM/HyperRAM pins do not have an IO standard, so we will ignore them """
     partno = pnr['modules']['top']['settings'].get('packer.partno', '')
     pkg, series, _ = db.packages[partno]
-    if not db.sip_cst or pkg not in db.sip_cst[series]:
+    if not db.sip_cst or series not in db.sip_cst or pkg not in db.sip_cst[series]:
         return False
     row = int(r) - 1
     col = int(c) - 1
