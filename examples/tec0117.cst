@@ -88,6 +88,6 @@ IO_LOC "tlvds_n" 30;
 IO_PORT "tlvds_n" IO_TYPE=LVDS25;
 
 IO_LOC "elvds_p" 71;
-IO_PORT "elvds_p" IO_TYPE=LVDS25;
+IO_PORT "elvds_p" IO_TYPE=LVDS25E;
 IO_LOC "elvds_n" 70;
-IO_PORT "elvds_n" IO_TYPE=LVDS25;
+IO_PORT "elvds_n" IO_TYPE=LVDS25E;
