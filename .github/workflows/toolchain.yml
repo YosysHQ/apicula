@@ -60,13 +60,6 @@ jobs:
         cmake -B build . -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         cmake --build build --config Release --parallel $(nproc)
         cmake --install build --prefix ${{ github.workspace }}/staging/usr/local --strip
-    - name: Build STABLE yosys    
-      if: ${{ inputs.name == 'stable' }}
-      run: |
-        cd yosys
-        make config-clang
-        make -j$(nproc) CC="ccache clang" CXX="ccache clang++"
-        make install DESTDIR=${{ github.workspace }}/staging
     - name: Build nextpnr
       run: |
         git clone https://github.com/YosysHQ/nextpnr.git
