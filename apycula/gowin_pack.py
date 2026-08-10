@@ -4596,6 +4596,9 @@ def set_multiboot_address(header, address):
     if not 0 <= address <= 0xffffffff:
         raise ValueError('Multiboot address must fit in 32 bits')
 
+    if address % 0x1000 != 0:
+        raise ValueError('Multiboot address must be 4KiB aligned')
+
     for command in header:
         if command[0] == 0xd2:
             command[4:8] = address.to_bytes(4, 'big')
