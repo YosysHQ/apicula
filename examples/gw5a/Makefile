@@ -31,7 +31,10 @@ tangmega138k: \
 tangconsole138k: \
 	uart-message-tangmega138k.fs
 
-all: primer25k tangmega138k tangconsole138k
+tangconsole60k: \
+	in-out-tangconsole60k.fs in-inv-out-tangconsole60k.fs in-or-inv-out-tangconsole60k.fs
+
+all: primer25k tangmega138k tangconsole138k tangconsole60k
 
 clean:
 	rm -f *.json *.fs *-unpacked.v
@@ -98,3 +101,14 @@ uart-message-tangmega138k-synth.json: uart-message-tangconsole138k.v
 
 uart-message-tangconsole138k-synth.json: uart-message-tangconsole138k.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+	
+# ============================================================
+# TangConsole60k
+%-tangconsole60k.fs: %-tangconsole60k.json
+	gowin_pack --cpu_as_gpio -d GW5AT-60B -o $@ $<
+
+%-tangconsole60k.json: %-tangconsole60k-synth.json tangconsole60k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst
+
+%-tangconsole60k-synth.json: %.v
+	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA  -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"

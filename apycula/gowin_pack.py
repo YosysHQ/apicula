@@ -494,11 +494,19 @@ class ChipDB:
 
     def create_main_tilemap(self) -> dict:
         """ Return chip tilemap """
-        return chipdb.tile_bitmap(self.db, bitmatrix.zeros(self.db.height, self.db.width), empty=True)
+        return chipdb.tile_bitmap(self.db, bitmatrix.zeros(self.db.height, self.db.width), empty = True)
 
-    def fuse_bitmap(self, tilemap) -> dict:
+    def create_main_tilemap_holes(self, calc_size_func) -> dict:
+        """ Return chip tilemap """
+        return chipdb.tile_bitmap_holes(self.db, bitmatrix.zeros(self.db.height, self.db.width), empty = True, calc_size_func = calc_size_func)
+
+    def fuse_bitmap(self, tilemap, calc_size_func = None) -> dict:
         """ Tilemap -> Bitmap """
         return chipdb.fuse_bitmap(self.db, tilemap)
+
+    def fuse_bitmap_holes(self, tilemap, calc_size_func) -> dict:
+        """ Tilemap -> Bitmap """
+        return chipdb.fuse_bitmap_holes(self.db, tilemap, calc_size_func)
 
     def get_tiledata(self, x: int, y: int) -> Tile:
         """ Get one cell description """
@@ -751,6 +759,14 @@ class ChipDB:
     @property
     def height(self):
         return self.db.height
+
+    @property
+    def empty_x(self):
+        return self.db.empty_cell_col
+
+    @property
+    def empty_y(self):
+        return self.db.empty_cell_row
 
     def rev_logicinfo(self, table: str):
         return self.db.rev_logicinfo(table)
@@ -1217,7 +1233,7 @@ class Device:
                     fuses.append(CellFuseBits(pip.x, pip.y, bits))
         return fuses
 
-    def get_isolated_wires(self, wires: Iterator[WireDesc]) -> list[CellFuseBits]:
+    def get_isolated_wire_fuses(self, wires: Iterator[WireDesc]) -> list[CellFuseBits]:
         """ Return fuses for all isolated wires """
         fuses = []
         for wire in wires:
@@ -1620,6 +1636,13 @@ class Device:
                     fuses.append(CellFuseBits(x, y, bits))
         return fuses
 
+    def get_work_in_progress_fuses(self) -> list[CellFuseBits]:
+        """ Setting bits whose purpose is unclear or roughly clear, but the
+        mechanism hasn't been fully developed. For example, if a chip doesn't
+        yet support segment wires in nextpnr, the ends of segments still need
+        to be insulated. """
+        return []
+
     #==============================
     #========== IO
     #==============================
@@ -1676,10 +1699,10 @@ class Device:
 
             # skip reserved IO - for exavple used ADC inputs (device specific)
             if self.do_not_touch_io(io_cfg.x, io_cfg.y, io_cfg.idx_str):
+                #print('reserved:', io_cfg.x, io_cfg.y, io_cfg.idx_str)
                 continue
 
-            #print('unused', io_cfg.x, io_cfg.y, io_cfg.idx_str)
-
+            #print('unused:', io_cfg.x, io_cfg.y, io_cfg.idx_str)
             av = set()
             for attrval in self.get_unused_io_attrvals(io_cfg, bank_desc):
                 #print(attrval)
@@ -4393,6 +4416,9 @@ class Device:
         fuses += self.get_io_bank_fuses()
         fuses += self.get_io_fuses()
         fuses += self.get_dualpin_fuses()
+
+        # wip fuses
+        fuses += self.get_work_in_progress_fuses()
         return fuses
 
     # debug
@@ -6540,8 +6566,157 @@ class GW5A_25A(GW5A):
         return super().__repr__() + ""
 
 ################################################################
+class GW5AT_60B(GW5A):
+    """ GW5AT-60B chip. TangCosole60k board """
+    def __init__(self, cli_args: CliArgs, pnr: Netlist):
+        super().__init__(cli_args, pnr)
+        self.default_ibuf_attrs = [('PADDI', 'PADDI'), ('HYSTERESIS', 'NONE'), ('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
+                 ('DRIVE', '0'), ('CLAMP', 'OFF'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('VREF', 'OFF'), ('LVDS_OUT', 'OFF'), ('PULL_STRENGTH', 'MEDIUM')]
+        self.default_obuf_attrs = [('ODMUX_1', '1'), ('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
+                 ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('OPENDRAIN', 'OFF'), ('PULL_STRENGTH', 'MEDIUM'), ('IOB_UNKNOWN51', 'TRIMUX')]
+        self.default_tbuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
+                 ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('OPENDRAIN', 'OFF'),
+                 ('PULL_STRENGTH', 'MEDIUM'), ('IOB_UNKNOWN51', 'TRIMUX')]
+        self.default_iobuf_attrs = [('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
+                 ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('PADDI', 'PADDI'), ('OPENDRAIN', 'OFF'),
+                 ('PULL_STRENGTH', 'MEDIUM'), ('IOB_UNKNOWN51', 'TRIMUX')]
+        self.default_tlvds_tbuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'), ('SLEWRATE', 'SLOW'),
+                 ('DRIVE', '0'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'),
+                 ('OPENDRAIN', 'OFF'), ('PULL_STRENGTH', 'MEDIUM'), ('IOB_UNKNOWN51', 'TRIMUX')]
+        self.default_tlvds_obuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'), ('SLEWRATE', 'SLOW'),
+                 ('DRIVE', '0'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'),
+                 ('OPENDRAIN', 'OFF'), ('PULL_STRENGTH', 'MEDIUM'), ('IOB_UNKNOWN51', 'TRIMUX')]
+        self.default_tlvds_iobuf_attrs = [('PULLMODE', 'NONE'), ('SLEWRATE', 'SLOW'),
+                 ('DRIVE', '0'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('PADDI', 'PADDI'),
+                 ('OPENDRAIN', 'OFF'), ('PULL_STRENGTH', 'MEDIUM'), ('IOB_UNKNOWN51', 'TRIMUX')]
+
+    def get_tilemap_func(self):
+        # for speed fill closure variables
+        empty_x = self.chipdb.empty_x
+        empty_y = self.chipdb.empty_y
+        last_col = self.chipdb.cols - 1
+        last_row = self.chipdb.rows - 1
+
+        def calc_size_func(y:int, x:int) -> tuple[int, int, bool]:
+            """ We have one large empty square and one column that don't fit
+            into a normal grid. Here, we create empty cells of appropriate
+            sizes on the fly. """
+
+            td = self.chipdb.get_tiledata(x, y)
+            # first - normal cells
+            if td.width and td.height:
+                return td.width, td.height, True
+            if x == empty_x or x == empty_x - 1:
+                h = self.chipdb.get_tiledata(last_col, y).height
+                return 0, h, False
+            # first row of the empty square doesn't need corrections
+            if y == 0:
+                return 0, 0, False
+            # other rows do not have a height
+            w = self.chipdb.get_tiledata(x, last_row).width
+            h = 0
+            return w, 0, False
+
+        return calc_size_func
+
+    def create_main_tilemap(self) -> dict:
+        """ Return chip tilemap """
+        return self.chipdb.create_main_tilemap_holes(calc_size_func = self.get_tilemap_func())
+
+    def fuse_bitmap(self, tilemap) -> dict:
+        """ Tilemap -> Bitmap """
+        return self.chipdb.fuse_bitmap_holes(tilemap, calc_size_func = self.get_tilemap_func())
+
+
+    #==============================
+    #========== Misc
+    #==============================
+    def get_BUFG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        """ Logic -> clock gate """
+        return []
+
+    def get_pins_attr_vals(self) -> list[AttrVal]:
+        attrvals = []
+        if self.cli_args.args.jtag_as_gpio:
+            attrvals.append(AttrVal('JTAG_AS_GPIO', 'YES'))
+        attrvals.append(AttrVal('SSPI_AS_GPIO', 'YES'))
+        if self.cli_args.args.mspi_as_gpio:
+            attrvals.append(AttrVal('MSPI_AS_GPIO', 'YES'))
+        if self.cli_args.args.ready_as_gpio:
+            attrvals.append(AttrVal('READY_AS_GPIO', 'YES'))
+        if self.cli_args.args.done_as_gpio:
+            attrvals.append(AttrVal('DONE_AS_GPIO', 'YES'))
+        if self.cli_args.args.reconfign_as_gpio:
+            attrvals.append(AttrVal('RECONFIG_AS_GPIO', 'YES'))
+        if self.cli_args.args.i2c_as_gpio:
+            attrvals.append(AttrVal('I2C_AS_GPIO', 'YES'))
+        if self.cli_args.args.cpu_as_gpio:
+            attrvals.append(AttrVal('CPU_AS_GPIO_25', 'YES'))
+        # XXX
+        # add CPU + MSSPI pin usage - IOR5A
+        return attrvals
+
+    def get_gsr_types(self) -> set[str]:
+        return [49]
+
+    def get_cfg_types(self) -> set[str]:
+        return [48, 49]
+
+    def get_work_in_progress_fuses(self) -> list[CellFuseBits]:
+        """ Setting bits whose purpose is unclear or roughly clear, but the
+        mechanism hasn't been fully developed. For example, if a chip doesn't
+        yet support segment wires in nextpnr, the ends of segments still need
+        to be insulated. """
+
+        # 5 full segment spines
+        def full_spines() -> Iterator[WireDesc]:
+            for x, y in itertools.product(range(self.chipdb.cols), [37, 46, 55, 64]):
+                if x != self.chipdb.empty_x:
+                    yield WireDesc(x, y, 'LT00')
+                    yield WireDesc(x, y, 'LT10')
+
+            for x in range(self.chipdb.cols):
+                if x != self.chipdb.empty_x:
+                    yield WireDesc(x, 73, 'LT13')
+                    yield WireDesc(x, 73, 'LT02')
+
+        # half-spines
+        def half_spines() -> Iterator[WireDesc]:
+            for x in range(self.chipdb.empty_x):
+                yield WireDesc(x, 28, 'LT13')
+                yield WireDesc(x, 28, 'LT02')
+
+            for x in range(self.chipdb.empty_x, self.chipdb.cols):
+                yield WireDesc(x, 0, 'LT13')
+                yield WireDesc(x, 0, 'LT02')
+
+            for x, y in itertools.product(range(self.chipdb.empty_x, self.chipdb.cols), [27, 18, 9]):
+                yield WireDesc(x, y, 'LT00')
+                yield WireDesc(x, y, 'LT10')
+
+        fuses = self.get_isolated_wire_fuses(itertools.chain(full_spines(), half_spines()))
+        return fuses
+
+    # debug
+    def __repr__(self):
+        return super().__repr__() + ""
+
+################################################################
 class GW5AST_138C(GW5A):
-    """ GW5AST-138X chip. Tangmega138k board """
+    """ GW5AST-138C chip. Tangmega138k board """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
         self.used_clock_spines = set()
@@ -6642,6 +6817,8 @@ class GW5AST_138C(GW5A):
         if self.cli_args.args.cpu_as_gpio:
             attrvals.append(AttrVal('CPU_AS_GPIO_0', 'YES'))
             attrvals.append(AttrVal('CPU_AS_GPIO_1', 'YES'))
+        # XXX
+        # add CPU + MSSPI pin usage - IOB175B
         return attrvals
 
     #==============================
@@ -6808,8 +6985,23 @@ class Bitstream_GW5A_25A(Bitstream_GW5A):
         return f'|Bitstream_GW5A_25A| output_name:{self.output_name}, compress:{self.compress}, init_bsram:{self.init_bsram}, header:{self.header}, footer:{self.footer}'
 
 ################################################################
+class Bitstream_GW5AT_60B(Bitstream_GW5A):
+    """ Output bitstream for GW5AT-60B """
+    def __init__(self, cli_args: CliArgs, device: Device):
+        super().__init__(cli_args, device)
+
+    def write_with_bsram(self, main_map):
+        extra_slots = self.device.get_extra_slots()
+        bsram_init_map = bitmatrix.transpose(self.device.get_bsram_init_map())
+        bslib.write_bitstream(self.output_name, main_map, self.header, self.footer, self.compress, extra_slots, bsram_init_map, self.device.get_bsram_cols_iterator(), is_gw5a_138 = False)
+
+    # debug
+    def __repr__(self):
+        return f'|Bitstream_GW5AT_60B| output_name:{self.output_name}, compress:{self.compress}, init_bsram:{self.init_bsram}, header:{self.header}, footer:{self.footer}'
+
+################################################################
 class Bitstream_GW5AST_138C(Bitstream_GW5A):
-    """ Output bitstream for GW5A-25A """
+    """ Output bitstream for GW5AST-138C """
     def __init__(self, cli_args: CliArgs, device: Device):
         super().__init__(cli_args, device)
 
@@ -6820,7 +7012,7 @@ class Bitstream_GW5AST_138C(Bitstream_GW5A):
 
     # debug
     def __repr__(self):
-        return f'|Bitstream_GW5A_25A| output_name:{self.output_name}, compress:{self.compress}, init_bsram:{self.init_bsram}, header:{self.header}, footer:{self.footer}'
+        return f'|Bitstream_GW5AST_138C| output_name:{self.output_name}, compress:{self.compress}, init_bsram:{self.init_bsram}, header:{self.header}, footer:{self.footer}'
 
 ################################################################
 class Pack:
@@ -6834,7 +7026,7 @@ class Pack:
         """ Set fuses for all pips """
         self.fuses += self.device.get_all_pips_fuses(self.pnr.get_pips())
         # isolate segment wires used
-        self.fuses += self.device.get_isolated_wires(self.pnr.get_wires_to_isolate())
+        self.fuses += self.device.get_isolated_wire_fuses(self.pnr.get_wires_to_isolate())
 
     def place(self):
         """ Set fuses for Bels """
@@ -6876,6 +7068,8 @@ def create_device(cli_args: CliArgs, pnr: Netlist) -> Device:
     # --- GW5A series
     if dev == 'GW5A-25A':
         return GW5A_25A(cli_args, pnr)
+    if dev == 'GW5AT-60B':
+        return GW5AT_60B(cli_args, pnr)
     if dev == 'GW5AST-138C':
         return GW5AST_138C(cli_args, pnr)
     else:
@@ -6887,6 +7081,8 @@ def create_output_bitstream(cli_args: CliArgs, device: Device) -> Bitstream:
         return Bitstream_GW1_2(cli_args, device)
     elif dev in {'GW5A-25A'}:
         return Bitstream_GW5A_25A(cli_args, device)
+    elif dev in {'GW5AT-60B'}:
+        return Bitstream_GW5AT_60B(cli_args, device)
     elif dev in {'GW5AST-138C'}:
         return Bitstream_GW5AST_138C(cli_args, device)
     else:

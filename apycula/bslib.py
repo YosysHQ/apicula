@@ -122,6 +122,10 @@ def read_bitstream(fname):
                         padding = 3
                         compress_padding = 43
                         is5ASeries = True
+                    elif ba == b'\x06\x00\x00\x00\x00\x01\x48\x1b':   # GW5AT-60B
+                        padding = 3
+                        compress_padding = 43
+                        is5ASeries = True
                     elif ba == b'\x06\x00\x00\x00\x00\x01\x08\x1b':   # GW5AST-138C
                         padding = 3
                         compress_padding = 43
@@ -458,7 +462,7 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
             f.write('\n')
 
 
-def display(fname, data):
+def display(fname, data, only_white = False):
     from PIL import Image
     """
     im = Image.frombytes(
@@ -472,7 +476,11 @@ def display(fname, data):
     idata = im.load()
     for x in range(im.size[0]):
         for y in range(im.size[1]):
-            idata[x, y] = (tdata[y][x], tdata[y][x], tdata[y][x])
+            if not only_white:
+                idata[x, y] = (tdata[y][x], tdata[y][x], tdata[y][x])
+            else:
+                color = 255 if tdata[y][x] else 0
+                idata[x, y] = (color, color, color)
     if fname:
         im.save(fname)
     return im

@@ -70,6 +70,11 @@ DEVICE_PARAMS = {
         "device": "GW5A-25A",
         "partnumber": "GW5A-LV25MG121NES",
     },
+    "GW5AT-60B": {
+        "package": "PBGA484A",
+        "device": "GW5AT-60B",
+        "partnumber": "GW5AT-LV60PG484AC1/I0",
+    },
     "GW5AST-138C": {
         "package": "PBGA484A",
         "device": "GW5AST-138C",
@@ -177,6 +182,9 @@ def fse_iob(fse, db, diff_cap_info, locations, device):
             for bel in iob_bels[ttyp].values():
                 bel.simplified_iob = True
     for ttyp, bels in iob_bels.items():
+        if ttyp > 1024:
+            # XXX 60k weird IO
+            continue
         first_cell = True
         for row, col in locations[ttyp]:
             if first_cell:
@@ -238,6 +246,7 @@ _chip_id = {
         'GW2A-18'     : b'\x06\x00\x00\x00\x00\x00\x08\x1b',
         'GW2A-18C'    : b'\x06\x00\x00\x00\x00\x00\x08\x1b',
         'GW5A-25A'    : b'\x06\x00\x00\x00\x00\x01\x28\x1b',
+        'GW5AT-60B'   : b'\x06\x00\x00\x00\x00\x01\x48\x1b',
         'GW5AST-138C' : b'\x06\x00\x00\x00\x00\x01\x08\x1b',
         }
 
@@ -383,7 +392,7 @@ def main():
 
     dat = dat_parser.Datfile(Path(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.dat"))
 
-    if params['device'] == "GW5AST-138C":
+    if params['device'] in {"GW5AT-60B", "GW5AST-138C"}:
         dat.patch_grid_bram_138()
 
     if gowin_debug:
@@ -448,24 +457,6 @@ def main():
         bel = db[loc[0], loc[1]].bels['IOBA']
         bel.portmap['GW9_ALWAYS_LOW0'] = wnames.wirenames[dat.portmap['IologicAIn'][40]]
         bel.portmap['GW9_ALWAYS_LOW1'] = wnames.wirenames[dat.portmap['IologicAIn'][42]]
-
-    # GSR
-    if device in {'GW2A-18', 'GW2A-18C'}:
-        db[27, 50].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
-    elif device in {'GW5A-25A'}:
-        db[27, 88].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'LSR0'
-    elif device in {'GW5AST-138C'}:
-        db[108, 165].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'D7'
-    elif device in {'GW1N-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C', 'GW1NS-2', 'GW1NZ-1'}:
-        db[0, 0].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
-    elif device in {'GW1N-2'}:
-        # GW1N-2 / GW1N-1P5: the GSR routes to wire C4 at [0, 1] (R1C2), not the
-        # [0, 0] corner. Verified by diff-fuzzing a GSR primitive through Gowin for
-        # GW1N-UV1P5: the GSRI route is invariant at tile [0, 1] across reset-pin
-        # placement, terminating on C4 (pip-fuse match).
-        db[0, 1].bels.setdefault('GSR', chipdb.Bel()).portmap['GSRI'] = 'C4'
-    else:
-        raise Exception(f"No GSR for {device}")
 
     # SDRAM pin discovery (previously find_sdram_pins.py stage 2)
     if not args.skip_sdram and device in SDRAM_PARAMS:

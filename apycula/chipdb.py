@@ -76,6 +76,26 @@ class Device:
     # special center cell (DSPs have gap there, also place for some clock MUX)
     center_row: int = field (default = 0)
     center_col: int = field (default = 0)
+    # The GW5AT-60B has a rectangular area in the upper left corner where FPGA
+    # components such as DFF and other, and even the wires between cells, are
+    # missing. Additionally, there is a similar row and column.
+    #
+    # f - normal FPGA cell
+    # . - empty cell (no wires etc)
+    # x - exactly the same cell as the previous one, but this is the cell whose
+    # coordinates we use to describe the empty area
+
+    #
+    #  ......fffff
+    #  ......fffff
+    #  ......fffff
+    #  ffffffx....
+    #  ffffff.ffff
+    #  ffffff.ffff
+    #  ffffff.ffff
+    empty_cell_row: int = field (default = -1)
+    empty_cell_col: int = field (default = -1)
+
     # tile type to Tile mapping
     tiles: Dict[int, Tile] = field(default_factory=dict)
     timing: Dict[str, Dict[str, Dict[str, Union[List[float], int]]]] = field(default_factory=dict)
@@ -276,7 +296,7 @@ except ImportError:
 
 
 def is_GW5_family(device):
-    return device in {'GW5A-25A', 'GW5AST-138C'}
+    return device in {'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}
 
 def set_corners_io(db, device):
     if device in {'GW5A-25A'}:
@@ -363,16 +383,18 @@ _wire_tables = {
 
 def fse_pips(fse, ttyp, device, table=_wire_tables['GENERAL'], wn=wnames.wirenames):
     pips = {}
+    if 'wire' not in fse[ttyp]:
+        return pips
     if table in fse[ttyp]['wire']:
         for srcid, destid, *fuses in fse[ttyp]['wire'][table]:
             fuses = {fuse.fuse_lookup(fse, ttyp, f, device) for f in unpad(fuses)}
             if srcid < 0:
                 fuses = set()
                 srcid = -srcid
-            src = wn[srcid]
-            dest = wn[destid]
-            pips.setdefault(dest, {})[src] = fuses
-
+            else:
+                src = wn[srcid]
+                dest = wn[destid]
+                pips.setdefault(dest, {})[src] = fuses
     return pips
 
 # GW5AST-138C have not one but three tables for clock fuses
@@ -843,6 +865,10 @@ wire_tables = {
 # and therefore do not have strings. This can be solved by cross-comparing
 # different chips and manually adding the missing mappings.
 _io_cfg = {
+     59: ['TCK'],
+     60: ['TMS'],
+     61: ['TDO'],
+     62: ['TDI'],
      66: ['JTAGSEL_N'],
      69: ['RECONFIG_N'],
      70: ['READY'],
@@ -865,6 +891,8 @@ _io_cfg = {
     108: ['GCLKC_1'],
     109: ['GCLKT_2'],
     110: ['GCLKC_2'],
+    111: ['GCLKT_3'],
+    112: ['GCLKC_3'],
     115: ['GCLKT_5'],
     116: ['GCLKC_5'],
     118: ['GCLKC_6'],
@@ -880,15 +908,28 @@ _io_cfg = {
     139: ['DIN', 'CLKHOLD_N'],
     140: ['DOUT', 'WE_N'],
     142: ['FASTRD_N', 'D3'],
+    146: ['SSPI_CS_N'],
     147: ['SSPI_CS_N', 'D0'],
     149: ['SI', 'D2'],
     151: ['SO', 'D1'],
+    159: ['MCS_N'],
     161: ['LVENN'],
+    215: ['D4'],
+    216: ['D5'],
+    217: ['D6'],
+    218: ['D7'],
+    220: ['D9'],
     221: ['D10'],
     222: ['D11'],
     223: ['D12'],
+    224: ['D13'],
+    225: ['D14'],
+    226: ['D15'],
     217: ['D06'],
+    244: ['CSI_B'],
     247: ['PUDC_B'],
+    248: ['EMCCLK'],
+    253: ['CLK'],
     262: ['PU'],
     263: ['INITDLY0'],
     264: ['INITDLY1'],
@@ -902,11 +943,88 @@ _io_cfg = {
     340: ['GCLKC_10A', 'D15', 'BPLL_C_FB0'],
     343: ['GCLKT_11A'],
     344: ['GCLKC_11A'],
+    352: ['GCLKC_15'],
+    353: ['GCLKT_16'],
+    354: ['GCLKC_16'],
+    358: ['LPLL1_T_IN0'],
     355: ['RPLL0_T_FB1'],
     356: ['RPLL0_T_IN1'],
     357: ['RPLL0_C_FB0'],
     367: ['ADCINCLK'],
     368: ['ADCOTEST'],
+    377: ['CLKHOLD_SSI3'],
+    381: ['D8'],
+    384: ['RDWR_B'],
+    385: ['TPLL0_T_IN0'],
+    386: ['TPLL0_C_IN0'],
+    387: ['TPLL1_T_IN1_TPLL0_T_FB1'],
+    388: ['TPLL1_C_IN1_TPLL0_C_FB1'],
+    389: ['PCIE_HOST_RSTN_TPLL0_T_IN2_TPLL0_T_FB0'],
+    390: ['TPLL0_C_IN2_TPLL0_C_FB0'],
+    391: ['UNK'],
+    392: ['UNK'],
+    393: ['UNK'],
+    394: ['UNK'],
+    395: ['TPLL1_T_IN1_TPLL1_T_FB0'],
+    396: ['TPLL1_C_IN1_TPLL1_C_FB0'],
+    397: ['TPLL1_C_IN0_TPLL1_T_FB0'],
+    398: ['MODE2_TPLL1_C_IN0_TPLL1_C_FB1'],
+    399: ['RPLL0_T_IN1_RPLL0_T_FB0'],
+    400: ['RPLL0_C_IN1_RPLL0_C_FB0'],
+    401: ['RPLL0_T_IN0_RPLL0_T_FB1'],
+    402: ['RPLL0_C_IN0_RPLL0_C_FB1'],
+    403: ['SDA_GCLKT_4_RPLL1_T_IN2_RPLL1_T_FB0'],
+    404: ['SCL_GCLKC_4_RPLL1_C_IN2_RPLL1_C_FB0'],
+    405: ['SI_SSI0'],
+    406: ['S0_SSI1_RPLL1_T_IN1_RPLL1_T_FB1'],
+    407: ['SSPI_CLK_RPLL1_C_IN1_RPLL1_C_FB1'],
+    408: ['SSPI_WPN_SSI2'],
+    409: ['RPLL1_T_IN0'],
+    410: ['RPLL1_C_IN0'],
+    411: ['BPLL0_T_IN1_BPLL0_T_FB0'],
+    412: ['BPLL0_C_IN1_BPLL0_C_FB0'],
+    413: ['BPLL0_T_IN2_BPLL0_T_FB1'],
+    414: ['BPLL0_C_IN2_BPLL0_C_FB1'],
+    415: ['GCLKT_18'],
+    416: ['GCLKC_18'],
+    417: ['GCLKT_17'],
+    418: ['GCLKC_17'],
+    419: ['GCLKT_15'],
+    420: ['GCLKT_14'],
+    421: ['GCLKC_14'],
+    422: ['GCLKT_13'],
+    423: ['GCLKC_13'],
+    424: ['GCLKT_12'],
+    425: ['GCLKC_12'],
+    426: ['GCLKT_11'],
+    427: ['GCLKC_11'],
+    428: ['GCLKT_10'],
+    429: ['GCLKC_10'],
+    430: ['GCLKT_9'],
+    431: ['GCLKC_9'],
+    432: ['BPLL1_T_IN0'],
+    433: ['BPLL1_C_IN0'],
+    434: ['BPLL1_T_IN1_BPLL1_T_FB1'],
+    435: ['BPLL1_C_IN1_BPLL1_C_FB1'],
+    436: ['BPLL1_T_IN2_BPLL1_T_FB0'],
+    437: ['BPLL1_C_IN2_BPLL1_C_FB0'],
+    438: ['CSO_B_DOUT'],
+    439: ['D2_MI2'],
+    440: ['D3_MI3'],
+    441: ['D0_MOSI_MI0'],
+    442: ['D1_DIN_MISO_MI1'],
+    443: ['LPLL0_T_IN0_LPLL0_T_FB0'],
+    444: ['LPLL0_C_IN0_LPLL0_C_FB0'],
+    445: ['GCLKT_19_LPLL0_T_IN1_LPLL0_T_FB1'],
+    446: ['GCLKC_19_LPLL0_C_IN1_LPLL0_C_FB1'],
+    447: ['LPLL1_C_IN0'],
+    448: ['LPLL1_T_IN1_LPLL1_T_FB0'],
+    449: ['LPLL1_C_IN1_LPLL1_C_FB0'],
+    450: ['LPLL1_T_IN2_LPLL1_T_FB0'],
+    451: ['LPLL1_C_IN2_LPLL1_C_FB0'],
+    452: ['BPLL0_T_IN0'],
+    453: ['BPLL0_C_IN0'],
+
 }
 def dat_fill_io_cfgs(db, dat, device, pindesc):
     cfg_dict = dat.compat_dict['Cfg']
@@ -3146,13 +3264,16 @@ def fse_create_simplio_rows(dev, dat: Datfile):
             dev.simplio_rows.add(row)
 
 def fse_create_tile_types(dev, device, dat: Datfile):
-    type_chars = 'PCMIBD'
+    type_chars = 'PCMIBDE'
     for fn in type_chars:
         dev.tile_types[fn] = set()
     for row, rd in enumerate(dat.grid.rows):
         for col, fn in enumerate(rd):
             if fn == '4' and device in {'GW5A-25A', 'GW5AST-138C'}:
                 fn = 'I'
+            if fn == ' ' and device in {'GW5AT-60B'}:
+                # tiles without wires
+                fn = 'E'
             if fn in type_chars:
                 i = row
                 if i > 0:
@@ -3164,7 +3285,12 @@ def fse_create_tile_types(dev, device, dat: Datfile):
                     j -= 1
                 if j == dev.cols:
                     j -= 1
-                dev.tile_types[fn].add(dev.grid[i][j])
+                ttyp = dev.grid[i][j]
+                if fn == 'E':
+                    if device in {'GW5AT-60B'} and ttyp in {440, 441}:
+                        dev.tile_types[fn].add(ttyp)
+                else:
+                    dev.tile_types[fn].add(ttyp)
 
 def get_tile_types_by_func(dev, dat: Datfile, fse, fn):
     ttypes = set()
@@ -3389,7 +3515,7 @@ def fse_create_logic2clk(dev, device, dat: Datfile):
                 dev.extra_func.setdefault((row, col), {}).setdefault('clock_gates', []).append(wnames.wirenames[wire_idx])
 
 def fse_create_osc(dev, device, fse):
-    if device in {'GW5AST-138C'}:
+    if device in {'GW5AT-60B', 'GW5AST-138C'}:
         return
     skip_nodes = False
     for row in range(dev.rows):
@@ -3453,16 +3579,28 @@ def fse_create_gsr(dev, device):
     # primitive (Gowin Primitives User Guide.pdf - GSR), connect the GSRI input
     # to the button and see how the routing has changed in which of the
     # previously found cells.
-    row, col = (0, 0)
-    wire = 'C4'
-    if device in {'GW2A-18', 'GW2A-18C'}:
+
+    if device in {'GW1N-1', 'GW1NZ-1', 'GW1N-4', 'GW1NS-4', 'GW1N-9', 'GW1N-9C'}:
+        row, col = (0, 0)
+        wire = 'C4'
+    elif device in {'GW1N-2'}:
+        row, col = (0, 1)
+        wire = 'C4'
+    elif device in {'GW2A-18', 'GW2A-18C'}:
         row, col = (27, 50)
+        wire = 'C4'
     elif device in {'GW5A-25A'}:
         row, col = (28, 89)
         wire = 'LSR0'
+    elif device in {'GW5AT-60B'}:
+        row, col = (65, 144)
+        wire = 'LSR1'
     elif device in {'GW5AST-138C'}:
         row, col = (108, 165)
         wire = 'D7'
+    else:
+        raise Exception(f"No GSR for {device}")
+
     dev.extra_func.setdefault((row, col), {}).update(
         {'gsr': {'wire': wire}})
 
@@ -3822,7 +3960,7 @@ def fse_dsp(fse, device, aux = False):
         bels['DSP_AUX1'] = Bel()
     else:
         bels['DSP'] = Bel()
-        if device not in {'GW5A-25A', 'GW5AST-138C'}:
+        if device not in {'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}:
             # These are two macro DSPs, their purpose is to manage the control
             # signals CE, CLK and RESET, which seem to be allocated to different
             # subblocks from a common pool, the size of which reaches 4 possible
@@ -3902,7 +4040,8 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("NEED_BLKSEL_FIX")
     if device in {'GW1NZ-1'}:
         dev.chip_flags.append("HAS_BANDGAP")
-    dev.chip_flags.append("HAS_PLL_HCLK")
+    if device not in {'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}:
+        dev.chip_flags.append("HAS_PLL_HCLK")
     if device in {'GW2A-18', 'GW2A-18C'}:
         dev.chip_flags.append("HAS_CLKDIV_HCLK")
     if device in {'GW5A-25A'}:
@@ -3914,6 +4053,8 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("NEED_SDP_FIX")
         dev.chip_flags.append("HAS_5A_DSP")
         dev.chip_flags.append("HAS_5A_HCLK")
+    if device in {'GW5AT-60B'}:
+        dev.chip_flags.append("HAS_EMPTY_QUADRANT")
     if device in {'GW5AST-138C'}:
         dev.chip_flags.append("HAS_PINCFG")
         dev.chip_flags.append("HAS_DFF67")
@@ -3924,6 +4065,9 @@ def set_chip_flags(dev, device):
 
     if device in {'GW5A-25A'}:
         dev.dcs_prefix = "CLKIN"
+    if device in {'GW5AT-60B'}:
+        dev.empty_cell_row = 28;
+        dev.empty_cell_col = 73;
 
 def from_fse(device, fse, dat: Datfile):
     wnames.select_wires(device)
@@ -3950,12 +4094,15 @@ def from_fse(device, fse, dat: Datfile):
             tile.clock_pips = fse_pips(fse, ttyp, device, _wire_tables['CLOCK_MUX'], wnames.clknames)
         tile.alonenode = fse_alonenode(fse, ttyp, device, _wire_tables['ALONE_NODE'])
         tile.alonenode_6 = fse_alonenode(fse, ttyp, device, _wire_tables['ALONE_NODE_6'])
-        if 5 in fse[ttyp]['shortval']:
-            tile.bels = fse_luts(fse, ttyp, device)
-        elif 51 in fse[ttyp]['shortval']:
-            if device not in {'GW5AST-138C'}:
-                tile.bels = fse_osc(device, fse, ttyp)
-        elif ttyp in bram_ttypes:
+        if 'shortval' in fse[ttyp]:
+            if 5 in fse[ttyp]['shortval']:
+                tile.bels = fse_luts(fse, ttyp, device)
+            elif 51 in fse[ttyp]['shortval']:
+                if device not in {'GW5AT-60B', 'GW5AST-138C'}:
+                    tile.bels = fse_osc(device, fse, ttyp)
+        else:
+            print(ttyp, fse[ttyp].keys())
+        if ttyp in bram_ttypes:
             tile.bels = fse_bram(fse)
         elif ttyp in bram_aux_ttypes and device not in {'GW5A-25A', 'GW5AST-138C'}:
             tile.bels = fse_bram(fse, True)
@@ -3982,6 +4129,12 @@ def from_fse(device, fse, dat: Datfile):
         dev.tile_types['P'] = set()
         dev.tile_types['M'] = set()
         dev.tile_types['D5A'] = dev.tile_types['D']
+        dev.tile_types['D'] = set()
+    if device in {'GW5AT-60B'}:
+        dev.tile_types.setdefault('C', set()).update(dev.tile_types['M'])
+        dev.tile_types['P'] = set()
+        dev.tile_types['M'] = set()
+        dev.tile_types['D5A'] = set()
         dev.tile_types['D'] = set()
     if device in {'GW5AST-138C'}:
         dev.tile_types['P'] = set()
@@ -4081,7 +4234,7 @@ def add_attr_val(dev, logic_table, attrs, attr, val):
         attrs.add(attrval)
 
 def get_pins(device):
-    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW1N-1P5C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A", "GW5AST-138C"}:
+    if device not in {"GW1N-1", "GW1NZ-1", "GW1N-4", "GW1N-9", "GW1NR-9", "GW1N-9C", "GW1NR-9C", "GW1NSR-4C", "GW1N-1P5C", "GW2A-18", "GW2A-18C", "GW2AR-18C", "GW5A-25A", "GW5AT-60B", "GW5AST-138C"}:
         raise Exception(f"unsupported device {device}")
     pkgs = pindef.all_packages(device)
     res = {}
@@ -4165,7 +4318,7 @@ def json_pinout(device):
             "GW2A-18C": pins,
             "GW2AR-18C": pins_r
         }, res_bank_pins)
-    elif device =="GW5A-25A":
+    elif device == "GW5A-25A":
         pkgs, pins, bank_pins = get_pins("GW5A-25A")
         res = {}
         res.update(pkgs)
@@ -4173,6 +4326,15 @@ def json_pinout(device):
         res_bank_pins.update(bank_pins)
         return (res, {
             "GW5A-25A": pins,
+        }, res_bank_pins)
+    elif device == "GW5AT-60B":
+        pkgs, pins, bank_pins = get_pins("GW5AT-60B")
+        res = {}
+        res.update(pkgs)
+        res_bank_pins = {}
+        res_bank_pins.update(bank_pins)
+        return (res, {
+            "GW5AT-60B": pins,
         }, res_bank_pins)
     elif device =="GW5AST-138C":
         pkgs, pins, bank_pins = get_pins("GW5AST-138C")
@@ -4266,7 +4428,7 @@ def need_create_multiple_nodes(device, name):
         return True
     if name == "BSRAM" or name.startswith("MULT") or name.startswith("PADD") or name.startswith("ALU54D"):
         return True
-    if (name.startswith('IOB') or name.startswith('IOLOGIC')) and device in {'GW5A-25A', 'GW5AST-138C'}:
+    if (name.startswith('IOB') or name.startswith('IOLOGIC')) and device in {'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}:
         return True
     return False
 
@@ -4309,22 +4471,32 @@ _gw5_fuse_cell_offset = {
              50: (0, 0), 51: (0, 1), 242: (0, 0), 382: (0, 0), 383: (0, 1), 387: (0, 1),
             388: (0, 0), 389: (0, 1), 390: (0, 0), 395: (0, 1), 400: (0, 1), 403: (0, 0),
             410: (0, 0), 411: (0, 0), 420: (0, 0), 421: (0, 0), 422: (0, 1), 423: (0, 1),
-            466: (0, 0)
+            466: (0, 0),
+            # XXX
+            455: (0, 0), 476: (0, 0), 477: (0, 1), 488: (0, 0),
             },
         'bottom': {
             48: (0, 0), 49: (0, 1), 63: (0, 0), 247: (0, 0), 248: (0, 1), 249: (0, 0), 250: (0, 1),
             251: (0, 1), 263: (0, 0), 274: (0, 1), 378: (0, 1), 380: (0, 1), 393: (0, 0),
             394: (0, 0), 396: (0, 0), 397: (0, 0), 405: (0, 1), 407: (0, 0), 436: (0, 1),
-            437: (0,0), 438: (0, 1), 439: (0, 0), },
+            437: (0,0), 438: (0, 1), 439: (0, 0),
+            # XXX
+            473: (0, 0), 491: (0, 0), 492: (0, 0), 494: (0, 0), 493: (0, 0),
+            },
         'left': {
             57: (0, 0), 64: (0, 0), 74: (1, 0), 86: (0, 0), 229: (0, 0), 231: (0, 0),
             243: (0, 0), 244: (1, 0), 257: (0, 0), 258: (0, 0), 272: (0, 0), 384: (1, 0),
             412: (1, 0),
+            # XXX
+            55: (0, 0), 471: (0, 0),
             },
         'right': {
             54: (0, 0), 65: (0, 0), 87: (0, 0), 220: (0, 0), 230: (0, 0), 232: (0, 0),
             245: (0, 0), 246: (1, 0), 260: (0, 0), 385: (1, 0), 391: (0, 0), 392: (0, 0),
-            399: (0, 0), 401: (0, 0), 419: (1, 0)
+            399: (0, 0), 401: (0, 0), 419: (1, 0),
+            # XXX
+            442: (0, 0), 443: (0, 0), 462: (0, 0), 467: (1, 0), 468: (1, 0),
+            469: (0, 0), 475: (0, 0), 489: (0, 0), 490: (0, 0),
             }
 }
 
@@ -4426,6 +4598,12 @@ _gw5_25a_io = {
         (36, 1, 'A')  : { 'I': 'C0', 'OE': 'C1', 'O': 'F2'} ,         # RECONFIG_N
         (36, 63, 'A') : { 'I': 'SEL0', 'OE': 'SEL1', 'O': 'F7'} ,     # DONE
 }
+_gw5_60b_io = {
+        (0, 145, 'A')  : ((1, 144), { 'I': 'A6', 'OE': 'A7', 'O': 'OF7'}) ,        # TCK
+        (0, 145, 'B')  : ((2, 144), { 'I': 'SEL1', 'OE': 'SEL2', 'O': 'Q5'}) ,     # TDI
+        (2, 145, 'A')  : ((3, 144), { 'I': 'A0', 'OE': 'A6', 'O': 'Q5'}) ,         # TMS
+        (2, 145, 'B')  : ((3, 144), { 'I': 'B6', 'OE': 'B7', 'O': 'Q6'}) ,         # TDO
+}
 def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
     pin = belname[-1]
     if device in {'GW5A-25A'}:
@@ -4444,6 +4622,17 @@ def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
             adcen = 'CE1'
             bel.portmap['ADCEN'] = adcen
             return
+    elif device in {'GW5AT-60B'}:
+        if (row, col, pin) in _gw5_60b_io:
+            loc = _gw5_60b_io[row, col, pin][0]
+            for port_wire in _gw5_60b_io[row, col, pin][1].items():
+                port, wire = port_wire
+                if (row, col) != loc:
+                    nodename = add_node(dev, f'X{col}Y{row}/IOB{pin}_{port}', f"IO_{port[0]}", loc[0], loc[1], wire)
+                    nodename = add_node(dev, nodename, f"IO_{port[0]}", row, col, f'IOB{pin}_{wire}')
+                    bel.portmap[port] = f'IOB{pin}_{wire}'
+                else:
+                    bel.portmap[port] = wire
     if pin == 'A' or not bel.fuse_cell_offset:
         inp = wnames.wirenames[dat.portmap[f'Iobuf{pin}Out']]
         bel.portmap['O'] = inp
@@ -5727,7 +5916,26 @@ def dat_portmap(dat, dev, device):
                         bel.portmap[port] = port
                         #dev.aliases[row, col, port] = alias
 
-def tile_bitmap(dev, bitmap, empty=False):
+def tile_bitmap_holes(dev, bitmap, calc_size_func, empty = False):
+    """ The GW5AT-60B grid description includes rows with cells of varying
+    heights, as well as cells with zero height and width. To describe this
+    geometry, we add a function parameter that returns dummy or actual
+    dimensions based on the logical coordinates of a cell, as well as a flag
+    indicating whether the cell has no bits. """
+    res = {}
+    y = 0
+    for idx in range(dev.rows):
+        x=0
+        for jdx in range(dev.cols):
+            w, h, has_bits = calc_size_func(idx, jdx)
+            tile = [row[x:x+w] for row in bitmap[y:y+h]]
+            if bitmatrix.any(tile) or empty:
+                res[(idx, jdx)] = tile
+            x+=w
+        y+=h
+    return res
+
+def tile_bitmap(dev, bitmap, empty = False):
     res = {}
     y = 0
     for idx in range(dev.rows):
@@ -5741,7 +5949,24 @@ def tile_bitmap(dev, bitmap, empty=False):
                 res[(idx, jdx)] = tile
             x+=w
         y+=h
+    return res
 
+def fuse_bitmap_holes(db, bitmap, calc_size_func = None):
+    """ The GW5AT-60B grid description includes rows with cells of varying
+    heights, as well as cells with zero height and width. To describe this
+    geometry, we add a function parameter that returns dummy or actual
+    dimensions based on the logical coordinates of a cell, as well as a flag
+    indicating whether the cell has no bits. """
+    res = bitmatrix.zeros(db.height, db.width)
+    y = 0
+    for idx in range(db.rows):
+        x=0
+        for jdx in range(db.cols):
+            w, h, has_bits = calc_size_func(idx, jdx)
+            if has_bits:
+                bitmatrix.blit(res, y, x, bitmap[(idx, jdx)])
+            x += w
+        y += h
     return res
 
 def fuse_bitmap(db, bitmap):
@@ -5756,7 +5981,6 @@ def fuse_bitmap(db, bitmap):
             bitmatrix.blit(res, y, x, bitmap[(idx, jdx)])
             x += w
         y += h
-
     return res
 
 def get_route_bits(db, row, col):

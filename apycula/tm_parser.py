@@ -341,7 +341,7 @@ def read_tm(f, device):
         if len(chunk) != chunklen:
             continue
         # XXX GW5A-25A check it
-        if i >= 3 and device in {'GW5A-25A', 'GW5AST-138C'}:
+        if i >= 3 and device in {'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}:
             break
         tmdat[speed_class] = {}
         #print(f'{i:2} class:{speed_class}' , "len(chunk):", len(chunk), "chunklen:", chunklen)
