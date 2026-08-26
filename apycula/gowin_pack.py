@@ -1510,7 +1510,7 @@ class Device:
     #==============================
     def get_ALU_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         fuses = []
-        init = bel.cell.parms.get('RAW_ALU_LUT')
+        init = bel.cell.attrs.get('RAW_ALU_LUT')
         if init:
             if len(init) > 16:
                 init = init[-16:]
