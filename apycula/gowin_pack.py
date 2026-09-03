@@ -6152,7 +6152,7 @@ class GW5A_25A(GW5A):
                     if 'HCLK_GCLK' in routing:
                        is_HCLK_GCLK_net = True
             if is_HCLK_GCLK_net:
-                self.common_io_handler(self.make_IoBelDesc(bel, {'HCLK': 1}))
+                self.common_io_handler(self.set_io_bel_flags(self.make_IoBelDesc(bel), {'HCLK': 1}))
                 pair_bel = IoBelDesc(pair_xy[0], pair_xy[1], 'A', bel.cell, {'HCLK_PAIR': 1})
                 self.common_io_handler(pair_bel)
             else:
