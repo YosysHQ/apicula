@@ -970,7 +970,7 @@ class Device:
             self.io_banks[bank_idx] = BankDesc(x, y)
 
         self.default_ibuf_attrs = [('PADDI', 'PADDI'), ('HYSTERESIS', 'NONE'), ('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
-                 ('DRIVE', '0'), ('CLAMP', 'OFF'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('DRIVE', '0'), ('CLAMP', 'ON'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('VREF', 'OFF'), ('LVDS_OUT', 'OFF')]
         self.default_obuf_attrs = [('ODMUX_1', '1'), ('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
                  ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
@@ -1807,7 +1807,11 @@ class Device:
     def process_IBUF(self, bank_desc: BankDesc, bel: IoBelDesc) -> list[CellFuseBits]:
         av = self.set_io_attrvals(bel, self.default_ibuf_attrs)
         fuses = []
-        self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
+        if not bank_desc.has_outputs:
+            io_type = bel.cell.attrs.get('IO_TYPE', self.get_default_io_type())
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
+        else:
+            self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", bank_desc.io_type), av)
         self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         fuses += self.get_iob_fuses(bel.x, bel.y, bel.idx_str, av)
         return fuses
@@ -2009,8 +2013,8 @@ class Device:
                     fuses += getattr(self, f'process_{bel.cell.typ}')(bank_desc, bel)
         return fuses
 
-    def make_IoBelDesc(self, bel: BelDesc, flags = {}) -> IoBelDesc:
-        return IoBelDesc(bel.x, bel.y, bel.idx_str, bel.cell, flags)
+    def make_IoBelDesc(self, bel: BelDesc) -> IoBelDesc:
+        return IoBelDesc(bel.x, bel.y, bel.idx_str, bel.cell, {})
 
     def common_io_handler(self, bel: IoBelDesc):
         mod_bel = self.normalize_io_bel_attr(bel)
