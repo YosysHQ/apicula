@@ -15,13 +15,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Build all chipdbs
       run: |
         docker pull ${{ env.APICULA_IMAGE }}
         docker run -v $(pwd):/usr/src/apicula ${{ env.APICULA_IMAGE }} make -j$(nproc)
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: '3.9'
     - name: Build Python package
@@ -34,7 +34,7 @@ jobs:
         pip install "dist/apycula-$(python setup.py --version)-py3-none-any.whl"
         gowin_pack --help
     - name: Archive artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: python-dist
         path: dist
