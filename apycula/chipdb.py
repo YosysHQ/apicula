@@ -3604,6 +3604,34 @@ def fse_create_gsr(dev, device):
     dev.extra_func.setdefault((row, col), {}).update(
         {'gsr': {'wire': wire}})
 
+def fse_create_jtag(dev, device, dat):
+    # XXX
+    if device not in {'GW2A-18C'}:
+        return
+    row, col = 27, 50
+    dev.extra_func.setdefault((row, col), {}).update(
+        {'jtag': {
+            'inputs': {
+                'tck_pad_i': 'DUMMY_JTAG_TCK_PAD',
+                'tms_pad_i': 'DUMMY_JTAG_TMS_PAD',
+                'tdi_pad_i': 'DUMMY_JTAG_TDI_PAD',
+                'tdo_er1_i': 'C1',
+                'tdo_er2_i': 'C2',
+                },
+            'outputs': {
+                'tdo_pad_o': 'DUMMY_JTAG_TDO_PAD',
+                'pause_dr_o': 'DUMMY_JTAG_PAUSE',
+                'tck_o': 'Q6',
+                'tdi_o': 'Q5',
+                'test_logic_reset_o': 'Q3',
+                'run_test_idle_er1_o': 'Q4',
+                'run_test_idle_er2_o': 'F7',
+                'shift_dr_capture_dr_o': 'F6',
+                'update_dr_o': 'Q2',
+                'enable_er1_o': 'Q0',
+                'enable_er2_o': 'Q1',
+                }}})
+
 def fse_create_bandgap(dev, device):
     # The cell and wire are found by a test compilation where the BGEN input is
     # connected to a button - such wires are easily traced in a binary image.
@@ -4155,6 +4183,7 @@ def from_fse(device, fse, dat: Datfile):
     fse_create_io16(dev, device)
     fse_create_osc(dev, device, fse)
     fse_create_gsr(dev, device)
+    fse_create_jtag(dev, device, dat)
     fse_create_bandgap(dev, device)
     fse_create_userflash(dev, device, dat)
     fse_create_pincfg(dev, device, dat)
