@@ -1784,12 +1784,14 @@ class Device:
             override_val = bel.cell.attrs.get(attr)
             if override_val:
                 val = override_val
-            force_val = force_attrs.get(attr)
-            if force_val:
-                val = force_val
+            if attr in force_attrs:
+                continue
             # Check for input resistor
             if attr == 'SINGLERESISTOR':
                 self.set_input_resistor(val, bel, av)
+            self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
+
+        for attr, val in force_attrs.items():
             self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
         return av
 
@@ -1965,7 +1967,7 @@ class Device:
     def process_ELVDS_OBUF(self, bank_desc: BankDesc, bel: IoBelDesc) -> list[CellFuseBits]:
         self.check_elvds_placement(bel)
 
-        av = self.set_io_attrvals(bel, self.default_elvds_obuf_attrs, force_attrs = {'DRIVE': '0', 'BANK_VCCIO': self.get_lvds_bank_vccio()})
+        av = self.set_io_attrvals(bel, self.default_elvds_obuf_attrs, force_attrs = {'DRIVE': '8', 'BANK_VCCIO': self.get_lvds_bank_vccio()})
         fuses = []
         io_type = bel.cell.attrs.get('IO_TYPE')
         if io_type:
