@@ -853,6 +853,9 @@ class BankDesc:
     def set_bank_vccio_by_io_type(self, io_type: str):
         self.attrs['BANK_VCCIO'] = self._vcc_ios[io_type]
 
+    def force_bank_vccio(self, vccio: str):
+        self.attrs['BANK_VCCIO'] = vccio
+
     def check_or_set_attr(self, bel: IoBelDesc, attr: str):
         """ Set bank attr or check for conflict """
         new_val = bel.cell.attrs.get(attr)
@@ -970,7 +973,7 @@ class Device:
             self.io_banks[bank_idx] = BankDesc(x, y)
 
         self.default_ibuf_attrs = [('PADDI', 'PADDI'), ('HYSTERESIS', 'NONE'), ('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
-                 ('DRIVE', '0'), ('CLAMP', 'ON'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('DRIVE', '0'), ('CLAMP', 'OFF'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('VREF', 'OFF'), ('LVDS_OUT', 'OFF')]
         self.default_obuf_attrs = [('ODMUX_1', '1'), ('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
                  ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
@@ -992,7 +995,7 @@ class Device:
                  ('DRIVE', '8'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'),
                  ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
                  ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'),
-                 ('OPENDRAIN', 'OFF')]
+                 ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),]
         self.default_elvds_tbuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'), ('SLEWRATE', 'FAST'),
                  ('DRIVE', 'UNKNOWN'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
@@ -1014,7 +1017,7 @@ class Device:
                  ('OPENDRAIN', 'OFF')]
         self.default_tlvds_obuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'NONE'), ('SLEWRATE', 'FAST'),
                  ('DRIVE', '0'), ('HYSTERESIS', 'NA'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
-                 ('SINGLERESISTOR', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('SINGLERESISTOR', 'NA'), ('DDR_DYNTERM', 'NA'),
                  ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'),
                  ('OPENDRAIN', 'OFF')]
         self.default_tlvds_iobuf_attrs = [('PULLMODE', 'NONE'), ('SLEWRATE', 'FAST'),
@@ -1666,6 +1669,10 @@ class Device:
         """ Default IO_TYPE """
         return "LVDS25"
 
+    def get_lvds_bank_vccio(self) -> str:
+        """ Default BANK_VCCIO for banks with LVDS outputs """
+        return "1.2"
+
     def get_default_unused_io_type(self) -> str:
         """ Default IO_TYPE for unused IO """
         return "LVCMOS18"
@@ -1742,6 +1749,8 @@ class Device:
                     bank_desc.set_attr("LVDS_OUT", "ON")
                     default_io_type = self.get_default_tlvds_io_type()
                     bank_desc.set_attr("IO_TYPE", default_io_type)
+                if bank_desc.has_lvds_outputs:
+                    bank_desc.force_bank_vccio(self.get_lvds_bank_vccio())
                 if not bank_desc.bank_pull_strength:
                     default_pull_strength = self.get_default_pull_strength()
                     bank_desc.set_attr("PULL_STRENGTH", default_pull_strength)
@@ -1749,12 +1758,12 @@ class Device:
                     # BANK_VCCIO wasn't set
                     default_io_type = self.get_default_io_type()
                     bank_desc.set_attr("IO_TYPE", default_io_type)
-                if not bank_desc.bank_vccio:
-                    # BANK_VCCIO may be set without IO_TYPE - in case of LVDS for example
-                    if bank_desc.has_outputs:
-                        bank_desc.set_bank_vccio_by_io_type(bank_desc.io_type)
-                    else:
-                        bank_desc.set_bank_vccio_by_io_type(self.get_default_io_type())
+                if not bank_desc.has_lvds_outputs:
+                    if not bank_desc.bank_vccio:
+                        if bank_desc.has_outputs:
+                            bank_desc.set_bank_vccio_by_io_type(bank_desc.io_type)
+                        else:
+                            bank_desc.set_bank_vccio_by_io_type(self.get_default_io_type())
 
     def add_io_to_bank(self, bel: IoBelDesc):
         self.io_banks[self.get_bel_bank(bel)].add_io_bel(self, bel)
@@ -1765,9 +1774,8 @@ class Device:
         if val != 'OFF' and bel.cell.typ in {'IBUF', 'IOBUF', 'TLVDS_IBUF', 'TLVDS_IOBUF', 'ELVDS_IBUF', 'ELVDS_IOBUF'}:
             self.chipdb.get_iob_attr_val(AttrVal('DDR_DYNTERM', 'ON'), av)
 
-    def set_io_attrvals(self, bel: IoBelDesc, default_attrs: list[tuple[str, str]], defaults_only = False) -> set[int]:
+    def set_io_attrvals(self, bel: IoBelDesc, default_attrs: list[tuple[str, str]], defaults_only = False, force_attrs: dict[str, str] = dict()) -> set[int]:
         """ Set IO attributes in addition to those specified in default. Or use only default. """
-        lvds = bel.cell.typ[1:].startswith('LVDS')
         av = set()
         for attr, val in default_attrs:
             if defaults_only:
@@ -1776,6 +1784,9 @@ class Device:
             override_val = bel.cell.attrs.get(attr)
             if override_val:
                 val = override_val
+            force_val = force_attrs.get(attr)
+            if force_val:
+                val = force_val
             # Check for input resistor
             if attr == 'SINGLERESISTOR':
                 self.set_input_resistor(val, bel, av)
@@ -1888,7 +1899,7 @@ class Device:
         if bel.is_mipi_out():
             av = self.set_io_attrvals(bel, self.default_mipi_tlvds_tbuf_attrs, defaults_only = True)
         else:
-            av = self.set_io_attrvals(bel, self.default_tlvds_tbuf_attrs)
+            av = self.set_io_attrvals(bel, self.default_tlvds_tbuf_attrs, force_attrs = {'DRIVE': '0', 'BANK_VCCIO': self.get_lvds_bank_vccio()})
         fuses = []
         io_type = bel.cell.attrs.get('IO_TYPE')
         if io_type:
@@ -1897,14 +1908,13 @@ class Device:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_tlvds_io_type()), av)
         if bel.idx_str == 'A':
             self.chipdb.get_iob_attr_val(AttrVal("LVDS_OUT", "ON"), av)
-        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         fuses += self.get_iob_fuses(bel.x, bel.y, bel.idx_str, av)
         return fuses
 
     def process_TLVDS_OBUF(self, bank_desc: BankDesc, bel: IoBelDesc) -> list[CellFuseBits]:
         self.check_tlvds_placement(bel)
 
-        av = self.set_io_attrvals(bel, self.default_tlvds_obuf_attrs)
+        av = self.set_io_attrvals(bel, self.default_tlvds_obuf_attrs, force_attrs = {'DRIVE': '0', 'BANK_VCCIO': self.get_lvds_bank_vccio()})
         fuses = []
         io_type = bel.cell.attrs.get('IO_TYPE')
         if io_type:
@@ -1913,14 +1923,13 @@ class Device:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_tlvds_io_type()), av)
         if bel.idx_str == 'A':
             self.chipdb.get_iob_attr_val(AttrVal("LVDS_OUT", "ON"), av)
-        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         fuses += self.get_iob_fuses(bel.x, bel.y, bel.idx_str, av)
         return fuses
 
     def process_TLVDS_IOBUF(self, bank_desc: BankDesc, bel: IoBelDesc) -> list[CellFuseBits]:
         self.check_tlvds_placement(bel)
 
-        av = self.set_io_attrvals(bel, self.default_tlvds_iobuf_attrs)
+        av = self.set_io_attrvals(bel, self.default_tlvds_iobuf_attrs, force_attrs = {'DRIVE': '0', 'BANK_VCCIO': self.get_lvds_bank_vccio()})
         fuses = []
         io_type = bel.cell.attrs.get('IO_TYPE')
         if io_type:
@@ -1929,7 +1938,6 @@ class Device:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_tlvds_io_type()), av)
         if bel.idx_str == 'A':
             self.chipdb.get_iob_attr_val(AttrVal("LVDS_OUT", "ON"), av)
-        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         self.set_iobuf_attrs(bel, av)
 
         fuses += self.get_iob_fuses(bel.x, bel.y, bel.idx_str, av)
@@ -1957,14 +1965,13 @@ class Device:
     def process_ELVDS_OBUF(self, bank_desc: BankDesc, bel: IoBelDesc) -> list[CellFuseBits]:
         self.check_elvds_placement(bel)
 
-        av = self.set_io_attrvals(bel, self.default_elvds_obuf_attrs)
+        av = self.set_io_attrvals(bel, self.default_elvds_obuf_attrs, force_attrs = {'DRIVE': '0', 'BANK_VCCIO': self.get_lvds_bank_vccio()})
         fuses = []
         io_type = bel.cell.attrs.get('IO_TYPE')
         if io_type:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", io_type), av)
         else:
             self.chipdb.get_iob_attr_val(AttrVal("IO_TYPE", self.get_default_elvds_io_type()), av)
-        self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
         fuses += self.get_iob_fuses(bel.x, bel.y, bel.idx_str, av)
         return fuses
 
@@ -2104,7 +2111,7 @@ class Device:
         val = cell_parms.get('HWL', 'FALSE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('UPDATE', 'SAME'))
-        val = cell_parms.get('GSREN', 'FALSE')
+        val = cell_parms.get('GSREN', 'TRUE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('GSR', 'ENGSR'))
         else:
