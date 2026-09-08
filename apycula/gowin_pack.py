@@ -4717,24 +4717,6 @@ class GW1N_4(GW1N):
     #==============================
     #========== IO
     #==============================
-    def set_io_attrvals(self, bel: IoBelDesc, default_attrs: list[tuple[str, str]], defaults_only = False) -> set[int]:
-        """ Set IO attributes in addition to those specified in default. Or use only default. """
-        lvds = bel.cell.typ[1:].startswith('LVDS')
-        av = set()
-        for attr, val in default_attrs:
-            if defaults_only:
-                self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
-                continue
-            if lvds and attr == 'DRIVE': # ignore
-                continue
-            override_val = bel.cell.attrs.get(attr)
-            if override_val:
-                val = override_val
-            # Check for input resistor
-            if attr == 'SINGLERESISTOR':
-                self.set_input_resistor(val, bel, av)
-            self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
-        return av
 
     #==============================
     #========== Misc
@@ -4839,24 +4821,6 @@ class GW1NS_4(GW1N):
     #==============================
     #========== IO
     #==============================
-    def set_io_attrvals(self, bel: IoBelDesc, default_attrs: list[tuple[str, str]], defaults_only = False) -> set[int]:
-        """ Set IO attributes in addition to those specified in default. Or use only default. """
-        lvds = bel.cell.typ[1:].startswith('LVDS')
-        av = set()
-        for attr, val in default_attrs:
-            if defaults_only:
-                self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
-                continue
-            if lvds and attr == 'DRIVE': # ignore
-                continue
-            override_val = bel.cell.attrs.get(attr)
-            if override_val:
-                val = override_val
-            # Check for input resistor
-            if attr == 'SINGLERESISTOR':
-                self.set_input_resistor(val, bel, av)
-            self.chipdb.get_iob_attr_val(AttrVal(attr, val), av)
-        return av
 
     #==============================
     #========== Misc
