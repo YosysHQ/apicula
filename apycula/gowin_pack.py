@@ -402,7 +402,7 @@ class Netlist:
         # Therefore, we will postpone their generation until after normal IOs, once the standard has been clarified.
         yield_later = []
 
-        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU27X18|MULTALU36X18|MULTADDALU18X18|MULTADDALU12X12|MULT36X36|MULT18X18|MULT12X12|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA|ADC)(\w*)")
+        belre = re.compile(r"X(\d+)Y(\d+)/(?:GSR|LUT|DFF|IOB|MUX|ALU|ODDR|OSC[ZFHWOA]?|BUF[GS]|RAM16SDP4|RAM16SDP2|RAM16SDP1|PLL|IOLOGIC|CLKDIV2|CLKDIV|BSRAM|ALU|MULTALU18X18|MULTALU27X18|MULTALU36X18|MULTADDALU18X18|MULTADDALU12X12|MULT36X36|MULT18X18|MULT12X12|MULT9X9|PADD18|PADD9|BANDGAP|DQCE|DCS|USERFLASH|EMCU|DHCEN|MIPI_OBUF|MIPI_IBUF|DLLDLY|PINCFG|PLLA|ADC|GW_JTAG)(\w*)")
         for cell_name, cell_data in self.in_file['modules'][self.top_module_name]['cells'].items():
             cell = self.fill_cell_desc(cell_name, cell_data)
             bel_attr = cell.attrs.get('NEXTPNR_BEL')
@@ -1612,6 +1612,9 @@ class Device:
 
     def get_EMCU_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         self.error_not_supported_cell_type(bel)
+
+    def get_GW_JTAG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        self.error_not_implemented_method('get_GW_JTAG_fuses')
 
     def get_cfgs_types(self) -> set[int]:
         self.error_not_implemented_method('get_cfg_types')
@@ -5160,6 +5163,17 @@ class GW2A_18C(GW2A):
     #==============================
     #========== Misc
     #==============================
+
+    def get_GW_JTAG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        av = set()
+        self.chipdb.get_cfg_attr_val(AttrVal('JTAG_ER1', 'USED'), av)
+        self.chipdb.get_cfg_attr_val(AttrVal('JTAG_ER2', 'USED'), av)
+
+        fuses = []
+        bits = self.chipdb.get_cfg_fuses(bel.x, bel.y, av)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
 
     # debug
     def __repr__(self):

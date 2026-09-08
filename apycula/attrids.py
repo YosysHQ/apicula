@@ -1512,6 +1512,8 @@ cfg_attrids = {
         'MSPI_AS_GPIO':     8,
         'RECONFIG_AS_GPIO': 9,
         'SSPI_AS_GPIO':     10,
+        'JTAG_ER1':         12,
+        'JTAG_ER2':         13,
         'POWERSAVE':        16,
         'I2C_AS_GPIO':      20,
         'JTAG_EN':          21,
