@@ -314,8 +314,12 @@ if __name__ == "__main__":
     with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.tm", 'rb') as f:
         tm = tm_parser.read_tm(f, device)
 
-    with open(f"/home/rabbit/src/apicula/{device}-dat.pickle", "rb") as f:
-        dat = pickle.load(f)
+    dat_file_name = f"/home/rabbit/src/apicula/{device}-dat.pickle"
+    if os.path.isfile(dat_file_name):
+        with open(dat_file_name, "rb") as f:
+            dat = pickle.load(f)
+    else:
+        print("The DAT file is unavailable. Set the GOWIN_DEBUG environment variable when generating chip databases if you want to use information from it.")
 
     db = chipdb.load_chipdb(f"/home/rabbit/src/apicula/apycula/{device}.msgpack.xz")
 
