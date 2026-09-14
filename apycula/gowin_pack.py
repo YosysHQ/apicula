@@ -3262,12 +3262,13 @@ class Device:
                     if sync_mult_reset:
                         attr_vals.append(AttrVal(f'RSTGENLMUX_REGM{r}{pair_idx}', 'SYNC'))
             else:
+                attr_off = 0 if r == 'A' else 2
                 if is_even:
-                    attr_vals.append(AttrVal(f'IRBY_IREG{pair_idx}{r}H_{pair_idx * 4 + 1}', "ENABLE"))
-                    attr_vals.append(AttrVal(f'IRNS_IREG{pair_idx}{r}H_{pair_idx * 4 + 1}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRBY_IREG{pair_idx}{r}H_{pair_idx * 4 + attr_off + 1}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRNS_IREG{pair_idx}{r}H_{pair_idx * 4 + attr_off + 1}', "ENABLE"))
                 else:
-                    attr_vals.append(AttrVal(f'IRBY_IREG{pair_idx}{r}L_{pair_idx * 4}', "ENABLE"))
-                    attr_vals.append(AttrVal(f'IRNS_IREG{pair_idx}{r}L_{pair_idx * 4}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRBY_IREG{pair_idx}{r}L_{pair_idx * 4 + attr_off}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRNS_IREG{pair_idx}{r}L_{pair_idx * 4 + attr_off}', "ENABLE"))
 
             val = int(cell_parms.get(f'{r}SIGN_REG', '0'), 2)
             if val:
