@@ -4964,6 +4964,8 @@ class GW1N_9C(GW1N):
         """ PLL can occupy several cells """
         if bel.x > 27:
             offx = -1
+        else:
+            offx = 1
         for off in range(4):
             yield (bel.x + offx * off, bel.y)
 
