@@ -5100,6 +5100,7 @@ class GW2A(Device):
 
     def get_pll_bels(self, bel: BelDesc) -> Iterator[tuple[int, int]]:
         """ PLL can occupy several cells """
+        offx = 1
         if bel.x > 27:
             offx = -1
         for off in range(4):
