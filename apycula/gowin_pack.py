@@ -6651,7 +6651,7 @@ class GW5AT_60B(GW5A):
         if not dest_is_pclk or dest in self.used_clock_spines:
             return None
         self.used_clock_spines.add(dest)
-        return f'5A_60_PCLK_ENABLE_{wnames.clknumbers[dest] - wnames.clknumbers['PCLK0']:02}'
+        return f'5A_60_PCLK_ENABLE_{wnames.clknumbers[dest] - wnames.clknumbers["PCLK0"]:02}'
 
     def get_spine_enable_fuses(self, x: int, y: int, spine_enable_table: str) -> set[Coord]:
         if self.chipdb.has_shortval(self.chipdb.get_ttyp(x, y)):
