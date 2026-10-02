@@ -3,7 +3,7 @@ YOSYS_FLAGS = -setundef
 NEXTPNR ?= nextpnr-himbaechel
 NEXTPNR_FLAGS ?= --timing-allow-fail -r
 DEBUG = -v --debug
-DEBUG =
+#DEBUG =
 
 .DEFAULT_GOAL := all
 
@@ -32,7 +32,8 @@ tangconsole138k: \
 	uart-message-tangmega138k.fs
 
 tangconsole60k: \
-	in-out-tangconsole60k.fs in-inv-out-tangconsole60k.fs in-or-inv-out-tangconsole60k.fs
+	in-out-tangconsole60k.fs in-inv-out-tangconsole60k.fs in-or-inv-out-tangconsole60k.fs \
+	60k-shift-tangconsole60k.fs blinky-osc-tangconsole60k.fs
 
 all: primer25k tangmega138k tangconsole138k tangconsole60k
 
@@ -111,4 +112,4 @@ uart-message-tangconsole138k-synth.json: uart-message-tangconsole138k.v
 	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst
 
 %-tangconsole60k-synth.json: %.v
-	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA  -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -D OSC_TYPE_OSCA  -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"

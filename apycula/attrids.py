@@ -1138,6 +1138,7 @@ cls_attrvals = {
         'ALU_5A_CIN_GND':       19,
         'ALU_5A_CIN_LOGIC':     20,
         'ALU_5A_CIN_COUT':      21,
+        'ALU_5A_60K_CIN_COUT':  22,
     }
 
 # DCS

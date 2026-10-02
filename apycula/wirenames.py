@@ -548,7 +548,8 @@ wirenames_60b = { 0: "A0", 1: "B0", 2: "C0", 3: "D0", 4: "A1", 5: "B1", 6: "C1",
 267: "LB61", 268: "LB71", 269: "GB00", 270: "GB10", 271: "GB20", 272: "GB30", 273: "GB40", 274: "GB50", 275: "GB60", 276: "GB70", 277: "VCC", 278: "VSS",
 279: "LT00", 280: "LT10", 281: "LT20", 282: "LT30", 283: "LT02", 284: "LT13", 285: "LT01", 286: "LT04", 287: "LBO0", 288: "LBO1", 289: "SS00", 290: "SS40",
 291: "GT00", 292: "GT10", 293: "GBO0", 294: "GBO1", 295: "DI0", 296: "DI1", 297: "DI2", 298: "DI3", 299: "DI4", 300: "DI5", 301: "DI6", 302: "DI7",
-             303: "CIN0", 304: "CIN1", 305: "CIN2", 306: "CIN3", 307: "CIN4", 308: "CIN5", 309: "COUT0", 310: "COUT1", 311: "COUT2", 312: "COUT3", 313: "COUT4", 314: "COUT5", 315: "SPCLK_0", 316: "SPCLK_1"}
+303: "CIN0", 304: "CIN1", 305: "CIN2", 306: "CIN3", 307: "CIN4", 308: "CIN5", 309: "COUT0", 310: "COUT1", 311: "COUT2", 312: "COUT3", 313: "COUT4",
+314: "COUT5", 315: "SPCLK_0", 316: "SPCLK_1", 317: "LEAP_GT00", 318: "LEAP_GT10"}
 
 wirenames_60b.update({n: f"UNK{n}" for n in range(506, 769)})
 
@@ -569,99 +570,53 @@ wirenames_60b.update({n: f"5A{n}" for n in range(1241, 2041)}) # GW5AST-138C nee
 wirenumbers_60b = {v: k for k, v in wirenames_60b.items()}
 
 clknames_60b = {}
-clknames_60b.update({n: f"SPINE{n}" for n in range(32)})
-clknames_60b.update({n: f"LWT{n - 32}" for n in range(32, 40)})
-clknames_60b.update({n: f"LWB{n - 40}" for n in range(40, 48)})
-# Apparently the names of the 8 primary clock wires comprise the quadrant
-# number and the number of the actual clock wire: P34 stands for primary clock
-# #4, 3rd quadrant. The quadrants are numbered counterclockwise:
-# 2        1
-#   center
-# 3        4
-# in addition, chips with two quadrants have quadrant numbers 3 and 4, not 1
-# and 2 as you might expect.
-# Wires 6 and 7 are the outputs of the dynamic 4-input MUX, the assumed
-# numbers of these inputs are listed below:
-clknames_60b.update({
-     48: 'P16A', 49: 'P16B', 50: 'P16C', 51: 'P16D',
-     52: 'P17A', 53: 'P17B', 54: 'P17C', 55: 'P17D',
-     56: 'P26A', 57: 'P26B', 58: 'P26C', 59: 'P26D',
-     60: 'P27A', 61: 'P27B', 62: 'P27C', 63: 'P27D',
-     64: 'P36A', 65: 'P36B', 66: 'P36C', 67: 'P36D',
-     68: 'P37A', 69: 'P37B', 70: 'P37C', 71: 'P37D',
-     72: 'P46A', 73: 'P46B', 74: 'P46C', 75: 'P46D',
-     76: 'P47A', 77: 'P47B', 78: 'P47C', 79: 'P47D'
-})
-clknames_60b[80] = 'VSS'
-clknames_60b.update({
-     81: 'PLL4CLKOUT0',  82: 'PLL4CLKOUT1',  83: 'PLL4CLKOUT2',  84: 'PLL4CLKOUT3',
-     85: 'PLL4CLKOUT4',  86: 'PLL4CLKOUT5',  87: 'PLL4CLKOUT6',  88: 'PLL4CLKOUT7',
-     89: 'PLL3CLKOUT0',  90: 'PLL3CLKOUT1',  91: 'PLL3CLKOUT2',  92: 'PLL3CLKOUT3',
-     93: 'PLL3CLKOUT4',  94: 'PLL3CLKOUT5',  95: 'PLL3CLKOUT6',  96: 'PLL3CLKOUT7',
-     97: 'PLL2CLKOUT0',  98: 'PLL2CLKOUT1',  99: 'PLL2CLKOUT2', 100: 'PLL2CLKOUT3',
-    101: 'PLL2CLKOUT4', 102: 'PLL2CLKOUT5', 103: 'PLL2CLKOUT6', 104: 'PLL2CLKOUT7',
-    105: 'PLL8CLKOUT0', 106: 'PLL8CLKOUT1', 107: 'PLL8CLKOUT2', 108: 'PLL8CLKOUT3',
-    109: 'PLL8CLKOUT4', 110: 'PLL8CLKOUT5', 111: 'PLL8CLKOUT6', 112: 'PLL8CLKOUT7',
-    113: 'PLL6CLKOUT0', 114: 'PLL6CLKOUT1', 115: 'PLL6CLKOUT2', 116: 'PLL6CLKOUT3',
-    117: 'PLL6CLKOUT4', 118: 'PLL6CLKOUT5', 119: 'PLL6CLKOUT6', 120: 'PLL6CLKOUT7',
-    121: 'PLL5CLKOUT0', 122: 'PLL5CLKOUT1', 123: 'PLL5CLKOUT2', 124: 'PLL5CLKOUT3',
-    125: 'PLL5CLKOUT4', 126: 'PLL5CLKOUT5', 127: 'PLL5CLKOUT6', 128: 'PLL5CLKOUT7',
- })
+clknames_60b.update({n: f"UNK{n}" for n in range(129)})
+clknames_60b.update({n: f"SPINE{n}"      for n in range(8)})
+clknames_60b.update({n: f"SPINE{n - 8}"  for n in range(16, 24)})
+clknames_60b.update({n: f"SPINE{n - 16}" for n in range(32, 40)})
+clknames_60b.update({n: f"SPINE{n - 24}" for n in range(48, 56)})
 
-clknames_60b.update({
-    129: 'TRBDCLK0', 130: 'TRBDCLK1', 131: 'TRBDCLK2', 132: 'TRBDCLK3',
-    133: 'TLBDCLK0', 134: 'TLBDCLK1', 135: 'TLBDCLK2', 136: 'TLBDCLK3',
-    137: 'BRBDCLK0', 138: 'BRBDCLK1', 139: 'BRBDCLK2', 140: 'BRBDCLK3',
-    141: 'BLBDCLK0', 142: 'BLBDCLK1', 143: 'BLBDCLK2', 144: 'BLBDCLK3',
-    145: 'TRMDCLK0', 146: 'TRMDCLK1', 147: 'TLMDCLK0', 148: 'TLMDCLK1',
-    149: 'BRMDCLK0', 150: 'BRMDCLK1', 151: 'BLMDCLK0', 152: 'BLMDCLK1',
-})
-#clknames_60b[153] = 'VCC'
+clknames_60b.update({n: f"PCLK{n - 64}" for n in range(64, 72)})
+clknames_60b.update({n: f"PCLK{n - 128}A" for n in range(128, 134)})
 
-clknames_60b.update({n: f"UNK{n}" for n in range(153, 170)})
-
-# HCLK
+# DQCE
 clknames_60b.update({
-    169: 'TBDHCLK0',  170: 'TBDHCLK1',  171: 'TBDHCLK2',  172: 'TBDHCLK3',
-    173: 'RBDHCLK0',  174: 'RBDHCLK1',  175: 'RBDHCLK2',  176: 'RBDHCLK3',
-    177: 'BBDHCLK0',  178: 'BBDHCLK1',  179: 'BBDHCLK2',  180: 'BBDHCLK3',
-    181: 'LBDHCLK0',  182: 'LBDHCLK1',  183: 'LBDHCLK2',  184: 'LBDHCLK3',
-    185: 'HCLKDIV00', 186: 'HCLKDIV01', 187: 'HCLKDIV02', 188: 'HCLKDIV03',
-    189: 'HCLKDIV30', 190: 'HCLKDIV31', 191: 'HCLKDIV32', 192: 'HCLKDIV33',
-    193: 'HCLKDIV10', 194: 'HCLKDIV11', 195: 'HCLKDIV12', 196: 'HCLKDIV13',
-    197: 'HCLKDIV20', 198: 'HCLKDIV21', 199: 'HCLKDIV22', 200: 'HCLKDIV23',
+    134: 'PCLK6A',  135: 'PCLK6B',  136: 'PCLK6C',  137: 'PCLK6D',
+    138: 'PCLK7A',  139: 'PCLK7B',  140: 'PCLK7C',  141: 'PCLK7D',
 })
 
+clknames_60b.update({n: f"UNK{n}" for n in range(142, 150)})
+clknames_60b[150] = 'VSS'
 
-clknames_60b.update({n: f"UNK{n}" for n in range(201, 277)})
-clknames_60b[277] = 'VCC'
-clknames_60b.update({n: f"UNK{n}" for n in range(278, 291)})
+clknames_60b.update({n: f"UNK{n}" for n in range(151, 312)})
 
-clknames_60b.update({291: "GT00", 292: "GT10"})
+clknames_60b.update({259: 'OSC_OUT'})
 
-clknames_60b.update({n: f"UNK{n}" for n in range(293, 335)})
-
+# logic -> clock
 clknames_60b.update({
-    501: 'MPLL4CLKOUT0', 502: 'MPLL4CLKOUT1', 503: 'MPLL4CLKOUT2', 504: 'MPLL4CLKOUT3',
-    505: 'MPLL4CLKOUT4', 506: 'MPLL4CLKOUT5', 507: 'MPLL4CLKOUT6', 508: 'MPLL4CLKFBOUT',
-    509: 'MPLL4CLKIN2',  510: 'MPLL4CLKIN6',  511: 'MPLL4CLKIN7',
-    512: 'MPLL3CLKOUT0', 513: 'MPLL3CLKOUT1', 514: 'MPLL3CLKOUT2', 515: 'MPLL3CLKOUT3',
-    516: 'MPLL3CLKOUT4', 517: 'MPLL3CLKOUT5', 518: 'MPLL3CLKOUT6', 519: 'MPLL3CLKFBOUT',
-    520: 'MPLL3CLKIN2',  521: 'MPLL3CLKIN6',  522: 'MPLL3CLKIN7',
-    523: 'MPLL2CLKOUT0', 524: 'MPLL2CLKOUT1', 525: 'MPLL2CLKOUT2', 526: 'MPLL2CLKOUT3',
-    527: 'MPLL2CLKOUT4', 528: 'MPLL2CLKOUT5', 529: 'MPLL2CLKOUT6', 530: 'MPLL2CLKFBOUT',
-    531: 'MPLL2CLKIN2',  532: 'MPLL2CLKIN6',  533: 'MPLL2CLKIN7',
-    534: 'MPLL8CLKOUT0', 535: 'MPLL8CLKOUT1', 536: 'MPLL8CLKOUT2', 537: 'MPLL8CLKOUT3',
-    538: 'MPLL8CLKOUT4', 539: 'MPLL8CLKOUT5', 540: 'MPLL8CLKOUT6', 541: 'MPLL8CLKFBOUT',
-    542: 'MPLL8CLKIN2',  543: 'MPLL8CLKIN6',  544: 'MPLL8CLKIN7',
-    545: 'MPLL6CLKOUT0', 546: 'MPLL6CLKOUT1', 547: 'MPLL6CLKOUT2', 548: 'MPLL6CLKOUT3',
-    549: 'MPLL6CLKOUT4', 550: 'MPLL6CLKOUT5', 551: 'MPLL6CLKOUT6', 552: 'MPLL6CLKFBOUT',
-    553: 'MPLL6CLKIN2',  554: 'MPLL6CLKIN6',  555: 'MPLL6CLKIN7',
-    556: 'MPLL5CLKOUT0', 557: 'MPLL5CLKOUT1', 558: 'MPLL5CLKOUT2', 559: 'MPLL5CLKOUT3',
-    560: 'MPLL5CLKOUT4', 561: 'MPLL5CLKOUT5', 562: 'MPLL5CLKOUT6', 563: 'MPLL5CLKFBOUT',
-    564: 'MPLL5CLKIN2',  565: 'MPLL5CLKIN6',  566: 'MPLL5CLKIN7',
+    276: 'TRBDCLK0', 277: 'TRBDCLK1', 278: 'TRBDCLK2',
+    287: 'TRMDCLK0', 288: 'TRMDCLK1',
+    289: 'BRBDCLK0', 290: 'BRBDCLK1', 291: 'BRBDCLK2',
+    296: 'BRMDCLK0', 297: 'BRMDCLK1',
+    302: 'BLBDCLK0', 303: 'BLBDCLK1', 304: 'BLBDCLK2',
+    307: 'BLMDCLK0', 308: 'BLMDCLK1',
+    311: 'TLBDCLK0',
 })
-clknames_60b.update({n: f"UNK{n}" for n in range(567, 581)})
+
+#clknames_60b.update({291: "GT00", 292: "GT10"})
+clknames_60b.update({n: f"UNK{n}" for n in range(312, 581)})
+
+
+# That's interesting; the 60k has an additional intermediate wire between the
+# gates and the gate wires.
+# some_cell_CLKx -> postgate_wire -> gate_wire
+clknames_60b.update({
+    565: 'TL_POSTGATE0',
+    566: 'TR_POSTGATE0', 567: 'TR_POSTGATE1', 568: 'TR_POSTGATE2',
+    569: 'BL_POSTGATE0', 570: 'BL_POSTGATE1', 571: 'BL_POSTGATE2',
+    572: 'BR_POSTGATE0', 573: 'BR_POSTGATE1', 574: 'BR_POSTGATE2',
+    579: 'OSC_GATE',
+})
 
 # HCLK->clock network
 # Each HCLK can connect to other HCLKs through two MUXes in the clock system.
