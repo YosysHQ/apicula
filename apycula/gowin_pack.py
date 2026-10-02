@@ -389,6 +389,8 @@ class Netlist:
                     # nextpnr creates the passtrough LUTs by itself, so skip such pips
                     if dest.startswith('XD') and src.startswith('F'):
                         continue
+                    if "DUMMY" in pip:
+                        continue
                     yield PipDesc(int(col), int(row), src, dest)
                 elif pip and "DUMMY" not in pip:
                     raise Exception("Invalid pip:", pip)
@@ -511,6 +513,9 @@ class ChipDB:
     def get_tiledata(self, x: int, y: int) -> Tile:
         """ Get one cell description """
         return self.db[y, x]
+
+    def has_shortval(self, ttyp: int) -> bool:
+        return ttyp in self.db.shortval
 
     def get_lut_data(self, x: int, y: int, idx: int) -> dict[int, set[Coord]]:
         """ Return LUT encoding """
@@ -6567,6 +6572,7 @@ class GW5AT_60B(GW5A):
     """ GW5AT-60B chip. TangCosole60k board """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
+        self.used_clock_spines = set()
         self.default_ibuf_attrs = [('PADDI', 'PADDI'), ('HYSTERESIS', 'NONE'), ('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
                  ('DRIVE', '0'), ('CLAMP', 'OFF'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('VREF', 'OFF'), ('LVDS_OUT', 'OFF'), ('PULL_STRENGTH', 'MEDIUM')]
@@ -6637,6 +6643,80 @@ class GW5AT_60B(GW5A):
         """ Tilemap -> Bitmap """
         return self.chipdb.fuse_bitmap_holes(tilemap, calc_size_func = self.get_tilemap_func())
 
+    #==============================
+    #========== PIPs
+    #==============================
+    def get_set_spine_enable_table(self, dest: str) -> str:
+        dest_is_pclk = len(dest) == 5 and dest.startswith('PCLK')
+        if not dest_is_pclk or dest in self.used_clock_spines:
+            return None
+        self.used_clock_spines.add(dest)
+        return f'5A_60_PCLK_ENABLE_{wnames.clknumbers[dest] - wnames.clknumbers['PCLK0']:02}'
+
+    def get_spine_enable_fuses(self, x: int, y: int, spine_enable_table: str) -> set[Coord]:
+        if self.chipdb.has_shortval(self.chipdb.get_ttyp(x, y)):
+            return self.chipdb.get_spine_enable_fuses(x, y, spine_enable_table)
+        return set()
+
+    def is_clock_pip(self, tiledata: Tile, src: str, dest: str) -> bool:
+        if src not in wnames.clknumbers:
+            return False
+        if not (dest in wnames.clknumbers or dest in {'GT00', 'GT10', 'LEAP_GT00', 'LEAP_GT10'}):
+            return False
+        return wnames.clknumbers[src] < 580
+
+    def get_clock_pip_fuses(self, tiledata: Tile, x: int, y: int, src: str, dest: str) -> list[CellFuseBits]:
+        """ The mux for clock wires can be "spread" across several cells. """
+        fuses = []
+        # SPINE->{GT00, GT10} must be set in the cell only
+        if dest in {'GT00', 'GT10'}:
+            bits = self.get_simple_clock_pip_fuses(tiledata, src, dest)
+            if bits:
+                fuses.append(CellFuseBits(x, y, bits))
+            return fuses
+
+        # need to enable spine?
+        spine_enable_table = self.get_set_spine_enable_table(dest)
+
+        for x, y in itertools.product(range(self.chipdb.cols), range(self.chipdb.rows)):
+            tiledata = self.chipdb.get_tiledata(x, y)
+            bits = self.get_simple_clock_pip_fuses(tiledata, src, dest)
+            if spine_enable_table:
+                bits |= self.get_spine_enable_fuses(x, y, spine_enable_table)
+            if bits:
+                fuses.append(CellFuseBits(x, y, bits))
+        return fuses
+
+    #==============================
+    #========== Oscillators
+    #==============================
+    def set_osc_attrvals(self, bel: BelDesc, attr_vals: list[AttrVal]) -> set[int]:
+        av = set()
+        for attr_val in attr_vals:
+            self.chipdb.get_osc_attr_val(attr_val, av)
+        return av
+
+    def get_OSC_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        self.error_not_supported_cell_type(bel)
+
+    def get_OSCA_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        attr_vals = []
+        cell_parms = bel.cell.parms
+
+        val = int(cell_parms.get('FREQ_DIV', bin(100)), 2) # default division coefficient 100
+        if val % 2 == 1:
+            raise Exception(f"Divisor of the cell '{bel.cell.name}' (OSC) must be even")
+
+        attr_vals.append(AttrVal('MCLKCIB', val))
+        attr_vals.append(AttrVal('MCLKCIB_EN', 'ENABLE'))
+
+        av = self.set_osc_attrvals(bel, attr_vals)
+
+        fuses = []
+        bits = self.chipdb.get_osc_fuses(bel.x, bel.y, av)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
 
     #==============================
     #========== Misc
