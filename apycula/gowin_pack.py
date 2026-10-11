@@ -4454,6 +4454,22 @@ class GW1N(Device):
     """ GW1N series """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
+        # IO
+        # Fixing a non-working green LED.
+        self.default_obuf_attrs = [('ODMUX_1', '1'), ('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', 'UNKNOWN'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('OPENDRAIN', 'OFF'), ('DRIVE_LEVEL', '8')]
+        self.default_tbuf_attrs = [('ODMUX_1', 'UNKNOWN'), ('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', 'UNKNOWN'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('TO', 'INV'), ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('OPENDRAIN', 'OFF'),
+                 ('DRIVE_LEVEL', '8')]
+        self.default_iobuf_attrs = [('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
+                 ('DRIVE', 'UNKNOWN'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('SINGLERESISTOR', 'OFF'), ('LVDS_OUT', 'OFF'), ('DDR_DYNTERM', 'NA'),
+                 ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('PADDI', 'PADDI'), ('OPENDRAIN', 'OFF'),
+                 ('DRIVE_LEVEL', '8')]
 
     #==============================
     #========== PIPs
