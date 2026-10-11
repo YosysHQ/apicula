@@ -2786,8 +2786,10 @@ class Device:
             yield (bel.x + off, bel.y)
 
     def get_bsram_attrvals(self, bel: BsramBelDesc) -> set[int]:
-        if 'INIT_RAM_00' in bel.cell.parms:
-            self.add_bsram_to_init(bel)
+        for parm in bel.cell.parms.keys():
+            if parm.startswith('INIT_RAM_'):
+                self.add_bsram_to_init(bel)
+                break
 
         av = set()
         self.chipdb.get_bsram_attr_val(AttrVal('MODE', 'ENABLE'), av)
