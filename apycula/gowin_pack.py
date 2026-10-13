@@ -1256,6 +1256,10 @@ class Device:
                 fuses.append(CellFuseBits(wire.x, wire.y, bits))
         return fuses
 
+    def get_unused_wire_fuses(self, pips: list[PipDesc]) -> list[CellFuseBits]:
+        """ Return fuses that give unused wires of used logic cells a static source """
+        return []
+
     #==============================
     #========== LUTs
     #==============================
@@ -5005,6 +5009,74 @@ class GW2A(Device):
     #==============================
     #========== PIPs
     #==============================
+    _span_wire = re.compile(r"[NSEW][128]\d0$")
+    _x_wire = re.compile(r"X0\d$")
+    _lut_input = re.compile(r"[ABCD][0-5]$")
+
+    def get_unused_wire_fuses(self, pips: list[PipDesc]) -> list[CellFuseBits]:
+        """ Return fuses that give unused wires of used logic cells a static source.
+
+        Without fuses a span or X0 wire, and a LUT input, keeps its default
+        connection from the alonenode table, an output of the cell (Q0, F0, ...).
+        In a used cell that output toggles, and so does every unused wire on it.
+        The vendor IDE gives these wires VCC or another static source. Cells
+        without any pip are left alone: nothing toggles there.
+        """
+        driven = {(pip.x, pip.y, pip.dest) for pip in pips}
+        used = {(pip.x, pip.y) for pip in pips}
+        cells = [(x, y) for x, y in sorted(used) if 'LUT0' in self.chipdb.get_tiledata(x, y).bels]
+        parked = set()
+        fuses = []
+
+        def park(x: int, y: int, tiledata: Tile, dest: str, src: str):
+            bits = self.get_simple_pip_fuses(tiledata, src, dest) | self.get_alonenode_fuses(tiledata, src, dest)
+            if bits:
+                fuses.append(CellFuseBits(x, y, bits))
+            parked.add((x, y, dest))
+
+        def is_static_segment(x: int, y: int, src: str) -> bool:
+            """ A span wire segment whose wire starts in an unused cell or was parked """
+            if not re.match(r"[NSEW][128]\d\d$", src):
+                return False
+            root = re.match(r"R(\d+)C(\d+)_(\w+)", chipdb.wire2global(y + 1, x + 1, self.chipdb.db, src))
+            rx, ry, name = int(root[2]) - 1, int(root[1]) - 1, root[3] + "0"
+            return (rx, ry) not in used or (rx, ry, name) in parked
+
+        def unused(x: int, y: int, dest: str) -> bool:
+            return (x, y, dest) not in driven and (x, y, dest) not in parked
+
+        def is_wire(dest: str) -> bool:
+            return bool(self._span_wire.match(dest) or self._x_wire.match(dest))
+
+        # span and X0 wires that can take VCC or VSS
+        for x, y in cells:
+            tiledata = self.chipdb.get_tiledata(x, y)
+            for dest, srcs in self.chipdb.get_pips(tiledata).items():
+                if is_wire(dest) and unused(x, y, dest):
+                    src = next((s for s in ('VCC', 'VSS') if s in srcs), None)
+                    if src:
+                        park(x, y, tiledata, dest, src)
+        # the rest of them from a static span wire segment
+        for x, y in cells:
+            tiledata = self.chipdb.get_tiledata(x, y)
+            for dest, srcs in self.chipdb.get_pips(tiledata).items():
+                if is_wire(dest) and unused(x, y, dest):
+                    src = next((s for s in sorted(srcs) if is_static_segment(x, y, s)), None)
+                    if src:
+                        park(x, y, tiledata, dest, src)
+        # LUT inputs: VCC or VSS, a parked X0 wire, or a static span wire segment
+        for x, y in cells:
+            tiledata = self.chipdb.get_tiledata(x, y)
+            for dest, srcs in self.chipdb.get_pips(tiledata).items():
+                if not self._lut_input.match(dest) or (x, y, dest) in driven:
+                    continue
+                src = (next((s for s in ('VCC', 'VSS') if s in srcs), None)
+                       or next((s for s in sorted(srcs) if self._x_wire.match(s) and (x, y, s) in parked), None)
+                       or next((s for s in sorted(srcs) if is_static_segment(x, y, s)), None))
+                if src:
+                    park(x, y, tiledata, dest, src)
+        return fuses
+
     def get_all_hclk_pip_fuses(self, x: int, y: int, src: str, dest: str) -> list[CellFuseBits]:
         """ Depending on the chip series, fuses can be either in one cell or in several. """
         fuses = []
@@ -7103,7 +7175,10 @@ class Pack:
 
     def route(self):
         """ Set fuses for all pips """
-        self.fuses += self.device.get_all_pips_fuses(self.pnr.get_pips())
+        pips = list(self.pnr.get_pips())
+        self.fuses += self.device.get_all_pips_fuses(pips)
+        # give unused wires of used logic cells a static source
+        self.fuses += self.device.get_unused_wire_fuses(pips)
         # isolate segment wires used
         self.fuses += self.device.get_isolated_wire_fuses(self.pnr.get_wires_to_isolate())
 
