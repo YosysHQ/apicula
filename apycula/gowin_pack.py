@@ -3295,7 +3295,12 @@ class Device:
                     attr_vals.append(AttrVal(f'IRNS_IREG{pair_idx}{r}L_{pair_idx * 4 + attr_off}', "ENABLE"))
 
             val = int(cell_parms.get(f'{r}SIGN_REG', '0'), 2)
-            if val:
+            if not val:
+                # unregistered sign: bypass its input register
+                sign_idx = pair_idx * 3 + (0 if r == 'A' else 1)
+                attr_vals.append(AttrVal(f'CINBY_{sign_idx}', "ENABLE"))
+                attr_vals.append(AttrVal(f'CINNS_{sign_idx}', "ENABLE"))
+            else:
                 attr_vals.append(AttrVal(f'CEMUX_{r}SIGN{pair_idx}1', ce_val))
                 attr_vals.append(AttrVal(f'CLKMUX_{r}SIGN{pair_idx}1', clk_val))
                 attr_vals.append(AttrVal(f'RSTMUX_{r}SIGN{pair_idx}1', reset_val))
