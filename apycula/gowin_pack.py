@@ -5,6 +5,7 @@ import itertools
 import json
 import math
 import re
+import sys
 
 from apycula import attrids
 from apycula import bitmatrix
@@ -874,8 +875,15 @@ class BankDesc:
     def set_attr(self, attr: str, val: str):
         self.attrs[attr] = val
 
+    def get_io_type_vccio(self, io_type: str, bel: IoBelDesc = None) -> str:
+        """ VCCIO required by the IO_TYPE. Aliased IO types (SSTL, HSTL_D, LVCMOS_D...) cover
+        several voltages, so the voltage the bel recorded before aliasing takes precedence. """
+        if bel and bel.cell.attrs.get('IO_TYPE') == io_type and 'IO_TYPE_VCCIO' in bel.flags:
+            return bel.flags['IO_TYPE_VCCIO']
+        return self._vcc_ios[io_type]
+
     def set_bank_vccio_by_io_type(self, io_type: str):
-        self.attrs['BANK_VCCIO'] = self._vcc_ios[io_type]
+        self.attrs['BANK_VCCIO'] = self.get_io_type_vccio(io_type, self.set_attr_bels.get('IO_TYPE'))
 
     def force_bank_vccio(self, vccio: str):
         self.attrs['BANK_VCCIO'] = vccio
@@ -903,7 +911,7 @@ class BankDesc:
             io_type = default_io_type
         if self.bank_vccio:
             set_bel = self.set_attr_bels['BANK_VCCIO']
-            if self._vcc_ios[io_type] != self.bank_vccio:
+            if self.get_io_type_vccio(io_type, io_type_bel) != self.bank_vccio:
                 if io_type_bel:
                     raise Exception(f"IO_TYPE and BANK_VCCIO conflict: X{io_type_bel.x}Y{io_type_bel.y}/IOB{io_type_bel.idx_str} ({io_type_bel.cell.name}) is trying to set {io_type} but X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) already set {self.bank_vccio}")
                 else:
@@ -932,7 +940,7 @@ class BankDesc:
                         raise Exception(f"LVDS bel X{bel.x}Y{bel.y}/IOB{bel.idx_str} must have IO_TYPE.")
                 else:
                     io_type = bel.cell.attrs['IO_TYPE']
-                self.lvds_BANK_VCCIO = self._vcc_ios[io_type]
+                self.lvds_BANK_VCCIO = self.get_io_type_vccio(io_type, bel)
                 self.has_lvds_outputs = True
                 if bel.is_true_lvds_output():
                     self.has_true_lvds_outputs = True
@@ -1130,8 +1138,17 @@ class Device:
     def normalize_io_bel_attr(self, bel: IoBelDesc) -> IoBelDesc:
         """ Modify IO attrs """
         mod_cell = self.normalize_io_cell_attr(bel.cell)
-        io_type = mod_cell.attrs.get('IO_TYPE', None)
-        mod_bel = IoBelDesc(bel.x, bel.y, bel.idx_str, mod_cell, bel.flags)
+        flags = dict(bel.flags)
+        # the alias may lose the voltage (SSTL15 -> SSTL), so remember it
+        orig_io_type = dict(_convert_legacy_io_cell_attr(attr, val) for attr, val in bel.cell.attrs.items()).get('IO_TYPE')
+        if orig_io_type in BankDesc._vcc_ios:
+            flags['IO_TYPE_VCCIO'] = BankDesc._vcc_ios[orig_io_type]
+        # single ended SSTL and HSTL inputs compare against VREF, which can't be configured yet
+        if (mod_cell.attrs.get('IO_TYPE') in {'SSTL', 'HSTL'} and bel.cell.typ in {'IBUF', 'IOBUF'}
+                and not bel.is_diff_io()):
+            print(f"Warning: X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) is a {orig_io_type} input, "
+                  "but VREF is not supported: the input has no reference voltage.", file=sys.stderr)
+        mod_bel = IoBelDesc(bel.x, bel.y, bel.idx_str, mod_cell, flags)
         return mod_bel
 
     def set_io_bel_flags(self, bel: IoBelDesc, flags_dict: dict[str, any]) -> IoBelDesc:
