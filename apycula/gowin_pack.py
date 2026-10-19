@@ -2126,7 +2126,7 @@ class Device:
         attr_vals.append(AttrVal("INDEL_0", "ENABLE"))
         attr_vals.append(AttrVal("INDEL_1", "ENABLE"))
 
-        c_static_delay = bel.cell.parms.get('C_STATIC_DELAY')
+        c_static_delay = bel.cell.parms.get('C_STATIC_DLY')
         if c_static_delay:
             for i in range(1, 8):
                 if c_static_delay[-i] == '1':
