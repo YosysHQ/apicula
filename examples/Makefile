@@ -3,6 +3,9 @@ NEXTPNR ?= nextpnr-himbaechel
 NEXTPNR_FLAGS ?= --timing-allow-fail -r
 YOSYS_FLAGS = -setundef
 
+# registers in IO blocks
+ioregs-%.json: NEXTPNR_FLAGS += --vopt ireg_in_iob --vopt oreg_in_iob
+
 .DEFAULT_GOAL := all
 
 .PHONY: all tangnano20k primer20k tangnano tangnano1k tangnano4k tangnano9k szfpga tec0117 runber
@@ -28,7 +31,8 @@ tangnano20k: \
 	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
 	dqce-tangnano20k.fs dcs-tangnano20k.fs \
 	femto-riscv-18-test-tangnano20k.fs \
-	latch-tangnano20k.fs
+	latch-tangnano20k.fs \
+	ioregs-tangnano20k.fs
 
 primer20k: \
 	blinky-latch-primer20k.fs \
@@ -46,7 +50,8 @@ primer20k: \
 	dsp-mult18x18-primer20k.fs dsp-mult36x36-primer20k.fs dsp-padd9-primer20k.fs dsp-padd18-primer20k.fs \
 	dsp-mult9x9-primer20k.fs dsp-alu54d-primer20k.fs dsp-multalu18x18-primer20k.fs \
 	dsp-multalu36x18-primer20k.fs dsp-multaddalu18x18-primer20k.fs \
-	dqce-primer20k.fs dcs-primer20k.fs
+	dqce-primer20k.fs dcs-primer20k.fs \
+	ioregs-primer20k.fs
 
 tangnano: \
 	blinky-latch-tangnano.fs \
@@ -58,7 +63,8 @@ tangnano: \
 	ides4-tangnano.fs ivideo-tangnano.fs ides8-tangnano.fs ides10-tangnano.fs \
 	bsram-pROM-tangnano.fs bsram-SDPB-tangnano.fs bsram-DPB-tangnano.fs \
 	bsram-SP-tangnano.fs bsram-pROMX9-tangnano.fs bsram-SDPX9B-tangnano.fs \
-	bsram-SPX9-tangnano.fs bsram-DPX9B-tangnano.fs
+	bsram-SPX9-tangnano.fs bsram-DPX9B-tangnano.fs \
+	ioregs-tangnano.fs
 
 tangnano1k: \
 	blinky-latch-tangnano1k.fs \
@@ -71,7 +77,8 @@ tangnano1k: \
 	bsram-pROM-tangnano1k.fs bsram-SDPB-tangnano1k.fs bsram-DPB16-tangnano1k.fs \
 	bsram-SP-tangnano1k.fs bsram-pROMX9-tangnano1k.fs bsram-SDPX9B-tangnano1k.fs \
 	bsram-SPX9-tangnano1k.fs bsram-DPX9B18-tangnano1k.fs \
-	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs bandgap-tangnano1k.fs
+	dqce-tangnano1k.fs dcs-tangnano1k.fs userflash-tangnano1k.fs bandgap-tangnano1k.fs \
+	ioregs-tangnano1k.fs
 
 tangnano4k: \
 	blinky-latch-tangnano4k.fs \
@@ -88,7 +95,8 @@ tangnano4k: \
 	dsp-mult9x9-tangnano4k.fs dsp-alu54d-tangnano4k.fs dsp-multalu18x18-tangnano4k.fs \
 	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
 	dqce-tangnano4k.fs dcs-tangnano4k.fs emcu-blinky-tangnano4k.fs emcu-with-apb-blinky-tangnano4k.fs \
-	emcu-with-apb-spi-tangnano4k.fs i3c-tangnano4k.fs mipi-out-tangnano4k.fs
+	emcu-with-apb-spi-tangnano4k.fs i3c-tangnano4k.fs mipi-out-tangnano4k.fs \
+	ioregs-tangnano4k.fs
 
 tangnano9k: \
 	blinky-latch-tangnano9k.fs \
@@ -108,7 +116,8 @@ tangnano9k: \
 	dsp-mult9x9-tangnano9k.fs dsp-alu54d-tangnano9k.fs dsp-multalu18x18-tangnano9k.fs \
 	dsp-multalu36x18-tangnano9k.fs dsp-multaddalu18x18-tangnano9k.fs \
 	dqce-tangnano9k.fs dcs-tangnano9k.fs femto-riscv-userflash-tangnano9k.fs \
-	i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs
+	i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs \
+	ioregs-tangnano9k.fs
 
 szfpga: \
 	blinky-latch-szfpga.fs \
@@ -140,7 +149,8 @@ tec0117: \
 	dsp-mult9x9-tec0117.fs dsp-alu54d-tec0117.fs dsp-multalu18x18-tec0117.fs \
 	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs \
 	femto-riscv-18-test-tec0117.fs \
-	latch-tec0117.fs
+	latch-tec0117.fs \
+	ioregs-tec0117.fs
 
 runber: \
 	blinky-latch-runber.fs \
@@ -153,7 +163,8 @@ runber: \
 	ides4-runber.fs ivideo-runber.fs ides8-runber.fs ides10-runber.fs \
 	dsp-mult36x36-runber.fs dsp-padd9-runber.fs dsp-padd18-runber.fs \
 	dsp-mult9x9-runber.fs dsp-alu54d-runber.fs dsp-multalu18x18-runber.fs \
-	dsp-multalu36x18-runber.fs dsp-multaddalu18x18-runber.fs
+	dsp-multalu36x18-runber.fs dsp-multaddalu18x18-runber.fs \
+	ioregs-runber.fs
 
 all: tangnano20k primer20k tangnano tangnano1k tangnano4k tangnano9k szfpga tec0117 runber
 
