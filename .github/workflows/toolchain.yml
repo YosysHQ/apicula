@@ -106,7 +106,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.9'
+        python-version: '3.12'
     - name: Download tools
       uses: actions/download-artifact@v8
       with:
