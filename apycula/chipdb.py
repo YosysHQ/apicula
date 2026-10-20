@@ -3397,89 +3397,198 @@ def fse_create_5a60_clocks(dev, device, dat: Datfile, fse):
 # The coverage areas between segment wires i and i + 4 are the same, only the
 # MUXes differ, so we create a pair of segments at once.
 
+# 60k addition.
+# The presence of empty regions makes it difficult to provide a compact
+# description of the geometry; therefore, we introduce an auxiliary function
+# that indicates whether or not there are any wire segments within a given
+# region.
+# For all chips except the 138k and 60k models, this function will return False.
+def _60k_skip_region(top_row, bottom_row, col):
+    # big empty square area
+    if col < 73:
+        if top_row == 28:
+            return False
+        if top_row <= 29:
+            return True
+        # top_row > 29
+        return False
+    else:
+        if top_row == 28:
+            return True
+        if top_row < 28:
+            return False
+        if top_row >= 37:
+            if col == 73:
+                return True
+            return False
+        else:
+            # top_row = 29
+            if col == 73:
+                return True
+            return False
+    return True
+
+# The need for this arises from the fact that the 60k chip, due to an empty
+# area at the top, has two starting points for segment index numbering: one
+# beginning at column 0 and another at column 73.
+# All other chips use a continuous numbering scheme starting from column 0.
+def _60k_get_seg(dev, top_row, bottom_row, col, tap_start):
+    if top_row in {0, 10, 19}:
+        top_gate_row = max(top_row - 1, 0)
+        idx = tap_start[(col - 73) % 4]
+        min_x = col - 1 if col > 73 + 3 else 73
+        max_x = min(dev.cols - 1, col + 2)
+        if dev.cols - 1 - max_x == 1:
+            max_x = dev.cols - 1
+    elif top_row == 28:
+            top_gate_row = max(top_row - 1, 28)
+            idx = tap_start[col % 4]
+            min_x = col - 1 if col > 3 else 0
+            max_x = min(72, col + 2)
+            if 73 - 1 - max_x == 1:
+                max_x = 72
+    elif top_row == 29:
+        top_gate_row = 27
+        idx = tap_start[(col - 73) % 4]
+        min_x = col - 1 if col > 73 + 4 else 74
+        max_x = min(dev.cols - 1, col + 2)
+        if dev.cols - 1 - max_x == 1:
+            max_x = dev.cols - 1
+    elif top_row in {38, 47, 56, 65}:
+        if col < 73:
+            top_gate_row = max(top_row - 1, 28)
+            idx = tap_start[col % 4]
+            min_x = col - 1 if col > 3 else 0
+            max_x = min(72, col + 2)
+            if 73 - 1 - max_x == 1:
+                max_x = 72
+        else:
+            top_gate_row = max(top_row - 1, 0)
+            idx = tap_start[(col - 73) % 4]
+            min_x = col - 1 if col > 73 + 4 else 74
+            max_x = min(dev.cols - 1, col + 2)
+            if dev.cols - 1 - max_x == 1:
+                max_x = dev.cols - 1
+
+    return (idx, min_x, max_x, top_gate_row)
+
+def _common_get_seg(dev, top_row, bottom_row, col, tap_start):
+    idx = tap_start[col % 4]
+    min_x = col - 1 if col > 3 else 0
+    max_x = min(dev.cols - 1, col + 2)
+    if dev.cols - 1 - max_x == 1:
+        # The main wire of the segment is repeated every 4 cells, if
+        # there is no space on the right side for the next wire, the
+        # service area is extended to the very edge
+        max_x = dev.cols - 1
+    return (idx, min_x, max_x, max(top_row - 1, 0))
+
 # tap_start = describes where in the 4-cell area the main wire column with index is located
 # rows = top and bottom rows of segments
 # top_wires = [(MUX wire for i segment, MUX wire for i + 4 segment), next_row]
 # bottom_wires = [(MUX wire for i segment, MUX wire for i + 4 segment), next_row]
 # top_gate_wires = [(MUX wire for i segment, MUX wire for i + 4 segment), next_row][2]
 # bottom_gate_wires = [(MUX wire for i segment, MUX wire for i + 4 segment), next_row][2]
+# skip_area_func = True if there are no segments
+# get_seg_func = returns index and a control area of segment wire
 _segment_data = {
-        'GW1N-1':  { 'tap_start':  [1, 0, 3, 2], 'rows': [(0, 10)],
-                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
-                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
-                     'reserved_wires': {(0, 17, 'A6'), (0, 18, 'A6'), (0, 17, 'A7'), (0, 18, 'A7'),
+        'GW1N-1':  {'tap_start':  [1, 0, 3, 2], 'rows': [(0, 10)],
+                    'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                    'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                    'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                    'skip_region_func': (lambda t, b, c: False), 'get_seg_func': _common_get_seg,
+                    'reserved_wires': {(0, 17, 'A6'), (0, 18, 'A6'), (0, 17, 'A7'), (0, 18, 'A7'),
                                         (0, 17, 'B6'), (0, 18, 'B6'), (0, 17, 'B7'), (0, 18, 'B7')}},
-        'GW1NZ-1': { 'tap_start':  [1, 0, 3, 2], 'rows': [(0, 10)],
-                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
-                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
-                     'reserved_wires': {(0, 17, 'A6'), (0, 18, 'A6'), (0, 17, 'A7'), (0, 18, 'A7'),
-                                        (0, 17, 'B6'), (0, 18, 'B6'), (0, 17, 'B7'), (0, 18, 'B7')}},
-        'GW1N-4':  { 'tap_start':  [2, 1, 0, 3], 'rows': [(0, 19)],
-                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
-                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
-                     'reserved_wires': {(0, 9, 'A6'), (0, 10, 'A6'), (0, 9, 'A7'), (0, 10, 'A7'),
-                                        (0, 9, 'B6'), (0, 10, 'B6'), (0, 9, 'B7'), (0, 10, 'B7'),
-                                        (0, 18, 'A6'), (0, 18, 'A7'), (0, 18, 'B6'), (0, 18, 'B7'),
-                                        (0, 27, 'A6'), (0, 28, 'A6'), (0, 27, 'A7'), (0, 28, 'A7'),
-                                        (0, 27, 'B6'), (0, 28, 'B6'), (0, 27, 'B7'), (0, 28, 'B7')}},
-        'GW1NS-4': { 'tap_start':  [2, 1, 0, 3], 'rows': [(0, 19)],
-                     'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
-                     'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
-                     'reserved_wires': {(0, 9, 'A6'), (0, 10, 'A6'), (0, 9, 'A7'), (0, 10, 'A7'),
-                                        (0, 9, 'B6'), (0, 10, 'B6'), (0, 9, 'B7'), (0, 10, 'B7'),
-                                        (0, 18, 'A6'), (0, 18, 'A7'), (0, 18, 'B6'), (0, 18, 'B7'),
-                                        (0, 27, 'A6'), (0, 28, 'A6'), (0, 27, 'A7'), (0, 28, 'A7'),
-                                        (0, 27, 'B6'), (0, 28, 'B6'), (0, 27, 'B7'), (0, 28, 'B7')}},
-        'GW1N-9':  { 'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 28)],
-                     'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10')],
-                     'bottom_wires': [('LT20', 'LT30'), ('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7'), (None, None)], [('B6', 'B7'), None]],
-                     'bottom_gate_wires': [[(None, 'B7'), (None, 'A7')], [None, None]],
-                     'reserved_wires': {}},
-        'GW1N-9C': { 'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 28)],
-                     'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10')],
-                     'bottom_wires': [('LT20', 'LT30'), ('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7'), (None, None)], [('B6', 'B7'), None]],
-                     'bottom_gate_wires': [[(None, 'B7'), ('A6', 'A7')], [None, None]],
-                     'reserved_wires': {}},
-        'GW2A-18': { 'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 36), (37, 54)],
-                     'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10')],
-                     'bottom_wires': [('LT20', 'LT30'), ('LT20', 'LT30'), ('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7'), (None, None), (None, None)], [('B6', 'B7'), None, None]],
-                     'bottom_gate_wires': [[(None, 'B7'), (None, 'B7'), ('A6', 'A7')], [None, None, ('B6', 'B7')]],
-                     'reserved_wires': {}},
-        'GW2A-18C': { 'tap_start': [3, 2, 1, 0], 'rows': [(0, 18), (19, 36), (37, 54)],
-                     'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10')],
-                     'bottom_wires': [('LT20', 'LT30'), ('LT20', 'LT30'), ('LT02', 'LT13')],
-                     'top_gate_wires':    [[('A6', 'A7'), (None, None), (None, None)], [('B6', 'B7'), None, None]],
-                     'bottom_gate_wires': [[(None, 'B7'), (None, 'B7'), ('A6', 'A7')], [None, None, ('B6', 'B7')]],
-                     'reserved_wires': {}},
+        'GW1NZ-1': {'tap_start':  [1, 0, 3, 2], 'rows': [(0, 10)],
+                    'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                    'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                    'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                    'skip_region_func': (lambda t, b, c: False), 'get_seg_func': _common_get_seg,
+                    'reserved_wires': {(0, 17, 'A6'), (0, 18, 'A6'), (0, 17, 'A7'), (0, 18, 'A7'),
+                                       (0, 17, 'B6'), (0, 18, 'B6'), (0, 17, 'B7'), (0, 18, 'B7')}},
+        'GW1N-4':  {'tap_start':  [2, 1, 0, 3], 'rows': [(0, 19)],
+                    'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                    'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                    'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                    'skip_region_func': (lambda t, b, c: False), 'get_seg_func': _common_get_seg,
+                    'reserved_wires': {(0, 9, 'A6'), (0, 10, 'A6'), (0, 9, 'A7'), (0, 10, 'A7'),
+                                       (0, 9, 'B6'), (0, 10, 'B6'), (0, 9, 'B7'), (0, 10, 'B7'),
+                                       (0, 18, 'A6'), (0, 18, 'A7'), (0, 18, 'B6'), (0, 18, 'B7'),
+                                       (0, 27, 'A6'), (0, 28, 'A6'), (0, 27, 'A7'), (0, 28, 'A7'),
+                                       (0, 27, 'B6'), (0, 28, 'B6'), (0, 27, 'B7'), (0, 28, 'B7')}},
+        'GW1NS-4': {'tap_start':  [2, 1, 0, 3], 'rows': [(0, 19)],
+                    'top_wires': [('LT02', 'LT13')], 'bottom_wires': [('LT02', 'LT13')],
+                    'top_gate_wires':    [[('A6', 'A7')], [('B6', 'B7')]],
+                    'bottom_gate_wires': [[('A6', 'A7')], [('B6', 'B7')]],
+                    'skip_region_func': (lambda t, b, c: False), 'get_seg_func': _common_get_seg,
+                    'reserved_wires': {(0, 9, 'A6'), (0, 10, 'A6'), (0, 9, 'A7'), (0, 10, 'A7'),
+                                       (0, 9, 'B6'), (0, 10, 'B6'), (0, 9, 'B7'), (0, 10, 'B7'),
+                                       (0, 18, 'A6'), (0, 18, 'A7'), (0, 18, 'B6'), (0, 18, 'B7'),
+                                       (0, 27, 'A6'), (0, 28, 'A6'), (0, 27, 'A7'), (0, 28, 'A7'),
+                                       (0, 27, 'B6'), (0, 28, 'B6'), (0, 27, 'B7'), (0, 28, 'B7')}},
+        'GW1N-9':  {'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 28)],
+                    'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10')],
+                    'bottom_wires': [('LT20', 'LT30'), ('LT02', 'LT13')],
+                    'top_gate_wires':    [[('A6', 'A7'), (None, None)], [('B6', 'B7'), None]],
+                    'bottom_gate_wires': [[(None, 'B7'), (None, 'A7')], [None, None]],
+                    'skip_region_func': (lambda t, b, c: False), 'get_seg_func': _common_get_seg,
+                    'reserved_wires': {}},
+        'GW1N-9C': {'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 28)],
+                    'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10')],
+                    'bottom_wires': [('LT20', 'LT30'), ('LT02', 'LT13')],
+                    'top_gate_wires':    [[('A6', 'A7'), (None, None)], [('B6', 'B7'), None]],
+                    'bottom_gate_wires': [[(None, 'B7'), ('A6', 'A7')], [None, None]],
+                    'skip_region_func': (lambda t, b, c: False), 'get_seg_func': _common_get_seg,
+                    'reserved_wires': {}},
+        'GW2A-18': {'tap_start':  [3, 2, 1, 0], 'rows': [(0, 18), (19, 36), (37, 54)],
+                    'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10')],
+                    'bottom_wires': [('LT20', 'LT30'), ('LT20', 'LT30'), ('LT02', 'LT13')],
+                    'top_gate_wires':    [[('A6', 'A7'), (None, None), (None, None)], [('B6', 'B7'), None, None]],
+                    'bottom_gate_wires': [[(None, 'B7'), (None, 'B7'), ('A6', 'A7')], [None, None, ('B6', 'B7')]],
+                    'skip_region_func': (lambda t, b, c: False), 'get_seg_func': _common_get_seg,
+                    'reserved_wires': {}},
+        'GW2A-18C':{'tap_start': [3, 2, 1, 0], 'rows': [(0, 18), (19, 36), (37, 54)],
+                    'top_wires': [('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10')],
+                    'bottom_wires': [('LT20', 'LT30'), ('LT20', 'LT30'), ('LT02', 'LT13')],
+                    'top_gate_wires':    [[('A6', 'A7'), (None, None), (None, None)], [('B6', 'B7'), None, None]],
+                    'bottom_gate_wires': [[(None, 'B7'), (None, 'B7'), ('A6', 'A7')], [None, None, ('B6', 'B7')]],
+                    'skip_region_func': (lambda t, b, c: False), 'get_seg_func': _common_get_seg,
+                    'reserved_wires': {}},
+        'GW5AT-60B':{'tap_start': [2, 1, 0, 3],
+                     'rows': [(0, 9), (10, 18), (19, 27), (28, 37), (38, 46), (47, 55), (56, 64), (65, 73), (29, 37)],
+                     'top_wires':    [('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10'), ('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10'), ('LT00', 'LT10'), ('LT00', 'LT10'), ('LT00', 'LT10')],
+                     'bottom_wires': [('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT02', 'LT13'), ('LT20', 'LT30')],
+                     'top_gate_wires': [
+                         [('A6', 'A7'), ('A6', 'B6'), ('A6', 'B6'), ('A6', 'A7'), ('A6', 'B6'), ('A6', 'B6'), ('A6', 'B6'), ('A6', 'B6'), ('A6', 'B6')],
+                         [('B6', 'B7'), None, None, ('B6', 'B7'), None, None, None, None, None], ],
+                     'bottom_gate_wires':
+                         [[('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A6', 'A7'), ('A7', 'B7')],
+                          [None, None, None, None, None, None, None, ('B6', 'B7'), None],],
+                     'skip_region_func': _60k_skip_region, 'get_seg_func': _60k_get_seg,
+                     'reserved_wires': {}
+                     }
         }
 def create_segments(dev, device):
     if device not in _segment_data:
         return
 
     dev_desc = _segment_data[device]
-    top_gate_row = dev_desc['rows'][0][0]
+    skip_region = dev_desc['skip_region_func']
+    get_seg = dev_desc['get_seg_func']
+    tap_start = dev_desc['tap_start']
     for row_idx, tb_row in enumerate(dev_desc['rows']):
         t_row, b_row = tb_row
         for s_col in range(dev.cols):
+            # complex geometry check
+            if skip_region(t_row, b_row, s_col):
+                continue
             # new segment i
-            seg_idx = dev_desc['tap_start'][s_col % 4]
+            seg_idx, s_min_x, s_max_x, top_gate_row = get_seg(dev, t_row, b_row, s_col, tap_start)
             seg = dev.segments.setdefault((top_gate_row, s_col, seg_idx), {})
             # controlled area
-            seg['min_x'] = max(0, s_col - 1)
+            seg['min_x'] = s_min_x
             seg['min_y'] = t_row
-            seg['max_x'] = min(dev.cols - 1, s_col + 2)
-            if dev.cols - 1 - seg['max_x'] == 1:
-                # The main wire of the segment is repeated every 4 cells, if
-                # there is no space on the right side for the next wire, the
-                # service area is extended to the very edge
-                seg['max_x'] = dev.cols - 1
+            seg['max_x'] = s_max_x
             seg['max_y'] = b_row
             # MUX's positions and wires
             seg['top_row'] = top_gate_row
@@ -3549,8 +3658,6 @@ def create_segments(dev, device):
             if (not seg_1['top_gate_wire'][0] and not seg_1['top_gate_wire'][1]
                 and not seg_1['bottom_gate_wire'][0] and not seg_1['bottom_gate_wire'][1]):
                 del dev.segments[(top_gate_row, s_col, seg_idx)]
-
-        top_gate_row = b_row
 
 # These features of IO on the underside of the chip were revealed during
 # operation. The first (normal) mode was found in a report by @LoneTech on

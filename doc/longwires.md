@@ -13,7 +13,7 @@ You can figure out a lot already from the syntax of the CLOCK_LOC constraint:
  - CLK
  - CE
  - SR set/reset/clear/preset
- - LOGIC jther than the above
+ - LOGIC other than the above
  the | can be used as OR.
 
  So we have 8 long wires per quandrant, which btw can be set as LEFT (L), RIGHT (R) for GW1N series and as TOPLEFT (TL), TOPRIGHT (TR), BOTTOMLEFT (BT) and BOTTOMRIGHT (BR) for GW1N-9/GW1NR-9/GW1N-9C/GW1NR-9C, GW2A series.
