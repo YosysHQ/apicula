@@ -311,6 +311,22 @@ class AdcIo:
         return f'|AdcIo| x:{self.x}, y:{self.y}, bus:{self.bus}'
 
 ################################################################
+class UsedWires:
+    """ Sets of used wires of various categories """
+    def __init__(self):
+        self.segments = set()
+
+    def add_segment_wire(self, wire: WireDesc):
+        self.segments.add(wire)
+
+    def is_segment_wire_used(self, wire: WireDesc) -> bool:
+        return wire in self.segments
+
+    # debug
+    def __repr__(self):
+        return f'|UsedWires| segments:{self.segments}'
+
+################################################################
 def _convert_legacy_io_cell_attr(attr: str, val: str) -> tuple[str, str]:
     """ Convert legacy '&IO_TYPE=LVCMOS33' style attributes to name-value pairs """
     if attr[0] != '&':
@@ -545,6 +561,9 @@ class ChipDB:
 
     def get_alonenode6(self, tiledata: Tile) -> dict[str, list[tuple[set[str], set[Coord]]]]:
         return tiledata.alonenode_6
+
+    def get_segments(self) -> dict:
+        return self.db.segments
 
     def get_dhcen_wire_side(self, x: int, y: int, idx_int) -> tuple[str, str]:
         _, wire, _, side = self.db.extra_func[y, x]['dhcen'][idx_int]['pip']
@@ -1177,6 +1196,9 @@ class Device:
                 fuses.append(CellFuseBits(x, y, bits))
         return fuses
 
+    def get_segments(self) -> dict:
+        return self.chipdb.get_segments()
+
     def mod_bels(self, bels: Iterator[BelDesc]) -> Iterator[BelDesc]:
         """ Add/Remove/Modify bels """
         yield from bels
@@ -1653,7 +1675,7 @@ class Device:
                     fuses.append(CellFuseBits(x, y, bits))
         return fuses
 
-    def get_work_in_progress_fuses(self) -> list[CellFuseBits]:
+    def get_work_in_progress_fuses(self, used_wires: UsedWires) -> list[CellFuseBits]:
         """ Setting bits whose purpose is unclear or roughly clear, but the
         mechanism hasn't been fully developed. For example, if a chip doesn't
         yet support segment wires in nextpnr, the ends of segments still need
@@ -4458,8 +4480,6 @@ class Device:
         fuses += self.get_io_fuses()
         fuses += self.get_dualpin_fuses()
 
-        # wip fuses
-        fuses += self.get_work_in_progress_fuses()
         return fuses
 
     # debug
@@ -6837,7 +6857,7 @@ class GW5AT_60B(GW5A):
     def get_cfg_types(self) -> set[str]:
         return [48, 49]
 
-    def get_work_in_progress_fuses(self) -> list[CellFuseBits]:
+    def get_work_in_progress_fuses(self, used_wires: UsedWires) -> list[CellFuseBits]:
         """ Setting bits whose purpose is unclear or roughly clear, but the
         mechanism hasn't been fully developed. For example, if a chip doesn't
         yet support segment wires in nextpnr, the ends of segments still need
@@ -6847,27 +6867,47 @@ class GW5AT_60B(GW5A):
         def full_spines() -> Iterator[WireDesc]:
             for x, y in itertools.product(range(self.chipdb.cols), [37, 46, 55, 64]):
                 if x != self.chipdb.empty_x:
-                    yield WireDesc(x, y, 'LT00')
-                    yield WireDesc(x, y, 'LT10')
+                    wire = WireDesc(x, y, 'LT00')
+                    if not used_wires.is_segment_wire_used(wire):
+                        yield wire
+                    wire = WireDesc(x, y, 'LT10')
+                    if not used_wires.is_segment_wire_used(wire):
+                        yield wire
 
             for x in range(self.chipdb.cols):
                 if x != self.chipdb.empty_x:
-                    yield WireDesc(x, 73, 'LT13')
-                    yield WireDesc(x, 73, 'LT02')
+                    wire = WireDesc(x, 73, 'LT02')
+                    if not used_wires.is_segment_wire_used(wire):
+                        yield wire
+                    wire = WireDesc(x, 73, 'LT13')
+                    if not used_wires.is_segment_wire_used(wire):
+                        yield wire
 
         # half-spines
         def half_spines() -> Iterator[WireDesc]:
             for x in range(self.chipdb.empty_x):
-                yield WireDesc(x, 28, 'LT13')
-                yield WireDesc(x, 28, 'LT02')
+                wire = WireDesc(x, 28, 'LT02')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
+                wire = WireDesc(x, 28, 'LT13')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
 
             for x in range(self.chipdb.empty_x, self.chipdb.cols):
-                yield WireDesc(x, 0, 'LT13')
-                yield WireDesc(x, 0, 'LT02')
+                wire = WireDesc(x, 0, 'LT02')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
+                wire = WireDesc(x, 0, 'LT13')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
 
             for x, y in itertools.product(range(self.chipdb.empty_x, self.chipdb.cols), [27, 18, 9]):
-                yield WireDesc(x, y, 'LT00')
-                yield WireDesc(x, y, 'LT10')
+                wire = WireDesc(x, y, 'LT00')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
+                wire = WireDesc(x, y, 'LT10')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
 
         fuses = self.get_isolated_wire_fuses(itertools.chain(full_spines(), half_spines()))
         return fuses
@@ -7183,10 +7223,27 @@ class Pack:
         self.device = device
         self.pnr = pnr
         self.fuses = []
+        self.used_wires = UsedWires()
+        # We isolate only the top wires of unused segments, so we need a lookup
+        # table to quickly find the top wire for any given wire.
+        self.wire_2_segment_top = {}
+        for seg_loc, seg_desc in self.device.get_segments().items():
+            _, x, _ = seg_loc
+            wire = WireDesc(x, seg_desc['top_row'], seg_desc['top_wire'])
+            self.wire_2_segment_top[(x, seg_desc['top_row'], seg_desc['top_wire'])] = wire
+            self.wire_2_segment_top[(x, seg_desc['bottom_row'], seg_desc['bottom_wire'])] = wire
+
+    def collect_segment_wires(self, pips: Iterator[PipDesc]):
+        for pip in pips:
+            if pip.dest.startswith('LT'):
+                wire = self.wire_2_segment_top.get((pip.x, pip.y, pip.dest))
+                if wire:
+                    self.used_wires.add_segment_wire(wire)
 
     def route(self):
         """ Set fuses for all pips """
         pips = list(self.pnr.get_pips())
+        self.collect_segment_wires(pips)
         self.fuses += self.device.get_all_pips_fuses(pips)
         # give unused wires of used logic cells a static source
         self.fuses += self.device.get_unused_wire_fuses(pips)
@@ -7205,6 +7262,8 @@ class Pack:
     def get_fuses(self) -> list[CellFuseBits]:
         """ Return generated fuses """
         self.fuses += self.device.get_final_fuses()
+        # wip fuses
+        self.fuses += self.device.get_work_in_progress_fuses(self.used_wires)
         return self.fuses
 
     # debug
