@@ -83,7 +83,7 @@ jobs:
         path: tools.tar.gz
 
   example:
-    runs-on: ubuntu-24.04 
+    runs-on: ubuntu-latest
     needs: [build-tools]
     strategy:
       fail-fast: false
