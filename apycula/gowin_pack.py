@@ -3051,11 +3051,17 @@ class Device:
         if val == 1:
             self.chipdb.get_bsram_attr_val(AttrVal('DPB_REGMODE', 'OUTREG'), av)
 
-        # write mode
-        val = int(bsram_bel.cell.parms.get('WRITE_MODE', bin(0)), 2)
+        # write mode, per port
+        val = int(bsram_bel.cell.parms.get('WRITE_MODE0', bin(0)), 2)
         if val == 1:
             self.chipdb.get_bsram_attr_val(AttrVal('DPA_MODE', 'WT'), av)
+        elif val == 2:
+            self.chipdb.get_bsram_attr_val(AttrVal('DPA_MODE', 'RBW'), av)
+        val = int(bsram_bel.cell.parms.get('WRITE_MODE1', bin(0)), 2)
+        if val == 1:
             self.chipdb.get_bsram_attr_val(AttrVal('DPB_MODE', 'WT'), av)
+        elif val == 2:
+            self.chipdb.get_bsram_attr_val(AttrVal('DPB_MODE', 'RBW'), av)
 
         return self.common_bsram_handler(bsram_bel, av)
 
