@@ -15,13 +15,13 @@ on:
 
 jobs:
   build-tools:
-    runs-on: ubuntu-24.04 
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.9'
+        python-version: '3.12'
     - name: Install build deps
       run: |
         sudo apt-get update
@@ -83,7 +83,7 @@ jobs:
         path: tools.tar.gz
 
   example:
-    runs-on: ubuntu-24.04 
+    runs-on: ubuntu-latest
     needs: [build-tools]
     strategy:
       fail-fast: false
@@ -106,7 +106,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.9'
+        python-version: '3.12'
     - name: Download tools
       uses: actions/download-artifact@v8
       with:
@@ -114,8 +114,8 @@ jobs:
     - name: Install runtime deps
       run: |
         sudo apt-get update
-        sudo apt-get install -y libboost-filesystem1.83.0 libboost-program-options1.83.0 \
-          libboost-iostreams1.83.0 libboost-thread1.83.0 libboost-system1.83.0
+        sudo apt-get install -y libboost-filesystem1.90.0 libboost-program-options1.90.0 \
+          libboost-iostreams1.90.0 libboost-thread1.90.0 libboost-system1.88.0
     - name: Install tools
       run: sudo tar xzf tools.tar.gz -C /usr/local && sudo ldconfig
     - name: Download python package
