@@ -348,6 +348,10 @@ class Netlist:
         # check for used chipdb
         cli_device = cli_args.get_device()
         pnr_device = self.get_device()
+        # GW5A-25B is revision B of the GW5A-25A silicon: nextpnr works with
+        # the GW5A-25A chip database, so the netlist always names GW5A-25A.
+        if cli_device == 'GW5A-25B' and pnr_device == 'GW5A-25A':
+            cli_device = 'GW5A-25A'
         if cli_device and cli_device != pnr_device:
             raise Exception(f"The netlist was generated for chip {pnr_device}, but chip {cli_device} is specified in the command line.")
         # must have GND and VCC networks
@@ -970,13 +974,16 @@ class Device:
         if not self.device_name:
             self.device_name = pnr.get_device()
 
-        wnames.select_wires(self.device_name)
+        # Revisions of the same silicon share one chip database
+        # (GW5A-25B, for example, uses the GW5A-25A database).
+        self.chipdb_name = self.get_chipdb_name()
+        wnames.select_wires(self.chipdb_name)
 
         # We need access to the design because sometimes the fuses of one cell
         # depend on the parameters of another cell.
         self.pnr = pnr
 
-        self.chipdb = ChipDB(self.device_name)
+        self.chipdb = ChipDB(self.chipdb_name)
         self.used_slices = UsedSlices()
         # default slice attributes
         self.default_slice_attrvals = {}
@@ -1156,6 +1163,11 @@ class Device:
         flags = bel.flags
         flags.update(flags_dict)
         return IoBelDesc(bel.x, bel.y, bel.idx_str, bel.cell, flags)
+
+    def get_chipdb_name(self) -> str:
+        """ Name of the chip database - may differ from the device name for
+        silicon revisions sharing one database """
+        return self.device_name
 
     def get_hdr(self):
         """ Bitstream header """
@@ -6690,6 +6702,23 @@ class GW5A_25A(GW5A):
         return super().__repr__() + ""
 
 ################################################################
+class GW5A_25B(GW5A_25A):
+    """ GW5A-25B chip: revision B of the GW5A-25A silicon. The revisions share
+    the IDCODE and, as far as is known, the configuration data, so the GW5A-25A
+    chip database is used; the only difference is in the bitstream header
+    (see Bitstream_GW5A_25B). https://github.com/YosysHQ/apicula/issues/566
+    """
+    def __init__(self, cli_args: CliArgs, pnr: Netlist):
+        super().__init__(cli_args, pnr)
+
+    def get_chipdb_name(self) -> str:
+        return 'GW5A-25A'
+
+    # debug
+    def __repr__(self):
+        return super().__repr__() + ""
+
+################################################################
 class GW5AT_60B(GW5A):
     """ GW5AT-60B chip. TangCosole60k board """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
@@ -7204,6 +7233,25 @@ class Bitstream_GW5A_25A(Bitstream_GW5A):
         return f'|Bitstream_GW5A_25A| output_name:{self.output_name}, compress:{self.compress}, init_bsram:{self.init_bsram}, header:{self.header}, footer:{self.footer}'
 
 ################################################################
+class Bitstream_GW5A_25B(Bitstream_GW5A_25A):
+    """ Output bitstream for GW5A-25B: the revision B silicon needs 0x02 as
+    the header command byte instead of 0xae - with 0xae the chip never
+    completes INIT and WAKEUP. https://github.com/YosysHQ/apicula/issues/566
+    """
+    def __init__(self, cli_args: CliArgs, device: Device):
+        super().__init__(cli_args, device)
+        for command in self.header:
+            if command[0] == 0x10:
+                command[5] = 0x02
+                break
+        else:
+            raise Exception("No 0x10 command found in the GW5A-25A bitstream header")
+
+    # debug
+    def __repr__(self):
+        return f'|Bitstream_GW5A_25B| output_name:{self.output_name}, compress:{self.compress}, init_bsram:{self.init_bsram}, header:{self.header}, footer:{self.footer}'
+
+################################################################
 class Bitstream_GW5AT_60B(Bitstream_GW5A):
     """ Output bitstream for GW5AT-60B """
     def __init__(self, cli_args: CliArgs, device: Device):
@@ -7309,6 +7357,8 @@ def create_device(cli_args: CliArgs, pnr: Netlist) -> Device:
     # --- GW5A series
     if dev == 'GW5A-25A':
         return GW5A_25A(cli_args, pnr)
+    if dev == 'GW5A-25B':
+        return GW5A_25B(cli_args, pnr)
     if dev == 'GW5AT-60B':
         return GW5AT_60B(cli_args, pnr)
     if dev == 'GW5AST-138C':
@@ -7322,6 +7372,8 @@ def create_output_bitstream(cli_args: CliArgs, device: Device) -> Bitstream:
         return Bitstream_GW1_2(cli_args, device)
     elif dev in {'GW5A-25A'}:
         return Bitstream_GW5A_25A(cli_args, device)
+    elif dev in {'GW5A-25B'}:
+        return Bitstream_GW5A_25B(cli_args, device)
     elif dev in {'GW5AT-60B'}:
         return Bitstream_GW5AT_60B(cli_args, device)
     elif dev in {'GW5AST-138C'}:

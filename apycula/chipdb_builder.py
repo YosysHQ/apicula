@@ -246,6 +246,9 @@ _chip_id = {
         'GW2A-18'     : b'\x06\x00\x00\x00\x00\x00\x08\x1b',
         'GW2A-18C'    : b'\x06\x00\x00\x00\x00\x00\x08\x1b',
         'GW5A-25A'    : b'\x06\x00\x00\x00\x00\x01\x28\x1b',
+        # GW5A-25B is revision B of the GW5A-25A silicon; both revisions share
+        # the same IDCODE and can only be told apart by the chip marking.
+        'GW5A-25B'    : b'\x06\x00\x00\x00\x00\x01\x28\x1b',
         'GW5AT-60B'   : b'\x06\x00\x00\x00\x00\x01\x48\x1b',
         'GW5AST-138C' : b'\x06\x00\x00\x00\x00\x01\x08\x1b',
         }
@@ -259,7 +262,11 @@ def gen_hdr(device, params):
     # chip id
     hdr.append(bytearray(_chip_id[device]))
     # flags?
-    hdr.append(bytearray(b'\x10\x00\x00\x00\x00\xae\x00\x00'))
+    # GW5A-25B (revision B silicon) needs 0x02 as the command byte: with 0xae
+    # the chip never completes INIT and WAKEUP.
+    # https://github.com/YosysHQ/apicula/issues/566
+    command_value = b'\x02' if device == 'GW5A-25B' else b'\xae'
+    hdr.append(bytearray(b'\x10\x00\x00\x00\x00' + command_value + b'\x00\x00'))
     if params['device'] in {'GW5A-25A'}:
         hdr.append(bytearray(b'\x62\x00\x00\x00\x00\x00\x00\x40'))
     # compression keys

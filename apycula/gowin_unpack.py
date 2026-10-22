@@ -1324,7 +1324,12 @@ def main():
         luts = m.group(3)
         _device = f"GW1N{mods}-{luts}"
 
-    with importlib.resources.path('apycula', f'{args.device}.msgpack.xz') as path:
+    # GW5A-25B is revision B of the GW5A-25A silicon; both revisions share the
+    # IDCODE and the configuration data, so the GW5A-25A database is used.
+    if _device == 'GW5A-25B':
+        _device = 'GW5A-25A'
+
+    with importlib.resources.path('apycula', f'{_device}.msgpack.xz') as path:
         db = load_chipdb(path)
 
     global _pinout
