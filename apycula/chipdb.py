@@ -4591,6 +4591,10 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_5A_HCLK")
         dev.chip_flags.append("HAS_5A_IDES")
     if device in {'GW5AT-60B'}:
+        # As the 25A and 138C: without it the semi-dual-port BSRAM's RESET
+        # reaches the wrong pin and the read port's reset is left high, so
+        # every read is 0 (checked on a Tang Console 60K).
+        dev.chip_flags.append("NEED_BSRAM_RESET_FIX")
         dev.chip_flags.append("HAS_EMPTY_QUADRANT")
         dev.chip_flags.append("HAS_PINCFG")
         dev.chip_flags.append("HAS_I2CCFG")
