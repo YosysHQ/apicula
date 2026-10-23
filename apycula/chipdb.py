@@ -3659,6 +3659,21 @@ def create_segments(dev, device):
                 and not seg_1['bottom_gate_wire'][0] and not seg_1['bottom_gate_wire'][1]):
                 del dev.segments[(top_gate_row, s_col, seg_idx)]
 
+# In the IO rows the gate wires are also IO logic inputs (SETN, SDTAP), and
+# they are not the only wires connected to the segment MUX there, so such segment ends
+# are not used. Segments with no gate wires left are removed. Needs the bel portmaps.
+def remove_iologic_segment_ends(dev):
+    for seg_key, seg in list(dev.segments.items()):
+        col = seg_key[1]
+        for end in ('top', 'bottom'):
+            gate_wires = set(seg[f'{end}_gate_wire']) - {None}
+            for name, bel in dev[seg[f'{end}_row'], col].bels.items():
+                if name.startswith('IOLOGIC') and gate_wires & set(bel.portmap.values()):
+                    seg[f'{end}_gate_wire'] = [None, None]
+                    break
+        if not any(seg['top_gate_wire']) and not any(seg['bottom_gate_wire']):
+            del dev.segments[seg_key]
+
 # These features of IO on the underside of the chip were revealed during
 # operation. The first (normal) mode was found in a report by @LoneTech on
 # 4/1/2022, when it turned out that the pins on the bottom edge of the GW1NR-9
