@@ -2363,7 +2363,7 @@ class Device:
         iol_bel = self.make_IologicBelDesc(bel)
         attr_vals = self.common_iologic_handler(iol_bel)
 
-
+        av = self.set_iologic_attrvals(iol_bel, attr_vals)
         fuses = []
         bits = self.chipdb.get_iologic_fuses(iol_bel.x, iol_bel.y, av, iol_bel.idx_str)
         if bits:
