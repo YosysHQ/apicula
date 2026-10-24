@@ -6361,6 +6361,13 @@ def dat_portmap(dat, dev, device):
                             nam = f'ADB{i - 100}'
                         elif i < 132:
                             nam = f'DIB{i - 114}'
+                        # GW5AT-60B: in the BSRAM tiles of types 233 and 236
+                        # data in 8 and 9 enter on B6 and B7, not on the
+                        # table's B0 and B1 (which hold only for the other
+                        # types): Gowin routes them so, and with B0/B1 a
+                        # Tang Console 60K got bits 8 and 9 wrong there.
+                        if device == 'GW5AT-60B' and tile.ttyp in {233, 236} and off == 0:
+                            wire = {'DIA8': 'B6', 'DI8': 'B6', 'DIA9': 'B7', 'DI9': 'B7'}.get(nam, wire)
                         create_port_wire(dev, row, col, 0, off, bel, "BSRAM", nam, wire, wire_type)
 
                 elif name == 'RPLLA':
