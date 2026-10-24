@@ -5205,6 +5205,11 @@ def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
         nodename = add_node(dev, nodename, "IO_OE", row, col, f'IOBB_{oe}')
         bel.portmap['OE'] = f'IOBB_{oe}'
 
+# See dat_portmap: (cell offset, table wire) -> the wire the GW5AT-60B's
+# BSRAMs of first-cell type 233 and 236 really use.
+_60b_bsram_b67 = {(0, 'B0'): 'B6', (0, 'B1'): 'B7', (1, 'A4'): 'B6', (1, 'A5'): 'B7',
+                  (2, 'C2'): 'B6', (2, 'C3'): 'B7'}
+
 def dat_portmap(dat, dev, device):
     wnames.select_wires(device)
     for row in range(dev.rows):
@@ -6361,13 +6366,18 @@ def dat_portmap(dat, dev, device):
                             nam = f'ADB{i - 100}'
                         elif i < 132:
                             nam = f'DIB{i - 114}'
-                        # GW5AT-60B: in the BSRAM tiles of types 233 and 236
-                        # data in 8 and 9 enter on B6 and B7, not on the
-                        # table's B0 and B1 (which hold only for the other
-                        # types): Gowin routes them so, and with B0/B1 a
-                        # Tang Console 60K got bits 8 and 9 wrong there.
-                        if device == 'GW5AT-60B' and tile.ttyp in {233, 236} and off == 0:
-                            wire = {'DIA8': 'B6', 'DI8': 'B6', 'DIA9': 'B7', 'DI9': 'B7'}.get(nam, wire)
+                        # GW5AT-60B: in the BSRAMs whose first cell is of
+                        # type 233 or 236, six data inputs enter each cell on
+                        # B6 and B7 instead of the table's wires (which hold
+                        # for the other types): DIA8/DI8 and DIA9/DI9 in the
+                        # first cell (B0, B1), DIB4/DI22 and DIB6/DI24 in the
+                        # second (A4, A5), DIB14/DI32 and DIB15/DI33 in the
+                        # third (C2, C3). Gowin routes them so, and with the
+                        # table's wires a Tang Console 60K got port A's bits
+                        # 8 and 9 and port B's bits 4, 6, 14 and 15 wrong
+                        # there.
+                        if device == 'GW5AT-60B' and tile.ttyp in {233, 236}:
+                            wire = _60b_bsram_b67.get((off, wire), wire)
                         create_port_wire(dev, row, col, 0, off, bel, "BSRAM", nam, wire, wire_type)
 
                 elif name == 'RPLLA':
