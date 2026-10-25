@@ -2027,6 +2027,15 @@ def add_hclk_bels(dat, dev, device):
             dev.nodes.setdefault(clkdiv_out_node, ('GLOBAL_CLK', set()))[1].add((tile_row, tile_col, shared_clkdiv_wire))
 
 
+# HCLK outputs that reach the PLL inputs: {device: {side: {PLL input: {HCLK outputs}}}}.
+# These pips have no fuses, nextpnr sets INSEL/FBSEL of the PLL from the HCLK_OUT name.
+# Only connections the IDE uses for CLKDIV2 -> rPLL are listed. GW1N-9C does not route
+# this at all, GW2A-18C feeds its PLLs from HCLK0 of the top and bottom HCLK, not from
+# the HCLKs of the side.
+_hclk_to_pll = {
+    'GW1NZ-1': {'T': {'PLL_CLKIN': {'HCLK_OUT1'}}},
+}
+
 _global_wire_prefixes = {'PCLK', 'TBDHCLK', 'BBDHCLK', 'RBDHCLK', 'LBDHCLK',
                          'TLPLL', 'TRPLL', 'BLPLL', 'BRPLL'}
 def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
@@ -2109,14 +2118,13 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                         pll = 'RPLLA'
                     elif 'PLLVR' in dev[row, col].bels:
                         pll = 'PLLVR'
-                    if pll:
-                        portmap = dev[row, col].bels[pll].portmap
+                    pll_srcs = _hclk_to_pll.get(device, {}).get(side)
+                    if pll and pll_srcs:
                         pips = dev.hclk_pips.setdefault((row, col), {})
-                        for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
-                            for src in srcs:
+                        for dst, dst_srcs in pll_srcs.items():
+                            for src in srcs & dst_srcs:
                                 pips.setdefault(dst, {}).update({src: set()})
-                                if src.startswith('HCLK'):
-                                    hclks[src].add((row, col, src))
+                                hclks[src].add((row, col, src))
             else:
                 col = {'L': 0, 'R': dev.cols - 1}[side]
                 for row in range(edge[0], edge[1]):
@@ -2132,14 +2140,13 @@ def fse_create_hclk_nodes(dev, device, fse, dat: Datfile):
                         pll = 'RPLLA'
                     elif 'PLLVR' in dev[row, col].bels:
                         pll = 'PLLVR'
-                    if pll:
-                        portmap = dev[row, col].bels[pll].portmap
+                    pll_srcs = _hclk_to_pll.get(device, {}).get(side)
+                    if pll and pll_srcs:
                         pips = dev.hclk_pips.setdefault((row, col), {})
-                        for dst in ['PLL_CLKIN', 'PLL_CLKFB']:
-                            for src in srcs:
+                        for dst, dst_srcs in pll_srcs.items():
+                            for src in srcs & dst_srcs:
                                 pips.setdefault(dst, {}).update({src: set()})
-                                if src.startswith('HCLK'):
-                                    hclks[src].add((row, col, src))
+                                hclks[src].add((row, col, src))
 
 # ADC in GW5A series are placed in slots AND in the main grid.
 def fse_create_adc(dev, device, fse, dat):
@@ -4576,7 +4583,7 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("NEED_BLKSEL_FIX")
     if device in {'GW1NZ-1'}:
         dev.chip_flags.append("HAS_BANDGAP")
-    if device not in {'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}:
+    if device in _hclk_to_pll:
         dev.chip_flags.append("HAS_PLL_HCLK")
     if device in {'GW2A-18', 'GW2A-18C'}:
         dev.chip_flags.append("HAS_CLKDIV_HCLK")
