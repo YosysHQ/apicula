@@ -9,7 +9,6 @@ module top (input wire clk, input wire resetn, output wire lock,
 		);
 
 wire clkfbout;
-wire [7:0] mdrdo;
 wire gw_gnd;
 
 assign gw_gnd = 1'b0;
@@ -24,7 +23,7 @@ PLLA PLLA_inst (
     .CLKOUT5(clkout5),
     .CLKOUT6(clkout6),
     .CLKFBOUT(clkfbout),
-    .MDRDO(mdrdo),
+    .MDRDO(),  // unused; two of the GW5AT-60B's three PLL sites have no MDRDO0-3
     .CLKIN(clk),
     .CLKFB(gw_gnd),
 `ifdef RESET_BTN_LOW
