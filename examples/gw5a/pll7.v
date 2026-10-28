@@ -10,6 +10,7 @@ module top (input wire clk, input wire resetn, output wire lock,
 
 wire clkfbout;
 wire gw_gnd;
+wire rst = !(`INV_BTN ^ resetn);
 
 assign gw_gnd = 1'b0;
 
@@ -26,11 +27,7 @@ PLLA PLLA_inst (
     .MDRDO(),  // unused; two of the GW5AT-60B's three PLL sites have no MDRDO0-3
     .CLKIN(clk),
     .CLKFB(gw_gnd),
-`ifdef RESET_BTN_LOW
-    .RESET(!resetn),    // the Console 60K's button reads low when pressed
-`else
-    .RESET(resetn),
-`endif
+    .RESET(rst),
     .PLLPWD(gw_gnd),
     .RESET_I(gw_gnd),
     .RESET_O(gw_gnd),

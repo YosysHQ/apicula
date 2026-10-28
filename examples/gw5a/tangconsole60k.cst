@@ -47,6 +47,16 @@ IO_PORT "led[15]" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
 IO_LOC  "rst_i" AB13;
 IO_PORT "rst_i" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
 
+// femto
+IO_LOC  "clk_i" V22;
+IO_PORT "clk_i" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+
+// usb uart
+IO_LOC  "RXD" V14;
+IO_PORT "RXD" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC  "TXD" U15;
+IO_PORT "TXD" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
 // The 40-pin RGB LCD connector (schematic 32001C, LCD_DPI). The examples
 // drive 4 bits a colour, on each colour's top four (R4-R7, G4-G7, B4-B7);
 // the backlight's enable (P20) is pulled up on the board.

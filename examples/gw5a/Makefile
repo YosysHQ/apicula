@@ -114,9 +114,6 @@ uart-message-tangconsole138k-synth.json: uart-message-tangconsole138k.v
 %-tangconsole60k.json: %-tangconsole60k-synth.json tangconsole60k.cst
 	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst
 
-pll7-tangconsole60k-synth.json: pll7.v
-	$(YOSYS) -D RESET_BTN_LOW -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
-
 bsram-%-tangconsole60k.fs: bsram-%-tangconsole60k.json
 	gowin_pack --sspi_as_gpio --cpu_as_gpio -d GW5AT-60B -o $@ $<
 
@@ -124,7 +121,7 @@ bsram-%-tangconsole60k.json: bsram-%-tangconsole60k-synth.json tangconsole60k.cs
 	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst --vopt sspi_as_gpio
 
 bsram-%-tangconsole60k-synth.json: pll/GW5AT-60B.vh io444.vh display-640x480.v %-image-rom.v %-video-ram.v %.v clock-PLLA.v
-	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
+	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
 %-tangconsole60k-synth.json: %.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -D OSC_TYPE_OSCA  -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
