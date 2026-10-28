@@ -27,7 +27,11 @@ PLLA PLLA_inst (
     .MDRDO(mdrdo),
     .CLKIN(clk),
     .CLKFB(gw_gnd),
+`ifdef RESET_BTN_LOW
+    .RESET(!resetn),    // the Console 60K's button reads low when pressed
+`else
     .RESET(resetn),
+`endif
     .PLLPWD(gw_gnd),
     .RESET_I(gw_gnd),
     .RESET_O(gw_gnd),
