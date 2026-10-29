@@ -60,7 +60,8 @@ IO_PORT "TXD" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
 // The 40-pin RGB LCD connector (schematic 32001C, LCD_DPI). The examples
 // drive 4 bits a colour, on each colour's top four (R4-R7, G4-G7, B4-B7);
 // the backlight's enable (P20) is pulled up on the board.
-// N20, M20, N22, M22 and U22 are also configuration pins: build with sspi_as_gpio.
+// N20, M20, N22 and M22 are also SSPI configuration pins and L19 is I2C's SDA:
+// build with sspi_as_gpio and i2c_as_gpio.
 IO_LOC  "LCD_CLK" L19;
 IO_PORT "LCD_CLK" PULL_MODE=NONE IO_TYPE=LVCMOS33;
 IO_LOC  "LCD_HYNC" N20;

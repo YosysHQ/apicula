@@ -115,10 +115,10 @@ uart-message-tangconsole138k-synth.json: uart-message-tangconsole138k.v
 	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst
 
 bsram-%-tangconsole60k.fs: bsram-%-tangconsole60k.json
-	gowin_pack --sspi_as_gpio --cpu_as_gpio -d GW5AT-60B -o $@ $<
+	gowin_pack --sspi_as_gpio --i2c_as_gpio --cpu_as_gpio -d GW5AT-60B -o $@ $<
 
 bsram-%-tangconsole60k.json: bsram-%-tangconsole60k-synth.json tangconsole60k.cst
-	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst --vopt sspi_as_gpio
+	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst --vopt sspi_as_gpio --vopt i2c_as_gpio
 
 bsram-%-tangconsole60k-synth.json: pll/GW5AT-60B.vh io444.vh display-640x480.v %-image-rom.v %-video-ram.v %.v clock-PLLA.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
