@@ -5229,6 +5229,9 @@ def create_GW5A_io_portmap(dat, dev, device, row, col, belname, bel, tile):
 # BSRAMs of first-cell type 233 and 236 really use.
 _60b_bsram_b67 = {(0, 'B0'): 'B6', (0, 'B1'): 'B7', (1, 'A4'): 'B6', (1, 'A5'): 'B7',
                   (2, 'C2'): 'B6', (2, 'C3'): 'B7'}
+# ... and port A's word-address bits 2 and 3 (only used at widths of 1 to 8
+# bits) enter the second cell on C6 and C7, not the third cell's C0 and C1.
+_60b_bsram_ad23 = {'ADA2': (1, 'C6'), 'AD2': (1, 'C6'), 'ADA3': (1, 'C7'), 'AD3': (1, 'C7')}
 
 def dat_portmap(dat, dev, device):
     wnames.select_wires(device)
@@ -6395,9 +6398,13 @@ def dat_portmap(dat, dev, device):
                         # third (C2, C3). Gowin routes them so, and with the
                         # table's wires a Tang Console 60K got port A's bits
                         # 8 and 9 and port B's bits 4, 6, 14 and 15 wrong
-                        # there.
+                        # there. Port A's address bits 2 and 3 likewise
+                        # enter the second cell on C6 and C7 (Gowin's 4-bit
+                        # DPB builds, 2026-10-29); with the table's wires a
+                        # 4-bit RAM there got address bits 0 and 1 mixed up.
                         if device == 'GW5AT-60B' and tile.ttyp in {233, 236}:
                             wire = _60b_bsram_b67.get((off, wire), wire)
+                            off, wire = _60b_bsram_ad23.get(nam, (off, wire))
                         create_port_wire(dev, row, col, 0, off, bel, "BSRAM", nam, wire, wire_type)
 
                 elif name == 'RPLLA':
