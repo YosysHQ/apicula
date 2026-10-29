@@ -2197,12 +2197,14 @@ def fse_create_adc(dev, device, fse, dat):
 # Only the slots that are used are added to the binary image.
 # GW5AT-60B: three of its eight PLLs, found in Sipeed's Tang Mega 60K example
 # bitstreams (made with Gowin's IDE). Each design's PLL slots are in its
-# footer; its PLL inputs' wiring shows where that PLL sits: in sdram_neo and
-# CH569_HSPI_FPGA (slot 2) 34 of the 35 inputs of the old-style table are
-# driven around (64, 144); in cam_dvi (slots 3 and 18) around (37, 144) and
-# 34 of 35 of the PllRB table's at (73, 72), and its NEO_DOCK.cst puts the
-# TMDS PLL (slot 3 by its fuses) at PLL_R[0] and the DDR PLL (slot 18) at
-# PLL_B[1]. No other site scores above 31 in any design.
+# footer, and the wiring into its PLL inputs shows where that PLL sits: for
+# every candidate cell we counted how many of the 35 input wires that a PLL
+# there would have (by the old-style or the PllRB table) the design drives.
+# In sdram_neo and CH569_HSPI_FPGA (slot 2) 34 of 35 are driven at (64, 144);
+# in cam_dvi (slots 3 and 18) 34 at (37, 144) and 34 by the PllRB table at
+# (73, 72), and its NEO_DOCK.cst puts the TMDS PLL (slot 3 by its fuses) at
+# PLL_R[0] and the DDR PLL (slot 18) at PLL_B[1]. No other cell has more
+# than 31 of its 35 driven in any of these designs.
 _slot_plls = {
     'GW5A-25A': {(27, 0, 6, 'PllLB'), (27, 91, 2, 'PllRB'), (0, 0, 5, 'PllLT'), (0, 91, 3, 'PllRT'), (0, 45, 4, 'old_style'), (36, 45, 8, 'old_style')},
     'GW5AT-60B': {(64, 144, 2, 'old_style'), (37, 144, 3, 'old_style'), (73, 72, 18, 'PllRB')},
@@ -2226,10 +2228,6 @@ def fse_create_slot_plls(dev, device, fse, dat):
                 wire_idx, wrow, wcol = dat.gw5aStuff[io_table + 'Ins'][idx]
             wrow -= 1
             wcol -= 1
-            # An old-style PLL at the 60B's right edge would have its mDRP
-            # read data past the last column: that site doesn't have it.
-            if not (0 <= wrow < dev.rows and 0 <= wcol < dev.cols):
-                continue
             wire = wnames.wirenames[wire_idx]
             if wrow == row and wcol == col:
                 portmap[nam] = wire
@@ -2269,6 +2267,9 @@ def fse_create_slot_plls(dev, device, fse, dat):
                 wire_idx, wrow, wcol = dat.gw5aStuff[io_table + 'Outs'][idx]
             wrow -= 1
             wcol -= 1
+            # By the old-style table's offsets (up to +3 columns) the 60B's
+            # right-edge PLLs at column 144 would have MDRDO0-3 in column
+            # 147, past the last one; those outputs are left out there.
             if not (0 <= wrow < dev.rows and 0 <= wcol < dev.cols):
                 del portmap[nam]
                 continue
