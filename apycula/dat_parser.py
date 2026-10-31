@@ -340,6 +340,9 @@ class Datfile:
         ret["Gtrl12UparDBOuts"]     = self.read_scaledGrid16(0x69, 3, 3, RSTable5ATOffset + 0x8620, 10)
         """
 
+        ret["BsramSpecIn"]          = self.read_scaledGrid16i(0x84, 3, 6, 1, RSTable5ATOffset + 0x6eea)
+        ret["BsramSpecOut"]         = self.read_scaledGrid16i(0x48, 3, 6, 1, RSTable5ATOffset + 0xdc9a)
+
         ret["Ae350SocIns"]          = self.read_scaledGrid16(0x1b1, 3, 3, RSTable5ATOffset + 0x86a0, 6)
         ret["Ae350SocOuts"]         = self.read_scaledGrid16(0x206, 3, 3, RSTable5ATOffset + 0x8bb0, 10)
 
