@@ -3566,10 +3566,10 @@ _segment_data = {
                      'top_wires':    [('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10'), ('LT02', 'LT13'), ('LT00', 'LT10'), ('LT00', 'LT10'), ('LT00', 'LT10'), ('LT00', 'LT10'), ('LT00', 'LT10')],
                      'bottom_wires': [('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT20', 'LT30'), ('LT02', 'LT13'), ('LT20', 'LT30')],
                      'top_gate_wires': [
-                         [('A6', 'A7'), ('A6', 'B6'), ('A6', 'B6'), ('A6', 'A7'), ('A6', 'B6'), ('A6', 'B6'), ('A6', 'B6'), ('A6', 'B6'), ('A6', 'B6')],
+                         [('A6', 'A7'), ('A6', 'B6'), ('A6', None), ('A6', 'A7'), ('A6', None), ('A6', 'B6'), ('A6', None), ('A6', 'B6'), ('A6', 'B6')],
                          [('B6', 'B7'), None, None, ('B6', 'B7'), None, None, None, None, None], ],
                      'bottom_gate_wires':
-                         [[('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A7', 'B7'), ('A6', 'A7'), ('A7', 'B7')],
+                         [[('A7', 'B7'), ('A7', None), ('A7', 'B7'), ('A7', None), ('A7', 'B7'), ('A7', None), ('A7', 'B7'), ('A6', 'A7'), ('A7', 'B7')],
                           [None, None, None, None, None, None, None, ('B6', 'B7'), None],],
                      'skip_region_func': _60k_skip_region, 'get_seg_func': _60k_get_seg,
                      'reserved_wires': {}
