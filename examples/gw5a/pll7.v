@@ -9,8 +9,8 @@ module top (input wire clk, input wire resetn, output wire lock,
 		);
 
 wire clkfbout;
-wire [7:0] mdrdo;
 wire gw_gnd;
+wire rst = !(`INV_BTN ^ resetn);
 
 assign gw_gnd = 1'b0;
 
@@ -24,10 +24,10 @@ PLLA PLLA_inst (
     .CLKOUT5(clkout5),
     .CLKOUT6(clkout6),
     .CLKFBOUT(clkfbout),
-    .MDRDO(mdrdo),
+    .MDRDO(),  // unused; two of the GW5AT-60B's three PLL sites have no MDRDO0-3
     .CLKIN(clk),
     .CLKFB(gw_gnd),
-    .RESET(resetn),
+    .RESET(rst),
     .PLLPWD(gw_gnd),
     .RESET_I(gw_gnd),
     .RESET_O(gw_gnd),

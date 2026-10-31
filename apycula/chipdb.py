@@ -2202,10 +2202,25 @@ def fse_create_adc(dev, device, fse, dat):
 # A slot with a specific number is responsible for a fixed primitive—for
 # example, slot 6 is the left PLL, slot 8 is the lower PLL.
 # Only the slots that are used are added to the binary image.
+# GW5AT-60B: three of its eight PLLs, found in Sipeed's Tang Mega 60K example
+# bitstreams (made with Gowin's IDE). Each design's PLL slots are in its
+# footer, and the wiring into its PLL inputs shows where that PLL sits: for
+# every candidate cell we counted how many of the 35 input wires that a PLL
+# there would have (by the old-style or the PllRB table) the design drives.
+# In sdram_neo and CH569_HSPI_FPGA (slot 2) 34 of 35 are driven at (64, 144);
+# in cam_dvi (slots 3 and 18) 34 at (37, 144) and 34 by the PllRB table at
+# (73, 72), and its NEO_DOCK.cst puts the TMDS PLL (slot 3 by its fuses) at
+# PLL_R[0] and the DDR PLL (slot 18) at PLL_B[1]. No other cell has more
+# than 31 of its 35 driven in any of these designs.
+_slot_plls = {
+    'GW5A-25A': {(27, 0, 6, 'PllLB'), (27, 91, 2, 'PllRB'), (0, 0, 5, 'PllLT'), (0, 91, 3, 'PllRT'), (0, 45, 4, 'old_style'), (36, 45, 8, 'old_style')},
+    'GW5AT-60B': {(64, 144, 2, 'old_style'), (37, 144, 3, 'old_style'), (73, 72, 18, 'PllRB')},
+}
+
 def fse_create_slot_plls(dev, device, fse, dat):
-    if device not in {"GW5A-25A"}:
+    if device not in _slot_plls:
         return
-    for row, col, slot_idx, io_table in {(27, 0, 6, 'PllLB'), (27, 91, 2, 'PllRB'), (0, 0, 5, 'PllLT'), (0, 91, 3, 'PllRT'), (0, 45, 4, 'old_style'), (36, 45, 8, 'old_style')}:
+    for row, col, slot_idx, io_table in _slot_plls[device]:
         extra = dev.extra_func.setdefault((row, col), {})
         pll = extra.setdefault('pll', {})
         pll['slot_idx'] = slot_idx
@@ -2259,6 +2274,12 @@ def fse_create_slot_plls(dev, device, fse, dat):
                 wire_idx, wrow, wcol = dat.gw5aStuff[io_table + 'Outs'][idx]
             wrow -= 1
             wcol -= 1
+            # By the old-style table's offsets (up to +3 columns) the 60B's
+            # right-edge PLLs at column 144 would have MDRDO0-3 in column
+            # 147, past the last one; those outputs are left out there.
+            if not (0 <= wrow < dev.rows and 0 <= wcol < dev.cols):
+                del portmap[nam]
+                continue
             wire = wnames.wirenames[wire_idx]
             logic_wire = wire
             if wrow != row or wcol != col:
@@ -4598,6 +4619,10 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_5A_HCLK")
         dev.chip_flags.append("HAS_5A_IDES")
     if device in {'GW5AT-60B'}:
+        # As the 25A and 138C: without it the semi-dual-port BSRAM's RESET
+        # reaches the wrong pin and the read port's reset is left high, so
+        # every read is 0 (checked on a Tang Console 60K).
+        dev.chip_flags.append("NEED_BSRAM_RESET_FIX")
         dev.chip_flags.append("HAS_EMPTY_QUADRANT")
         dev.chip_flags.append("HAS_PINCFG")
         dev.chip_flags.append("HAS_I2CCFG")
@@ -6364,6 +6389,18 @@ def dat_portmap(dat, dev, device):
                             nam = f'ADB{i - 100}'
                         elif i < 132:
                             nam = f'DIB{i - 114}'
+                        # GW5AT-60B: the BSRAMs whose first cell is of type
+                        # 233 or 236 take some inputs on other wires, which
+                        # the dat's BsramSpecIn table gives as (wire, cell
+                        # offset, -1): port A's AD2/AD3 on C6/C7 of the
+                        # second cell, and DIA8/DIA9, DIB4/DIB6 and
+                        # DIB14/DIB15 on B6/B7 of their cells. Its DI18-35
+                        # entries say offset 0, which is cell 0's DIA pins;
+                        # DI18-35 are DIB0-17's pins (as in the BsramIn
+                        # table), so those take DIB0-17's entries.
+                        if device == 'GW5AT-60B' and tile.ttyp in {233, 236} and i < 132:
+                            spec = dat.gw5aStuff['BsramSpecIn'][i + 32 if 82 <= i < 100 else i]
+                            wire, off = wnames.wirenames[spec[0]], spec[1]
                         create_port_wire(dev, row, col, 0, off, bel, "BSRAM", nam, wire, wire_type)
 
                 elif name == 'RPLLA':

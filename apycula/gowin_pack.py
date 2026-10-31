@@ -6728,6 +6728,17 @@ class GW5AT_60B(GW5A):
                  ('PERSISTENT', 'OFF'), ('ODMUX', 'TRIMUX'), ('PADDI', 'PADDI'),
                  ('OPENDRAIN', 'OFF'), ('PULL_STRENGTH', 'MEDIUM'), ('IOB_UNKNOWN51', 'TRIMUX')]
 
+    def get_permitted_pll_freqs(self) -> tuple[float, float, float, float, float]:
+        """ (max_in, max_out, min_out, max_vco, min_vco)
+        GW5AT-60 PLL switching characteristics, DS981 v1.1.3 Table 3-44. """
+        return (800., 1400., 5.469, 1400., 700.)
+
+    # The 25A's pump tables: with them the PLL slots of Sipeed's Tang Mega 60K
+    # examples (SDRAM_PLL, TMDS_PLL_60HZ, DDR_PLL_60K, made by Gowin's IDE)
+    # come out bit for bit.
+    get_pll_freq_R = GW5A_25A.get_pll_freq_R
+    get_pll_coeffs = GW5A_25A.get_pll_coeffs
+
     def get_tilemap_func(self):
         # for speed fill closure variables
         empty_x = self.chipdb.empty_x
