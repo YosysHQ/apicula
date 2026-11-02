@@ -959,7 +959,7 @@ class BankDesc:
 
     # debug
     def __repr__(self):
-        return f'|BankDesc| x:{self.x}, y:{self.y}, attrs:{self.attrs}, has_outputs:{self.has_outputs}, has_lvds_outputs:{self.has_lvds_outputs}, lvds_BANK_VCCIO:{self.lvds_BANK_VCCIO}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
+        return f'|BankDesc| x:{self.x}, y:{self.y}, attrs:{self.attrs}, has_outputs:{self.has_outputs}, has_lvds_outputs:{self.has_lvds_outputs}, has_true_lvds_outputs:{self.has_true_lvds_outputs}, lvds_BANK_VCCIO:{self.lvds_BANK_VCCIO}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
 
 ################################################################
 class Device:
@@ -1796,7 +1796,6 @@ class Device:
                 if bank_desc.has_true_lvds_outputs:
                     bank_desc.set_attr("LVDS_OUT", "ON")
                     default_io_type = self.get_default_tlvds_io_type()
-                    bank_desc.set_attr("IO_TYPE", default_io_type)
                 if bank_desc.has_lvds_outputs:
                     bank_desc.force_bank_vccio(self.get_lvds_bank_vccio())
                 if not bank_desc.bank_pull_strength:
