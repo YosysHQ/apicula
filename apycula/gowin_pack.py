@@ -4823,6 +4823,21 @@ class GW1NS_4(GW1N):
         super().__init__(cli_args, pnr)
 
     #==============================
+    #========== Misc
+    #==============================
+
+    def get_GW_JTAG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        av = set()
+        self.chipdb.get_cfg_attr_val(AttrVal('JTAG_ER1', 'USED'), av)
+        self.chipdb.get_cfg_attr_val(AttrVal('JTAG_ER2', 'USED'), av)
+
+        fuses = []
+        bits = self.chipdb.get_cfg_fuses(bel.x, bel.y, av)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
+
+    #==============================
     #========== IO
     #==============================
     def process_TLVDS_TBUF(self, bank_desc: BankDesc, bel: IoBelDesc) -> list[CellFuseBits]:

@@ -4116,9 +4116,16 @@ def fse_create_gsr(dev, device):
 
 def fse_create_jtag(dev, device, dat):
     # XXX
-    if device not in {'GW2A-18C'}:
+    # The GW1NS-4 cell and wires were found the same way as for GW2A-18C: a
+    # netlist with every GW_JTAG output on a pin, traced back in the bitstream.
+    if device == 'GW2A-18C':
+        row, col = 27, 50
+        rti_er2, sdr = 'F7', 'F6'
+    elif device == 'GW1NS-4':
+        row, col = 0, 0
+        rti_er2, sdr = 'F0', 'Q7'
+    else:
         return
-    row, col = 27, 50
     dev.extra_func.setdefault((row, col), {}).update(
         {'jtag': {
             'inputs': {
@@ -4135,8 +4142,8 @@ def fse_create_jtag(dev, device, dat):
                 'tdi_o': 'Q5',
                 'test_logic_reset_o': 'Q3',
                 'run_test_idle_er1_o': 'Q4',
-                'run_test_idle_er2_o': 'F7',
-                'shift_dr_capture_dr_o': 'F6',
+                'run_test_idle_er2_o': rti_er2,
+                'shift_dr_capture_dr_o': sdr,
                 'update_dr_o': 'Q2',
                 'enable_er1_o': 'Q0',
                 'enable_er2_o': 'Q1',
