@@ -362,8 +362,8 @@ bsram-%-tangnano20k-synth.json: pll/GW2A-18-dyn.vh io565.vh display-480x272.v %-
 attosoc-tangnano20k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
 
-dvi-example-tangnano20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channel.v
-	$(YOSYS) -D INV_BTN=1 -D IS_ELVDS=0 -p "read_verilog -sv $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
+dvi-example-tangnano20k-synth.json: DVI/dvi-example.v DVI/dvi_sync.v DVI/dvi_top.v DVI/pll480.v DVI/tmds_encoder.v
+	$(YOSYS) -D INV_BTN=1 -D IS_ELVDS=0 -p "read_verilog -I DVI $(filter %.v,$^); synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
 
 # ============================================================
 # TangPrimer20k
@@ -385,8 +385,8 @@ bsram-%-primer20k-synth.json: pll/GW2A-18-dyn.vh io565.vh display-480x272.v %-im
 attosoc-%-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
 
-dvi-example-primer20k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channel.v
-	$(YOSYS) -D INV_BTN=0 -D IS_ELVDS=0 -p "read_verilog -sv $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
+dvi-example-primer20k-synth.json: DVI/dvi-example.v DVI/dvi_sync.v DVI/dvi_top.v DVI/pll480.v DVI/tmds_encoder.v
+	$(YOSYS) -D INV_BTN=0 -D IS_ELVDS=0 -p "read_verilog -I DVI $(filter %.v,$^); synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
 
 # ============================================================
 # Tangnano (GW1N-1)
@@ -464,8 +464,8 @@ pll-nanolcd-tangnano9k.fs: pll-nanolcd-tangnano9k.json
 bsram-%-tangnano9k-synth.json: pll/GW1N-9C-dyn.vh io565.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-rPLL.v
 	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
 
-dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/pll480.v DVI/tmds-channel.v
-	$(YOSYS) -D INV_BTN=0 -D IS_ELVDS=1 -p "read_verilog -sv $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
+dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/dvi_sync.v DVI/dvi_top.v DVI/pll480.v DVI/tmds_encoder.v
+	$(YOSYS) -D INV_BTN=0 -D IS_ELVDS=1 -p "read_verilog -I DVI $(filter %.v,$^); synth_gowin -json $@ ${YOSYS_FLAGS}"
 
 # ============================================================
 # szfpga miniboard (GW1N-9)
