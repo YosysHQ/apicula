@@ -9,7 +9,7 @@ A new colour should wipe across the screen over a couple of seconds. This should
 
 module dvi_pattern (
     input  wire       clk,
-    input  wire       key_i,
+    input  wire       rst_i,
     output wire       tmds_clk_n,
     output wire       tmds_clk_p,
     output wire [2:0] tmds_d_n,
@@ -21,46 +21,43 @@ module dvi_pattern (
 // Local signals declaration
 // ------------------------------------------------------------------------
 
-wire              clk_pixel;
-wire              clk_pixel_x5;
-wire              pll_lock;
-reg [23:0]        counter;           // Debug clk_pixel counter for led output
+wire               clk_pixel;
+wire               clk_pixel_x5;
+wire               pll_lock;
+reg [23:0]         counter;           // Debug clk_pixel counter for led output
 
-wire              rst_key_n;
-reg               sys_rst_n;
-wire              rst;
-reg [3:0]         reset_cnt = 15;    // reset for 15 cycles
+wire               rst_n;
+reg                rst;
+reg [3:0]          reset_cnt = 15;    // reset for 15 cycles
 
-wire              red_serial;
-wire              green_serial;
-wire              blue_serial;
+wire               red_serial;
+wire               green_serial;
+wire               blue_serial;
 
-wire [23:0]       rgb;
-reg [W_H_RES-1:0] px_x;
-reg [W_V_RES-1:0] px_y;
+wire [23:0]        rgb;
+wire [W_H_RES-1:0] px_x;
+wire [W_V_RES-1:0] px_y;
 
-wire              next;              // Generate new color
-reg [W_H_RES-1:0] screen_partition;  // Old/new color divider
-reg [23:0]        old_color;
-reg [23:0]        new_color;
-reg [23:0]        lfsr_out;
+wire               next;              // Generate new color
+reg [W_H_RES-1:0]  screen_partition;  // Old/new color divider
+reg [23:0]         old_color;
+reg [23:0]         new_color;
+reg [23:0]         lfsr_out;
 
 // ------------------------------------------------------------------------
 // Reset generation
 // ------------------------------------------------------------------------
 
-assign rst_key_n = key_i ^ `INV_BTN;
+assign rst_n = rst_i ^ `INV_BTN;
 
 always @(posedge clk) begin
     if (reset_cnt > 0) begin
         reset_cnt <= reset_cnt - 1'b1;
-        sys_rst_n <= 1'b0;
+        rst       <= 1'b1;
     end else begin
-        sys_rst_n <= rst_key_n;
+        rst       <= !rst_n;
     end
 end
-
-assign rst = !sys_rst_n;
 
 // ------------------------------------------------------------------------
 // Pixel/serial clock generation
