@@ -4904,7 +4904,7 @@ class GW1NS_4(GW1N):
     #==============================
     def get_permitted_pll_freqs(self) -> tuple[float, float, float, float, float]:
         """ (max_in, max_out, min_out, max_vco, min_vco) """
-        return (400., 600., 4.6875, 1200., 400.)
+        return (400., 600., 4.6875, 1200., 600.)
 
     def get_pll_bels(self, bel: BelDesc) -> Iterator[tuple[int, int]]:
         """ One cell for PLLVR + common cell """
