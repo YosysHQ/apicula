@@ -5,6 +5,7 @@ import itertools
 import json
 import math
 import re
+import sys
 
 from apycula import attrids
 from apycula import bitmatrix
@@ -311,6 +312,22 @@ class AdcIo:
         return f'|AdcIo| x:{self.x}, y:{self.y}, bus:{self.bus}'
 
 ################################################################
+class UsedWires:
+    """ Sets of used wires of various categories """
+    def __init__(self):
+        self.segments = set()
+
+    def add_segment_wire(self, wire: WireDesc):
+        self.segments.add(wire)
+
+    def is_segment_wire_used(self, wire: WireDesc) -> bool:
+        return wire in self.segments
+
+    # debug
+    def __repr__(self):
+        return f'|UsedWires| segments:{self.segments}'
+
+################################################################
 def _convert_legacy_io_cell_attr(attr: str, val: str) -> tuple[str, str]:
     """ Convert legacy '&IO_TYPE=LVCMOS33' style attributes to name-value pairs """
     if attr[0] != '&':
@@ -545,6 +562,9 @@ class ChipDB:
 
     def get_alonenode6(self, tiledata: Tile) -> dict[str, list[tuple[set[str], set[Coord]]]]:
         return tiledata.alonenode_6
+
+    def get_segments(self) -> dict:
+        return self.db.segments
 
     def get_dhcen_wire_side(self, x: int, y: int, idx_int) -> tuple[str, str]:
         _, wire, _, side = self.db.extra_func[y, x]['dhcen'][idx_int]['pip']
@@ -855,8 +875,15 @@ class BankDesc:
     def set_attr(self, attr: str, val: str):
         self.attrs[attr] = val
 
+    def get_io_type_vccio(self, io_type: str, bel: IoBelDesc = None) -> str:
+        """ VCCIO required by the IO_TYPE. Aliased IO types (SSTL, HSTL_D, LVCMOS_D...) cover
+        several voltages, so the voltage the bel recorded before aliasing takes precedence. """
+        if bel and bel.cell.attrs.get('IO_TYPE') == io_type and 'IO_TYPE_VCCIO' in bel.flags:
+            return bel.flags['IO_TYPE_VCCIO']
+        return self._vcc_ios[io_type]
+
     def set_bank_vccio_by_io_type(self, io_type: str):
-        self.attrs['BANK_VCCIO'] = self._vcc_ios[io_type]
+        self.attrs['BANK_VCCIO'] = self.get_io_type_vccio(io_type, self.set_attr_bels.get('IO_TYPE'))
 
     def force_bank_vccio(self, vccio: str):
         self.attrs['BANK_VCCIO'] = vccio
@@ -884,7 +911,7 @@ class BankDesc:
             io_type = default_io_type
         if self.bank_vccio:
             set_bel = self.set_attr_bels['BANK_VCCIO']
-            if self._vcc_ios[io_type] != self.bank_vccio:
+            if self.get_io_type_vccio(io_type, io_type_bel) != self.bank_vccio:
                 if io_type_bel:
                     raise Exception(f"IO_TYPE and BANK_VCCIO conflict: X{io_type_bel.x}Y{io_type_bel.y}/IOB{io_type_bel.idx_str} ({io_type_bel.cell.name}) is trying to set {io_type} but X{set_bel.x}Y{set_bel.y}/IOB{set_bel.idx_str} ({set_bel.cell.name}) already set {self.bank_vccio}")
                 else:
@@ -913,7 +940,7 @@ class BankDesc:
                         raise Exception(f"LVDS bel X{bel.x}Y{bel.y}/IOB{bel.idx_str} must have IO_TYPE.")
                 else:
                     io_type = bel.cell.attrs['IO_TYPE']
-                self.lvds_BANK_VCCIO = self._vcc_ios[io_type]
+                self.lvds_BANK_VCCIO = self.get_io_type_vccio(io_type, bel)
                 self.has_lvds_outputs = True
                 if bel.is_true_lvds_output():
                     self.has_true_lvds_outputs = True
@@ -932,7 +959,7 @@ class BankDesc:
 
     # debug
     def __repr__(self):
-        return f'|BankDesc| x:{self.x}, y:{self.y}, attrs:{self.attrs}, has_outputs:{self.has_outputs}, has_lvds_outputs:{self.has_lvds_outputs}, lvds_BANK_VCCIO:{self.lvds_BANK_VCCIO}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
+        return f'|BankDesc| x:{self.x}, y:{self.y}, attrs:{self.attrs}, has_outputs:{self.has_outputs}, has_lvds_outputs:{self.has_lvds_outputs}, has_true_lvds_outputs:{self.has_true_lvds_outputs}, lvds_BANK_VCCIO:{self.lvds_BANK_VCCIO}, set_attr_bels:{self.set_attr_bels}, bels:{self.bels}'
 
 ################################################################
 class Device:
@@ -1111,8 +1138,17 @@ class Device:
     def normalize_io_bel_attr(self, bel: IoBelDesc) -> IoBelDesc:
         """ Modify IO attrs """
         mod_cell = self.normalize_io_cell_attr(bel.cell)
-        io_type = mod_cell.attrs.get('IO_TYPE', None)
-        mod_bel = IoBelDesc(bel.x, bel.y, bel.idx_str, mod_cell, bel.flags)
+        flags = dict(bel.flags)
+        # the alias may lose the voltage (SSTL15 -> SSTL), so remember it
+        orig_io_type = dict(_convert_legacy_io_cell_attr(attr, val) for attr, val in bel.cell.attrs.items()).get('IO_TYPE')
+        if orig_io_type in BankDesc._vcc_ios:
+            flags['IO_TYPE_VCCIO'] = BankDesc._vcc_ios[orig_io_type]
+        # single ended SSTL and HSTL inputs compare against VREF, which can't be configured yet
+        if (mod_cell.attrs.get('IO_TYPE') in {'SSTL', 'HSTL'} and bel.cell.typ in {'IBUF', 'IOBUF'}
+                and not bel.is_diff_io()):
+            print(f"Warning: X{bel.x}Y{bel.y}/IOB{bel.idx_str} ({bel.cell.name}) is a {orig_io_type} input, "
+                  "but VREF is not supported: the input has no reference voltage.", file=sys.stderr)
+        mod_bel = IoBelDesc(bel.x, bel.y, bel.idx_str, mod_cell, flags)
         return mod_bel
 
     def set_io_bel_flags(self, bel: IoBelDesc, flags_dict: dict[str, any]) -> IoBelDesc:
@@ -1176,6 +1212,9 @@ class Device:
             if bits:
                 fuses.append(CellFuseBits(x, y, bits))
         return fuses
+
+    def get_segments(self) -> dict:
+        return self.chipdb.get_segments()
 
     def mod_bels(self, bels: Iterator[BelDesc]) -> Iterator[BelDesc]:
         """ Add/Remove/Modify bels """
@@ -1255,6 +1294,10 @@ class Device:
             if bits:
                 fuses.append(CellFuseBits(wire.x, wire.y, bits))
         return fuses
+
+    def get_unused_wire_fuses(self, pips: list[PipDesc]) -> list[CellFuseBits]:
+        """ Return fuses that give unused wires of used logic cells a static source """
+        return []
 
     #==============================
     #========== LUTs
@@ -1649,7 +1692,7 @@ class Device:
                     fuses.append(CellFuseBits(x, y, bits))
         return fuses
 
-    def get_work_in_progress_fuses(self) -> list[CellFuseBits]:
+    def get_work_in_progress_fuses(self, used_wires: UsedWires) -> list[CellFuseBits]:
         """ Setting bits whose purpose is unclear or roughly clear, but the
         mechanism hasn't been fully developed. For example, if a chip doesn't
         yet support segment wires in nextpnr, the ends of segments still need
@@ -1753,7 +1796,6 @@ class Device:
                 if bank_desc.has_true_lvds_outputs:
                     bank_desc.set_attr("LVDS_OUT", "ON")
                     default_io_type = self.get_default_tlvds_io_type()
-                    bank_desc.set_attr("IO_TYPE", default_io_type)
                 if bank_desc.has_lvds_outputs:
                     bank_desc.force_bank_vccio(self.get_lvds_bank_vccio())
                 if not bank_desc.bank_pull_strength:
@@ -2100,7 +2142,7 @@ class Device:
         attr_vals.append(AttrVal("INDEL_0", "ENABLE"))
         attr_vals.append(AttrVal("INDEL_1", "ENABLE"))
 
-        c_static_delay = bel.cell.parms.get('C_STATIC_DELAY')
+        c_static_delay = bel.cell.parms.get('C_STATIC_DLY')
         if c_static_delay:
             for i in range(1, 8):
                 if c_static_delay[-i] == '1':
@@ -2320,7 +2362,7 @@ class Device:
         iol_bel = self.make_IologicBelDesc(bel)
         attr_vals = self.common_iologic_handler(iol_bel)
 
-
+        av = self.set_iologic_attrvals(iol_bel, attr_vals)
         fuses = []
         bits = self.chipdb.get_iologic_fuses(iol_bel.x, iol_bel.y, av, iol_bel.idx_str)
         if bits:
@@ -2786,8 +2828,10 @@ class Device:
             yield (bel.x + off, bel.y)
 
     def get_bsram_attrvals(self, bel: BsramBelDesc) -> set[int]:
-        if 'INIT_RAM_00' in bel.cell.parms:
-            self.add_bsram_to_init(bel)
+        for parm in bel.cell.parms.keys():
+            if parm.startswith('INIT_RAM_'):
+                self.add_bsram_to_init(bel)
+                break
 
         av = set()
         self.chipdb.get_bsram_attr_val(AttrVal('MODE', 'ENABLE'), av)
@@ -3045,11 +3089,17 @@ class Device:
         if val == 1:
             self.chipdb.get_bsram_attr_val(AttrVal('DPB_REGMODE', 'OUTREG'), av)
 
-        # write mode
-        val = int(bsram_bel.cell.parms.get('WRITE_MODE', bin(0)), 2)
+        # write mode, per port
+        val = int(bsram_bel.cell.parms.get('WRITE_MODE0', bin(0)), 2)
         if val == 1:
             self.chipdb.get_bsram_attr_val(AttrVal('DPA_MODE', 'WT'), av)
+        elif val == 2:
+            self.chipdb.get_bsram_attr_val(AttrVal('DPA_MODE', 'RBW'), av)
+        val = int(bsram_bel.cell.parms.get('WRITE_MODE1', bin(0)), 2)
+        if val == 1:
             self.chipdb.get_bsram_attr_val(AttrVal('DPB_MODE', 'WT'), av)
+        elif val == 2:
+            self.chipdb.get_bsram_attr_val(AttrVal('DPB_MODE', 'RBW'), av)
 
         return self.common_bsram_handler(bsram_bel, av)
 
@@ -3289,7 +3339,12 @@ class Device:
                     attr_vals.append(AttrVal(f'IRNS_IREG{pair_idx}{r}L_{pair_idx * 4 + attr_off}', "ENABLE"))
 
             val = int(cell_parms.get(f'{r}SIGN_REG', '0'), 2)
-            if val:
+            if not val:
+                # unregistered sign: bypass its input register
+                sign_idx = pair_idx * 3 + (0 if r == 'A' else 1)
+                attr_vals.append(AttrVal(f'CINBY_{sign_idx}', "ENABLE"))
+                attr_vals.append(AttrVal(f'CINNS_{sign_idx}', "ENABLE"))
+            else:
                 attr_vals.append(AttrVal(f'CEMUX_{r}SIGN{pair_idx}1', ce_val))
                 attr_vals.append(AttrVal(f'CLKMUX_{r}SIGN{pair_idx}1', clk_val))
                 attr_vals.append(AttrVal(f'RSTMUX_{r}SIGN{pair_idx}1', reset_val))
@@ -4441,8 +4496,6 @@ class Device:
         fuses += self.get_io_fuses()
         fuses += self.get_dualpin_fuses()
 
-        # wip fuses
-        fuses += self.get_work_in_progress_fuses()
         return fuses
 
     # debug
@@ -4786,6 +4839,21 @@ class GW1NS_4(GW1N):
         super().__init__(cli_args, pnr)
 
     #==============================
+    #========== Misc
+    #==============================
+
+    def get_GW_JTAG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        av = set()
+        self.chipdb.get_cfg_attr_val(AttrVal('JTAG_ER1', 'USED'), av)
+        self.chipdb.get_cfg_attr_val(AttrVal('JTAG_ER2', 'USED'), av)
+
+        fuses = []
+        bits = self.chipdb.get_cfg_fuses(bel.x, bel.y, av)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
+
+    #==============================
     #========== IO
     #==============================
     def process_TLVDS_TBUF(self, bank_desc: BankDesc, bel: IoBelDesc) -> list[CellFuseBits]:
@@ -4867,7 +4935,7 @@ class GW1NS_4(GW1N):
     #==============================
     def get_permitted_pll_freqs(self) -> tuple[float, float, float, float, float]:
         """ (max_in, max_out, min_out, max_vco, min_vco) """
-        return (400., 600., 4.6875, 1200., 400.)
+        return (400., 600., 4.6875, 1200., 600.)
 
     def get_pll_bels(self, bel: BelDesc) -> Iterator[tuple[int, int]]:
         """ One cell for PLLVR + common cell """
@@ -5019,6 +5087,74 @@ class GW2A(Device):
     #==============================
     #========== PIPs
     #==============================
+    _span_wire = re.compile(r"[NSEW][128]\d0$")
+    _x_wire = re.compile(r"X0\d$")
+    _lut_input = re.compile(r"[ABCD][0-5]$")
+
+    def get_unused_wire_fuses(self, pips: list[PipDesc]) -> list[CellFuseBits]:
+        """ Return fuses that give unused wires of used logic cells a static source.
+
+        Without fuses a span or X0 wire, and a LUT input, keeps its default
+        connection from the alonenode table, an output of the cell (Q0, F0, ...).
+        In a used cell that output toggles, and so does every unused wire on it.
+        The vendor IDE gives these wires VCC or another static source. Cells
+        without any pip are left alone: nothing toggles there.
+        """
+        driven = {(pip.x, pip.y, pip.dest) for pip in pips}
+        used = {(pip.x, pip.y) for pip in pips}
+        cells = [(x, y) for x, y in sorted(used) if 'LUT0' in self.chipdb.get_tiledata(x, y).bels]
+        parked = set()
+        fuses = []
+
+        def park(x: int, y: int, tiledata: Tile, dest: str, src: str):
+            bits = self.get_simple_pip_fuses(tiledata, src, dest) | self.get_alonenode_fuses(tiledata, src, dest)
+            if bits:
+                fuses.append(CellFuseBits(x, y, bits))
+            parked.add((x, y, dest))
+
+        def is_static_segment(x: int, y: int, src: str) -> bool:
+            """ A span wire segment whose wire starts in an unused cell or was parked """
+            if not re.match(r"[NSEW][128]\d\d$", src):
+                return False
+            root = re.match(r"R(\d+)C(\d+)_(\w+)", chipdb.wire2global(y + 1, x + 1, self.chipdb.db, src))
+            rx, ry, name = int(root[2]) - 1, int(root[1]) - 1, root[3] + "0"
+            return (rx, ry) not in used or (rx, ry, name) in parked
+
+        def unused(x: int, y: int, dest: str) -> bool:
+            return (x, y, dest) not in driven and (x, y, dest) not in parked
+
+        def is_wire(dest: str) -> bool:
+            return bool(self._span_wire.match(dest) or self._x_wire.match(dest))
+
+        # span and X0 wires that can take VCC or VSS
+        for x, y in cells:
+            tiledata = self.chipdb.get_tiledata(x, y)
+            for dest, srcs in self.chipdb.get_pips(tiledata).items():
+                if is_wire(dest) and unused(x, y, dest):
+                    src = next((s for s in ('VCC', 'VSS') if s in srcs), None)
+                    if src:
+                        park(x, y, tiledata, dest, src)
+        # the rest of them from a static span wire segment
+        for x, y in cells:
+            tiledata = self.chipdb.get_tiledata(x, y)
+            for dest, srcs in self.chipdb.get_pips(tiledata).items():
+                if is_wire(dest) and unused(x, y, dest):
+                    src = next((s for s in sorted(srcs) if is_static_segment(x, y, s)), None)
+                    if src:
+                        park(x, y, tiledata, dest, src)
+        # LUT inputs: VCC or VSS, a parked X0 wire, or a static span wire segment
+        for x, y in cells:
+            tiledata = self.chipdb.get_tiledata(x, y)
+            for dest, srcs in self.chipdb.get_pips(tiledata).items():
+                if not self._lut_input.match(dest) or (x, y, dest) in driven:
+                    continue
+                src = (next((s for s in ('VCC', 'VSS') if s in srcs), None)
+                       or next((s for s in sorted(srcs) if self._x_wire.match(s) and (x, y, s) in parked), None)
+                       or next((s for s in sorted(srcs) if is_static_segment(x, y, s)), None))
+                if src:
+                    park(x, y, tiledata, dest, src)
+        return fuses
+
     def get_all_hclk_pip_fuses(self, x: int, y: int, src: str, dest: str) -> list[CellFuseBits]:
         """ Depending on the chip series, fuses can be either in one cell or in several. """
         fuses = []
@@ -6768,7 +6904,7 @@ class GW5AT_60B(GW5A):
     def get_cfg_types(self) -> set[str]:
         return [48, 49]
 
-    def get_work_in_progress_fuses(self) -> list[CellFuseBits]:
+    def get_work_in_progress_fuses(self, used_wires: UsedWires) -> list[CellFuseBits]:
         """ Setting bits whose purpose is unclear or roughly clear, but the
         mechanism hasn't been fully developed. For example, if a chip doesn't
         yet support segment wires in nextpnr, the ends of segments still need
@@ -6778,27 +6914,47 @@ class GW5AT_60B(GW5A):
         def full_spines() -> Iterator[WireDesc]:
             for x, y in itertools.product(range(self.chipdb.cols), [37, 46, 55, 64]):
                 if x != self.chipdb.empty_x:
-                    yield WireDesc(x, y, 'LT00')
-                    yield WireDesc(x, y, 'LT10')
+                    wire = WireDesc(x, y, 'LT00')
+                    if not used_wires.is_segment_wire_used(wire):
+                        yield wire
+                    wire = WireDesc(x, y, 'LT10')
+                    if not used_wires.is_segment_wire_used(wire):
+                        yield wire
 
             for x in range(self.chipdb.cols):
                 if x != self.chipdb.empty_x:
-                    yield WireDesc(x, 73, 'LT13')
-                    yield WireDesc(x, 73, 'LT02')
+                    wire = WireDesc(x, 73, 'LT02')
+                    if not used_wires.is_segment_wire_used(wire):
+                        yield wire
+                    wire = WireDesc(x, 73, 'LT13')
+                    if not used_wires.is_segment_wire_used(wire):
+                        yield wire
 
         # half-spines
         def half_spines() -> Iterator[WireDesc]:
             for x in range(self.chipdb.empty_x):
-                yield WireDesc(x, 28, 'LT13')
-                yield WireDesc(x, 28, 'LT02')
+                wire = WireDesc(x, 28, 'LT02')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
+                wire = WireDesc(x, 28, 'LT13')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
 
             for x in range(self.chipdb.empty_x, self.chipdb.cols):
-                yield WireDesc(x, 0, 'LT13')
-                yield WireDesc(x, 0, 'LT02')
+                wire = WireDesc(x, 0, 'LT02')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
+                wire = WireDesc(x, 0, 'LT13')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
 
             for x, y in itertools.product(range(self.chipdb.empty_x, self.chipdb.cols), [27, 18, 9]):
-                yield WireDesc(x, y, 'LT00')
-                yield WireDesc(x, y, 'LT10')
+                wire = WireDesc(x, y, 'LT00')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
+                wire = WireDesc(x, y, 'LT10')
+                if not used_wires.is_segment_wire_used(wire):
+                    yield wire
 
         fuses = self.get_isolated_wire_fuses(itertools.chain(full_spines(), half_spines()))
         return fuses
@@ -7114,10 +7270,30 @@ class Pack:
         self.device = device
         self.pnr = pnr
         self.fuses = []
+        self.used_wires = UsedWires()
+        # We isolate only the top wires of unused segments, so we need a lookup
+        # table to quickly find the top wire for any given wire.
+        self.wire_2_segment_top = {}
+        for seg_loc, seg_desc in self.device.get_segments().items():
+            _, x, _ = seg_loc
+            wire = WireDesc(x, seg_desc['top_row'], seg_desc['top_wire'])
+            self.wire_2_segment_top[(x, seg_desc['top_row'], seg_desc['top_wire'])] = wire
+            self.wire_2_segment_top[(x, seg_desc['bottom_row'], seg_desc['bottom_wire'])] = wire
+
+    def collect_segment_wires(self, pips: Iterator[PipDesc]):
+        for pip in pips:
+            if pip.dest.startswith('LT'):
+                wire = self.wire_2_segment_top.get((pip.x, pip.y, pip.dest))
+                if wire:
+                    self.used_wires.add_segment_wire(wire)
 
     def route(self):
         """ Set fuses for all pips """
-        self.fuses += self.device.get_all_pips_fuses(self.pnr.get_pips())
+        pips = list(self.pnr.get_pips())
+        self.collect_segment_wires(pips)
+        self.fuses += self.device.get_all_pips_fuses(pips)
+        # give unused wires of used logic cells a static source
+        self.fuses += self.device.get_unused_wire_fuses(pips)
         # isolate segment wires used
         self.fuses += self.device.get_isolated_wire_fuses(self.pnr.get_wires_to_isolate())
 
@@ -7133,6 +7309,8 @@ class Pack:
     def get_fuses(self) -> list[CellFuseBits]:
         """ Return generated fuses """
         self.fuses += self.device.get_final_fuses()
+        # wip fuses
+        self.fuses += self.device.get_work_in_progress_fuses(self.used_wires)
         return self.fuses
 
     # debug

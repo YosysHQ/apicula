@@ -448,6 +448,7 @@ def main():
     chipdb.pll_pads(db, device, pad_locs)
 
     chipdb.dat_portmap(dat, db, device)
+    chipdb.remove_iologic_segment_ends(db)
     chipdb.add_hclk_bels(dat, db, device)
 
 

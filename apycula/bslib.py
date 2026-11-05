@@ -378,7 +378,18 @@ def write_bitstream(fname, bs, hdr, ftr, compress, extra_slots, gw5a_bsram_init_
     crcdat = bytearray()
     preamble = 3
     calc = make_crc16_arc()
+    # Gowin programmer tools refuse to process an FS file that carries no
+    # "//UserCode" comment, so emit the vendor-style metadata. The vendor
+    # default sets UserCode equal to the configuration data checksum stored
+    # in the footer. (https://github.com/YosysHQ/apicula/issues/566)
+    checksum = None
+    for ba in ftr:
+        if ba[0] == 0x0a:
+            checksum = int.from_bytes(ba, 'big') & 0xffff
     with open(fname, 'w') as f:
+        if checksum is not None:
+            f.write(f'//CheckSum: 0x{checksum:04X}\n')
+            f.write(f'//UserCode: 0x{checksum:08X}\n')
         for ba in hdr:
             if not preamble and ba[0] != 0xd2: # SPI address
                 crcdat.extend(ba)
