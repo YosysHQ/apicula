@@ -4116,38 +4116,34 @@ def fse_create_gsr(dev, device):
 
 def fse_create_jtag(dev, device, dat):
     # XXX
-    # The GW1NS-4 cell and wires were found the same way as for GW2A-18C: a
-    # netlist with every GW_JTAG output on a pin, traced back in the bitstream.
+    # The cell was found by a test compilation with every GW_JTAG output on a
+    # pin, traced back in the bitstream. The wires come from dat['JtagIns'] and
+    # dat['JtagOuts'], listed in GW_JTAG port order; the pad ports and
+    # pause_dr_o have no wire there (-1).
     if device == 'GW2A-18C':
         row, col = 27, 50
-        rti_er2, sdr = 'F7', 'F6'
     elif device == 'GW1NS-4':
         row, col = 0, 0
-        rti_er2, sdr = 'F0', 'Q7'
     else:
         return
+    dummy = {
+        'tck_pad_i': 'DUMMY_JTAG_TCK_PAD',
+        'tms_pad_i': 'DUMMY_JTAG_TMS_PAD',
+        'tdi_pad_i': 'DUMMY_JTAG_TDI_PAD',
+        'tdo_pad_o': 'DUMMY_JTAG_TDO_PAD',
+        'pause_dr_o': 'DUMMY_JTAG_PAUSE',
+    }
+    def ports(names, table):
+        return {name: dummy[name] if wire == -1 else wnames.wirenames[wire]
+                for name, wire in zip(names, dat.compat_dict[table])}
     dev.extra_func.setdefault((row, col), {}).update(
         {'jtag': {
-            'inputs': {
-                'tck_pad_i': 'DUMMY_JTAG_TCK_PAD',
-                'tms_pad_i': 'DUMMY_JTAG_TMS_PAD',
-                'tdi_pad_i': 'DUMMY_JTAG_TDI_PAD',
-                'tdo_er1_i': 'C1',
-                'tdo_er2_i': 'C2',
-                },
-            'outputs': {
-                'tdo_pad_o': 'DUMMY_JTAG_TDO_PAD',
-                'pause_dr_o': 'DUMMY_JTAG_PAUSE',
-                'tck_o': 'Q6',
-                'tdi_o': 'Q5',
-                'test_logic_reset_o': 'Q3',
-                'run_test_idle_er1_o': 'Q4',
-                'run_test_idle_er2_o': rti_er2,
-                'shift_dr_capture_dr_o': sdr,
-                'update_dr_o': 'Q2',
-                'enable_er1_o': 'Q0',
-                'enable_er2_o': 'Q1',
-                }}})
+            'inputs': ports(['tck_pad_i', 'tms_pad_i', 'tdi_pad_i', 'tdo_er1_i', 'tdo_er2_i'], 'JtagIns'),
+            'outputs': ports(['tdo_pad_o', 'tck_o', 'tdi_o', 'test_logic_reset_o',
+                              'run_test_idle_er1_o', 'run_test_idle_er2_o',
+                              'shift_dr_capture_dr_o', 'pause_dr_o', 'update_dr_o',
+                              'enable_er1_o', 'enable_er2_o'], 'JtagOuts'),
+            }})
 
 def fse_create_bandgap(dev, device):
     # The cell and wire are found by a test compilation where the BGEN input is
