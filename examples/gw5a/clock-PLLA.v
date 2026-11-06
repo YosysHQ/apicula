@@ -8,7 +8,6 @@ module clock_pll(input wire clk, input wire rst, output wire write_clk, output w
     wire clkout5;
     wire clkout6;
     wire clkfbout;
-    wire [7:0] mdrdo;
     wire gw_gnd;
 
     assign gw_gnd = 1'b0;
@@ -23,7 +22,7 @@ module clock_pll(input wire clk, input wire rst, output wire write_clk, output w
         .CLKOUT5(clkout5),
         .CLKOUT6(clkout6),
         .CLKFBOUT(clkfbout),
-        .MDRDO(mdrdo),
+        .MDRDO(),  // unused; two of the GW5AT-60B's three PLL sites have no MDRDO0-3
         .CLKIN(clk),
         .CLKFB(gw_gnd),
         .RESET(!rst),
