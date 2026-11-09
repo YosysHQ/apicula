@@ -37,8 +37,9 @@ Pick the cheapest tool that answers the question:
    `cmp; ja; lea table(%rip); movslq; add; jmp *%rax`, with 32-bit offsets
    relative to the table.
 4. Ghidra or REA for real decompilation. `open_binary` is instant, but the first
-   query starts a full analysis of this 78 MB library, which had not finished
-   after about an hour. Do not make that a blocking step.
+   query starts a full analysis of this 78 MB library. With a 1-hour Ghidra
+   startup limit it failed with `provider_timeout`. Do not make that a blocking
+   step.
 
 Prefer static analysis over running vendor binaries. Do not modify the IDE or
 work around its licensing.
