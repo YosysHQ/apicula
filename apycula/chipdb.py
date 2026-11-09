@@ -783,6 +783,7 @@ def set_banks(fse, dat, db):
                     db.pin_bank[f'IO{side}{row + 1}{name}'] = bank
 
 _known_logic_tables = {
+            7:  'CIU',
             8:  'DCS',
             9:  'GSR',
             10: 'IOLOGIC',
@@ -791,15 +792,32 @@ _known_logic_tables = {
             13: 'BSRAM',
             14: 'DSP',
             15: 'PLL',
+            16: 'PLLTEST',
             39: 'BSRAM_INIT',
             49: 'HCLK',
             52: 'DLLDLY',
+            55: 'DLL',
+            57: 'DQS',
             59: 'CFG',
             62: 'OSC',
             63: 'USB',
+            65: 'EFLASH',
             67: 'ADC',
+            70: 'I3C',
+            72: 'SPMI',
+            74: 'VCP',
+            76: 'BANDGAP',
+            78: 'EMCU',
+            81: 'POR',
+            83: 'PWD',
+            85: 'MIPI_DPHY',
             87: '5A_DSP',
             92: '5A_PCLK_ENABLE',
+            154: 'MIPI_CPHY',
+            157: 'MULTACC',
+            159: 'JPEG1_SCRAMBLER',
+            161: 'IOL_SCLK_GEN',
+            167: 'HCLK_MRCC',
         }
 
 _known_tables = {
