@@ -56,4 +56,5 @@ by the decoded `devToFsePath` cases. `fse_parser.device_format` gives them the
   whole file at width 440 reaches the end marker with no bytes left, after 246
   files and 2,199 tables. It is inferred to be a leftover in an older layout.
 - **Signed `logicinfo` types `0x86` and `0x87`** are parsed but not used by the
-  builder. The vendor has a `getFuseByInfo` overload for them.
+  builder. They are requested by `getAdclrcFuse` and `getAdculcFuse`, and the vendor
+  has a `getFuseByInfo` overload for them. What the signed rows mean is not known.
