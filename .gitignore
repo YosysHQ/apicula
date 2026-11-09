@@ -4,6 +4,7 @@
 *.fs
 *.gif
 *.json
+!tools/gowin_extract_out/**/*.json
 *.cpp
 *.o
 *.il
