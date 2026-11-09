@@ -2852,6 +2852,9 @@ class Device:
             self.chipdb.get_bsram_attr_val(AttrVal('OUTREG_ASYNC', 'RESET'), av)
         return av
 
+    def add_sp_sdp_bsram_attrs(self, av: set[int]) -> None:
+        """ Device-specific attributes of the SP and SDP modes. """
+
     def common_bsram_handler(self, bel: BsramBelDesc, av: set[int]) -> list[CellFuseBits]:
         fuses = []
         bels_x_y = self.get_bsram_bels(bel)
@@ -2907,6 +2910,7 @@ class Device:
         """ Semi Dual Port bsram """
         bsram_bel = self.make_BsramBelDesc(bel)
         av = self.get_bsram_attrvals(bsram_bel)
+        self.add_sp_sdp_bsram_attrs(av)
 
         # blksel
         val = bsram_bel.cell.parms.get('BLK_SEL_0', "000")
@@ -2974,6 +2978,7 @@ class Device:
         """ Single Port bsram """
         bsram_bel = self.make_BsramBelDesc(bel)
         av = self.get_bsram_attrvals(bsram_bel)
+        self.add_sp_sdp_bsram_attrs(av)
 
         # blksel
         val = bsram_bel.cell.parms.get('BLK_SEL', "000")
@@ -4719,6 +4724,12 @@ class GW1N_1(GW1N):
 ################################################################
 class GW1NZ_1(GW1N):
     """ GW1NZ-1 chip. Tangnano1k board """
+    def add_sp_sdp_bsram_attrs(self, av: set[int]) -> None:
+        # The IDE sets these on GW1NZ-1 and GW1NZ-1C for SP and SDP only. They are
+        # past the end of its BSRAM_ATTR enum and their function is unknown.
+        for attr in range(86, 93):
+            add_attr_val(self.chipdb.db, 'BSRAM', av, attr, 16)
+
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
 
