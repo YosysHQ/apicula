@@ -28,7 +28,9 @@ SET_ATTR = re.compile(r'set\w*Attr\(NETLIST::(\w+_ATTR), (?:NETLIST::)?(\w+)\)')
 GET_ATTR = re.compile(r'get\w*Attr\(NETLIST::(\w+_ATTR)\)')
 
 # Parameter objects: the ALL_INIT_TYPE range stored at each accessor's result.
-INIT_STRUCTS = {'PllInit': {'accessor': 'NETLIST::Pll::getPllInitValue()', 'first': 0xb5, 'last': 0x15d}}
+INIT_STRUCTS = {'PllInit': {'accessor': 'NETLIST::Pll::getPllInitValue()', 'first': 0xb5, 'last': 0x15d},
+                'BsramInit': {'accessor': 'NETLIST::Bsram::getInitValue()', 'first': 0x1e, 'last': 0x5d},
+                'BsramMode': {'accessor': 'NETLIST::Bsram::getBsramMode()', 'first': 0x09, 'last': 0x1d}}
 
 
 def symbols(lib):
@@ -161,7 +163,8 @@ def main():
     parser.add_argument('--lib', required=True)
     parser.add_argument('--enums', required=True)
     parser.add_argument('--out', required=True)
-    parser.add_argument('--project', default=os.path.expanduser('~/.cache/apicula-ghidra'))
+    parser.add_argument('--project', default=os.path.expanduser('~/apicula-ghidra'),
+                        help='Ghidra project directory; no path element may start with a dot')
     parser.add_argument('names', nargs='+')
     args = parser.parse_args()
 

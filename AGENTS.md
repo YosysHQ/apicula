@@ -121,15 +121,9 @@ Pick the cheapest tool that answers the question:
 3. Python over `objdump` output for anything repeated. Jump tables are
    `cmp; ja; lea table(%rip); movslq; add; jmp *%rax`, with 32-bit offsets
    relative to the table.
-4. Ghidra or REA for real decompilation. `open_binary` is instant, but the first
-   query starts a full analysis of this 78 MB library. With a 1-hour Ghidra
-   startup limit it failed with `provider_timeout`. Do not make that a blocking
-   step.
-
-Vendor bitstreams settle what static reading cannot. Run the IDE with
-`LD_PRELOAD=/usr/lib/libfreetype.so.6 IDE/bin/gw_sh build.tcl` if `gw_sh` stops with
-a `libfontconfig` symbol error. Decode results with `chipdb.tile_bitmap`; see
-[`doc/agent/pll.md`](doc/agent/pll.md) for an example and the decoder's limits.
+4. `tools/gowin_decompile.py` for real decompilation. It needs no full analysis
+   and takes seconds. REA's full analysis of this library takes hours, treats
+   `__dynamic_cast` as noreturn and truncates functions such as `setClsRegAttr`.
 
 Prefer static analysis over running vendor binaries. Do not modify the IDE or
 work around its licensing.
