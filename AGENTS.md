@@ -138,6 +138,7 @@ new IDE version. Vendor enums are not committed; generate them when updating
 | `tools/gowin_extract.py extract` | Generates `apycula/fse_formats.py` and writes vendor enums to a local `enums.json` |
 | `tools/gowin_extract.py check-attrids` | Compares `apycula/attrids.py` with vendor names |
 | `tools/gowin_attr_sites.py` | Lists attribute assignments with approximate guards; research aid, output not committed |
+| `tools/gowin_decompile.py` | Decompiles named functions with Ghidra, applying Gowin enums, parameter structs and signatures; no full analysis needed |
 | `tools/chipdb_compare.py` | Content comparison of chipdb directories |
 
 Do not edit `apycula/fse_formats.py` by hand.
