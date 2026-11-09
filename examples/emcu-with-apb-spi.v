@@ -108,7 +108,7 @@ module top (
 	.FCLKIN("27.0"),
 	.IDIV_SEL(4), // -> PFD = 5.4 MHz (range: 3-400 MHz)
 	.FBDIV_SEL(12), // -> CLKOUT = 70.2 MHz (range: 400-600 MHz)
-	.ODIV_SEL(8) // -> VCO = 561.6 MHz (range: 600-1200 MHz)
+	.ODIV_SEL(16) // -> VCO = 1123.2 MHz (range: 600-1200 MHz)
 )
 	pll (.CLKOUTP(), .CLKOUTD(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0), .VREN(1'b1),
 	.CLKIN(clk_i), // 27.0 MHz
