@@ -5707,15 +5707,21 @@ class GW5A(Device):
             val = int(cell_parms.get(attr, '0'), 2)
             self.chipdb.get_pll_attr_val(AttrVal(attr, val), av)
 
-        for i in range(6):
+        # A_BYPASS selects CLKIN. Unset selects the VCO or divider, with no table row.
+        for i in range(7):
             attr = f'A_CLK{i}_IN_SEL'
             val = int(cell_parms.get(attr, '0'), 2)
-            self.chipdb.get_pll_attr_val(AttrVal(attr, val), av)
+            if i == 4:
+                source = {0b10: 'A_BYPASS', 0b01: 'CASCADE'}.get(val)
+            else:
+                source = 'A_BYPASS' if val == 1 else None
+            if source:
+                self.chipdb.get_pll_attr_val(AttrVal(attr, source), av)
 
-        for i in range(6):
+        for i in range(7):
             attr = f'A_CLK{i}_OUT_SEL'
-            val = int(cell_parms.get(attr, '0'), 2)
-            self.chipdb.get_pll_attr_val(AttrVal(attr, val), av)
+            if int(cell_parms.get(attr, '0'), 2) == 1:
+                self.chipdb.get_pll_attr_val(AttrVal(attr, 'A_BYPASS'), av)
 
         for i in range(7):
             attr = f'A_CLKOUT{i}_PE_COARSE'
