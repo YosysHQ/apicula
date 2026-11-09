@@ -388,7 +388,7 @@ def main():
     gowin_debug = os.getenv("GOWIN_DEBUG")
 
     with open(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.fse", 'rb') as f:
-        fse = fse_parser.read_fse(f, device)
+        fse = fse_parser.read_fse(f, params['device'])
 
     dat = dat_parser.Datfile(Path(f"{gowinhome}/IDE/share/device/{params['device']}/{params['device']}.dat"))
 
