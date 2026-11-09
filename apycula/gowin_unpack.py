@@ -614,6 +614,12 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
                     clock_pips[f'LWSPINE{half}{qd}{num}'] = f'LW{half}{num}'
         #print("flags:", sorted(bels.get(name, set())))
 
+    # LUT bits are stored inverted, so a LUT with INIT 16'hFFFF has no fuse set
+    # and no flags. Keep it, otherwise the nets it drives are left undriven.
+    for name in tiledata.bels:
+        if name.startswith("LUT") and name not in bels:
+            bels[name] = set()
+
     pips = {}
     for dest, srcs in tiledata.pips.items():
         pip_bits = set().union(*srcs.values())
@@ -953,6 +959,8 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             val = 0xffff - sum(1<<f for f in flags)
             if val == 0:
                 mod.assigns.append((f"R{row}C{col}_F{idx}", "VSS"))
+            elif val == 0xffff:
+                mod.assigns.append((f"R{row}C{col}_F{idx}", "VCC"))
             else:
                 name = f"R{row}C{col}_LUT4_{idx}"
                 lut = codegen.Primitive("LUT4", name)
