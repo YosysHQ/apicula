@@ -134,8 +134,7 @@ version:
 
 | Tool | Purpose |
 |---|---|
-| `tools/gowin_extract.py extract` | Enums, table types, device layouts into `tools/gowin_extract_out/` |
-| `tools/gowin_extract.py gen-formats` | Generates `apycula/fse_formats.py` from those outputs |
+| `tools/gowin_extract.py extract` | Writes vendor enums to `tools/gowin_extract_out/` and generates `apycula/fse_formats.py` |
 | `tools/gowin_extract.py check-attrids` | Compares `apycula/attrids.py` with vendor names |
 | `tools/gowin_attr_sites.py` | Lists attribute assignments with approximate guards; research aid, output not committed |
 | `tools/chipdb_compare.py` | Content comparison of chipdb directories |

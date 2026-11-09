@@ -5,9 +5,8 @@ Complements [`doc/filestructure.md`](../filestructure.md). The vendor reader is
 
 ## Table types
 
-`readOneTable` is a jump table from table type to reader class. Its contents are in
-`tools/gowin_extract_out/1.9.10.03/fse_table_types.json` and generated into
-`apycula/fse_formats.py`.
+`readOneTable` is a jump table from table type to reader class. It is extracted
+into `TABLE_KINDS` in `apycula/fse_formats.py`.
 
 | Vendor class | Apicula name | Row width (16-bit words) |
 |---|---|---|
@@ -28,7 +27,7 @@ Complements [`doc/filestructure.md`](../filestructure.md). The vendor reader is
 
 `fseFuseTable::readFseData(_IO_FILE*, DEV_TYPE)` and `fseWireTable::readFseData`
 switch on `DEV_TYPE`. `devToFsePath` names each code. Fuse rows are 150, 169, 512 or
-559 words. Results are in `fse_device_formats.json`.
+559 words. Results are in `DEVICE_FORMATS` in `apycula/fse_formats.py`.
 
 Seven installed GW1N-family devices, such as `GW1N-9` and `GW1NS-4`, are not named
 by the decoded `devToFsePath` cases. `fse_parser.device_format` gives them the
