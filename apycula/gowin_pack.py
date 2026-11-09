@@ -6259,9 +6259,9 @@ class GW5A_25A(GW5A):
         self.chipdb.get_iob_attr_val(AttrVal("BANK_VCCIO", bank_desc.bank_vccio), av)
 
         if 'HCLK' in bel.flags:
-            self.chipdb.get_iob_attr_val(AttrVal("IOB_UNKNOWN67", "UNKNOWN263"), av)
+            self.chipdb.get_iob_attr_val(AttrVal("IOB_UNKNOWN67", "DISELMUX"), av)
         if 'HCLK_PAIR' in bel.flags:
-            self.chipdb.get_iob_attr_val(AttrVal("IOB_UNKNOWN67", "UNKNOWN266"), av)
+            self.chipdb.get_iob_attr_val(AttrVal("IOB_UNKNOWN67", "INCK_II"), av)
 
         fuses += self.get_iob_fuses(bel.x, bel.y, bel.idx_str, av)
         return fuses
