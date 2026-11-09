@@ -2412,7 +2412,7 @@ class Device:
         if dyn_odiv_sel == 'TRUE':
             self.chipdb.get_pll_attr_val(AttrVal('ODIVSEL', 'DYN'), av)
 
-        if not (dyn_idiv_sel or dyn_fbdiv_sel or dyn_odiv_sel):
+        if 'TRUE' not in (dyn_idiv_sel.upper(), dyn_fbdiv_sel.upper(), dyn_odiv_sel.upper()):
             # static. We can immediately check the compatibility of the divisors
             clkout = fclkin * fbdiv / idiv
             if clkout <= permitted_freqs[2] or clkout > permitted_freqs[1]:
