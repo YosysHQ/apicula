@@ -10,6 +10,7 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
   into fuses, and how that compares with Apicula's structures.
 - [fse-format.md](fse-format.md): `.fse` table types, per-device layouts and open
   questions.
+- [pll.md](pll.md): how the vendor configures PLLs, compared with `gowin_pack`.
 - [hand-written-tables.md](hand-written-tables.md): which Apicula tables have a
   vendor source, and what each `logicinfo` table is for.
 

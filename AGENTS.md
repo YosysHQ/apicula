@@ -126,6 +126,11 @@ Pick the cheapest tool that answers the question:
    startup limit it failed with `provider_timeout`. Do not make that a blocking
    step.
 
+Vendor bitstreams settle what static reading cannot. Run the IDE with
+`LD_PRELOAD=/usr/lib/libfreetype.so.6 IDE/bin/gw_sh build.tcl` if `gw_sh` stops with
+a `libfontconfig` symbol error. Decode results with `chipdb.tile_bitmap`; see
+[`doc/agent/pll.md`](doc/agent/pll.md) for an example and the decoder's limits.
+
 Prefer static analysis over running vendor binaries. Do not modify the IDE or
 work around its licensing.
 
