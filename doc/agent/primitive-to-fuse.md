@@ -28,8 +28,8 @@ All of this is in `libgowin.so`, class `fusegenMem`.
 ## The missing link is step 1
 
 A parameter does not map to a single fuse because step 1 is hand-written C++.
-Of 4,396 setter call sites, 4,122 pass constants, 263 are under an `INS_TYPE`
-switch and 444 have no branch guard. The rest depend on string compares of
+Of 5,057 setter call sites, 4,597 pass constants, 263 are under an `INS_TYPE`
+switch and 634 have no branch guard. The rest depend on string compares of
 parameters, `atoi` on values, pin source checks and device type checks.
 
 Numbers from `tools/gowin_attr_sites.py`. Its guard descriptions are approximate.

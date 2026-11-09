@@ -21,7 +21,8 @@ from collections import Counter
 
 from gowin_extract import HEADER, INSN, NAME_FN, RIP, Image
 
-SETTER = re.compile(r'<(?:NETLIST::)?([\w:~]*?::)?(set\w*Attr)\(NETLIST::(\w+_ATTR), NETLIST::(\w+_VALUE)\)')
+# Numeric values such as PLL dividers go through overloads taking a short.
+SETTER = re.compile(r'<(?:NETLIST::)?([\w:~]*?::)?(set\w*Attr)\(NETLIST::(\w+_ATTR), (NETLIST::\w+_VALUE|short)\)')
 COND_JUMP = re.compile(r'j(e|ne|a|ae|b|be|g|ge|l|le|s|ns)\s+([0-9a-f]+)')
 JUMP = re.compile(r'jmp\s+([0-9a-f]+)')
 CONST_ARG = re.compile(r'mov[lw]?\s+\$(-?0x[0-9a-f]+),%(esi|edx)$')
