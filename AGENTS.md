@@ -98,6 +98,30 @@ The `doc/` folder contains technical documentation about FPGA architecture, vend
 - Use `.venv` for builds: `PATH=$PWD/.venv/bin:$PATH make -j4`. The chipdb build
   fails on a Python without `msgspec`.
 
+## Verifying changes
+
+This is critical. A change to bitstream generation is not done until both checks
+below pass, and the PR must say what was compared. Reading the vendor code is not
+enough, and neither is a design that builds.
+
+1. **It matches the vendor.** Build a design that exercises the feature with the
+   IDE and with Apicula, then decode both bitstreams and compare the attributes or
+   fuses. Set the feature's parameters to non-default values, and cover each value
+   you changed.
+2. **Existing output does not change by accident.** Pack the same nextpnr JSON with
+   `master` and with your branch, and `cmp` the two bitstreams for designs that do
+   not use the feature. Explain every difference.
+
+Before trusting a comparison:
+
+- Constrain every pin to the IDE's choice (`impl/pnr/top.pin.html`). The IDE picks
+  PLL input selects from the clock pin, so unconstrained designs differ for reasons
+  unrelated to your change.
+- Check the vendor log and netlist (`impl/gwsynthesis/top.vg`) to confirm your
+  parameters took effect. A later `defparam` silently overrides an earlier one.
+- `gowin_unpack.parse_attrvals` can misreport overlapping table rows, so confirm a
+  surprising difference against the fuses.
+
 ## Checking a chipdb change
 
 Back up `apycula/*.msgpack.xz`, rebuild, then compare by content:
