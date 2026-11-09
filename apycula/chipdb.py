@@ -1103,12 +1103,17 @@ def dat_fill_io_cfgs(db, dat, device, pindesc):
 
 def fse_fill_logic_tables(dev, fse, device):
     # logicinfo
-    for ltable in fse['header']['logicinfo']:
+    logic_tables = dict(fse['header']['logicinfo'])
+    # Table 0x43 (ADC) is a signed logicinfo table on some devices.
+    signed_adc = fse['header'].get('signedlogicinfo', {}).get(0x43)
+    if signed_adc is not None:
+        logic_tables[0x43] = signed_adc
+    for ltable in logic_tables:
         if ltable in _known_logic_tables:
             table = dev.logicinfo.setdefault(_known_logic_tables[ltable], {})
         else:
             table = dev.logicinfo.setdefault(f"unknown_{ltable}", {})
-        for code, av in enumerate(fse['header']['logicinfo'][ltable]):
+        for code, av in enumerate(logic_tables[ltable]):
             attr, val, _ = av
             table[(attr, val)] = code
     # shortval

@@ -1,5 +1,19 @@
 import random
 from apycula import bitmatrix
+from apycula.fse_formats import DEVICE_FORMATS, TABLE_KINDS
+
+# Row width in 16-bit words; fuse and wire widths depend on the device.
+ROW_WIDTHS = {"wiresearch": 3, "const": 1, "shortval": 14, "alonenode": 15, "logicinfo": 3,
+              "signedlogicinfo": 3, "longfuse": 17, "longval": 28, "drpfuse": 10}
+
+def device_format(device):
+    """(fuse row width, wire row width, kind of table 0x43) for a device."""
+    if device in DEVICE_FORMATS:
+        return DEVICE_FORMATS[device]
+    # These GW1N devices are not named in the extracted vendor table.
+    if device.startswith("GW1N"):
+        return 150, 8, "logicinfo"
+    raise ValueError(f"No .fse format known for device {device}")
 
 
 def read_int(f, w):
@@ -29,96 +43,21 @@ def read_one_file(f, tile_type, device):
     tables = read_int(f, 4)
     #print("height: ", tmap["height"], "width: ", tmap["width"], "tables:", tables)
 
-    #v1 = 0x1b8
-    #v2 = 3
-    #if (tile_type < 0x400):
-    #    if ((0x1b7 < tile_type) or (tile_type < 0)):
-    #        print("Error: read_one_file 1")
-    #else:
-    #    if (2 < tile_type + -0x400):
-    #        print("Error: read_one_file 2")
-
-    #    v2 = tile_type + -0x400
-    #    tile_type = v1
-
-    #v1 = tile_type
-
-    is_5_series = device.lower().startswith("gw5a")
+    fuse_row, wire_row, table_0x43 = device_format(device)
+    row_widths = dict(ROW_WIDTHS, fuse=fuse_row, wire=wire_row)
 
     for i in range(tables):
         typ = read_int(f, 4)
         size = read_int(f, 4)
         #print(hex(f.tell()), " Table type", typ, "/", hex(typ), "of size", size)
-        if typ == 61:
-            size2 = read_int(f, 4)
-            typn = "grid"
-            t = read_table(f, size, size2, 4)
-        elif typ == 1:
-            # Check if the device is 5 series as tile type 1 needs to be read differently
-            typn = "fuse"
-            if is_5_series:
-                t = read_table(f, size, 512, 2)
-            else:
-                t = read_table(f, size, 150, 2)
-        elif typ in {0x02, 0x26, 0x30, 0x5a, 0x5b}:
-            typn = "wire"
-            if not is_5_series: t = read_table(f, size, 8, 2)
-            else: t = read_table(f, size, 9, 2)
-        elif typ == 0x03:
-            typn = "wiresearch"
-            t = read_table(f, size, 3, 2)
-        elif typ == 0x04:
-            typn = "const"
-            t = read_table(f, size, 1, 2)
-        elif typ in {0x05, 0x11, 0x14, 0x15, 0x16, 0x19, 0x1a, 0x1b,
-                     0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23,
-                     0x24, 0x32, 0x33, 0x38, 0x3c, 0x40, 0x42, 0x44,
-                     0x47, 0x49, 0x4b, 0x4d, 0x4f, 0x50, 0x52, 0x54,
-                     0x56, 0x58, 0x59, 0x5d, 0x5e, 0x5f, 0x60, 0x61,
-                     0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
-                     0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70, 0x71,
-                     0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79,
-                     0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x80, 0x81,
-                     0x82, 0x83, 0x84, 0x85, 0x88, 0x89, 0x8a, 0x8c,
-                     0x8d, 0x8e, 0x8f, 0x90, 0x91, 0x92, 0x93, 0x94,
-                     0x95, 0x96, 0x97, 0x98, 0x99, 0x9b, 0x9c, 0x9e}:
-            typn = "shortval"
-            t = read_table(f, size, 14, 2)
-        elif typ in {6, 0x45}:
-            typn = "alonenode"
-            t = read_table(f, size, 15, 2)
-        elif typ in {0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
-                     0x0f, 0x10, 0x27, 0x31, 0x34, 0x37, 0x39, 0x3b,
-                     0x3e, 0x3f, 0x41, 0x46, 0x48, 0x4a, 0x4c, 0x4e,
-                     0x51, 0x53, 0x55, 0x57, 0x5c}:
-            typn = "logicinfo"
-            t = read_table(f, size, 3, 2)
-        elif typ in {0x12, 0x13, 0x35, 0x36, 0x3a}:
-            typn = "longfuse"
-            t = read_table(f, size, 17, 2)
-        elif typ in {0x17, 0x18, 0x25, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f}:
-            typn = "longval"
-            t = read_table(f, size, 28, 2)
-        elif typ == 0x43:
-            if device in {'GW1N-1', 'GW1NZ-1', 'GW1N-9', 'GW1N-9C', 'GW1N-4', 'GW1NS-4',
-                        'GW2A-18', 'GW2A-18C', 'GW5A-25A', 'GW5AS-25A', 'GW5AST-138C'}:
-                typn = "logicinfo"
-                t = read_table(f, size, 3, 2)
-            else: # GW5A-138B GW5AST-138B GW5AT-138 GW5AT-138B GW5AT-75B
-                typn = "signedlogicinfo"
-                t = read_table(f, size, 3, 2)
-        elif typ in {0x86, 0x87}:
-            typn = "signedlogicinfo"
-            #t = read_table(f, size, 6, 2)
-            t = read_table(f, size, 3, 2)
-        elif typ == 0x8b:
-            typn = "drpfuse"
-            t = read_table(f, size, 10, 2)
-        elif typ == 0x9a: # 60K
-            typn = "logicinfo"
-            t = read_table(f, size, 3, 2)
-        else:
+        typn = table_0x43 if typ == 0x43 else TABLE_KINDS.get(typ)
+        if typn is None:
             raise ValueError("Unknown type {} at {}".format(hex(typ), hex(f.tell())))
+        if typn == "grid":
+            size2 = read_int(f, 4)
+            t = read_table(f, size, size2, 4)
+        else:
+            t = read_table(f, size, row_widths[typn], 2)
         tmap.setdefault(typn, {})[typ] = t
     return tmap
 
