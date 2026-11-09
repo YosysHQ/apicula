@@ -9,9 +9,9 @@ constants), the primitives of an enclosing INS_TYPE switch case, and the branche
 guarding the call.
 
 This is a research aid. The guards are approximate: `call` is the nearest earlier
-call, which can be unrelated to the condition being tested. The output is
-therefore not committed, unlike the output of gowin_extract.py. Static analysis
-only; the vendor library is never executed.
+call, which can be unrelated to the condition being tested. ENUMS_JSON comes from
+gowin_extract.py extract. Static analysis only; the vendor library is never
+executed.
 """
 import json
 import re

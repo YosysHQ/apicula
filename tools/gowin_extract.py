@@ -2,8 +2,9 @@
 """Extract vendor enums and .fse table types from a Gowin IDE's libgowin.so.
 
 Static analysis only: the vendor library is disassembled with objdump and never
-executed. It relies on libgowin.so being unstripped and built at -O0. The output
-is meant to be committed, so running this is only needed for a new IDE version.
+executed. It relies on libgowin.so being unstripped and built at -O0. The generated
+apycula/fse_formats.py is committed, so extract only needs running for a new IDE
+version. enums.json is not committed; generate it when updating apycula/attrids.py.
 
     gowin_extract.py extract LIBGOWIN_SO OUTDIR
     gowin_extract.py check-attrids OUTDIR [ATTRIDS_PY]

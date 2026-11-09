@@ -4,7 +4,6 @@
 *.fs
 *.gif
 *.json
-!tools/gowin_extract_out/*/enums.json
 *.cpp
 *.o
 *.il

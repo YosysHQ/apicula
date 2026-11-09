@@ -129,12 +129,13 @@ Pick the cheapest tool that answers the question:
 Prefer static analysis over running vendor binaries. Do not modify the IDE or
 work around its licensing.
 
-Generated data is committed, so extraction only needs re-running for a new IDE
-version:
+`apycula/fse_formats.py` is committed, so extraction only needs re-running for a
+new IDE version. Vendor enums are not committed; generate them when updating
+`apycula/attrids.py`:
 
 | Tool | Purpose |
 |---|---|
-| `tools/gowin_extract.py extract` | Writes vendor enums to `tools/gowin_extract_out/` and generates `apycula/fse_formats.py` |
+| `tools/gowin_extract.py extract` | Generates `apycula/fse_formats.py` and writes vendor enums to a local `enums.json` |
 | `tools/gowin_extract.py check-attrids` | Compares `apycula/attrids.py` with vendor names |
 | `tools/gowin_attr_sites.py` | Lists attribute assignments with approximate guards; research aid, output not committed |
 | `tools/chipdb_compare.py` | Content comparison of chipdb directories |

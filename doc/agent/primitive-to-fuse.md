@@ -54,7 +54,7 @@ which this function does not. Whether that matters has not been checked.
 ## Vendor enums
 
 `enumToStr(*_ATTR)`, `enumToStr(*_VALUE)` and `getInstSubTypeName` give vendor
-names, in `tools/gowin_extract_out/1.9.10.03/enums.json`. The numbers match
+names, which `tools/gowin_extract.py extract` dumps to `enums.json`. The numbers match
 `apycula/attrids.py` in the tables compared, so those are the vendor's own enums.
 `check-attrids` lists name differences. Most are naming choices. Some are likely
 corrections, for example IOB values 247 (`SSTL135D_I`) and 254 (`SSTL135_I`), PLL
