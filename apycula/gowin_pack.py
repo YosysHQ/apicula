@@ -2402,17 +2402,17 @@ class Device:
         odiv = int(val, 2)
         self.chipdb.get_pll_attr_val(AttrVal('ODIV', odiv), av)
 
-        dyn_idiv_sel = cell_parms.get('DYN_IDIV_SEL', 'FALSE')
+        dyn_idiv_sel = cell_parms.get('DYN_IDIV_SEL', 'FALSE').upper()
         if dyn_idiv_sel == 'TRUE':
             self.chipdb.get_pll_attr_val(AttrVal('IDIVSEL', 'DYN'), av)
-        dyn_fbdiv_sel = cell_parms.get('DYN_FBDIV_SEL', 'FALSE')
+        dyn_fbdiv_sel = cell_parms.get('DYN_FBDIV_SEL', 'FALSE').upper()
         if dyn_fbdiv_sel == 'TRUE':
             self.chipdb.get_pll_attr_val(AttrVal('FDIVSEL', 'DYN'), av)
-        dyn_odiv_sel = cell_parms.get('DYN_ODIV_SEL', 'FALSE')
+        dyn_odiv_sel = cell_parms.get('DYN_ODIV_SEL', 'FALSE').upper()
         if dyn_odiv_sel == 'TRUE':
             self.chipdb.get_pll_attr_val(AttrVal('ODIVSEL', 'DYN'), av)
 
-        if 'TRUE' not in (dyn_idiv_sel.upper(), dyn_fbdiv_sel.upper(), dyn_odiv_sel.upper()):
+        if 'TRUE' not in (dyn_idiv_sel, dyn_fbdiv_sel, dyn_odiv_sel):
             # static. We can immediately check the compatibility of the divisors
             clkout = fclkin * fbdiv / idiv
             if clkout <= permitted_freqs[2] or clkout > permitted_freqs[1]:
@@ -2432,7 +2432,7 @@ class Device:
         self.chipdb.get_pll_attr_val(AttrVal('FLDCOUNT', fclkin_idx), av)
 
         # duty cycle
-        if cell_parms.get('DYN_DA_EN', 'FALSE') == 'TRUE':
+        if cell_parms.get('DYN_DA_EN', 'FALSE').upper() == 'TRUE':
             self.chipdb.get_pll_attr_val(AttrVal('DPSEL', 'DYN'), av)
             self.chipdb.get_pll_attr_val(AttrVal('DUTY', 0), av)
             self.chipdb.get_pll_attr_val(AttrVal('PHASE', 0), av)
@@ -2470,13 +2470,13 @@ class Device:
         val = cell_parms.get('CLKOUTD3_SRC', 'CLKOUT')
         if val == 'CLKOUTP':
             self.chipdb.get_pll_attr_val(AttrVal('CLKOUTDIV3SEL', 'CLKOUTPS'), av)
-        val = cell_parms.get('CLKOUT_BYPASS', 'FALSE')
+        val = cell_parms.get('CLKOUT_BYPASS', 'FALSE').upper()
         if val == 'TRUE':
             self.chipdb.get_pll_attr_val(AttrVal('BYPCK', 'BYPASS'), av)
-        val = cell_parms.get('CLKOUTP_BYPASS', 'FALSE')
+        val = cell_parms.get('CLKOUTP_BYPASS', 'FALSE').upper()
         if val == 'TRUE':
             self.chipdb.get_pll_attr_val(AttrVal('BYPCKPS', 'BYPASS'), av)
-        val = cell_parms.get('CLKOUTD_BYPASS', 'FALSE')
+        val = cell_parms.get('CLKOUTD_BYPASS', 'FALSE').upper()
         if val == 'TRUE':
             self.chipdb.get_pll_attr_val(AttrVal('BYPCKDIV', 'BYPASS'), av)
 
