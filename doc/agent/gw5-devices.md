@@ -43,10 +43,34 @@ and 648.
 The name `isDeviceBeforeGW5AT138` is misleading: 25A, 60B, 75 and 15A return false
 along with the 138 parts, so it separates GW5 from earlier families.
 
+## PLL input select follows the clock pin
+
+Read from code: `A_CLKIN_SEL` comes from the internal `IN_SEL` value, which the
+placer sets from the input buffer's dedicated function (`placeOneFixIOBBufInst`,
+`isCfgPllClkin*TypeForGW5A25`).
+
+Checked against vendor bitstreams, GW5A-25A in MBGA121N with only the clock pin
+changed:
+
+| Clock pin | Function | `A_CLKIN_SEL` |
+|---|---|---|
+| A10, A1, B3 | none | 18 (`CLKIN0`) |
+| C2 | `LPLL1_C_FB0` | 18 |
+| C11 | `GCLKT_13`, `LPLL0_T_IN1` | 21 |
+| A11 | `LPLL1_T_IN0` | 22 |
+| E11 | `GCLKT_14`, `LPLL0_T_IN2` | 22 |
+| C10 | `GCLKC_13`, `LPLL0_C_FB1` | 19 |
+| E10 | `GCLKC_14`, `LPLL0_C_FB0` | 52 |
+| E1 | `GCLKC_10B`, `LPLL1_C_IN1` | 53 |
+| F1, F2 | `GCLK*_9B` | 52 |
+
+`gowin_pack` always writes 18. With every pin matched to the vendor's on A10, all
+56 attributes agree. The same holds for rPLL `INSEL` on GW1NR-9C: `CLKIN1` on plain
+pins 3, 11 and 13, as `gowin_pack` writes, but `CLKIN0` on `LPLL_T_IN` and
+`RPLL_T_IN`, and `CLKIN4` on `GCLKT_4`.
+
 ## Open
 
 - The vendor bitstream omits `ODIV1_SEL` and `ODIV6_SEL` when the channel is
   disabled, although the handler sets them unconditionally. The cause is unknown.
   `gowin_pack` still writes them.
-- `A_CLKIN_SEL` differed in every GW5A-25A comparison (vendor 21, ours 18). It
-  probably depends on placement; not confirmed.
