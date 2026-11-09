@@ -2428,7 +2428,8 @@ class Device:
         fvco = (odiv * fbdiv * fclkin) / idiv
         fclkin_idx, icp, r_idx = self.get_pll_pump(fref, fvco)
         self.chipdb.get_pll_attr_val(AttrVal('ICPSEL', int(icp)), av)
-        self.chipdb.get_pll_attr_val(AttrVal('LPR', f'R{r_idx}'), av)
+        if r_idx is not None:
+            self.chipdb.get_pll_attr_val(AttrVal('LPR', f'R{r_idx}'), av)
         self.chipdb.get_pll_attr_val(AttrVal('FLDCOUNT', fclkin_idx), av)
 
         # duty cycle
@@ -2482,6 +2483,10 @@ class Device:
 
         val = cell_parms.get('INSEL', 'CLKIN1')
         self.chipdb.get_pll_attr_val(AttrVal('INSEL', val), av)
+
+        # The vendor sets this for a static output divider of 32, except on the GW1N-2.
+        if dyn_odiv_sel.upper() != 'TRUE' and odiv == 32 and self.chipdb.device_name != 'GW1N-2':
+            self.chipdb.get_pll_attr_val(AttrVal('SFTDLY', 1), av)
 
         # set internal attrs
         self.chipdb.get_pll_attr_val(AttrVal('FBSEL', 'CLKFB3'), av)
@@ -2541,6 +2546,11 @@ class Device:
             if Ic <= 0.00028:
                 icp = int(Ic * 100000.0 + 0.5) * 10
                 break
+        else:
+            # No resistor meets the limit: the vendor uses 200k and leaves LPR unset.
+            Ic = (1.8769 / (200000.0 * 200000.0 * Kvco * C1)) * 4.0 * Ndiv
+            icp = int(Ic * 100000.0 + 0.5) * 10
+            r_idx = None
 
         return ((fclkin_idx + 1) * 16, icp, r_idx)
 
@@ -5722,7 +5732,8 @@ class GW5A(Device):
         if fvco > 1400.0:
             fclkin_idx += 1
         self.chipdb.get_pll_attr_val(AttrVal('A_ICP_SEL', int(icp)), av)
-        self.chipdb.get_pll_attr_val(AttrVal('A_LPF_RES_SEL', f'R{r_idx}'), av)
+        if r_idx is not None:
+            self.chipdb.get_pll_attr_val(AttrVal('A_LPF_RES_SEL', f'R{r_idx}'), av)
         self.chipdb.get_pll_attr_val(AttrVal('FLDCOUNT', fclkin_idx), av)
 
         # set other attributes
