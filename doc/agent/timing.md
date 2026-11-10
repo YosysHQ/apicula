@@ -123,19 +123,6 @@ IREG/OREG at 0x306c ends at 0x3278). (code, data)
   0 holds delays. (code, data)
 - DQS, DLLDLY, DQCE and DCS have no getters, only `print*Delay`, and are not
   parsed.
-- IO buffers: for GW1N/GW2A (`isDeviceBeforeGW5AT138`), the edge delay of an IO
-  buffer is `STA::TmModel::getBufPinToPinDly` (0x2d7c624), called from
-  `TmAnalyzer::setN2nDlyForOneInsTmEdge`. Inputs use `Pad_PaddisV`. Outputs use
-  `Paddo_PadsV`, or `Ioldo_PadsV` when driven by IOLOGIC, plus a constant 2.0 ns.
-  Output enables use `Paddt_PadsV` or `Iolto_PadsV`, with no constant. All of
-  these read entry 0, the only entry populated in GW1N and GW2A files. GW5A files
-  fill all ten entries of `Ioldo_PadsV` and others, and use `TmModelNew` for IO.
-  (code, data)
-- The SDF does not match that formula. GW1N-9C C6/I5 LVCMOS18 gives IBUF
-  2.140/4.230 and OBUF 2.318/4.582 (min/max), against `Pad_PaddisV`
-  0.844/0.984 and `Paddo_PadsV` + 2.0 = 2.671/2.781. Neither 4.230 nor 4.582
-  occurs in the .tm file, so an IO-standard term is computed elsewhere. Not
-  found; the IO group is not parsed. (data)
 - IODELAY (0x3728) holds `DI_DO` at 0x0, the delay step (`getStepDly`) as one
   float at 0x10, and the six other fields from 0x14. `tm_parser` called `DI_DO`
   `GI_DO` and read the later fields one float early until this was found. The
