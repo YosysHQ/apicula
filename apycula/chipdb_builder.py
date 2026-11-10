@@ -148,6 +148,37 @@ SDRAM_PARAMS = {
     }],
 }
 
+
+def gw5a_xwire_crossings(db, dat):
+    """Rows and columns where GW5A X1/X2/X8 wires are buffered or slowed down.
+
+    NETLIST::chip::buildXwireNodeCrossDelayValueFlag (IDE 1.9.10.03) flags every
+    wire segment that crosses one of these, with an XWIRE_DELAY_VALUE_FLAG: 2 for
+    BSRAM rows (VBUF_EBR), 4 for DSP rows (VBUF_DSP), 7 for the DSR repeater
+    columns (HOS_RPT), 9 for the spine columns (HOS_SPINE) and 6 for the VIQ
+    column (HBUF_VIQ), in that order, later ones overwriting earlier ones. A
+    segment crosses row or column p when it lies on the other side of the boundary
+    between p and p + 1 from its root. Returned as {'R<row>': flag, 'C<col>': flag}
+    in Apicula coordinates; the vendor's are one more, as its grid has a border.
+    """
+    res = {}
+    def rows_with(prefix):
+        return sorted({y for y in range(db.rows) for x in range(db.cols)
+                       if any(b.startswith(prefix) for b in db.tiles[db.grid[y][x]].bels)})
+    for y in rows_with('BSRAM'):
+        if y not in {0, db.rows - 1}:
+            res[f'R{y}'] = 2
+    for y in rows_with('DSP'):
+        res[f'R{y}'] = 4
+    # chip::getSpineColumnLoc is not decoded; dat_parser reads zeros there, which
+    # is either unused (-1 in the vendor's check) or a wrong offset.
+    viq = dat.grid.center_x
+    for c in range(10, dat.grid.num_cols - 10, 9):  # chip::getDSRRepeaterColumnLoc
+        if c != viq:
+            res[f'C{c - 1}'] = 7
+    res[f'C{viq - 1}'] = 6
+    return res
+
 def tbrl2rc(fse, side, num):
     if side == 'T':
         row = 0
@@ -405,6 +436,10 @@ def main():
     db = chipdb.from_fse(device, fse, dat)
     chipdb.set_banks(fse, dat, db)
     db.timing = tm
+    if device.lower().startswith('gw5a'):
+        xcross = gw5a_xwire_crossings(db, dat)
+        for groups in db.timing.values():
+            groups['xcross'] = xcross
     chipdb.fse_wire_delays(db, params['device'])
     db.packages, db.pinout, _ = chipdb.json_pinout(device)
 

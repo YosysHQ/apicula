@@ -902,12 +902,13 @@ _new_vars = {
              'clka_reseta_set_syn': ('BSRAM', 15), 'clka_reseta_hold_syn': ('BSRAM', 24),
              'clkb_resetb_set_syn': ('BSRAM', 48), 'clkb_resetb_hold_syn': ('BSRAM', 49)},
 }
-# Routing is not taken from the new block yet. The IDE charges different
-# delays for wires that cross BSRAM/DSP columns or the spine (X*_VBUF_*,
-# X*_HBUF_*, X*_HOS_*, *_LOAD_DERATE), selected per wire by a flag of its
-# routing graph. With the plain X0/X1/X2/X8 values alone nextpnr's routing
-# delays on IDE-routed GW5A-25A designs come out 17% low, against 2% low with
-# the placeholder values, so the 'wire' and 'fanout' groups keep those.
+# The 'wire' and 'fanout' groups keep the placeholder values. The IDE charges
+# different delays for wires that cross BSRAM/DSP rows and some columns
+# (X*_VBUF_*, X*_HBUF_*, X*_HOS_*, *_LOAD_DERATE), selected per wire by a flag
+# of its routing graph. With the plain X0/X1/X2/X8 values alone nextpnr's
+# routing delays on IDE-routed GW5A-25A designs come out 17% low, against 2%
+# low with the placeholder values. The new-block values and the crossing
+# geometry are exported separately as 'xwire', 'xfanout' and 'xcross'.
 
 # Speed grade -> (old-format placeholder record, slow-corner multiplier).
 # STA::TmAnalyzer::getTmModelDelayMultByDevice returns 1.25 for GW5A and it is
@@ -916,6 +917,54 @@ _new_vars = {
 _gw5a_speeds = {'C1/I0': (0, 1.25), 'A0': (0, 1.25), 'ES': (0, 1.25), 'C2/I1': (1, 1.0)}
 # The IDE uses core type 1 by default (STA::TmModelNew::setCoreType)
 _gw5a_core_type = 1
+
+# GW5A routing (STA::TmModelNew::getWiresDlyNew, IDE 1.9.10.03). Variable names of
+# the XWIRE and FANOUT classes, by enum value (STA::TmModelBase::getXWireVarName,
+# getFanoutVarName). See doc/agent/timing.md, "New model: routing".
+_gw5a_xwire_vars = [
+    'X0', 'X1', 'X2', 'X8', 'X1_VBUF_EBR', 'X1_VBUF_DSP', 'X2_VBUF_EBR', 'X2_VBUF_DSP',
+    'X8_VBUF_EBR', 'X8_VBUF_DSP', 'X1_HBUF_VIQ', 'X1_HBUF_RPT', 'X1_HBUF_SPINE', 'X2_HBUF_VIQ',
+    'X2_HBUF_RPT', 'X2_HBUF_SPINE', 'X8_HBUF_VIQ', 'X8_HBUF_RPT', 'X8_HBUF_SPINE', 'ISB',
+    'X0CTL', 'X0CLK', 'X0M', 'X1_VOS_EBR', 'X1_VOS_DSP', 'X2_VOS_EBR', 'X2_VOS_DSP',
+    'X8_VOS_EBR', 'X8_VOS_DSP', 'X1_HOS_VIQ', 'X1_HOS_RPT', 'X1_HOS_SPINE', 'X2_HOS_VIQ',
+    'X2_HOS_RPT', 'X2_HOS_SPINE', 'X8_HOS_VIQ', 'X8_HOS_RPT', 'X8_HOS_SPINE', 'X0_LOAD_DERATE',
+    'X1_LOAD_DERATE', 'X2_LOAD_DERATE', 'X8_LOAD_DERATE', 'X1_VBUF_EBR_LOAD_DERATE',
+    'X1_VBUF_DSP_LOAD_DERATE', 'X2_VBUF_EBR_LOAD_DERATE', 'X2_VBUF_DSP_LOAD_DERATE',
+    'X8_VBUF_EBR_LOAD_DERATE', 'X8_VBUF_DSP_LOAD_DERATE', 'X1_HBUF_VIQ_LOAD_DERATE',
+    'X1_HBUF_RPT_LOAD_DERATE', 'X1_HBUF_SPINE_LOAD_DERATE', 'X2_HBUF_VIQ_LOAD_DERATE',
+    'X2_HBUF_RPT_LOAD_DERATE', 'X2_HBUF_SPINE_LOAD_DERATE', 'X8_HBUF_VIQ_LOAD_DERATE',
+    'X8_HBUF_RPT_LOAD_DERATE', 'X8_HBUF_SPINE_LOAD_DERATE',
+]
+_gw5a_fanout_vars = [
+    'FAN_RATIO_X0', 'FAN_RATIO_X0_range_1_5', 'FAN_RATIO_X0_range_5_9',
+    'FAN_RATIO_X0_range_9_13', 'FAN_RATIO_X1', 'FAN_RATIO_X1_range_1_5',
+    'FAN_RATIO_X1_range_5_9', 'FAN_RATIO_X1_range_9_13', 'FAN_RATIO_X2',
+    'FAN_RATIO_X2_range_1_5', 'FAN_RATIO_X2_range_5_9', 'FAN_RATIO_X2_range_9_13',
+    'FAN_RATIO_X8', 'FAN_RATIO_X8_range_1_5', 'FAN_RATIO_X8_range_5_9',
+    'FAN_RATIO_X8_range_9_13', 'FAN_RATIO_X1_VBUF_EBR', 'FAN_RATIO_X1_VBUF_EBR_range_1_5',
+    'FAN_RATIO_X1_VBUF_EBR_range_5_9', 'FAN_RATIO_X1_VBUF_EBR_range_9_13',
+    'FAN_RATIO_X1_VBUF_DSP', 'FAN_RATIO_X1_VBUF_DSP_range_1_5',
+    'FAN_RATIO_X1_VBUF_DSP_range_5_9', 'FAN_RATIO_X1_VBUF_DSP_range_9_13',
+    'FAN_RATIO_X2_VBUF_EBR', 'FAN_RATIO_X2_VBUF_EBR_range_1_5',
+    'FAN_RATIO_X2_VBUF_EBR_range_5_9', 'FAN_RATIO_X2_VBUF_EBR_range_9_13',
+    'FAN_RATIO_X2_VBUF_DSP', 'FAN_RATIO_X2_VBUF_DSP_range_1_5',
+    'FAN_RATIO_X2_VBUF_DSP_range_5_9', 'FAN_RATIO_X2_VBUF_DSP_range_9_13',
+    'FAN_RATIO_X8_VBUF_EBR', 'FAN_RATIO_X8_VBUF_EBR_range_1_5',
+    'FAN_RATIO_X8_VBUF_EBR_range_5_9', 'FAN_RATIO_X8_VBUF_EBR_range_9_13',
+    'FAN_RATIO_X8_VBUF_DSP', 'FAN_RATIO_X8_VBUF_DSP_range_1_5',
+    'FAN_RATIO_X8_VBUF_DSP_range_5_9', 'FAN_RATIO_X8_VBUF_DSP_range_9_13',
+    'FAN_RATIO_X1_HBUF_VIQ', 'FAN_RATIO_X1_HBUF_VIQ_range_1_5',
+    'FAN_RATIO_X1_HBUF_VIQ_range_5_9', 'FAN_RATIO_X1_HBUF_VIQ_range_9_13',
+    'FAN_RATIO_X1_HBUF_RPT', 'FAN_RATIO_X1_HBUF_SPINE', 'FAN_RATIO_X2_HBUF_VIQ',
+    'FAN_RATIO_X2_HBUF_VIQ_range_1_5', 'FAN_RATIO_X2_HBUF_VIQ_range_5_9',
+    'FAN_RATIO_X2_HBUF_VIQ_range_9_13', 'FAN_RATIO_X2_HBUF_RPT', 'FAN_RATIO_X2_HBUF_SPINE',
+    'FAN_RATIO_X8_HBUF_VIQ', 'FAN_RATIO_X8_HBUF_VIQ_range_1_5',
+    'FAN_RATIO_X8_HBUF_VIQ_range_5_9', 'FAN_RATIO_X8_HBUF_VIQ_range_9_13',
+    'FAN_RATIO_X8_HBUF_RPT', 'FAN_RATIO_X8_HBUF_SPINE', 'FAN_RATIO_F', 'FAN_RATIO_F_range_1_5',
+    'FAN_RATIO_F_range_5_9', 'FAN_RATIO_F_range_9_13', 'FAN_RATIO_Q', 'FAN_RATIO_Q_range_1_5',
+    'FAN_RATIO_Q_range_5_9', 'FAN_RATIO_Q_range_9_13', 'FAN_RATIO_OFX',
+    'FAN_RATIO_OFX_range_1_5', 'FAN_RATIO_OFX_range_5_9', 'FAN_RATIO_OFX_range_9_13',
+]
 
 _gw5a_no_placeholder = {'dl', 'iddroddr', 'pll', 'dll', 'clkdiv', 'iregoreg',
                         'mult', 'mult36x36', 'mac', 'multadd', 'padd', 'alu54'}
@@ -935,6 +984,15 @@ def read_tm_gw5a(data):
                     continue
                 quad = vals[_gw5a_core_type * per_group:(_gw5a_core_type + 1) * per_group]
                 groups.setdefault(group, {})[key] = [v * mult for v in quad]
+        # Routing delays of the new model, under their own names. The placeholder
+        # 'wire' and 'fanout' groups stay as they are: the plain X-wire values are
+        # only right together with the buffered crossings (see 'xcross' in
+        # chipdb_builder), which a consumer has to model first.
+        for group, cls, var_names in (('xwire', 'XWIRE', _gw5a_xwire_vars),
+                                      ('xfanout', 'FANOUT', _gw5a_fanout_vars)):
+            for var, vals in new.get(cls, {}).items():
+                quad = vals[_gw5a_core_type * per_group:(_gw5a_core_type + 1) * per_group]
+                groups.setdefault(group, {})[var_names[var]] = [v * mult for v in quad]
         tmdat[speed] = groups
     return tmdat
 

@@ -348,21 +348,79 @@ Read from `TmModelNew::getWiresDlyNew` (0x2d9d84a), `getWireFanout`
   Middle and end segments contribute nothing.
 - F, Q and OF nodes contribute `n * FAN_RATIO_F/Q/OFX_range_<r>`.
 - LUT inputs and CK/SR/CE/SEL contribute nothing. There is no ISB term.
-- Each wire node carries a flag (`NETLIST::node::getXwireDelayValueFlag`).
-  When it is set, the base and fanout variables are replaced by the
-  `X*_VBUF_EBR/DSP`, `X*_HBUF_VIQ/RPT/SPINE` variants, plus `X*_VOS_*`/`X*_HOS_*`
-  and a `*_LOAD_DERATE` correction (`subRowDistLoadRatio`). Where the flag comes
-  from has not been traced.
+- Each wire node carries a flag (`NETLIST::node::getXwireDelayValueFlag`) that
+  changes how the wire is charged. See "Buffered crossings" below.
 
-Checked against data on GW5A-25A, 1305 connections. The formula without the
-buffer variants reproduces the SDF for 285 connections and 81% of the total.
-Most of the remaining connections are short by 0.32–0.38 ns, which matches the
-X8 VBUF/HBUF values times 1.25. A smaller group is short by about 5 ps, which
-looks like a fanout count off by one; the cause is not known.
+### Buffered crossings (GW5A)
 
-Because of this, Apicula keeps the placeholder `wire` and `fanout` groups for
-GW5A. The plain X-wire values make nextpnr's routing delays 17% low on
-IDE-routed GW5A-25A designs, against 2% low with the placeholder values.
+`NETLIST::chip::buildXwireNodeCrossDelayValueFlag` (0x1948270) flags wire
+segments that cross certain rows and columns, in this order (later ones
+overwrite earlier ones). (code)
+
+| Rows / columns | Flag | Delay variables |
+|---|---|---|
+| BSRAM rows, except vendor row 1 and `rows − 2` | 2 | `X*_VBUF_EBR` |
+| DSP rows | 4 | `X*_VBUF_DSP` |
+| spine columns (`routeSwitchDataTable::getSpineColumn`) | 9 | `X*_HOS_SPINE` |
+| DSR repeater columns: every 9th from 10 to `cols − 10`, minus spine and VIQ | 7 | `X*_HOS_RPT` |
+| the VIQ column (`routeSwitchDataTable::getViq`, `cc_x` in `dat_parser`) | 6 | `X*_HBUF_VIQ` |
+
+- `chip::setX{1,2,8}NodeCross{Row,Column}Flag(p, flag)` looks at every X wire
+  root within 8 rows or columns of `p`. A middle or end segment on the other side
+  of the boundary between `p` and `p + 1` from its root gets the flag. The root
+  records the distance from itself to `p` as its offset. Flags 1, 3, 5, 8 and 10
+  exist in the code but are not set by this function. (code)
+- Vendor coordinates are Apicula's plus one: the vendor grid has a border. For
+  GW5A-25A, `dat` gives 39×94 with VIQ 46, Apicula has 37×92, and the crossings
+  are BSRAM rows 9 and 27, DSP row 18, VIQ column 45 and repeater columns 9, 18,
+  27, 36, 54, 63, 72 and 81 (Apicula coordinates). The spine-column table reads as
+  zeros in `dat_parser`, either unused or a wrong offset. (code, data)
+
+How `getWiresDlyNew` charges an X wire (X8 read in full; X1 from its root and end
+branches; X2 assumed the same as X8). `mf` and `ef` are the middle and end
+segment flags, `n_r`, `n_m` and `n_e` the used pips on the root, middle and end
+segments. (code)
+
+- No flags: `X<n> + fanout(n_r + n_m + n_e)`, charged at the root.
+- Odd end flag, middle flag 0 or odd: as above, plus the adder `X<n>_VOS/HOS_*`.
+- Even end flag, middle flag 0 (buffer between the middle and the end): the
+  root charges `X<n>_VBUF/HBUF_*` minus `(len − offset) × *_LOAD_DERATE`
+  (`subRowDistLoadRatio`, floored at 0) plus `fanout(n_r + n_m)`. The end node, if
+  the path reaches it, charges the buffered value again plus its own fanout with
+  the `FAN_RATIO_X<n>_VBUF/HBUF_*` ratios.
+- Even middle flag (buffer between the root and the middle): the same, with the
+  root charging `fanout(n_r)` and the middle node `fanout(n_m + n_e)`.
+- Odd middle flag with even end flag: the root charges nothing; the end node
+  charges as above. (Read from the root branch; looks like a vendor quirk.)
+
+So a load past a buffered crossing pays roughly two wire delays. That is the
+0.32–0.38 ns shortfall noted above.
+
+Checked against the SDF on GW5A-25A C1/I0, 1305 connections of the IDE's own
+routes, with the geometry above (data):
+
+| Model | Total vs SDF | Median ratio | Within 10 ps |
+|---|---|---|---|
+| no crossings | −19% | 0.887 | 338 |
+| BSRAM and DSP rows | −4% | 0.973 | 545 |
+| rows, repeater and VIQ columns | −0.9% | 0.998 | 858 |
+| same, every load charged for the crossing (what nextpnr can express) | +1.7% | 0.999 | 801 |
+
+The remaining error is mostly fanout: `routes.json` only has the loads along each
+path, not all loads on a segment.
+
+Apicula exports this for GW5A as timing groups `xwire` (all XWIRE variables by
+name), `xfanout` (all FANOUT variables) and `xcross` (`{'R<row>': flag,
+'C<col>': flag}`, Apicula coordinates, from `chipdb_builder.gw5a_xwire_crossings`).
+The `wire` and `fanout` groups stay the GW2A placeholders. The plain values are
+only right together with the crossings.
+
+A nextpnr prototype gives each crossing wire its own node class, carrying the
+extra delay in `cap`: `getPipDelay` adds `res / 2 × cap` of the destination node to
+the pip that drives the wire. With real GW5A values and the fanout change, the
+same IDE routes come out at +6.7% (median 1.045, p10–p90 1.02–1.10), against
+−1.9% (median 1.03, p10–p90 0.76–1.23) for the placeholders. The tighter spread
+is the point: the placeholder total was right only on average. (data)
 
 ### What Apicula uses for GW5A
 
