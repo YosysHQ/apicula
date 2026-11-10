@@ -16,10 +16,6 @@ def float_data(data, paths):
             res.setdefault(name,[]).append(to_float(data[idx*4:idx*4+4]))
     return res
 
-def offset_data(data, fields):
-    """{name: 4 floats} for fields at the given byte offsets."""
-    return {name: list(struct.unpack_from('<4f', data, off)) for name, off in fields.items()}
-
 def to_int(s):
     return struct.unpack('I', s)[0]
 
@@ -86,114 +82,16 @@ def parse_dff(data):
     return float_data(data, paths)
 
 def parse_dl(data):
-    # field offsets from the STA::DlTmModel::get* getters (IDE 1.9.10.03)
-    fields = {
-        'di_clksetpos': 0x0,
-        'di_clksetneg': 0x10,
-        'di_clkholdpos': 0x20,
-        'di_clkholdneg': 0x30,
-        'ce_clksetpos': 0x40,
-        'ce_clksetneg': 0x50,
-        'ce_clkholdpos': 0x60,
-        'ce_clkholdneg': 0x70,
-        'clk_qpos': 0x80,
-        'clk_qneg': 0x90,
-        'lsr_q': 0xa0,
-        'lsr_clksetpos_asyn': 0xb0,
-        'lsr_clksetneg_asyn': 0xc0,
-        'lsr_clkholdpos_asyn': 0xd0,
-        'lsr_clkholdneg_asyn': 0xe0,
-        'clk_clk': 0xf0,
-        'lsr_lsr': 0x100,
-    }
-    return offset_data(data, fields)
+    pass
 
 def parse_iddroddr(data):
-    # field offsets from the STA::IddrOddrTmModel::get* getters (IDE 1.9.10.03); 0x0-0x2c not read by any getter
-    fields = {
-        'iclkmpwp': 0x2c,
-        'iclkmpwn': 0x3c,
-        'oclkmpwp': 0x4c,
-        'oclkmpwn': 0x5c,
-        'clk_ces_p': 0x6c,
-        'clk_ceh_p': 0x7c,
-        'clk_ces_n': 0x8c,
-        'clk_ceh_n': 0x9c,
-        'iclk_dis_p': 0xac,
-        'iclk_dih_p': 0xbc,
-        'iclk_dis_n': 0xcc,
-        'iclk_dih_n': 0xdc,
-        'iclk_srs_s_p': 0xec,
-        'iclk_srh_s_p': 0xfc,
-        'iclk_srs_s_n': 0x10c,
-        'iclk_srh_s_n': 0x11c,
-        'iclk_srs_a_p': 0x12c,
-        'iclk_srh_a_p': 0x13c,
-        'iclk_srs_a_n': 0x14c,
-        'iclk_srh_a_n': 0x15c,
-        'iclk_q0': 0x16c,
-        'iclk_q1': 0x17c,
-        'isr_q0': 0x18c,
-        'isr_q1': 0x19c,
-        'clk_oposs': 0x1ac,
-        'clk_oposh': 0x1bc,
-        'clk_onegs': 0x1cc,
-        'clk_onegh': 0x1dc,
-        'oclk_srs_p_s': 0x1ec,
-        'oclk_srs_n_s': 0x1fc,
-        'oclk_srh_p_s': 0x20c,
-        'oclk_srh_n_s': 0x21c,
-        'oclk_srs_p_a': 0x22c,
-        'oclk_srs_n_a': 0x23c,
-        'oclk_srh_p_a': 0x24c,
-        'oclk_srh_n_a': 0x25c,
-        'oclk_q_p': 0x26c,
-        'oclk_q_n': 0x27c,
-        'osr_q_p': 0x28c,
-        'osr_q_n': 0x29c,
-        'tclk_tss': 0x2ac,
-        'tclk_tsh': 0x2bc,
-        'tclk_srs_s': 0x2cc,
-        'tclk_srh_s': 0x2dc,
-        'tclk_srs_a': 0x2ec,
-        'tclk_srh_a': 0x2fc,
-        'tclk_q': 0x30c,
-        'tsr_q': 0x31c,
-    }
-    return offset_data(data, fields)
+    pass
 
 def parse_pll(data):
-    # field offsets from the STA::PLLTmModel::get* getters (IDE 1.9.10.03)
-    fields = {
-        'clkin_clkout': 0x0,
-        'clkin_lock': 0x10,
-        'clkin_clkoutp': 0x20,
-        'clkin_clkoutd': 0x30,
-        'clkin_clkoutd3': 0x40,
-    }
-    return offset_data(data, fields)
+    pass
 
 def parse_dll(data):
-    # field offsets from the STA::DLLTmModel::get* getters (IDE 1.9.10.03)
-    fields = {
-        'clkin_step': 0x0,
-        'clkin_lock': 0x10,
-        'hclkin_lock': 0x20,
-        'hclkin_step': 0x30,
-    }
-    return offset_data(data, fields)
-
-def parse_clkdiv(data):
-    # field offsets from the STA::ClkdivTmModel::get* getters (IDE 1.9.10.03)
-    fields = {
-        'hclkin_sel35_set': 0x0,
-        'hclkin_sel35_hold': 0x10,
-        'hclkin_resetn_rec': 0x20,
-        'hclkin_resetn_rem': 0x30,
-        'hclkin_clkout': 0x40,
-        'resetn_clkout': 0x50,
-    }
-    return offset_data(data, fields)
+    pass
 
 def parse_bram(data):
     paths = [
@@ -334,40 +232,7 @@ def parse_io(data):
     pass
 
 def parse_iregoreg(data):
-    # field offsets from the STA::IregOregTmModel::get* getters (IDE 1.9.10.03); 0x0-0x2c not read by any getter
-    fields = {
-        'iclkmpwp': 0x2c,
-        'iclkmpwn': 0x3c,
-        'oclkmpwp': 0x4c,
-        'oclkmpwn': 0x5c,
-        'clk_ces': 0x6c,
-        'clk_ceh': 0x7c,
-        'iclk_srs_s': 0x8c,
-        'iclk_srh_s': 0x9c,
-        'iclk_srs_a': 0xac,
-        'iclk_srh_a': 0xbc,
-        'iclk_dis': 0xcc,
-        'iclk_dih': 0xdc,
-        'iclk_q': 0xec,
-        'isr_q': 0xfc,
-        'clk_oposs': 0x10c,
-        'clk_oposh': 0x11c,
-        'oclk_srs_s': 0x12c,
-        'oclk_srh_s': 0x13c,
-        'oclk_srs_a': 0x14c,
-        'oclk_srh_a': 0x15c,
-        'oclk_q': 0x16c,
-        'osr_q': 0x17c,
-        'tclk_tss': 0x18c,
-        'tclk_tsh': 0x19c,
-        'tclk_srs_s': 0x1ac,
-        'tclk_srh_s': 0x1bc,
-        'tclk_srs_a': 0x1cc,
-        'tclk_srh_a': 0x1dc,
-        'tclk_q': 0x1ec,
-        'tsr_q': 0x1fc,
-    }
-    return offset_data(data, fields)
+    pass
 
 def parse_wire(data):
     paths = [
@@ -391,7 +256,6 @@ offsets = {
     0x4a0: parse_iddroddr,
     0x7cc: parse_pll,
     0x81c: parse_dll,
-    0x85c: parse_clkdiv,
     0x8bc: parse_bram,
     0xc8c: parse_dsp,
     0x381c: parse_fanout,
@@ -499,16 +363,6 @@ _new_vars = {
             'lsr_clksetpos_asyn': ('DFF', 27), 'lsr_clksetneg_asyn': ('DFF', 28),
             'lsr_clkholdpos_asyn': ('DFF', 29), 'lsr_clkholdneg_asyn': ('DFF', 30),
             'clk_clk': ('DFF', 32), 'lsr_lsr': ('DFF', 33)},
-    # DL variables (STA::TmModelBase::getDlVarName): DI_M 0-3, DI_FS 4-7, DI_OFX 8-11,
-    # CE 12-15, LSR_SYN 16-19, CLK_QPos 20, CLK_QNeg 21, D_*_to_Q 22-24, LSR_Q 25,
-    # LSR_ASYN 26-29. D is taken from DI_FS, as for DFF.
-    'dl': {'di_clksetpos': ('DL', 4), 'di_clksetneg': ('DL', 5),
-           'di_clkholdpos': ('DL', 6), 'di_clkholdneg': ('DL', 7),
-           'ce_clksetpos': ('DL', 12), 'ce_clksetneg': ('DL', 13),
-           'ce_clkholdpos': ('DL', 14), 'ce_clkholdneg': ('DL', 15),
-           'clk_qpos': ('DL', 20), 'clk_qneg': ('DL', 21), 'lsr_q': ('DL', 25),
-           'lsr_clksetpos_asyn': ('DL', 26), 'lsr_clksetneg_asyn': ('DL', 27),
-           'lsr_clkholdpos_asyn': ('DL', 28), 'lsr_clkholdneg_asyn': ('DL', 29)},
     'sram': {'rad0_do': ('SSRAM', 0), 'rad1_do': ('SSRAM', 1), 'rad2_do': ('SSRAM', 2), 'rad3_do': ('SSRAM', 3),
              'clk_di_set': ('SSRAM', 4), 'clk_di_hold': ('SSRAM', 6),
              'clk_wre_set': ('SSRAM', 8), 'clk_wre_hold': ('SSRAM', 10),
@@ -558,16 +412,12 @@ _gw5a_speeds = {'C1/I0': (0, 1.25), 'A0': (0, 1.25), 'ES': (0, 1.25), 'C2/I1': (
 # The IDE uses core type 1 by default (STA::TmModelNew::setCoreType)
 _gw5a_core_type = 1
 
-_gw5a_no_placeholder = {'dl', 'iddroddr', 'pll', 'dll', 'clkdiv', 'iregoreg'}
-
 def read_tm_gw5a(data):
     new, per_group = parse_new_block(data)
     tmdat = {}
     for speed, (rec, mult) in _gw5a_speeds.items():
-        # groups without a new-model counterpart keep the placeholder values, except
-        # those parsed after the placeholder was introduced, which would be GW2A data
-        groups = {name: tm for name, tm in parse_chunk(data[rec * chunklen:(rec + 1) * chunklen])
-                  if tm and name not in _gw5a_no_placeholder}
+        # groups without a new-model counterpart keep the placeholder values
+        groups = {name: tm for name, tm in parse_chunk(data[rec * chunklen:(rec + 1) * chunklen]) if tm}
         for group, keys in _new_vars.items():
             for key, (cls, var) in keys.items():
                 vals = new.get(cls, {}).get(var)
