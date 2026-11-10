@@ -163,7 +163,6 @@ new IDE version. Vendor enums are not committed; generate them when updating
 | `tools/gowin_attr_sites.py` | Lists attribute assignments with approximate guards; research aid, output not committed |
 | `tools/gowin_decompile.py` | Decompiles named functions with Ghidra, applying Gowin enums, parameter structs and signatures; no full analysis needed |
 | `tools/chipdb_compare.py` | Content comparison of chipdb directories |
-| `tools/timing/` | Timing research: parse the GW5A `.tm` block, rebuild IDE routes from its bitstream, compare IDE, reimplemented vendor and nextpnr delays. See `doc/agent/timing.md` |
 
 Do not edit `apycula/fse_formats.py` by hand.
 
