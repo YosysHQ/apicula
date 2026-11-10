@@ -585,6 +585,13 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             for mode, bits in bel.modes.items():
                 if bits == mode_bits and (default or bits):
                     bels[name] = {mode}
+            # C2L and ONE2C chain ends, and ALUs packed from RAW_ALU_LUT (no named mode
+            # matches), are decoded from the 16 LUT bits, stored inverted like a LUT.
+            if bels[name] <= {"C2L", "ONE2C"}:
+                lut = tiledata.bels[f"LUT{idx}"]
+                init = 0xffff - sum(1 << f for f, bits in lut.flags.items()
+                                    if all(tile[r][c] for r, c in bits))
+                bels[name] = {f"RAW={init:04x}"}
         else:
             mode_bits = {(row, col)
                          for row, col in bel.mode_bits
@@ -1078,11 +1085,29 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
             name = f"R{row}C{col}_ALU_{idx}"
             if kind == 'hadder':
                 kind = '0'
-            if kind in "012346789" or kind == "C2L" : # main ALU
+            if kind.startswith("RAW="):
+                # doc/alu.md: P = LUT4(D,C,B,A), G = LUT2(B,A) from the low 4 bits,
+                # SUM = P ^ CIN, COUT = P ? CIN : G
+                init = int(kind[4:], 16)
+                p, g = f"R{row}C{col}_ALU{idx}_P", f"R{row}C{col}_ALU{idx}_G"
+                cin = f"R{row}C{col}_CIN{idx}"
+                cout = f"R{row}C{col}_CIN{idx + 1}" if idx != 5 else f"R{row}C{col + 1}_CIN0"
+                lut = codegen.Primitive("LUT4", f"{name}_P")
+                lut.params["INIT"] = f"16'h{init:04x}"
+                lut.portmap = {'F': p, 'I0': f"R{row}C{col}_A{idx}", 'I1': f"R{row}C{col}_B{idx}",
+                               'I2': f"R{row}C{col}_C{idx}", 'I3': f"R{row}C{col}_D{idx}"}
+                lut2 = codegen.Primitive("LUT2", f"{name}_G")
+                lut2.params["INIT"] = f"4'h{init & 0xf:x}"
+                lut2.portmap = {'F': g, 'I0': f"R{row}C{col}_A{idx}", 'I1': f"R{row}C{col}_B{idx}"}
+                mod.assigns.append((f"R{row}C{col}_F{idx}", f"{p} ^ {cin}"))
+                mod.assigns.append((cout, f"{p} ? {cin} : {g}"))
+                mod.wires.update(lut.portmap.values(), lut2.portmap.values(), {cin, cout})
+                mod.primitives[lut.inst] = lut
+                mod.primitives[lut2.inst] = lut2
+            elif kind in "012346789": # main ALU
                 alu = codegen.Primitive("ALU", name)
                 alu.params["ALU_MODE"] = kind
-                if kind != "C2L":
-                    alu.portmap['SUM'] = f"R{row}C{col}_F{idx}"
+                alu.portmap['SUM'] = f"R{row}C{col}_F{idx}"
                 alu.portmap['CIN'] = f"R{row}C{col}_CIN{idx}"
                 alu.portmap['I2'] = f"R{row}C{col}_C{idx}"
                 if idx != 5:
@@ -1098,11 +1123,6 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                     alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
                     alu.portmap['I3'] = f"R{row}C{col}_A{idx}"
-                elif kind == "C2L":
-                    alu.portmap['I0'] = f"R{row}C{col}_B{idx}"
-                    alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
-                    alu.portmap['COUT'] = f"R{row}C{col}_F{idx}"
-                    alu.params["ALU_MODE"] = "9" # XXX
                 else:
                     alu.portmap['I0'] = f"R{row}C{col}_A{idx}"
                     alu.portmap['I1'] = f"R{row}C{col}_D{idx}"
