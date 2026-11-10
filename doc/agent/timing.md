@@ -53,9 +53,8 @@ Findings, most important first:
    That is 0.2–0.6 ns depending on family. nextpnr inserts the pass-through LUT
    in `postPlace`, so the final report includes the delay but placement does
    not. (code, data)
-6. **IO and some special blocks are not parsed.** DL, IDDR/ODDR, IREG/OREG,
-   PLL, DLL, CLKDIV and DSP (except MULTADDSUM) are parsed. IO, DQS, DLLDLY,
-   DQCE and DCS are not.
+6. **IO, DSP and some special blocks are not parsed.** DL, IDDR/ODDR, IREG/OREG,
+   PLL, DLL and CLKDIV are parsed. IO, DSP, DQS, DLLDLY, DQCE and DCS are not.
    Register-to-register Fmax on one clock does not depend on them. IO paths,
    PLL-derived clocks and DSP paths do. (code)
 
@@ -88,7 +87,7 @@ GW2A*, GW1NZ-2, GW1AN device type and false for every GW5A* device type. (code)
 | 0x81c | DLL | parsed |
 | 0x85c | CLKDIV | parsed |
 | 0x8bc | BSRAM | parsed |
-| 0xc8c | DSP (MULT, MULT36X36, MAC, MULTADD, MULTADDSUM, PADD, ALU54) | parsed except MULTADDSUM |
+| 0xc8c | DSP (MULT, MULT36X36, MAC, MULTADD, MULTADDSUM, PADD, ALU54) | stub |
 | 0x306c | IREG/OREG | parsed |
 | 0x3278 | IO | stub |
 | 0x3728 | IODELAY | parsed |
@@ -121,48 +120,9 @@ IREG/OREG at 0x306c ends at 0x3278). (code, data)
   getters read entry 0 only. `TmAnalyzer::createTmEdgesForIo` and `calcIoTiming`
   presumably choose an entry by IO attributes; not traced. On GW1N-9C only entry
   0 holds delays. (code, data)
-- DQS, DLLDLY, DQCE and DCS have no getters, only `print*Delay`, and are not
-  parsed.
-- IODELAY (0x3728) holds `DI_DO` at 0x0, the delay step (`getStepDly`) as one
-  float at 0x10, and the six other fields from 0x14. `tm_parser` called `DI_DO`
-  `GI_DO` and read the later fields one float early until this was found. The
-  SDF of an IODELAY with `C_STATIC_DLY=8` on GW1N-9C gives SETN→DF 0.316/0.275,
-  the first and last values of `SETN_DF`, and DI→DO typical 0.810 =
-  `DI_DO` 0.57 + 8 × step 0.030. (code, data)
-
-### DSP (0xc8c)
-
-`DSPTmModel::get<X>TmModel()` gives the sub-model offsets within the DSP block:
-MULT 0x0, MULT36X36 0x410, MAC 0x5b0, MULTADD 0x850, MULTADDSUM 0xc90, PADD
-0x14a0, ALU54 0x1700. The getters are `get<Name>(int i)`, reading float `i` of a
-quad at `this + 4 * K`, and `get<Name>(int j, int i)`, reading float `i` of quad
-`j` from `this + 4 * (K + 4 * j)`. The number of quads per two-index field is the
-distance to the next field. Every sub-model tiles to the next, except a 16-byte
-hole after MULTADD's last field and one after ALU54's `Alusel_Cout`. MULTADDSUM
-has no getters. `tm_parser` stores two-index fields as `<name>_<j>`. (code)
-
-Checked against the IDE's SDF on GW1N-9C C6/I5 (data):
-
-| Primitive | Sub-model | Example |
-|---|---|---|
-| MULT9X9, MULT18X18 | MULT | A/B/ASIGN/BSIGN/ASEL/BSEL→DOUT 0.555/0.506/0.493/0.534/0.510/0.501 = `mdia_mout`, `mdib_mout`, `asign_mout`, `bsign_mout`, `asel_mout`, `bsel_mout` |
-| MULT36X36 | MULT36X36 | same values as MULT |
-| MULTALU18X18, MULTALU36X18, MULTADDALU18X18 | MULTADD | A0/A1→DOUT 0.269/0.273 = `mdia0_mout`, `mdia1_mout`; B 0.282 = `mdib0_mout`; C and ACCLOAD 0.271 = `addsub_mout` |
-| ALU54D | ALU54 | A/B/ASIGN/BSIGN→DOUT 0.271/0.291/0.414/0.292 = `ina_dout`, `inb_dout`, `asign_dout`, `bsign_dout` |
-| PADD18 | PADD | A→DOUT 0.451 = `pdia_pout`, ASEL→DOUT 0.562 = `asel_pout` |
-
-- The second index selects by register use. With OUT_REG=1, CLK→DOUT is
-  `clk_mout_1` (0.278). `clk_mout_0` (2.318) is CLK→DOUT through the multiplier
-  from an earlier register. Input setup is `clk_mdias_1` with AREG=1 and
-  `clk_mdias_0` with AREG=0. Some MAC and MULTADD fields have three quads; their
-  third case is not identified.
-- Setup times in the SDF are element 2 of the quad (`clk_mdias_1` is
-  0.045/0.042/0.045/0.052 and the SDF gives 0.045; CE and RESET agree), not the
-  maximum. IOPATH delays are the maximum of elements 2 and 3, as elsewhere.
-- SDF hold times for registered inputs are negative (A hold -0.069 with AREG=1)
-  and do not equal any `*h` field. Not resolved.
-- The combinational multiplier delays are much smaller than CLK→DOUT through the
-  multiplier (0.555 vs 2.318). That is what the IDE reports.
+- DSP sub-models (MULT, MAC, MULTADD, ALU54, ...) use `get<Name>(int)` getters,
+  and DQS, DLLDLY, DQCE and DCS have no getters, only `print*Delay`. Neither is
+  covered by `tm_fields.py`.
 
 Checked against the IDE's SDF (GW1N-9C, C6/I5, `ide_io` design in "Method"):
 
