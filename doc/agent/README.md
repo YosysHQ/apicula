@@ -13,6 +13,8 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
 - [pll.md](pll.md): how the vendor configures PLLs, compared with `gowin_pack`.
 - [gw5-devices.md](gw5-devices.md): where GW5AT-60B and GW5AST-138C differ.
 - [bsram.md](bsram.md): BSRAM handlers compared with `gowin_pack`.
+- [timing.md](timing.md): how the IDE computes delays, the `.tm` formats, and how
+  Apicula's and nextpnr's timing compare with it.
 - [hand-written-tables.md](hand-written-tables.md): which Apicula tables have a
   vendor source, and what each `logicinfo` table is for.
 
