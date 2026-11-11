@@ -281,10 +281,158 @@ def parse_chunk(chunk):
         if off < len(chunk):
             yield parser.__name__[6:], parser(chunk[off:])
 
-_aliases = {
-        "gw5a" : {"ES": ["C1/I0", "A0"]},
-        }
+# GW5A devices: the IDE reads delays from a self-describing block that follows
+# three old-format records (STA::TmModelNew::readTmData, IDE 1.9.10.03). The
+# old-format records in these files are placeholders copied from GW2A-18C. See
+# doc/agent/timing.md.
+#
+#   char hdr[15]; i32 magic = 0x37
+#   u16 n_class_enum; u16 n_models; u16 values_per_group; i32 max_fanout
+#   i16 class_enum2idx[n_class_enum]
+#   per model:  u16 n_var_enum; u16 n_vars; i16 var_enum2idx[n_var_enum]
+#               n_vars * (i16 len; f32 values[len])
+#               the FANOUT model (class 6) is followed by
+#               u16 n; u16 k; i16 idx[n]; k * u16[max_fanout + 1]
+#   i32 magic = 0x37
+NEW_CLASSES = ['LUT', 'ALU', 'DFF', 'DL', 'SSRAM', 'XWIRE', 'FANOUT', 'GLBSRC', 'HCLK', 'IBUF', 'OBUF4mA',
+               'OBUF8mA', 'BSRAM']
+
+def parse_new_block(data, offset=3 * chunklen):
+    """Return {class name: {var enum: [floats]}} and the number of values per group."""
+    pos = offset + 15
+    def take(fmt):
+        nonlocal pos
+        v = struct.unpack_from('<' + fmt, data, pos)
+        pos += struct.calcsize('<' + fmt)
+        return v if len(v) > 1 else v[0]
+    if take('i') != 0x37:
+        raise ValueError('bad TmModelNew header')
+    n_enum, n_models, per_group, max_fan = take('H'), take('H'), take('H'), take('i')
+    enum2idx = [take('h') for _ in range(n_enum)]
+    models = []
+    for m in range(n_models):
+        n_var_enum, n_vars = take('H'), take('H')
+        var2idx = [take('h') for _ in range(n_var_enum)]
+        values = []
+        for _ in range(n_vars):
+            length = take('h')
+            values.append(list(struct.unpack_from(f'<{length}f', data, pos)))
+            pos += 4 * length
+        if m == enum2idx[6]:
+            n, k = take('H'), take('H')
+            pos += 2 * n + 2 * k * (max_fan + 1)
+        models.append((var2idx, values))
+    if take('i') != 0x37:
+        raise ValueError('bad TmModelNew trailer')
+    res = {}
+    for cls, mi in enumerate(enum2idx):
+        if 0 <= mi < len(models) and cls < len(NEW_CLASSES):
+            var2idx, values = models[mi]
+            res[NEW_CLASSES[cls]] = {en: values[vi] for en, vi in enumerate(var2idx) if 0 <= vi < len(values)}
+    return res, per_group
+
+# New-model variable (class, enum) for each key of the old-style groups that
+# nextpnr reads. Enum names are from STA::TmModelBase::get*VarName.
+_new_vars = {
+    'lut': {'a_f': ('LUT', 0),        # A_F
+            'b_f': ('LUT', 2),        # B_F
+            'c_f': ('LUT', 4),        # C_F
+            'd_f': ('LUT', 6),        # D_F
+            'a_ofx': ('LUT', 8),      # A_OFX0
+            'b_ofx': ('LUT', 9),      # B_OFX0
+            'c_ofx': ('LUT', 10),     # C_OFX0
+            'd_ofx': ('LUT', 11),     # D_OFX0
+            'm0_ofx0': ('LUT', 12),   # M0_OFX0
+            'm1_ofx1': ('LUT', 13),   # M1_OFX1
+            'fx_ofx1': ('LUT', 14)},  # FXA_FX1
+    'alu': {'a_f': ('ALU', 0),        # A_F
+            'b_f': ('ALU', 2),        # B_F
+            'd_f': ('ALU', 3),        # D_F
+            'a0_fco': ('ALU', 4),     # A0_FCO0
+            'b0_fco': ('ALU', 6),     # B0_FCO0
+            'd0_fco': ('ALU', 8),     # D0_FCO0
+            'fci_fco': ('ALU', 11),   # FCI_FCO
+            'fci_f0': ('ALU', 13)},   # FCI0_F0
+    # D comes from the LUT F of the same slot, so the DI_FS arcs apply
+    # (STA::TmModelNew::getDffPinToPinDly).
+    'dff': {'di_clksetpos': ('DFF', 4), 'di_clksetneg': ('DFF', 5),
+            'di_clkholdpos': ('DFF', 6), 'di_clkholdneg': ('DFF', 7),
+            'ce_clksetpos': ('DFF', 12), 'ce_clksteneg': ('DFF', 13),
+            'ce_clkholdpos': ('DFF', 14), 'ce_clkholdneg': ('DFF', 15),
+            'lsr_clksetpos_syn': ('DFF', 16), 'lsr_clksetneg_syn': ('DFF', 17),
+            'lsr_clkholdpos_syn': ('DFF', 18), 'lsr_clkholdneg_syn': ('DFF', 19),
+            'clk_qpos': ('DFF', 24), 'clk_qneg': ('DFF', 25), 'lsr_q': ('DFF', 26),
+            'lsr_clksetpos_asyn': ('DFF', 27), 'lsr_clksetneg_asyn': ('DFF', 28),
+            'lsr_clkholdpos_asyn': ('DFF', 29), 'lsr_clkholdneg_asyn': ('DFF', 30),
+            'clk_clk': ('DFF', 32), 'lsr_lsr': ('DFF', 33)},
+    'sram': {'rad0_do': ('SSRAM', 0), 'rad1_do': ('SSRAM', 1), 'rad2_do': ('SSRAM', 2), 'rad3_do': ('SSRAM', 3),
+             'clk_di_set': ('SSRAM', 4), 'clk_di_hold': ('SSRAM', 6),
+             'clk_wre_set': ('SSRAM', 8), 'clk_wre_hold': ('SSRAM', 10),
+             'clk_wad0_set': ('SSRAM', 12), 'clk_wad0_hold': ('SSRAM', 14),
+             'clk_wad1_set': ('SSRAM', 16), 'clk_wad1_hold': ('SSRAM', 18),
+             'clk_wad2_set': ('SSRAM', 20), 'clk_wad2_hold': ('SSRAM', 22),
+             'clk_wad3_set': ('SSRAM', 24), 'clk_wad3_hold': ('SSRAM', 26),
+             'clk_do': ('SSRAM', 28)},
+    'bram': {'clka_doa': ('BSRAM', 0), 'clka_doa_bypass': ('BSRAM', 1),
+             'clkb_dob': ('BSRAM', 4), 'clkb_dob_bypass': ('BSRAM', 5),
+             'clkb_do': ('BSRAM', 8), 'clkb_do_bypass': ('BSRAM', 9),
+             'clk_do': ('BSRAM', 0), 'clk_do_bypass': ('BSRAM', 1),
+             'clka_reseta_set': ('BSRAM', 14), 'clka_ocea_set': ('BSRAM', 16), 'clka_cea_set': ('BSRAM', 17),
+             'clka_wrea_set': ('BSRAM', 18), 'clka_dia_set': ('BSRAM', 19), 'clka_di_set': ('BSRAM', 19),
+             'clka_ada_set': ('BSRAM', 21), 'clka_blksel_set': ('BSRAM', 22),
+             'clka_reseta_hold': ('BSRAM', 23), 'clka_ocea_hold': ('BSRAM', 25), 'clka_cea_hold': ('BSRAM', 26),
+             'clka_wrea_hold': ('BSRAM', 27), 'clka_dia_hold': ('BSRAM', 28), 'clka_di_hold': ('BSRAM', 28),
+             'clka_ada_hold': ('BSRAM', 30), 'clka_blksel_hold': ('BSRAM', 31),
+             'clkb_resetb_set': ('BSRAM', 32), 'clkb_oceb_set': ('BSRAM', 33), 'clkb_ceb_set': ('BSRAM', 34),
+             'clkb_oce_set': ('BSRAM', 35), 'clkb_wreb_set': ('BSRAM', 36), 'clkb_dib_set': ('BSRAM', 37),
+             'clkb_adb_set': ('BSRAM', 38), 'clkb_blksel_set': ('BSRAM', 39),
+             'clkb_resetb_hold': ('BSRAM', 40), 'clkb_oceb_hold': ('BSRAM', 41), 'clkb_ceb_hold': ('BSRAM', 42),
+             'clkb_oce_hold': ('BSRAM', 43), 'clkb_wreb_hold': ('BSRAM', 44), 'clkb_dib_hold': ('BSRAM', 45),
+             'clkb_adb_hold': ('BSRAM', 46), 'clkb_blksel_hold': ('BSRAM', 47),
+             'clk_ce_set': ('BSRAM', 17), 'clk_oce_set': ('BSRAM', 16), 'clk_reset_set': ('BSRAM', 14),
+             'clk_wre_set': ('BSRAM', 18), 'clk_ad_set': ('BSRAM', 21), 'clk_di_set': ('BSRAM', 19),
+             'clk_blksel_set': ('BSRAM', 22),
+             'clk_ce_hold': ('BSRAM', 26), 'clk_oce_hold': ('BSRAM', 25), 'clk_reset_hold': ('BSRAM', 23),
+             'clk_wre_hold': ('BSRAM', 27), 'clk_ad_hold': ('BSRAM', 30), 'clk_di_hold': ('BSRAM', 28),
+             'clk_blksel_hold': ('BSRAM', 31),
+             'clk_reset_set_syn': ('BSRAM', 15), 'clk_reset_hold_syn': ('BSRAM', 24),
+             'clka_reseta_set_syn': ('BSRAM', 15), 'clka_reseta_hold_syn': ('BSRAM', 24),
+             'clkb_resetb_set_syn': ('BSRAM', 48), 'clkb_resetb_hold_syn': ('BSRAM', 49)},
+}
+# Routing is not taken from the new block yet. The IDE charges different
+# delays for wires that cross BSRAM/DSP columns or the spine (X*_VBUF_*,
+# X*_HBUF_*, X*_HOS_*, *_LOAD_DERATE), selected per wire by a flag of its
+# routing graph. With the plain X0/X1/X2/X8 values alone nextpnr's routing
+# delays on IDE-routed GW5A-25A designs come out 17% low, against 2% low with
+# the placeholder values, so the 'wire' and 'fanout' groups keep those.
+
+# Speed grade -> (old-format placeholder record, slow-corner multiplier).
+# STA::TmAnalyzer::getTmModelDelayMultByDevice returns 1.25 for GW5A and it is
+# applied when the record index is 0 (C1/I0, A0); C2/I1 uses index 2 and 1.0.
+# ES is treated like C1/I0.
+_gw5a_speeds = {'C1/I0': (0, 1.25), 'A0': (0, 1.25), 'ES': (0, 1.25), 'C2/I1': (1, 1.0)}
+# The IDE uses core type 1 by default (STA::TmModelNew::setCoreType)
+_gw5a_core_type = 1
+
+def read_tm_gw5a(data):
+    new, per_group = parse_new_block(data)
+    tmdat = {}
+    for speed, (rec, mult) in _gw5a_speeds.items():
+        # groups without a new-model counterpart keep the placeholder values
+        groups = {name: tm for name, tm in parse_chunk(data[rec * chunklen:(rec + 1) * chunklen]) if tm}
+        for group, keys in _new_vars.items():
+            for key, (cls, var) in keys.items():
+                vals = new.get(cls, {}).get(var)
+                if vals is None:
+                    continue
+                quad = vals[_gw5a_core_type * per_group:(_gw5a_core_type + 1) * per_group]
+                groups.setdefault(group, {})[key] = [v * mult for v in quad]
+        tmdat[speed] = groups
+    return tmdat
+
 def read_tm(f, device):
+    if device.lower().startswith("gw5a"):
+        return read_tm_gw5a(f.read())
     if device.lower().startswith("gw1n"):
         chunk_order = [
             "C5/I4",
@@ -313,22 +461,6 @@ def read_tm(f, device):
             "C9/I8",
             "C9/I8_LV",
         ]
-    elif device.lower().startswith("gw5a"):
-        chunk_order = [
-            "ES", # In the case of GW5A-25 engineering samples (ES), ‘C1/I0’
-                  # and ‘A0’ use the same delay variant. A duplicate set of delays
-                  # should be considered in the future.
-            "C2/I1",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7",
-            "8",
-            "9",
-            "10",
-            "11",
-        ]
     else:
         raise Exception("unknown family")
 
@@ -339,12 +471,8 @@ def read_tm(f, device):
             speed_class = chunk_order[i]
         except IndexError:
             speed_class = str(i)
-        # XXX no gw5 for now
         if len(chunk) != chunklen:
             continue
-        # XXX GW5A-25A check it
-        if i >= 3 and device in {'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}:
-            break
         tmdat[speed_class] = {}
         #print(f'{i:2} class:{speed_class}' , "len(chunk):", len(chunk), "chunklen:", chunklen)
         #assert len(chunk) == chunklen # 5A the last chunk is smaller 12922 vs. 15552
@@ -352,10 +480,6 @@ def read_tm(f, device):
         for name, tm in res:
             if tm:
                 tmdat[speed_class][name] = tm
-                for series, aliases in _aliases.items():
-                    if device.lower().startswith(series) and speed_class in aliases:
-                        for al in aliases[speed_class]:
-                            tmdat.setdefault(al, {})[name] = tm
     return tmdat
 
 
