@@ -326,9 +326,11 @@ def parse_hclk(data):
     return float_data(data, paths)
 
 def parse_iodelay(data):
-    paths = ['GI_DO', 'SDTAP_DO', 'SETN_DO', 'VALUE_DO',
-             'SDTAP_DF', 'SETN_DF', 'VALUE_DF']
-    return float_data(data, paths)
+    # Offsets from the STA::IodelayTmModel::get*(int) getters (IDE 1.9.10.03).
+    # GI_DO is the vendor's DI_DO. The single float at 0x10 is the delay step
+    # (getStepDly), so the remaining fields start at 0x14.
+    paths = ['SDTAP_DO', 'SETN_DO', 'VALUE_DO', 'SDTAP_DF', 'SETN_DF', 'VALUE_DF']
+    return {'GI_DO': float_data(data, ['GI_DO'])['GI_DO'], **float_data(data[0x14:], paths)}
 
 def parse_io(data):
     pass
