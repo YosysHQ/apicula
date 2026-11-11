@@ -53,10 +53,10 @@ Findings, most important first:
    That is 0.2–0.6 ns depending on family. nextpnr inserts the pass-through LUT
    in `postPlace`, so the final report includes the delay but placement does
    not. (code, data)
-6. **IO and special blocks are not parsed.** IO, IREG/OREG, IDDR/ODDR, PLL, DLL,
-   DL, DSP, CLKDIV, DQS, DLLDLY, DQCE and DCS groups are stubs or missing in
-   `tm_parser`. Register-to-register Fmax on one clock does not depend on them.
-   IO paths, PLL-derived clocks and DSP paths do. (code)
+6. **IO, DSP and some special blocks are not parsed.** DL, IDDR/ODDR, IREG/OREG,
+   PLL, DLL and CLKDIV are parsed. IO, DSP, DQS, DLLDLY, DQCE and DCS are not.
+   Register-to-register Fmax on one clock does not depend on them. IO paths,
+   PLL-derived clocks and DSP paths do. (code)
 
 ## Which model the IDE uses
 
@@ -81,14 +81,14 @@ GW2A*, GW1NZ-2, GW1AN device type and false for every GW5A* device type. (code)
 | 0xb0 | ALU | parsed |
 | 0x130 | SSRAM | parsed |
 | 0x240 | DFF | parsed |
-| 0x390 | DL | stub |
-| 0x4a0 | IDDR/ODDR | stub |
-| 0x7cc | PLL | stub |
-| 0x81c | DLL | stub |
-| 0x85c | CLKDIV | missing |
+| 0x390 | DL | parsed |
+| 0x4a0 | IDDR/ODDR | parsed |
+| 0x7cc | PLL | parsed |
+| 0x81c | DLL | parsed |
+| 0x85c | CLKDIV | parsed |
 | 0x8bc | BSRAM | parsed |
 | 0xc8c | DSP (MULT, MULT36X36, MAC, MULTADD, MULTADDSUM, PADD, ALU54) | stub |
-| 0x306c | IREG/OREG | stub |
+| 0x306c | IREG/OREG | parsed |
 | 0x3278 | IO | stub |
 | 0x3728 | IODELAY | parsed |
 | 0x379c | WIRE | parsed |
@@ -100,10 +100,53 @@ GW2A*, GW1NZ-2, GW1AN device type and false for every GW5A* device type. (code)
 | 0x3c3c | DQCE | missing |
 | 0x3c5c | DCS | missing |
 
-Field names come from the getters (`nm -DC | grep 'STA::IoTmModel::'` and so
-on). Each getter copies four floats from `this + offset`; the offset is the
-constant added in the getter's loop, so a script over `objdump` output can
-recover all field offsets. Not done yet.
+The sub-models are not separate reads: `TmModel` is read verbatim and
+`init_dlt` only scales each sub-model in place, so a field's file offset is the
+sub-model offset above plus the field offset within the sub-model. (code)
+
+Field names and offsets come from the getters. Each `STA::<X>TmModel::get<Name>(float*)`
+copies four floats from `this + disp + 4 * k`, where `k` is added to the loop
+index (sometimes as `sub $-k`). `tools/timing/tm_fields.py` lists these for every
+sub-model. The offsets reproduce every group `tm_parser` already parsed, with
+the same field order, and consecutive sub-models tile without gaps (for example
+IREG/OREG at 0x306c ends at 0x3278). (code, data)
+
+- IDDR/ODDR and IREG/OREG start at 0x2c. The first 0x2c bytes hold two quads and
+  three zero floats (GW1N-9C: 0.355/0.426 and 0.851/1.021) that no getter reads.
+  (data)
+- IO (0x3278) has five fields (`Pad_PaddisV`, `Paddo_PadsV`, `Paddt_PadsV`,
+  `Ioldo_PadsV`, `Iolto_PadsV`), each an array of ten 0x18-byte entries
+  `{IoAttr flags (8 bytes), 4 floats}`, at 0x0, 0xf0, 0x1e0, 0x2d0 and 0x3c0. The
+  getters read entry 0 only. `TmAnalyzer::createTmEdgesForIo` and `calcIoTiming`
+  presumably choose an entry by IO attributes; not traced. On GW1N-9C only entry
+  0 holds delays. (code, data)
+- DSP sub-models (MULT, MAC, MULTADD, ALU54, ...) use `get<Name>(int)` getters,
+  and DQS, DLLDLY, DQCE and DCS have no getters, only `print*Delay`. Neither is
+  covered by `tm_fields.py`.
+
+Checked against the IDE's SDF (GW1N-9C, C6/I5, `ide_io` design in "Method"):
+
+| Arc | SDF max | Field |
+|---|---|---|
+| IDDR CLK→Q0, Q1 | 0.635, 0.540 | `iddroddr.iclk_q0`, `iclk_q1` |
+| IDDR D setup, hold | 0.045, 0.015 | `iddroddr.iclk_dis_p`, `iclk_dih_p` (same for N) |
+| ODDR CLK→Q0/Q1 rise, fall | 1.289, 1.273 | `iddroddr.oclk_q_p`, `oclk_q_n` |
+| ODDR D0/D1 setup, hold | 0.045, 0.015 | `iddroddr.clk_oposs`, `clk_oposh` |
+| DL G→Q, D setup | 0.458, 0.400 | `dl.clk_qpos`, `dl.di_clksetpos` |
+
+- Flip-flops and the latch packed into IO registers (`-ireg_in_iob`,
+  `-oreg_in_iob`) are timed with the DFF values (CLK→Q 0.458, setup 0.400, pulse
+  width 1.25), not with IREG/OREG (`iclk_q` 0.635). On GW1N-9C the DL fields equal
+  the DFF fields, so this design does not tell them apart either. IREG/OREG
+  meaning is therefore from names only. (data)
+- The SDF gives rPLL CLKIN→CLKOUT/P/D/D3 as 0, and no path in that design used a
+  PLL clock, so the PLL, DLL and CLKDIV fields are from names only. (data)
+
+GW5A: the new block has a DL class (`getDlVarName`: DI_M 0-3, DI_FS 4-7, DI_OFX
+8-11, CE 12-15, LSR_SYN 16-19, CLK_QPos 20, CLK_QNeg 21, D_M/FS/OFX_to_Q 22-24,
+LSR_Q 25, LSR_ASYN 26-29), which `tm_parser` maps like DFF (D from DI_FS). It has
+no IOLOGIC, PLL, DLL or CLKDIV class, so those groups are left out for GW5A
+rather than taken from the GW2A placeholder record. (code, data)
 
 ### Record index (`getTimingDataIndexByReportOpt`, 0x2c17cea)
 
@@ -318,6 +361,13 @@ The IDE's GW5A-25A critical path uses these values: CLK→Q 0.382, ALU I0→COUT
 
 All scripts are in `tools/timing/`. They are research aids and their output is
 not committed.
+
+For cell arcs alone no route rebuilding is needed: compare the SDF IOPATH and
+SETUPHOLD values with `read_tm` for the device's speed grade. The `ide_io`
+design used for the IOLOGIC check is plain Verilog run through the IDE's own
+synthesis (`add_file top.v`, `run all`, `-ireg_in_iob 1 -oreg_in_iob 1`): one
+IDDR, one ODDR, one DL, an rPLL clocking a flip-flop, and flip-flops between
+pads.
 
 1. Prepare one netlist for both tools. Synthesize with yosys and write both
    `write_json` and `write_verilog -noattr -defparam`. The vendor netlist
