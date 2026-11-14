@@ -19,6 +19,18 @@ from dataclasses import dataclass
 from types import FunctionType
 
 ################################################################
+
+def dsp_control_line(cell_attrs, pin, prefix):
+    """The control line (0..3) nextpnr chose for a DSP cell's CE, CLK or RESET
+    pin, written as a binary-string cell attribute, as the value the mux
+    attributes take: line 0 is the default with no fuse, lines 1..3 are the
+    named values CEIN1..3 / CLKIN1..3 / RSTIN1..3 of the DSP tables. An
+    integer index matches no table entry and is dropped by add_attr_val, so
+    passing it through leaves every register on line 0 whatever line the
+    router drove."""
+    line = int(cell_attrs.get(pin, '0'), 2)
+    return f'{prefix}{line}' if line else 0
+
 class CliArgs:
     """ Parses the command line. """
     def __init__(self):
@@ -3160,9 +3172,9 @@ class Device:
         idx = dsp_indices.idx
         is_even = dsp_indices.is_even
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val = dsp_control_line(cell_attrs, 'CE', 'CEIN')
+        clk_val = dsp_control_line(cell_attrs, 'CLK', 'CLKIN')
+        reset_val = dsp_control_line(cell_attrs, 'RESET', 'RSTIN')
 
         attr_vals.append(AttrVal(f'CINBY_{pair_idx + 7}', "ENABLE"))
         attr_vals.append(AttrVal(f'CINNS_{pair_idx + 7}', "ENABLE"))
@@ -3296,9 +3308,9 @@ class Device:
         idx = dsp_indices.idx
         is_even = dsp_indices.is_even
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val = dsp_control_line(cell_attrs, 'CE', 'CEIN')
+        clk_val = dsp_control_line(cell_attrs, 'CLK', 'CLKIN')
+        reset_val = dsp_control_line(cell_attrs, 'RESET', 'RSTIN')
 
         attr_vals.append(AttrVal(f'IRASHFEN_{pair_idx}', "1"))
         attr_vals.append(AttrVal(f'IRBSHFEN_{pair_idx}', "1"))
@@ -3455,9 +3467,9 @@ class Device:
         cell_parms = bel.cell.parms
         cell_attrs = bel.cell.attrs
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val = dsp_control_line(cell_attrs, 'CE', 'CEIN')
+        clk_val = dsp_control_line(cell_attrs, 'CLK', 'CLKIN')
+        reset_val = dsp_control_line(cell_attrs, 'RESET', 'RSTIN')
 
         attr_vals.append(AttrVal('ALU_EN', "ENABLE"))
         for i in range(2, 7):
@@ -3615,9 +3627,9 @@ class Device:
         cell_parms = bel.cell.parms
         cell_attrs = bel.cell.attrs
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val = dsp_control_line(cell_attrs, 'CE', 'CEIN')
+        clk_val = dsp_control_line(cell_attrs, 'CLK', 'CLKIN')
+        reset_val = dsp_control_line(cell_attrs, 'RESET', 'RSTIN')
 
         # The mode determines which multiplier is used, and this in turn selects
         # the registers and pins used. We rely on nextpnr so that MULTALU18X18_MODE
@@ -3871,9 +3883,9 @@ class Device:
         cell_attrs = bel.cell.attrs
         mac = dsp_indices.mac
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val = dsp_control_line(cell_attrs, 'CE', 'CEIN')
+        clk_val = dsp_control_line(cell_attrs, 'CLK', 'CLKIN')
+        reset_val = dsp_control_line(cell_attrs, 'RESET', 'RSTIN')
 
         mode = int(cell_parms.get('MULTALU36X18_MODE', "0"), 2)
         accload = cell_attrs.get('NET_ACCLOAD', '')
@@ -4101,9 +4113,9 @@ class Device:
         cell_parms = bel.cell.parms
         cell_attrs = bel.cell.attrs
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val = dsp_control_line(cell_attrs, 'CE', 'CEIN')
+        clk_val = dsp_control_line(cell_attrs, 'CLK', 'CLKIN')
+        reset_val = dsp_control_line(cell_attrs, 'RESET', 'RSTIN')
 
         mode = int(cell_parms.get('MULTADDALU18X18_MODE', "0"), 2)
         accload = cell_attrs.get('NET_ACCLOAD', '')
