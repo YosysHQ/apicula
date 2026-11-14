@@ -3150,6 +3150,18 @@ class Device:
         idx = int(bel.idx_str[-1])
         return DspIndices(int(bel.idx_str[-2]), idx)
 
+    def get_dsp_ce_clk_reset(self, cell: CellDesc) -> tuple[str, str, str]:
+        cell_attrs = cell.attrs
+
+        ce_val = int(cell_attrs.get('CE', '0'), 2)
+        ce_val = f"CEIN{ce_val}" if ce_val else 'UNKNOWN'
+        clk_val = int(cell_attrs.get('CLK', '0'), 2)
+        clk_val = f"CLKIN{clk_val}" if clk_val else 'UNKNOWN'
+        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        reset_val = f"RSTIN{reset_val}" if reset_val else 'UNKNOWN'
+
+        return (ce_val, clk_val, reset_val)
+
     def set_padd9_attrvals(self, bel: BelDesc, dsp_indices: DspIndices) -> list[AttrVal]:
         """ 9 """
         attr_vals = []
@@ -3160,9 +3172,7 @@ class Device:
         idx = dsp_indices.idx
         is_even = dsp_indices.is_even
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val, clk_val, reset_val = self.get_dsp_ce_clk_reset(bel.cell)
 
         attr_vals.append(AttrVal(f'CINBY_{pair_idx + 7}', "ENABLE"))
         attr_vals.append(AttrVal(f'CINNS_{pair_idx + 7}', "ENABLE"))
@@ -3296,9 +3306,7 @@ class Device:
         idx = dsp_indices.idx
         is_even = dsp_indices.is_even
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val, clk_val, reset_val = self.get_dsp_ce_clk_reset(bel.cell)
 
         attr_vals.append(AttrVal(f'IRASHFEN_{pair_idx}', "1"))
         attr_vals.append(AttrVal(f'IRBSHFEN_{pair_idx}', "1"))
@@ -3455,9 +3463,7 @@ class Device:
         cell_parms = bel.cell.parms
         cell_attrs = bel.cell.attrs
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val, clk_val, reset_val = self.get_dsp_ce_clk_reset(bel.cell)
 
         attr_vals.append(AttrVal('ALU_EN', "ENABLE"))
         for i in range(2, 7):
@@ -3615,9 +3621,7 @@ class Device:
         cell_parms = bel.cell.parms
         cell_attrs = bel.cell.attrs
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val, clk_val, reset_val = self.get_dsp_ce_clk_reset(bel.cell)
 
         # The mode determines which multiplier is used, and this in turn selects
         # the registers and pins used. We rely on nextpnr so that MULTALU18X18_MODE
@@ -3871,9 +3875,7 @@ class Device:
         cell_attrs = bel.cell.attrs
         mac = dsp_indices.mac
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val, clk_val, reset_val = self.get_dsp_ce_clk_reset(bel.cell)
 
         mode = int(cell_parms.get('MULTALU36X18_MODE', "0"), 2)
         accload = cell_attrs.get('NET_ACCLOAD', '')
@@ -4101,9 +4103,7 @@ class Device:
         cell_parms = bel.cell.parms
         cell_attrs = bel.cell.attrs
 
-        ce_val = int(cell_attrs.get('CE', '0'), 2)
-        clk_val = int(cell_attrs.get('CLK', '0'), 2)
-        reset_val = int(cell_attrs.get('RESET', '0'), 2)
+        ce_val, clk_val, reset_val = self.get_dsp_ce_clk_reset(bel.cell)
 
         mode = int(cell_parms.get('MULTADDALU18X18_MODE', "0"), 2)
         accload = cell_attrs.get('NET_ACCLOAD', '')
