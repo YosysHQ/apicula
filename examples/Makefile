@@ -117,6 +117,8 @@ tangnano9k: \
 	dsp-multalu36x18-tangnano9k.fs dsp-multaddalu18x18-tangnano9k.fs \
 	dqce-tangnano9k.fs dcs-tangnano9k.fs femto-riscv-userflash-tangnano9k.fs \
 	i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs \
+	femto-riscv-18-test-tangnano9k.fs \
+	latch-tangnano9k.fs \
 	ioregs-tangnano9k.fs
 
 szfpga: \
