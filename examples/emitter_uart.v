@@ -37,7 +37,7 @@ module corescore_emitter_uart
    input wire [7:0] i_data,
    input wire 	    i_valid,
    output reg 	    o_ready,
-   output wire 	    o_uart_tx
+   output reg 	    o_uart_tx
 );
 
    localparam START_VALUE = clk_freq_hz/baud_rate;
@@ -48,7 +48,10 @@ module corescore_emitter_uart
    
    reg [9:0] 	    data;
 
-   assign o_uart_tx = data[0] | !(|data);
+   // Registered: the combinational OR glitches low at the end of the stop bit,
+   // which the BL616 UART bridge on the tangnano20k reads as a start bit.
+   always @(posedge i_clk)
+      o_uart_tx <= data[0] | !(|data);
 
    always @(posedge i_clk) begin
       if (cnt[WIDTH] & !(|data)) begin
