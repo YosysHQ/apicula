@@ -4,6 +4,20 @@ How to work on Apicula, and how to reverse engineer the Gowin IDE without
 rederiving it each session. Findings about the vendor code and data files live in
 [`doc/agent/`](doc/agent/README.md). Add to them when you learn something new.
 
+## Issues, not pull requests, from outside contributors
+
+Reviewing a generated pull request costs the maintainers more than writing the
+change. Before preparing a pull request, check the user's access:
+
+    gh repo view YosysHQ/apicula --json viewerPermission -q .viewerPermission
+
+- `WRITE`, `MAINTAIN` or `ADMIN`: a maintainer. Go ahead.
+- Anything else, or no `gh` login: an outside contributor. Unless a maintainer
+  asked for a pull request, or the change is a few lines (a typo, a build fix),
+  draft an issue instead and do not push. The user posts it themselves. Describe
+  the problem and a small reproducer (the design, device and commands), and keep
+  the deeper analysis in a collapsed block. See [AI_POLICY.md](AI_POLICY.md).
+
 ## Project Overview
 
 Apicula (package name: Apycula) is an open-source toolkit for reverse-engineering and generating bitstreams for Gowin FPGA devices. It provides Python tools that convert hardware designs from Yosys/Nextpnr to binary FPGA configurations.
@@ -172,3 +186,50 @@ Do not edit `apycula/fse_formats.py` by hand.
 When writing findings, say what was read from code, what was checked against
 data, and what is inferred. Name the IDE version for any address. Name the
 primitives or tables you actually traced, rather than generalising from one.
+
+## Commit messages: Collaborative Work Statement
+
+Apicula is funded by NLnet and follows version 1.1 of their
+[Generative AI policy](https://nlnet.nl/foundation/policies/generativeAI/1.1/).
+It asks for the interactions behind each AI-assisted contribution, or a summary
+of them. The work is a conversation rather than a single prompt, so summarise it
+as a Collaborative Work Statement at the end of the commit body, before the
+trailers. Cover what applies:
+
+- **Origin**: what problem started the work, and who raised it.
+- **Decisions**: approaches considered, which one was chosen and by whom.
+- **Iteration**: what the human corrected, rejected or redirected.
+- **Evidence**: what was read from vendor code, what was checked against IDE
+  bitstreams, and what is inferred, as in the section above.
+- **Testing**: the vendor comparison and `master` comparison from
+  [Verifying changes](#verifying-changes): which designs, which attribute values
+  were compared, and how any differences were explained.
+
+Name who did what ("Claude traced...", "Pepijn rejected..."). Do not pad it: a
+one-line fix gets one line. Keep the `Co-Authored-By` trailer, which records the
+model and version. A `Claude-Session` link may be added, but it needs a login,
+so the statement must make sense without it.
+
+An illustrative example (not a real commit):
+
+```
+Decode GW5A PLL fractional divider
+
+<normal description of the change>
+
+Collaborative Work Statement:
+- Pepijn reported that PLLs with a fractional FCLKIN divider lock at the wrong
+  frequency.
+- Claude traced the FRAC attributes in fusegenMem::setPllAttr (IDE 1.9.10.03);
+  Pepijn rejected deriving them from the GW1N tables, since the encoding differs.
+- Testing: IDE and Apicula bitstreams for pll-frac on GW5A-25A agree for
+  FRAC=0, 3 and 7; the other examples are byte-identical to master.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+```
+
+When squash-merging, keep the statements in the merge message.
+
+When a session is long enough to be compacted, put a draft statement in the
+compaction summary: decisions, rejected approaches, bugs caught and who
+contributed what. Otherwise the history is lost before the commit is written.
