@@ -297,26 +297,26 @@ endef
 hil-dsp-mult18x18-%: HIL_SETTLE = 10
 hil-dsp-mult9x9-%: HIL_SETTLE = 10
 
-# --- tec0117 (GW1N-9) ---
-hil-%-tec0117: %-tec0117.fs hil-references/%.txt
-	openFPGALoader -d /dev/serial/by-id/usb-FTDI_Dual_RS232-HS-if00-port0 -b tec0117 $<
-	$(call hil_capture,/dev/serial/by-id/usb-FTDI_Dual_RS232-HS-if01-port0) | diff hil-references/$*.txt -
-	@echo "PASS: $* (tec0117)"
+# --- tangnano9k (GW1N-9C) ---
+hil-%-tangnano9k: %-tangnano9k.fs hil-references/%.txt
+	openFPGALoader -c dirtyJtag -b tangnano9k $<
+	$(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_000054f5634c-if01) | diff hil-references/$*.txt -
+	@echo "PASS: $* (tangnano9k)"
 
-hil-femto-riscv-18-test-tec0117: HIL_SETTLE = 1
+hil-femto-riscv-18-test-tangnano9k: HIL_SETTLE = 1
 
-.PHONY: hil-tec0117
-hil-tec0117: \
-	hil-latch-tec0117 \
-	hil-dsp-mult18x18-tec0117 \
-	hil-dsp-mult36x36-tec0117 \
-	hil-dsp-mult9x9-tec0117 \
-	hil-dsp-padd9-tec0117 \
-	hil-dsp-padd18-tec0117 \
-	hil-dsp-multalu18x18-tec0117 \
-	hil-dsp-multalu36x18-tec0117 \
-	hil-dsp-multaddalu18x18-tec0117 \
-	hil-femto-riscv-18-test-tec0117
+.PHONY: hil-tangnano9k
+hil-tangnano9k: \
+	hil-latch-tangnano9k \
+	hil-dsp-mult18x18-tangnano9k \
+	hil-dsp-mult36x36-tangnano9k \
+	hil-dsp-mult9x9-tangnano9k \
+	hil-dsp-padd9-tangnano9k \
+	hil-dsp-padd18-tangnano9k \
+	hil-dsp-multalu18x18-tangnano9k \
+	hil-dsp-multalu36x18-tangnano9k \
+	hil-dsp-multaddalu18x18-tangnano9k \
+	hil-femto-riscv-18-test-tangnano9k
 
 # --- tangnano20k (GW2A-18C) ---
 hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
