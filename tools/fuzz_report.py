@@ -27,6 +27,7 @@ TABLES = {
     'CLS': ('SLICE', attrids.cls_attrids, attrids.cls_attrvals),
     'BSRAM': ('BSRAM', attrids.bsram_attrids, attrids.bsram_attrvals),
     'PLL': ('PLL', attrids.pll_attrids, attrids.pll_attrvals),
+    'IOLOGIC': ('IOLOGIC', attrids.iologic_attrids, attrids.iologic_attrvals),
 }
 
 

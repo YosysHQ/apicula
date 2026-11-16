@@ -243,6 +243,59 @@ checked against `libgowin`.
 - `TBUF` decodes as `IOBUF`.
 - Some `TBUF`/`IOBUF` cases produce no buffer cell.
 
+### Differential buffers (GW1N-9C)
+
+`TLVDS_*` cases go on true-LVDS pairs and `ELVDS_*` on the other differential
+pairs. The pairs come from the chipdb flags `is_diff` and `is_true_lvds`, and A
+is the positive pin. Each side of the pair is a top-level port with its own
+`IO_LOC` and `IO_PORT`. The Apicula flow runs `iopadmap` as `synth_gowin` does:
+nextpnr expects an `OBUF`/`IBUF` on each differential pad and merges it. The
+enables are not inverted, because an inverter would need synthesis to map.
+`TLVDS_IOBUF` does not exist on GW1N-9C (PA2085).
+
+`-n 4 --seed 5`, 40 cases. Use `tools/fuzz_report.py` for details.
+
+- **Unused I/Os:** with a `TLVDS` buffer in a bank, Apicula sets the
+  `BANK_VCCIO=1.2/1.5/1.8` row fuses on about 175 unused I/O bits that the
+  vendor leaves clear.
+- **Bank tile:** the vendor sets bank-tile fuses in `IO_TYPE=BLVDS…` combination
+  rows (`BLVDS25,SSTL`, `BLVDS_E,LVDS25,BANK_VCCIO=2.5`, …) that Apicula does not,
+  and the other way round for `IO_TYPE=BLVDS25,BANK_VCCIO=1.2`.
+- **ELVDS fuses:** for `ELVDS_*` the `DRIVE,OPENDRAIN` and `ODMUX` row fuses
+  differ.
+- **Unpacker:** `TLVDS_OBUF` decodes as `TLVDS_TBUF`; `ELVDS_OBUF` as
+  `ELVDS_IOBUF`; `ELVDS_IBUF` and `TLVDS_IBUF` as `IBUF`.
+- **Bank voltage of `LVCMOS12D`–`LVCMOS25D`:** added to `gowin_pack`'s table.
+  `ELVDS_OBUF` designs with each of the four pack to bitstreams identical to
+  master's, so the new entries change nothing there. Their bank tiles differ
+  from the vendor's in the same places with and without the change.
+
+### I/O logic (GW1N-9C)
+
+`IDDR`, `ODDR`, `IDES*`, `OSER*`, `IODELAY`, `IVIDEO` and `OVIDEO` cases are
+placed with an LVCMOS33 buffer on a pin: an `IBUF` feeds `D`/`DI`, or the
+`Q`/`Q0`/`DO` output feeds an `OBUF`. The vendor requires this connection
+(PR0018). `CLK`, `PCLK` and `FCLK` come from the harness clock pin.
+
+`-n 3 --seed 1`, 45 cases: none ok; 24 mismatch, 14 decode, 7 invalid.
+
+- **Fast clock select:** Apicula sets `CLKIDDRMUX_ECLK=ECLK1` /
+  `CLKODDRMUX_ECLK=ECLK1` in nearly every IDES/OSER/IVIDEO/OVIDEO case, and the
+  vendor does not. It may depend on how `FCLK` is routed from the clock pin.
+  This has not been separated from the harness.
+- **GSR and LSR:** the vendor sets `GSR=DISGSR` and rows with `!LSROMUX_0`, so
+  `GSREN`/`LSREN` handling differs.
+- **ODDR:** `OUTMODE` rows differ, and so do `ODMUX`/`TRI_MUX` in the IOB.
+- **Unnamed bits:** many differing bits are in no table that
+  `tools/fuzz_report.py` names yet.
+- **Placement rules, vendor `invalid`:** `IDES16`/`OSER16` must be on an "X16
+  location" (PR2046), the `io16` role in `extra_func`. `OSER8` and `OVIDEO` could
+  not be placed on some pins (CT1094). Sites need restricting for these.
+- **Unpacker:**
+  - `IDDR`, `IDDRC`, `ODDR`, `ODDRC` and `IODELAY` decode wrongly or not at all.
+  - It compared instead of assigning the decoded `CLKODDRMUX_ECLK` and
+    `CLKIDDRMUX_ECLK` (`eclk == val`); now fixed.
+
 ## Adding a primitive
 
 Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site
