@@ -156,6 +156,30 @@ First run, `-n 3` over the 11 types nextpnr lists as BSRAM: 33 cases, 16 ok.
 - **Decode (1 case):** a `DPX9B` with `READ_MODE0=1'b1` produced no BSRAM cell
   from `gowin_unpack` for either bitstream, though the fuses agree.
 
+## rPLL (GW1N-9C)
+
+rPLLs are placed with `INS_LOC "x" PLL_L` or `PLL_R`, and nextpnr's BEL
+`X<c>Y<r>/PLL` (not `RPLLA`, the chipdb bel name). `CLKIN` is driven from the
+clock pin. Fuses are compared over the `RPLLA` tile and its `RPLLB` neighbours.
+Random dividers almost never meet the vendor's frequency checks (PA2078), so
+`pll_dividers` in `primitive_strategies.py` draws FCLKIN, IDIV_SEL, FBDIV_SEL
+and ODIV_SEL within PFD 3–400 MHz, VCO 400–1200 MHz and output 3.125–600 MHz.
+The VCO range is from the vendor's message for GW1NR-9C.
+
+`-n 8 --seed 5` (8 cases) and an earlier pair:
+
+- **Packing matches.** The decoded PLL attributes are identical in the vendor's
+  and Apicula's bitstreams in all 10 cases, and the fuse comparison is clean.
+- **Decoding does not.** Every case is **decode**: the unpacker's reverse
+  mapping (`pll_attrs_refine` in `gowin_unpack.py`) does not give back the
+  generated `PSDA_SEL`, `DUTYDA_SEL`, `DYN_SDIV_SEL`, `CLKOUT_DLY_STEP` or
+  `CLKOUTP_DLY_STEP`. Some examples: `DYN_SDIV_SEL` 16 → 32, 56 → 120, 34 → 58;
+  `CLKOUT_DLY_STEP` 4 → 1; `CLKOUTP_DLY_STEP` 0 → 1.5. Part of this is
+  don't-care values: with `DYN_DA_EN` true both tools write `PSDA_SEL` and
+  `DUTYDA_SEL` as `1111`. The static cases are not explained.
+- `DEVICE` is left out of the comparison. It sets no fuse, and the unpacker
+  writes the family name (`GW1N-9C` for `GW1NR-9C`).
+
 ## Adding a primitive
 
 Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site

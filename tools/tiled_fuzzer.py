@@ -96,6 +96,9 @@ class Sites:
             cols = [c for c in range(db.cols) if 'BSRAM' in db[r, c].bels]
             self.bsram += [(r, c, 'BSRAM', n) for n, c in enumerate(cols)]
         rng.shuffle(self.bsram)
+        # rPLLs: the vendor names them PLL_L and PLL_R by side
+        self.pll = [(r, c, 'PLL', 'L' if c < db.cols // 2 else 'R')
+                    for r in range(db.rows) for c in range(db.cols) if 'RPLLA' in db[r, c].bels]
         self.singletons = {'osc'}
 
 
@@ -118,9 +121,10 @@ def allocate(cases, sites):
                     batch.append((luts.pop(), (r, c, cls, 'B')))
             else:
                 break
-        for site in sites.bsram:
-            if queues['bsram']:
-                batch.append((queues['bsram'].pop(), site))
+        for kind, free in (('bsram', sites.bsram), ('pll', sites.pll)):
+            for site in free:
+                if queues[kind]:
+                    batch.append((queues[kind].pop(), site))
         for kind in sites.singletons:
             if queues[kind]:
                 batch.append((queues[kind].pop(), None))
@@ -183,7 +187,7 @@ def netlist(batch, spec, pins):
         for port, (d, w) in spec[case.prim]['ports'].items():
             if d != 'input' or w != 1:
                 continue
-            if port == 'CLK':
+            if port in ('CLK', 'CLKIN'):
                 conns[port] = 'clk'
             elif port in CONTROL_PORTS and sources:
                 conns[port] = sources.pop(0)
@@ -194,6 +198,8 @@ def netlist(batch, spec, pins):
         wiring[name] = conns
         if site and site[2] == 'BSRAM':
             cst.cells[name] = f'BSRAM_R{site[0] + 1}[{site[3]}]'
+        elif site and site[2] == 'PLL':
+            cst.cells[name] = f'PLL_{site[3]}'
         elif site:
             cst.cells[name] = (site[0] + 1, site[1] + 1, site[2], site[3])
 
@@ -207,6 +213,8 @@ def bel_name(case, site):
     r, c, cls, ab = site
     if cls == 'BSRAM':
         return f'X{c}Y{r}/BSRAM'
+    if cls == 'PLL':
+        return f'X{c}Y{r}/PLL'
     kind = 'DFF' if case.site == 'dff' else 'LUT'
     return f'X{c}Y{r}/{kind}{2 * cls + "AB".index(ab)}'
 
@@ -307,8 +315,8 @@ def bit_owner(db, r, c, bit):
 
 def case_bel(case, site):
     r, c, cls, ab = site
-    if cls == 'BSRAM':
-        return 'BSRAM'
+    if cls in ('BSRAM', 'PLL'):
+        return cls
     return f'LUT{2 * cls + "AB".index(ab)}' if case.site == 'lut' else f'CLS{cls}'
 
 
@@ -329,6 +337,8 @@ def fuse_tables(db, r, c, bit):
 
 def literal_value(text):
     text = str(text).strip().strip('"')
+    if re.fullmatch(r'-?\d+\.0*', text):  # gowin_unpack writes some integers as floats
+        text = text.split('.')[0]
     m = re.fullmatch(r"(\d+)'([bhd])([0-9a-fA-F_]+)", text)
     if m:
         return int(m.group(3).replace('_', ''), {'b': 2, 'h': 16, 'd': 10}[m.group(2)])
@@ -369,11 +379,11 @@ class Decoded:
         if site is None:
             return next((n for n, c in self.nl.cells.items() if c['type'].startswith(case.site.upper())), None)
         r, c, cls, ab = site
-        if case.site == 'bsram':
-            # gowin_unpack names BSRAMs by a counter; find the one on this tile
-            prefix = f'R{r + 1}C{c + 1}_'
-            return next((n for n, cell in self.nl.cells.items() if cell['type'] == 'BSRAM'
-                         and any(w.startswith(prefix) for w in cell['ports'].values())), None)
+        if case.site in ('bsram', 'pll'):
+            # gowin_unpack names these by a counter; find the one on this tile
+            prefix, typ = f'R{r + 1}C{c + 1}_', {'bsram': 'BSRAM', 'pll': 'rPLL'}[case.site]
+            return next((n for n, cell in self.nl.cells.items() if cell['type'] == typ
+                         and any(str(w).startswith(prefix) for w in cell['ports'].values())), None)
         if case.site == 'lut':
             name = f'R{r + 1}C{c + 1}_LUT4_{2 * cls + "AB".index(ab)}'
             return name if name in self.nl.cells else None
@@ -386,6 +396,11 @@ class Decoded:
         if case.site == 'bsram':
             # gowin_unpack does not decode BSRAM parameters; the fuse comparison covers them
             return {'cell': 'BSRAM' if name else None}
+        if case.site == 'pll':
+            if name is None:
+                return {'cell': None, 'params': {}}
+            return {'cell': 'rPLL', 'params': {k: literal_value(v) for k, v in self.nl.cells[name]['params'].items()
+                                               if k != 'DEVICE'}}  # not a fuse; unpacked as the family name
         if case.site == 'lut':
             if name:
                 return {'cell': 'LUT', 'init': literal_value(self.nl.cells[name]['params']['INIT'])}
@@ -408,6 +423,8 @@ class Decoded:
 def describe_generated(case, conns, spec):
     if case.site == 'bsram':
         return {'cell': 'BSRAM'}
+    if case.site == 'pll':
+        return {'cell': 'rPLL', 'params': {k: literal_value(v) for k, v in case.params if k != 'DEVICE'}}
     if case.site == 'lut':
         return {'cell': 'LUT', 'init': lut_init(case)}
     inputs = {p: 'VSS' if conns.get(p, 'gnd') == 'gnd' else 'sig'
@@ -487,6 +504,11 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
             # a BSRAM's fuses are in its tile and the BSRAM_AUX tiles to its right
             for dc in (1, 2):
                 if loc[1] + dc < db.cols and 'BSRAM_AUX' in db[loc[0], loc[1] + dc].bels:
+                    by_tile[(loc[0], loc[1] + dc)].append(name)
+        if site and site[2] == 'PLL':
+            # an rPLL's fuses are in its RPLLA tile and the adjacent RPLLB tiles
+            for dc in (-3, -2, -1, 1, 2, 3):
+                if 0 <= loc[1] + dc < db.cols and 'RPLLB' in db[loc[0], loc[1] + dc].bels:
                     by_tile[(loc[0], loc[1] + dc)].append(name)
         if site:
             by_bel[(*loc, case_bel(case, site))] = name

@@ -27,6 +27,7 @@ SITES = {
     **{name: 'dff' for name in DFFS},
     'OSC': 'osc',
     # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
+    'rPLL': 'pll',
     **{name: 'bsram' for name in ['SP', 'SPX9', 'pROM', 'pROMX9', 'ROM', 'SDP', 'SDPB', 'SDPX9B',
                                   'DP', 'DPB', 'DPX9B']},
 }
@@ -34,6 +35,31 @@ SITES = {
 # Parameters held at their default. BSRAM contents are not in the vendor
 # bitstream (bit_incl_bsram_init is off), so they cannot be compared yet.
 KEEP_DEFAULT = re.compile(r'INIT_RAM_[0-9A-F]{2}$')
+
+# PLL frequency limits in MHz, from the vendor's PA2078 message for GW1NR-9C
+# ("suitable range is from 400MHz to 1200MHz"); PFD and output limits as in
+# apycula/gowin_pll.py. Too few valid divider combinations survive a filter, so
+# rPLL dividers are drawn to satisfy them (see pll_dividers).
+PLL_LIMITS = {'pfd': (3, 400), 'vco': (400, 1200), 'clkout': (3.125, 600)}
+
+
+@st.composite
+def pll_dividers(draw, spec):
+    """FCLKIN, IDIV_SEL, FBDIV_SEL and ODIV_SEL of an rPLL within PLL_LIMITS:
+    PFD = FCLKIN/(IDIV+1), CLKOUT = PFD*(FBDIV+1), VCO = CLKOUT*ODIV."""
+    lo, hi = PLL_LIMITS['pfd']
+    fclkin = draw(st.sampled_from([f for f in REAL_VALUES if float(f) >= lo]))
+    f = float(fclkin)
+    idiv = draw(st.sampled_from([i for i in range(64) if lo <= f / (i + 1) <= hi]))
+    pfd = f / (idiv + 1)
+    choices = [(fb, od) for fb in range(64) for od in map(int, spec['ODIV_SEL']['values'])
+               if PLL_LIMITS['clkout'][0] <= pfd * (fb + 1) <= PLL_LIMITS['clkout'][1]
+               and PLL_LIMITS['vco'][0] <= pfd * (fb + 1) * od <= PLL_LIMITS['vco'][1]]
+    if not choices:
+        return {}
+    fb, od = draw(st.sampled_from(choices))
+    return {'FCLKIN': f'"{fclkin}"', 'IDIV_SEL': str(idiv), 'FBDIV_SEL': str(fb), 'ODIV_SEL': str(od)}
+
 
 # Rules across parameters, or values the XML allows but the vendor rejects.
 # Found with tools/vendor_sweep.py; each is (primitive regex, predicate on the
@@ -129,6 +155,10 @@ class Primitives:
             else:
                 fields[name] = param_strategy(param).map(lambda v, p=param: literal(p, v))
         rules = [ok for pat, ok, _ in RULES if re.match(pat, prim)]
+        if prim == 'rPLL':
+            base = st.fixed_dictionaries(fields)
+            return st.tuples(base, pll_dividers(self.spec[prim]['params'])).map(
+                lambda t: Case(prim, tuple(sorted({**t[0], **t[1]}.items()))))
         return (st.fixed_dictionaries(fields).filter(lambda d: all(ok(d) for ok in rules))
                 .map(lambda d: Case(prim, tuple(sorted(d.items())))))
 
