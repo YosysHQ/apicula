@@ -1,5 +1,6 @@
 from collections import namedtuple
 from itertools import chain
+import contextlib
 import os
 import re
 import subprocess
@@ -238,14 +239,21 @@ run pnr
                         errs.setdefault((name, code), []).append(text)
         return errs
 
-    def run_pnr(self, *, device=None, constr=None, partnumber=None, opt=None):
+    def run_pnr(self, *, device=None, constr=None, partnumber=None, opt=None, workdir=None, stdout=None):
+        """Run vendor place and route. With `workdir`, run there and keep the
+        output (impl/pnr/top.posp, top.log, ...) instead of a temporary directory.
+        `stdout` is passed to subprocess.run for the gw_sh console output."""
         device = device or self.device
         constr = constr or self.cst
         partnumber = partnumber or self.partnumber
         self.opt = opt or self.opt
 
-
-        with tempfile.TemporaryDirectory() as tmpdir:
+        if workdir:
+            os.makedirs(workdir, exist_ok=True)
+            context = contextlib.nullcontext(os.path.abspath(workdir))
+        else:
+            context = tempfile.TemporaryDirectory()
+        with context as tmpdir:
 
             netlist = tmpdir + "/top.v"
             cst = tmpdir + "/top.cst"
@@ -267,7 +275,7 @@ run pnr
             with open(tmpdir+"/run.tcl", "w") as f:
                 self.write(f, cst=cst, netlist=netlist)
 
-            subprocess.run(["/usr/bin/env", "LD_PRELOAD=" + self.gowinhome + "/Programmer/bin/libfontconfig.so.1", self.gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
+            subprocess.run(["/usr/bin/env", "LD_PRELOAD=" + self.gowinhome + "/Programmer/bin/libfontconfig.so.1", self.gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir, stdout = stdout)
             #print(tmpdir); input()
             try:
                 constrs = self.cst if isinstance(self.cst, Constraints) else Constraints()
