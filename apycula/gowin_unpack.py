@@ -185,7 +185,9 @@ def get_latch_type(dff_idx, in_attrs):
     if 'CLKMUX_CLK' in in_attrs.keys():
         attrs['CLKMUX_CLK'] = get_attrval_name(in_attrs['CLKMUX_CLK'])
     else:
-        attrs['CLKMUX_CLK'] = 'SIG'
+        # The CLS fuse of (REGMODE=LATCH, CLKMUX_CLK=SIG) is the one of
+        # (REGMODE=FF, CLKMUX_CLK=INV), so a latch without it has an inverted gate
+        attrs['CLKMUX_CLK'] = 'INV'
     if 'SRMODE' in in_attrs.keys():
         attrs['SRMODE'] = get_attrval_name(in_attrs['SRMODE'])
     else:

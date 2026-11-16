@@ -25,8 +25,12 @@ DFFS = ['DFF', 'DFFE', 'DFFS', 'DFFSE', 'DFFR', 'DFFRE', 'DFFP', 'DFFPE', 'DFFC'
 SITES = {
     **{f'LUT{n}': 'lut' for n in range(1, 5)},
     **{name: 'dff' for name in DFFS},
+    # latches share the flip-flop slots
+    **{name: 'dff' for name in ['DL', 'DLE', 'DLC', 'DLCE', 'DLP', 'DLPE',
+                                'DLN', 'DLNE', 'DLNC', 'DLNCE', 'DLNP', 'DLNPE']},
     'OSC': 'osc',
     'OSCA': 'osc',
+    'ALU': 'alu',
     # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
     'rPLL': 'pll',
     'PLLA': 'plla',

@@ -38,6 +38,7 @@ else their yowasp- versions.
 """
 import argparse
 import collections
+import copy
 import json
 import os
 import random
@@ -66,7 +67,13 @@ DEVICES = {
     'GW5A-25A': ('GW5A-25A', 'GW5A-LV25MG121NC1/I0', 'MBGA121N'),
 }
 
-CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR'}
+CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR', 'GE'}
+
+# Ports the vendor and Yosys' cell library name differently. The Apicula side
+# renames them before Yosys; the mismatch itself is recorded in
+# doc/agent/primitive-params.md (a vendor-style netlist with latches does not
+# go through Yosys).
+YOSYS_PORTS = {re.compile(r'DLN?[CP]?E?$'): {'G': 'CLK', 'GE': 'CE'}}
 
 # Vendor log codes that make a case invalid rather than a mismatch.
 INVALID_CODES = {'PA1002': 'invalid parameter value', 'CT1094': 'not placed at its constraint'}
@@ -92,6 +99,11 @@ class Sites:
                     for cls in range(4)
                     if {f'LUT{2 * cls}', f'LUT{2 * cls + 1}', f'DFF{2 * cls}'} <= db[r, c].bels.keys()]
         rng.shuffle(self.cls)
+        # an ALU case goes in ALU1 (CLS0, B): with CIN tied to GND, nextpnr puts a
+        # carry-in head in ALU0 of the same chain
+        self.alu = [(r, c, 0, 'B') for r in range(db.rows) for c in range(db.cols)
+                    if {'ALU0', 'ALU1'} <= db[r, c].bels.keys()]
+        rng.shuffle(self.alu)
         self.bsram = []
         for r in range(db.rows):
             cols = [c for c in range(db.cols) if 'BSRAM' in db[r, c].bels]
@@ -193,6 +205,9 @@ def allocate(cases, sites):
     for case in cases:
         queues[case.site].append(case)
     batches = []
+    alus = queues.pop('alu', [])
+    for i in range(0, len(alus), len(sites.alu)):
+        batches.append(list(zip(alus[i:i + len(sites.alu)], sites.alu)))
     # I/O cases: one bank voltage per design, since a bank has one VCCIO
     by_vccio = collections.defaultdict(list)
     for case in queues.pop('iob', []) + queues.pop('diob', []) + queues.pop('iol', []):
@@ -324,8 +339,10 @@ def netlist(batch, spec, pins, harness_io_type=None):
                 # a plain pin: nextpnr moves a PLL fed from a dedicated PLL input
                 # pin (the harness clock on GW2A-18C) before applying its BEL
                 conns[port] = sources.pop(0)
-            elif port == 'CLK':
+            elif port in ('CLK', 'G'):
                 conns[port] = 'clk'
+            elif case.site == 'alu' and port == 'CIN':
+                conns[port] = 'gnd'
             elif port in CONTROL_PORTS and sources:
                 conns[port] = sources.pop(0)
             else:
@@ -358,7 +375,7 @@ def bel_name(case, site):
         return f'X{c}Y{r}/PLL'
     if str(cls).startswith('IOB'):
         return f'X{c}Y{r}/{cls}'
-    kind = 'DFF' if case.site == 'dff' else 'LUT'
+    kind = {'dff': 'DFF', 'alu': 'ALU'}.get(case.site, 'LUT')
     return f'X{c}Y{r}/{kind}{2 * cls + "AB".index(ab)}'
 
 
@@ -374,6 +391,11 @@ def run_vendor(workdir, mod, cst, vendor_device, part):
 
 def run_apicula(workdir, mod, cst, names, device, part):
     os.makedirs(workdir, exist_ok=True)
+    mod = copy.deepcopy(mod)
+    for prim in mod.primitives.values():
+        for pattern, rename in YOSYS_PORTS.items():
+            if pattern.match(prim.typ):
+                prim.portmap = {rename.get(k, k): v for k, v in prim.portmap.items()}
     with open(os.path.join(workdir, 'top.v'), 'w') as f:
         mod.write(f)
     with open(os.path.join(workdir, 'top.cst'), 'w') as f:
@@ -520,14 +542,14 @@ def canonical(cell, params, inputs):
     """Flip-flops in one form: no E means CE=VCC, and a set/reset input tied to
     VSS means no set/reset. The unpacker emits e.g. DFFPE with CE=VCC for DFFP.
     `inputs` maps each input port to 'VCC', 'VSS' or 'sig'."""
-    m = re.fullmatch(r'DFF(N?)([SRPC]?)(E?)', cell or '')
+    m = re.fullmatch(r'(DFF|DL)(N?)([SRPC]?)(E?)', cell or '')
     if not m:
         return {'cell': cell, 'params': params, 'inputs': inputs}
-    neg, sr, ce = m.groups()
+    kind, neg, sr, ce = m.groups()
     if sr and inputs.get(_SR[sr]) == 'VSS':
         sr = ''
-    return {'cell': 'DFF', 'params': params, 'edge': 'neg' if neg else 'pos', 'sr': sr or None,
-            'ce': inputs.get('CE', 'sig') if ce else 'VCC'}
+    enable = inputs.get('CE', inputs.get('GE', 'sig')) if ce else 'VCC'
+    return {'cell': kind, 'params': params, 'edge': 'neg' if neg else 'pos', 'sr': sr or None, 'ce': enable}
 
 
 class Decoded:
@@ -555,12 +577,15 @@ class Decoded:
             prefix, typ = f'R{r + 1}C{c + 1}_', {'bsram': 'BSRAM', 'pll': 'rPLL'}[case.site]
             return next((n for n, cell in self.nl.cells.items() if cell['type'] == typ
                          and any(str(w).startswith(prefix) for w in cell['ports'].values())), None)
+        if case.site == 'alu':
+            name = f'R{r + 1}C{c + 1}_ALU_{2 * cls + "AB".index(ab)}'
+            return name if name in self.nl.cells else None
         if case.site == 'lut':
             name = f'R{r + 1}C{c + 1}_LUT4_{2 * cls + "AB".index(ab)}'
             return name if name in self.nl.cells else None
         prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{2 * cls}'
         return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
-                     and cell['type'].startswith(('DFF', 'DL'))), None)
+                     and cell['type'].startswith(('DFF', 'DL'))), None)  # flip-flops and latches
 
     def describe(self, case, site):
         name = self.find(case, site)
@@ -573,6 +598,10 @@ class Decoded:
             return {'cell': self.nl.cells[name]['type'] if name else None}
         if case.site == 'plla':
             return {'cell': 'PLLA'}  # compared through its bitstream slot in run_batch
+        if case.site == 'alu':
+            cell = self.nl.cells.get(name) if name else None
+            return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}
+                    if cell else {}} if cell else {'cell': None}
         if case.site == 'bsram':
             # gowin_unpack does not decode BSRAM parameters; the fuse comparison covers them
             return {'cell': 'BSRAM' if name else None}
@@ -601,6 +630,8 @@ class Decoded:
 
 
 def describe_generated(case, conns, spec):
+    if case.site == 'alu':
+        return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
     if case.site == 'plla':
         return {'cell': 'PLLA'}
     if case.site == 'iol':
