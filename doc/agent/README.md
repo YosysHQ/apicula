@@ -19,6 +19,9 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
   allowed values from the IDE's `primitive.xml`, compared with Yosys' cell library.
 - [tiled-fuzzer.md](tiled-fuzzer.md): comparing Apicula with the vendor on random
   primitive configurations, and what the comparison has to allow for.
+- [vendor-sweep.md](vendor-sweep.md): every `primitive.xml` primitive through
+  the vendor on GW1N-9C, GW2A-18C and GW5A-25A: availability, and the parameter
+  rules the XML does not have.
 - [hand-written-tables.md](hand-written-tables.md): which Apicula tables have a
   vendor source, and what each `logicinfo` table is for.
 
