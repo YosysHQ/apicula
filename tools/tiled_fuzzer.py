@@ -594,11 +594,24 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         if site:
             by_bel[(*loc, case_bel(case, site))] = name
 
+    # Unused I/Os are configured from their bank's settings, so differences in
+    # an I/O tile with no case belong to the I/O cases of that bank.
+    by_bank = collections.defaultdict(list)
+    for name, (case, site) in names.items():
+        if case.site == 'iob':
+            by_bank[db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))].append(name)
+
+    def bank_cases(r, c):
+        if not any(b.startswith('IOB') for b in db[r, c].bels):
+            return []
+        banks = {db.pin_bank.get(io_name(db, r, c, ab)) for ab in 'AB'}
+        return [n for b in banks for n in by_bank.get(b, [])]
+
     unattributed = {}
     for (r, c), bits in sorted(diffs.items()):
         for bit, v in sorted(bits):
             bel = bit_owner(db, r, c, bit)
-            owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c), [])
+            owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c)) or bank_cases(r, c)
             detail = f'{bit} vendor={v} apicula={1 - v} {bel or ""} {fuse_tables(db, r, c, bit)}'
             if not owners:
                 unattributed.setdefault(f'R{r + 1}C{c + 1}', []).append(detail)
@@ -676,9 +689,18 @@ def main(argv):
             json.dump(report, f, indent=1)
         if 'error' in report:
             if len(batch) > 1:
-                # a vendor error stops the whole design: split it to find the case
+                # an error stops the whole design: split it to find the case. If
+                # Apicula fails on a design the vendor accepts, that is a failure
+                # in itself, even when every case passes alone.
                 half = len(batch) // 2
                 print(f'{i}: {report["error"]}; splitting')
+                for line in dict.fromkeys(report.get('why', [])):
+                    print('    ', line)
+                if 'Apicula' in report['error']:
+                    totals['unsupported combinations'] += 1
+                    with open(os.path.join(workdir, 'unsupported_combination.json'), 'w') as f:
+                        json.dump({'cases': [(c.to_json(), s) for c, s in batch], 'why': report.get('why', [])},
+                                  f, indent=1)
                 queue[:0] = [(f'{i}a', batch[:half]), (f'{i}b', batch[half:])]
                 continue
             case, site = batch[0]
@@ -712,7 +734,8 @@ def main(argv):
             print(f'{i} unattributed {tile}:', *bits, sep='\n       ')
     print('summary:', dict(totals))
     # invalid cases are generator problems (a vendor rule to learn); the rest are failures
-    return 1 if totals.keys() & {'mismatch', 'decode', 'unsupported', 'unattributed tiles'} else 0
+    return 1 if totals.keys() & {'mismatch', 'decode', 'unsupported', 'unsupported combinations',
+                                 'unattributed tiles'} else 0
 
 
 if __name__ == '__main__':
