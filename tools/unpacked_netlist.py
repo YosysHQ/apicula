@@ -1,8 +1,8 @@
 """Read gowin_unpack output as a netlist: cells, parameters and resolved nets.
 
 gowin_unpack writes routing as `assign` statements and `` `define `` aliases.
-Every wire joined by them is one net. Each net has a root name, and `driver`
-gives the cell output on it.
+Every wire joined by them is one net, and `find` gives its root name, which is
+VCC or VSS for a constant.
 """
 import os
 import re
@@ -43,7 +43,6 @@ class Netlist:
                 if m and m.group(1) not in ('module', 'input', 'output', 'inout', 'wire'):
                     cell = {'type': m.group(1), 'ports': {}, 'params': {}}
                     self.cells[m.group(2)] = cell
-        self.driver = {}
 
     def find(self, w):
         root = w
@@ -60,13 +59,6 @@ class Netlist:
             if ra in ('VCC', 'VSS'):
                 ra, rb = rb, ra
             self.parent[ra] = rb
-
-    def set_outputs(self, outputs):
-        """outputs: cell type -> set of output port names (from primitive.xml)."""
-        for name, cell in self.cells.items():
-            for port, wire in cell['ports'].items():
-                if port in outputs.get(cell['type'], ()):
-                    self.driver[self.find(wire)] = (name, port)
 
 
 def unpack(device, fs, out, repo):

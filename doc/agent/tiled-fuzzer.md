@@ -22,19 +22,17 @@ same fuses for them. IDE **1.9.10.03**.
      Placement is fixed by `BEL` attributes added to the Yosys JSON.
 4. **Compare through the unpacker.** The chipdb exists by the time the fuzzer
    runs, so both bitstreams are unpacked with `gowin_unpack`.
-   `tools/unpacked_netlist.py` joins the `assign` and `` `define `` statements
-   into nets. Each case's cell is described the same way for the vendor, for
-   Apicula and for the generated case: cell type, parameters, and the harness
-   pin feeding each input. Tracing passes through the pass-through LUTs
-   (`16'hff00`) both tools put in front of a DFF's D input. A LUT is described
-   by its truth table over the harness pins, which makes the vendor's input
-   permutation irrelevant. Flip-flops are put in one form: no E means CE=VCC,
-   and a set/reset input tied to VSS means no set/reset.
-   - vendor ≠ Apicula: **mismatch**, a packer difference;
-   - vendor = Apicula ≠ generated: **decode**, an unpacker bug or a mistake both
-     make;
-   - an input that could not be traced in the unpacked routing is a wildcard,
-     and the case is **partial** rather than ok.
+   Each case sits on a known bel, so only the cell found there is compared:
+   type, parameters, LUT INIT, and which inputs are tied to a constant. Nets
+   are dummies and are not traced. `tools/unpacked_netlist.py` joins the
+   `assign` and `` `define `` statements only to see whether an input is VCC or
+   VSS. Flip-flops are put in one form: no E means CE=VCC, and a set/reset
+   input tied to VSS means no set/reset.
+   - vendor ≠ Apicula: **mismatch**, a packer difference. The vendor's LUT INIT
+     only has to match up to an input permutation;
+   - vendor = Apicula, but Apicula ≠ generated: **decode**, an unpacker bug or a
+     mistake both make. nextpnr keeps LUT pin order, so Apicula's INIT must match
+     exactly.
 5. **Compare fuses.** As a backstop for fuses the unpacker does not decode, both
    bitstreams are also split into tiles. Routing fuses are masked: `pips`,
    `clock_pips`, `alonenode` and `alonenode_6`. Each remaining difference is
@@ -61,8 +59,8 @@ isolation.
   and inputs come from input pins.
 - **The vendor permutes LUT inputs.** It connects the nets to A–D in its own order
   and rewrites INIT to match. 15 of 16 LUT mismatches in the first run were exact
-  input permutations. The 16th was the constant propagation above. This is why
-  LUTs are compared as truth tables over the traced input pins.
+  input permutations. The 16th was the constant propagation above. So the
+  vendor's INIT is compared up to an input permutation.
 - **The netlist dialect.** Every port must be connected (PA2058), and sized
   constants on ports are rejected (PA2000). Unused inputs go to a `GND` cell's
   net. `PA1002` (invalid parameter value) and `CT1094` mark a case invalid rather
@@ -95,10 +93,10 @@ isolation.
   `DLNC`, `DLNCE`, `DLNP` and `DLNPE` from the vendor unpack as `DLE`, `DLCE` or
   `DLPE`, before and after the fix. Latches are not fuzzed yet, because the
   vendor calls the gate port `G` while Yosys' cell library calls it `CLK`.
-- **Not followed: clock routing and long wires.** Nets do not reach from the
-  GCLK input pin to the clock spines (`SPINEn`), and the long-wire taps
-  (`LBO0` → `LTnn` → `LBnn`) that nextpnr uses are not joined in the unpacked
-  netlist. These inputs are wildcards, so such cases report **partial**.
+- **Not followed: clock routing and long wires.** In the unpacked netlist, nets
+  do not reach from the GCLK input pin to the clock spines (`SPINEn`), and
+  long-wire taps (`LBO0` → `LTnn` → `LBnn`) are not joined. The fuzzer does not
+  trace nets, so this does not affect it.
 - Constant LUTs are written as an assign of the `F` wire to VCC or VSS, not as
   a cell. The fuzzer accounts for this.
 
@@ -106,11 +104,9 @@ isolation.
 
 - All 20 DFF types, LUT1–LUT4 and OSC (`FREQ_DIV` across its range) match:
   167 cases in 27 designs, `-n 40 --seed 3`, by fuses only.
-- With unpacked comparison, `-n 40 --seed 7`: 168 cases in 28 designs, no
-  mismatch or decode failure. 36 are ok and 132 partial. Every DFF is partial,
-  because of the clock spine. 92 LUTs are partial because the vendor routed
-  their inputs over long wires (`LBnn`) too. Joining long-wire taps in the
-  unpacked netlist would turn most partial results into full ones.
+- With the unpacked comparison, `-n 3`: all 55 cases ok. Given the master
+  unpacker's netlist instead, all 20 negative-edge DFF cases fail, and a LUT INIT
+  off by one bit is rejected, so the check can fail.
 - The harness alone (IBUFs, one OBUF and GND, on the QFN88P pins chosen by
   `pick_pins`) differs in 24 non-routing bits, in I/O and corner tiles R1C1, R1C2,
   R1C47, R15C1, R16C1, R21C1, R22C1, R25C1, R26C1 and R29C1. They are subtracted
