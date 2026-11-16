@@ -4633,7 +4633,7 @@ def set_chip_flags(dev, device):
     if device in _hclk_to_pll:
         dev.chip_flags.append("HAS_PLL_HCLK")
     if device in {'GW1N-2'}:
-        dev.chip_flags.append("HAS_DFF67")
+        dev.chip_flags.append("HAS_DFF6")
     if device in {'GW2A-18', 'GW2A-18C'}:
         dev.chip_flags.append("HAS_CLKDIV_HCLK")
     if device in {'GW5A-25A'}:
