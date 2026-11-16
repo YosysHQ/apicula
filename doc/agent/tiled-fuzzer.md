@@ -73,9 +73,9 @@ isolation.
 - **`codegen.Pnr.read_err_log` recorded nothing** until this branch. It kept only
   lines starting with `Warning` or `Error`, while 1.9.10.03 writes `WARN` and
   `ERROR`.
-- **Bus outputs.** The vendor rejected a `wire [7:0]` connected to the output
-  bus of `DLL` with PA2060, "crosses the bits border". Primitives with bus
-  outputs will need a different way of leaving outputs unconnected.
+- **Buses are per bit.** The vendor rejected a `wire [7:0]` on the output bus of
+  `DLL` with PA2060, "crosses the bits border". A concatenation of eight 1-bit
+  wires is accepted, so bus ports are wired that way.
 - **The `.posp` file has no cell placements** in this IDE version, so vendor
   placement is checked through the `CT1094`/`CT1005` warnings instead.
 
@@ -134,6 +134,6 @@ Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site
 kind, `Sites` and `allocate` need to know the sites, and `bel_name` and
 `case_bel` need the bel names used by nextpnr and the bel that owns its fuses.
 `Decoded.find` needs the name `gowin_unpack` gives the cell.
-Device-dependent parameter values go in `DEVICE_PARAMS`. Rules involving several
+Device-dependent parameter values go in `Primitives.fixed`. Rules involving several
 parameters, such as the PLL VCO range in `gowin_pll.py`, are filters on the
 strategy.

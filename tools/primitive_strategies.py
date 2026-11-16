@@ -27,11 +27,9 @@ SITES = {
     'OSC': 'osc',
 }
 
-# Parameters whose legal value depends on the device rather than on the XML.
-# Called with the vendor device name (as passed to set_device).
-DEVICE_PARAMS = {
-    ('OSC', 'DEVICE'): lambda vendor_device: vendor_device,
-}
+# Real-valued parameters (the PLL and DCC input frequency FCLKIN) have no domain
+# in primitive.xml; draw typical frequencies in MHz.
+REAL_VALUES = ['3', '10', '24', '27', '50', '100', '200', '400']
 
 
 def family(device):
@@ -83,6 +81,8 @@ def param_strategy(param):
         return st.integers(0, (hi - lo) // step).map(lambda i: lo + i * step)
     if kind == 'bits':
         return st.integers(0, (1 << param['width']) - 1)
+    if kind == 'real':
+        return st.sampled_from(REAL_VALUES)
     raise ValueError(f'no strategy for {kind} parameters')
 
 
@@ -95,12 +95,19 @@ class Primitives:
         self.spec = gowin_primitives.load(xml)
         self.vendor_device = vendor_device
 
+    def fixed(self, prim, name, param):
+        """Literal for a parameter whose value depends on the device, else None.
+        DEVICE parameters list the devices a primitive exists on; use this one."""
+        if name == 'DEVICE' and param['kind'] == 'enum' and self.vendor_device in param['values']:
+            return literal(param, self.vendor_device)
+        return None
+
     def case(self, prim):
         fields = {}
         for name, param in self.spec[prim]['params'].items():
-            fixed = DEVICE_PARAMS.get((prim, name))
-            if fixed:
-                fields[name] = st.just(literal(param, fixed(self.vendor_device)))
+            fixed = self.fixed(prim, name, param)
+            if fixed is not None:
+                fields[name] = st.just(fixed)
             else:
                 fields[name] = param_strategy(param).map(lambda v, p=param: literal(p, v))
         return st.fixed_dictionaries(fields).map(lambda d: Case(prim, tuple(sorted(d.items()))))

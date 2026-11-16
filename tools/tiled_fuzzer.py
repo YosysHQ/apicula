@@ -139,9 +139,11 @@ def netlist(batch, spec, pins):
             elif direction == 'input':  # the vendor rejects unconnected or constant ports
                 p.portmap[port] = ['gnd'] * width if width > 1 else 'gnd'
             else:
-                wire = f'{name}_{port}'
-                mod.wires.add(f'[{width - 1}:0] {wire}' if width > 1 else wire)
-                p.portmap[port] = wire
+                # the vendor reads netlists per bit: a `wire [7:0]` on a port is
+                # rejected with PA2060, a concatenation of 1-bit wires is not
+                wires = [f'{name}_{port}' + (f'_{b}' if width > 1 else '') for b in range(width)]
+                mod.wires.update(wires)
+                p.portmap[port] = wires[0] if width == 1 else wires[::-1]
         p.params = dict(params)
         mod.primitives[name] = p
         return p
