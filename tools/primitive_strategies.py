@@ -31,6 +31,12 @@ SITES = {
     'OSC': 'osc',
     'OSCA': 'osc',
     'ALU': 'alu',
+    # DSP: one case per DSP block
+    **{name: 'dsp' for name in ['MULT9X9', 'MULT18X18', 'MULT36X36', 'MULTALU18X18', 'MULTALU36X18',
+                                'MULTADDALU18X18', 'PADD9', 'PADD18', 'ALU54D',
+                                'MULT12X12', 'MULT27X36', 'MULTADDALU12X12', 'MULTALU27X18']},
+    # SSRAM: a whole logic tile
+    **{name: 'ssram' for name in ['RAM16SDP1', 'RAM16SDP2', 'RAM16SDP4', 'ROM16', 'RAM16S1', 'RAM16S2', 'RAM16S4']},
     # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
     'rPLL': 'pll',
     'PLLA': 'plla',
@@ -182,6 +188,24 @@ def plla_fixup(p):
     return p
 
 
+def accload_fixup(p):
+    """PA2079 on GW1N-9C MULTALU36X18: "Level of ACCLOAD-path ... should not be
+    more than data-path(INPUT_REG + PIPE_REG)'s via register". Rejected with
+    ACCLOAD_REG0/1 = 1/1 and AREG/BREG/PIPE_REG = 0/1/0. Which input register
+    counts is inferred: the larger of the A and B registers, plus the pipeline
+    registers. ACCLOAD stages are dropped until they fit."""
+    if 'ACCLOAD_REG0' not in p:
+        return p
+    p = dict(p)
+    on = lambda k: p.get(k, "1'b0").endswith('1')
+    data = max([on(k) for k in p if re.fullmatch(r'[AB]\d?REG', k)] or [0]) + \
+        max([on(k) for k in p if re.fullmatch(r'PIPE\d?_REG', k)] or [0])
+    for k in ('ACCLOAD_REG1', 'ACCLOAD_REG0'):
+        if on('ACCLOAD_REG0') + on('ACCLOAD_REG1') > data and on(k):
+            p[k] = "1'b0"
+    return p
+
+
 # Rules across parameters, or values the XML allows but the vendor rejects.
 # Found with tools/vendor_sweep.py; each is (primitive regex, predicate on the
 # case's {name: literal}, vendor message it avoids).
@@ -291,6 +315,10 @@ class Primitives:
             else:
                 fields[name] = param_strategy(param).map(lambda v, p=param: literal(p, v))
         rules = [ok for pat, ok, _ in RULES if re.match(pat, prim)]
+        if SITES.get(prim) == 'dsp':
+            return (st.fixed_dictionaries(fields).map(accload_fixup)
+                    .filter(lambda d: all(ok(d) for ok in rules))
+                    .map(lambda d: Case(prim, tuple(sorted(d.items())))))
         if prim == 'rPLL':
             base = st.fixed_dictionaries(fields)
             return st.tuples(base, pll_dividers(self.spec[prim]['params'])).map(

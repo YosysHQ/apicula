@@ -104,6 +104,17 @@ class Sites:
         self.alu = [(r, c, 0, 'B') for r in range(db.rows) for c in range(db.cols)
                     if {'ALU0', 'ALU1'} <= db[r, c].bels.keys()]
         rng.shuffle(self.alu)
+        # DSP blocks: the main tile with a 'DSP' bel, numbered per row as the
+        # vendor's DSP_R<row>[n]; its DSP_AUX tiles are to the right
+        self.dsp = []
+        for r in range(db.rows):
+            cols = [c for c in range(db.cols) if 'DSP' in db[r, c].bels]
+            self.dsp += [(r, c, 'DSP', n) for n, c in enumerate(cols)]
+        rng.shuffle(self.dsp)
+        # SSRAM takes a whole logic tile
+        self.ssram = [(r, c, 'RAM16', '-') for r in range(db.rows) for c in range(db.cols)
+                      if 'RAM16' in db[r, c].bels]
+        rng.shuffle(self.ssram)
         self.bsram = []
         for r in range(db.rows):
             cols = [c for c in range(db.cols) if 'BSRAM' in db[r, c].bels]
@@ -205,9 +216,10 @@ def allocate(cases, sites):
     for case in cases:
         queues[case.site].append(case)
     batches = []
-    alus = queues.pop('alu', [])
-    for i in range(0, len(alus), len(sites.alu)):
-        batches.append(list(zip(alus[i:i + len(sites.alu)], sites.alu)))
+    for kind in ('alu', 'ssram'):  # these use slices too, so in designs of their own
+        group, free = queues.pop(kind, []), getattr(sites, kind)
+        for i in range(0, len(group), len(free) or 1):
+            batches.append(list(zip(group[i:i + len(free)], free)))
     # I/O cases: one bank voltage per design, since a bank has one VCCIO
     by_vccio = collections.defaultdict(list)
     for case in queues.pop('iob', []) + queues.pop('diob', []) + queues.pop('iol', []):
@@ -234,7 +246,7 @@ def allocate(cases, sites):
                     batch.append((luts.pop(), (r, c, cls, 'B')))
             else:
                 break
-        for kind, free in (('bsram', sites.bsram), ('pll', sites.pll), ('plla', sites.plla)):
+        for kind, free in (('bsram', sites.bsram), ('pll', sites.pll), ('plla', sites.plla), ('dsp', sites.dsp)):
             for site in free:
                 if queues[kind]:
                     batch.append((queues[kind].pop(), site))
@@ -356,6 +368,11 @@ def netlist(batch, spec, pins, harness_io_type=None):
             cst.cells[name] = f'BSRAM_R{site[0] + 1}[{site[3]}]'
         elif site and site[2] in ('PLL', 'PLLA'):
             cst.cells[name] = f'PLL_{site[3]}'
+        elif site and site[2] == 'DSP':
+            cst.cells[name] = f'DSP_R{site[0] + 1}[{site[3]}][A]'
+            dsp_bel(DB[0], site[0], site[1], case.prim)
+        elif site and site[2] == 'RAM16':
+            cst.cells[name] = f'R{site[0] + 1}C{site[1] + 1}'
         elif site:
             cst.cells[name] = (site[0] + 1, site[1] + 1, site[2], site[3])
 
@@ -367,12 +384,28 @@ def netlist(batch, spec, pins, harness_io_type=None):
     return mod, cst, names, wiring
 
 
+DSP_BEL = {}  # (row, col, primitive) -> bel
+DB = [None]  # the device, for dsp_bel from netlist()
+
+
+def dsp_bel(db, r, c, prim):
+    """First bel of a DSP primitive in a block's main tile, e.g. MULT18X1800
+    (macro 0, unit 0). Its fuses are compared over the whole block."""
+    if (r, c, prim) not in DSP_BEL:
+        DSP_BEL[(r, c, prim)] = min((b for b in db[r, c].bels if re.fullmatch(prim + r'\d*', b)), default=None)
+    return DSP_BEL[(r, c, prim)]
+
+
 def bel_name(case, site):
     r, c, cls, ab = site
+    if cls == 'DSP':
+        return f'X{c}Y{r}/{DSP_BEL.get((r, c, case.prim))}'
     if cls == 'BSRAM':
         return f'X{c}Y{r}/BSRAM'
     if cls in ('PLL', 'PLLA'):
         return f'X{c}Y{r}/PLL'
+    if cls == 'RAM16':
+        return f'X{c}Y{r}/RAM16SDP4'
     if str(cls).startswith('IOB'):
         return f'X{c}Y{r}/{cls}'
     kind = {'dff': 'DFF', 'alu': 'ALU'}.get(case.site, 'LUT')
@@ -498,7 +531,7 @@ def case_bel(case, site):
     r, c, cls, ab = site
     if case.site == 'iol':
         return f'IOLOGIC{cls[-1]}'
-    if cls in ('BSRAM', 'PLL', 'PLLA') or str(cls).startswith('IOB'):
+    if cls in ('BSRAM', 'PLL', 'PLLA', 'RAM16', 'DSP') or str(cls).startswith('IOB'):
         return cls
     return f'LUT{2 * cls + "AB".index(ab)}' if case.site == 'lut' else f'CLS{cls}'
 
@@ -577,6 +610,9 @@ class Decoded:
             prefix, typ = f'R{r + 1}C{c + 1}_', {'bsram': 'BSRAM', 'pll': 'rPLL'}[case.site]
             return next((n for n, cell in self.nl.cells.items() if cell['type'] == typ
                          and any(str(w).startswith(prefix) for w in cell['ports'].values())), None)
+        if case.site == 'ssram':
+            name = f'R{r + 1}C{c + 1}_RAM16'
+            return name if name in self.nl.cells else None
         if case.site == 'alu':
             name = f'R{r + 1}C{c + 1}_ALU_{2 * cls + "AB".index(ab)}'
             return name if name in self.nl.cells else None
@@ -598,6 +634,18 @@ class Decoded:
             return {'cell': self.nl.cells[name]['type'] if name else None}
         if case.site == 'plla':
             return {'cell': 'PLLA'}  # compared through its bitstream slot in run_batch
+        if case.site == 'dsp':
+            return {'cell': 'DSP'}  # gowin_unpack decodes fuse-level modes only; compared on fuses
+        if case.site == 'ssram' and isinstance(site[2], int):
+            # nextpnr implements ROM16 as a LUT; its INIT is the ROM contents
+            cell = self.nl.cells.get(f'R{site[0] + 1}C{site[1] + 1}_LUT4_{2 * site[2] + "AB".index(site[3])}')
+            return {'cell': 'SSRAM' if cell else None,
+                    'params': {'INIT_0': literal_value(cell['params']['INIT'])} if cell else {}}
+        if case.site == 'ssram':
+            # gowin_unpack writes every SSRAM as RAM16SDP4; compare INIT
+            cell = self.nl.cells.get(name) if name else None
+            return {'cell': 'SSRAM' if cell else None,
+                    'params': {k: literal_value(v) for k, v in cell['params'].items()} if cell else {}}
         if case.site == 'alu':
             cell = self.nl.cells.get(name) if name else None
             return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}
@@ -630,6 +678,10 @@ class Decoded:
 
 
 def describe_generated(case, conns, spec):
+    if case.site == 'dsp':
+        return {'cell': 'DSP'}
+    if case.site == 'ssram':
+        return {'cell': 'SSRAM', 'params': {k: literal_value(v) for k, v in case.params}}
     if case.site == 'alu':
         return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
     if case.site == 'plla':
@@ -660,7 +712,11 @@ def same(a, b):
     return all(x[k] == y[k] for k in x.keys() & y.keys())
 
 
-FOLLOW_NEXTPNR = {'alu'}  # nextpnr places ALU clusters itself and ignores BEL
+# Placed by nextpnr, and the vendor constrained to where nextpnr put them: ALU
+# clusters ignore BEL; SSRAM with a BEL makes nextpnr crash (RAM16SDP2/4) or
+# leave its blocker cells unplaced (RAM16SDP1); ROM16 becomes a LUT.
+# DSP clusters get DUMMY_CELLs that stay unplaced with a BEL.
+FOLLOW_NEXTPNR = {'alu', 'ssram', 'dsp'}
 
 
 def vendor_failed(workdir):
@@ -691,13 +747,29 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     if follow:
         for name, (case, site) in list(names.items()):
             if case.site in FOLLOW_NEXTPNR:
-                m = re.fullmatch(r'X(\d+)Y(\d+)/ALU(\d)', placed.get(name) or '')
+                m = re.fullmatch(r'X(\d+)Y(\d+)/(\w+)', placed.get(name) or '')
+                if m and case.site == 'dsp':
+                    # DSP_R<row>[n][A|B]: n-th DSP block of the row, macro from the bel name
+                    c, r, bel = int(m.group(1)), int(m.group(2)), m.group(3)
+                    cols = [cc for cc in range(db.cols) if 'DSP' in db[r, cc].bels]
+                    if c not in cols:
+                        continue
+                    macro = bel[len(case.prim):][:1]
+                    names[name] = (case, (r, c, 'DSP', cols.index(c)))
+                    cst.cells[name] = f'DSP_R{r + 1}[{cols.index(c)}]' + (f'[{"AB"[int(macro)]}]' if macro else '')
+                    continue
+                m = re.fullmatch(r'X(\d+)Y(\d+)/(ALU|LUT|RAM16SDP4)(\d?)', placed.get(name) or '')
                 if not m:
                     continue
-                c, r, n = map(int, m.groups())
-                site = (r, c, n // 2, 'AB'[n % 2])
+                c, r = int(m.group(1)), int(m.group(2))
+                if m.group(3) == 'RAM16SDP4':
+                    site = (r, c, 'RAM16', '-')
+                    cst.cells[name] = f'R{r + 1}C{c + 1}'
+                else:
+                    n = int(m.group(4))
+                    site = (r, c, n // 2, 'AB'[n % 2])
+                    cst.cells[name] = (r + 1, c + 1, n // 2, 'AB'[n % 2])
                 names[name] = (case, site)
-                cst.cells[name] = (r + 1, c + 1, n // 2, 'AB'[n % 2])
         vres = run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
         if vres is None:
             return vendor_failed(workdir)
@@ -758,6 +830,12 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
             bank = db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))
             if bank in db.bank_tiles:
                 by_tile[db.bank_tiles[bank]].append(name)
+        if site and site[2] == 'DSP':
+            # a DSP block's fuses are in its main tile and the DSP_AUX tiles to its right
+            dc = 1
+            while loc[1] + dc < db.cols and any(b.startswith('DSP_AUX') for b in db[loc[0], loc[1] + dc].bels):
+                by_tile[(loc[0], loc[1] + dc)].append(name)
+                dc += 1
         if site and site[2] == 'PLL':
             # an rPLL's fuses are in its RPLLA tile and the adjacent RPLLB tiles
             for dc in (-3, -2, -1, 1, 2, 3):
@@ -835,6 +913,7 @@ def main(argv):
 
     vendor_device, part, package = DEVICES[args.device]
     db = chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{args.device}.msgpack.xz'))
+    DB[0] = db
     prims = ps.Primitives(args.device, vendor_device)
     pins = pick_pins(db, vendor_device, args.device, package)
     rng = random.Random(args.seed)

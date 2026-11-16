@@ -3225,12 +3225,15 @@ class Device:
                     if sync_padd_reset:
                         attr_vals.append(AttrVal(f'RSTGENLMUX_REG{r}{pair_idx}', 'SYNC'))
             else:
+                # attrids number these 4*pair + 0/1 for A (L/H) and 4*pair + 2/3 for B,
+                # e.g. IRNS_PRAD0AL_0, IRNS_PRAD0AH_1, IRNS_PRAD0BL_2, IRNS_PRAD0BH_3
+                b = 2 if r == 'B' else 0
                 if is_even:
-                    attr_vals.append(AttrVal(f'IRNS_PRAD{pair_idx}{r}H_{pair_idx * 4 + 1}', "ENABLE"))
-                    attr_vals.append(AttrVal(f'IRBY_PRAD{pair_idx}{r}H_{pair_idx * 4 + 1}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRNS_PRAD{pair_idx}{r}H_{pair_idx * 4 + b + 1}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRBY_PRAD{pair_idx}{r}H_{pair_idx * 4 + b + 1}', "ENABLE"))
                 else:
-                    attr_vals.append(AttrVal(f'IRNS_PRAD{pair_idx}{r}L_{pair_idx * 4}', "ENABLE"))
-                    attr_vals.append(AttrVal(f'IRBY_PRAD{pair_idx}{r}L_{pair_idx * 4}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRNS_PRAD{pair_idx}{r}L_{pair_idx * 4 + b}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRBY_PRAD{pair_idx}{r}L_{pair_idx * 4 + b}', "ENABLE"))
 
         val = int(cell_parms.get('SOREG', '0'), 2)
         if val:

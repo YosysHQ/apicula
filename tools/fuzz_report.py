@@ -28,6 +28,7 @@ TABLES = {
     'BSRAM': ('BSRAM', attrids.bsram_attrids, attrids.bsram_attrvals),
     'PLL': ('PLL', attrids.pll_attrids, attrids.pll_attrvals),
     'IOLOGIC': ('IOLOGIC', attrids.iologic_attrids, attrids.iologic_attrvals),
+    'DSP': ('DSP', attrids.dsp_attrids, attrids.dsp_attrvals),
 }
 
 
