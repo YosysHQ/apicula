@@ -29,6 +29,7 @@ SITES = {
     # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
     'rPLL': 'pll',
     **{name: 'iob' for name in ['IBUF', 'OBUF', 'TBUF', 'IOBUF']},
+    **{f'{kind}_{buf}': 'diob' for kind in ('TLVDS', 'ELVDS') for buf in ('IBUF', 'OBUF', 'TBUF', 'IOBUF')},
     **{name: 'bsram' for name in ['SP', 'SPX9', 'pROM', 'pROMX9', 'ROM', 'SDP', 'SDPB', 'SDPX9B',
                                   'DP', 'DPB', 'DPX9B']},
 }
@@ -73,6 +74,26 @@ IO_STANDARDS = {
     'LVCMOS15': '1.5', 'SSTL15': '1.5', 'HSTL15_I': '1.5',
     'LVCMOS12': '1.2',
 }
+# Differential standards: true LVDS buffers (TLVDS_*) need true-LVDS pins,
+# emulated ones (ELVDS_*) use a pair of single-ended drivers.
+DIFF_STANDARDS = {
+    'TLVDS': {'LVDS25': '2.5', 'RSDS': '2.5', 'MINILVDS': '2.5', 'PPLVDS': '2.5', 'LVPECL33': '3.3'},
+    'ELVDS': {'LVDS25E': '2.5', 'BLVDS25E': '2.5', 'MLVDS25E': '2.5', 'RSDS25E': '2.5', 'LVPECL33E': '3.3',
+              'SSTL15D': '1.5', 'SSTL18D_I': '1.8', 'SSTL25D_I': '2.5', 'SSTL33D_I': '3.3',
+              'HSTL15D_I': '1.5', 'HSTL18D_I': '1.8',
+              'LVCMOS33D': '3.3', 'LVCMOS25D': '2.5', 'LVCMOS18D': '1.8', 'LVCMOS15D': '1.5', 'LVCMOS12D': '1.2'},
+}
+
+
+def io_vccio(case):
+    """Bank voltage an I/O case needs."""
+    io_type = dict(case.params)['IO_TYPE']
+    for table in (IO_STANDARDS, *DIFF_STANDARDS.values()):
+        if io_type in table:
+            return table[io_type]
+    raise KeyError(io_type)
+
+
 IO_INPUT_ATTRS = {'PULL_MODE': ['UP', 'DOWN', 'NONE', 'KEEPER'], 'HYSTERESIS': ['NONE', 'H2L', 'L2H', 'HIGH']}
 IO_OUTPUT_ATTRS = {'PULL_MODE': ['UP', 'DOWN', 'NONE', 'KEEPER'], 'DRIVE': ['4', '8', '12', '16', '24'],
                    'SLEW_RATE': ['SLOW', 'FAST'], 'OPEN_DRAIN': ['ON', 'OFF']}
@@ -82,11 +103,19 @@ def io_case(prim):
     """An I/O buffer with IO_TYPE and a random subset of its attributes. The
     Case params are the IO_PORT attributes."""
     attrs = {}
-    if prim in ('IBUF', 'IOBUF'):
-        attrs.update(IO_INPUT_ATTRS)
-    if prim in ('OBUF', 'TBUF', 'IOBUF'):
-        attrs.update(IO_OUTPUT_ATTRS)
-    fields = {'IO_TYPE': st.sampled_from(sorted(IO_STANDARDS))}
+    kind, _, buf = prim.rpartition('_')
+    if kind:  # differential
+        standards = DIFF_STANDARDS[kind]
+        attrs['PULL_MODE'] = ['UP', 'DOWN', 'NONE']
+        if buf in ('IBUF', 'IOBUF'):
+            attrs['DIFF_RESISTOR'] = ['ON', 'OFF']
+    else:
+        standards = IO_STANDARDS
+        if buf in ('IBUF', 'IOBUF'):
+            attrs.update(IO_INPUT_ATTRS)
+        if buf in ('OBUF', 'TBUF', 'IOBUF'):
+            attrs.update(IO_OUTPUT_ATTRS)
+    fields = {'IO_TYPE': st.sampled_from(sorted(standards))}
     fields.update({k: st.one_of(st.none(), st.sampled_from(v)) for k, v in attrs.items()})
     return st.fixed_dictionaries(fields).map(
         lambda d: Case(prim, tuple(sorted((k, v) for k, v in d.items() if v is not None))))
@@ -186,7 +215,7 @@ class Primitives:
         return None
 
     def case(self, prim):
-        if SITES.get(prim) == 'iob':
+        if SITES.get(prim) in ('iob', 'diob'):
             return io_case(prim)
         fields = {}
         for name, param in self.spec[prim]['params'].items():

@@ -116,6 +116,18 @@ class Sites:
                 r, c, ab = io_loc(db, name)
                 self.iob.append((r, c, f'IOB{ab}', pin))
         rng.shuffle(self.iob)
+        # differential pairs: A is the positive pin; TLVDS needs true-LVDS pins
+        self.tlvds, self.elvds = [], []
+        names = {name: pin for pin, (name, funcs) in (pinout or {}).items() if not funcs and pin not in harness}
+        for name, pin in names.items():
+            if name.endswith('A') and name[:-1] + 'B' in names:
+                r, c, _ = io_loc(db, name)
+                bel = db[r, c].bels.get('IOBA')
+                if bel and bel.is_diff:
+                    site = (r, c, 'IOBA', [pin, names[name[:-1] + 'B']])
+                    (self.tlvds if bel.is_true_lvds else self.elvds).append(site)
+        rng.shuffle(self.tlvds)
+        rng.shuffle(self.elvds)
 
 
 _io_name = re.compile(r'IO([TBLR])(\d+)([A-Z])')
@@ -136,11 +148,21 @@ def io_name(db, r, c, ab):
 
 HARNESS_IO_TYPE = {'3.3': 'LVCMOS33', '2.5': 'LVCMOS25', '1.8': 'LVCMOS18', '1.5': 'LVCMOS15', '1.2': 'LVCMOS12'}
 IO_PAD = {'IBUF': 'I', 'OBUF': 'O', 'TBUF': 'O', 'IOBUF': 'IO'}
+DIFF_PAD = {'IBUF': ['I', 'IB'], 'OBUF': ['O', 'OB'], 'TBUF': ['O', 'OB'], 'IOBUF': ['IO', 'IOB']}
+IO_SITES = ('iob', 'diob')
+
+
+def io_pads(case, site):
+    """[(port, pin)] of an I/O case: one pad, or the positive and negative pads
+    of a differential buffer."""
+    if case.site == 'diob':
+        return list(zip(DIFF_PAD[case.prim.rpartition('_')[2]], site[3]))
+    return [(IO_PAD[case.prim], site[3])]
 
 
 def io_class(batch):
     """Bank voltage shared by the I/O cases of a batch, or None."""
-    return next((ps.IO_STANDARDS[dict(c.params)['IO_TYPE']] for c, _ in batch if c.site == 'iob'), None)
+    return next((ps.io_vccio(c) for c, _ in batch if c.site in IO_SITES), None)
 
 
 def allocate(cases, sites):
@@ -151,11 +173,13 @@ def allocate(cases, sites):
     batches = []
     # I/O cases: one bank voltage per design, since a bank has one VCCIO
     by_vccio = collections.defaultdict(list)
-    for case in queues.pop('iob', []):
-        by_vccio[ps.IO_STANDARDS[dict(case.params)['IO_TYPE']]].append(case)
-    for group in by_vccio.values():
-        for i in range(0, len(group), len(sites.iob)):
-            batches.append(list(zip(group[i:i + len(sites.iob)], sites.iob)))
+    for case in queues.pop('iob', []) + queues.pop('diob', []):
+        pool = 'iob' if case.site == 'iob' else case.prim.split('_')[0].lower()
+        by_vccio[(ps.io_vccio(case), pool)].append(case)
+    for (_, pool), group in by_vccio.items():
+        free = getattr(sites, pool)
+        for i in range(0, len(group), len(free)):
+            batches.append(list(zip(group[i:i + len(free)], free)))
     while any(queues.values()):
         batch, free = [], iter(sites.cls)
         luts = queues['lut']
@@ -236,28 +260,32 @@ def netlist(batch, spec, pins, harness_io_type=None):
         name = f'inst{i}_{case.prim}'
         names[name] = (case, site)
         conns, sources = {}, data[i % len(data):] + data[:i % len(data)]
-        if case.site == 'iob':
-            pad = IO_PAD[case.prim]
-            conns[pad] = f'{name}_pad'
-            direction = spec[case.prim]['ports'][pad][0]
-            getattr(mod, {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}[direction]).add(conns[pad])
-            cst.ports[conns[pad]] = site[3]
-            cst.attrs[conns[pad]] = dict(case.params)
+        if case.site in IO_SITES:
+            for k, (pad, pin) in enumerate(io_pads(case, site)):
+                conns[pad] = f'{name}_pad' + ('_n' if k else '')
+                direction = spec[case.prim]['ports'][pad][0]
+                getattr(mod, {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}[direction]).add(conns[pad])
+                cst.ports[conns[pad]] = pin
+                cst.attrs[conns[pad]] = dict(case.params)
         for port, (d, w) in spec[case.prim]['ports'].items():
             if d != 'input' or w != 1 or port in conns:
                 continue
-            if case.site == 'iob' and sources:
+            if case.site in IO_SITES and sources:
                 conns[port] = sources.pop(0)  # buffer data and enable inputs
-            elif port in ('CLK', 'CLKIN'):
+            elif port == 'CLKIN' and sources:
+                # a plain pin: nextpnr moves a PLL fed from a dedicated PLL input
+                # pin (the harness clock on GW2A-18C) before applying its BEL
+                conns[port] = sources.pop(0)
+            elif port == 'CLK':
                 conns[port] = 'clk'
             elif port in CONTROL_PORTS and sources:
                 conns[port] = sources.pop(0)
             else:
                 conns[port] = f'{name}_{port}'
                 mod.wires.add(conns[port])
-        inst(case.prim, name, conns, () if case.site == 'iob' else case.params)
+        inst(case.prim, name, conns, () if case.site in IO_SITES else case.params)
         wiring[name] = conns
-        if case.site == 'iob':
+        if case.site in IO_SITES:
             pass  # placed by IO_LOC
         elif site and site[2] == 'BSRAM':
             cst.cells[name] = f'BSRAM_R{site[0] + 1}[{site[3]}]'
@@ -313,7 +341,7 @@ def run_apicula(workdir, mod, cst, names, device, part):
     with open(path) as f:
         syn = json.load(f)
     for name, cell in syn['modules']['top']['cells'].items():
-        if name in names and names[name][1] and names[name][0].site != 'iob':  # I/O: IO_LOC
+        if name in names and names[name][1] and names[name][0].site not in IO_SITES:  # I/O: IO_LOC
             cell['attributes']['BEL'] = bel_name(*names[name])  # nextpnr ignores INS_LOC
     with open(path, 'w') as f:
         json.dump(syn, f)
@@ -452,11 +480,11 @@ class Decoded:
         if site is None:
             return next((n for n, c in self.nl.cells.items() if c['type'].startswith(case.site.upper())), None)
         r, c, cls, ab = site
-        if case.site == 'iob':
+        if case.site in IO_SITES:
             # gowin_unpack names I/O buffers R<r>C<c>_<TYPE>_<A|B>
             prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{cls[-1]}'
             return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
-                         and cell['type'] in IO_PAD), None)
+                         and cell['type'].endswith('BUF')), None)
         if case.site in ('bsram', 'pll'):
             # gowin_unpack names these by a counter; find the one on this tile
             prefix, typ = f'R{r + 1}C{c + 1}_', {'bsram': 'BSRAM', 'pll': 'rPLL'}[case.site]
@@ -471,7 +499,7 @@ class Decoded:
 
     def describe(self, case, site):
         name = self.find(case, site)
-        if case.site == 'iob':
+        if case.site in IO_SITES:
             # attributes are compared on fuses; gowin_unpack writes them to a .cst
             return {'cell': self.nl.cells[name]['type'] if name else None}
         if case.site == 'bsram':
@@ -502,7 +530,7 @@ class Decoded:
 
 
 def describe_generated(case, conns, spec):
-    if case.site == 'iob':
+    if case.site in IO_SITES:
         return {'cell': case.prim}
     if case.site == 'bsram':
         return {'cell': 'BSRAM'}
@@ -542,7 +570,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     except subprocess.CalledProcessError:
         with open(os.path.join(workdir, 'apicula/tools.log'), errors='replace') as f:
             why = [line.strip() for line in f
-                   if 'ERROR' in line or re.match(r'\w+(Error|Exception): ', line)]
+                   if 'ERROR' in line or re.match(r'\w*(Error|Exception): ', line)]
         return {'error': 'the Apicula flow failed', 'why': why}, None
     vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
     at = chipdb.tile_bitmap(db, abm, empty=True)
@@ -593,7 +621,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                     if 'BSRAM_AUX' in aux.bels or ('BSRAM' not in aux.bels
                                                     and 'BSRAM_SP' in db.shortval.get(aux.ttyp, {})):
                         by_tile[(loc[0], loc[1] + dc)].append(name)
-        if case.site == 'iob':
+        if case.site in IO_SITES:
             # bank settings are shared by every I/O in the bank
             bank = db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))
             if bank in db.bank_tiles:
@@ -610,7 +638,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     # an I/O tile with no case belong to the I/O cases of that bank.
     by_bank = collections.defaultdict(list)
     for name, (case, site) in names.items():
-        if case.site == 'iob':
+        if case.site in IO_SITES:
             by_bank[db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))].append(name)
 
     def bank_cases(r, c):

@@ -5911,6 +5911,15 @@ class GW5A(Device):
 ################################################################
 class GW5A_25A(GW5A):
     """ GW5A-25A chip. Tangprimer25k board """
+    def get_bsram_attrvals(self, bel: BsramBelDesc) -> set[int]:
+        """ The IDE leaves the BSRAM GSR=DISABLE row clear on this device (all 32
+        cases of SP, SPX9, SDPB, SDPX9B, DPB, DPX9B, pROM and pROMX9 in
+        tools/tiled_fuzzer.py), while on GW1N-9C and GW2A-18C it is set. """
+        av = super().get_bsram_attrvals(bel)
+        gsr = set()
+        self.chipdb.get_bsram_attr_val(AttrVal('GSR', 'DISABLE'), gsr)
+        return av - gsr
+
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
         # The GW5A-25A has an interesting phenomenon on the bottom side of the
