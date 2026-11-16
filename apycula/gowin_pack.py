@@ -1664,6 +1664,9 @@ class Device:
     def get_FLASH256K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         self.error_not_supported_cell_type(bel)
 
+    def get_FLASH96K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        self.error_not_supported_cell_type(bel)
+
     def get_FLASH608K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         self.error_not_supported_cell_type(bel)
 
@@ -4696,6 +4699,13 @@ class GW1N_1(GW1N):
         if bits:
             fuses.append(CellFuseBits(bel.x, bel.y, bits))
         return fuses
+
+    #==============================
+    #========== Misc
+    #==============================
+    def get_FLASH96K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        # the vendor sets no fuses outside routing for it (checked on GW1N-LV1)
+        return []
 
 
     #==============================

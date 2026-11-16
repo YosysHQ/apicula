@@ -68,9 +68,20 @@ DEVICES = {
 }
 
 WIDELUTS_PER_DESIGN = 8
-DIVIDER_LOAD = {'CLKDIV2', 'DHCEN'}
+def lone_pads(ports, prim):
+    """Pad ports of an I/O primitive without a site kind: its inouts, else the
+    inputs of an input buffer or the outputs of an output buffer."""
+    pads = [p for p, (d, _) in ports.items() if d == 'inout']
+    if pads or 'BUF' not in prim:
+        return pads
+    if 'IBUF' in prim:
+        return [p for p, (d, w) in ports.items() if d == 'input' and w == 1 and re.fullmatch(r'IB?\d?', p)]
+    return [p for p, (d, w) in ports.items() if d == 'output' and w == 1 and re.fullmatch(r'OB?\d?', p)]
+
+
+DIVIDER_LOAD = {'CLKDIV2', 'DHCEN', 'DHCENC', 'DHCE', 'DCC'}
 CLOCK_INPUTS = {'HCLKIN', 'CLKIN', 'CLKIN0', 'CLK0', 'I'}
-CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR', 'GE'}
+CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR', 'GE', 'OSCEN'}
 
 # Ports the vendor and Yosys' cell library name differently. The Apicula side
 # renames them before Yosys; the mismatch itself is recorded in
@@ -221,7 +232,7 @@ def allocate(cases, sites):
     batches = []
     # clock primitives drive the harness output, so one per design; nextpnr and
     # the vendor place them
-    batches += [[(case, None)] for case in queues.pop('clock', [])]
+    batches += [[(case, None)] for case in queues.pop('clock', []) + queues.pop('lone', [])]
     # wide LUT trees: placed by both tools, in designs of their own, with no
     # LUT INIT used twice in a design
     batch, inits = [], set()
@@ -363,6 +374,13 @@ def netlist(batch, spec, pins, harness_io_type=None):
                 getattr(mod, {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}[direction]).add(conns[pad])
                 cst.ports[conns[pad]] = pin
                 cst.attrs[conns[pad]] = dict(case.params)
+        if case.site == 'lone':
+            # pads become top-level ports; the vendor picks their pins and
+            # nextpnr gets the same ones (run_batch)
+            for pad in lone_pads(spec[case.prim]['ports'], case.prim):
+                direction, width = spec[case.prim]['ports'][pad]
+                conns[pad] = f'{name}_{pad}'
+                getattr(mod, {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}[direction]).add(conns[pad])
         if case.site == 'iol':
             # I/O logic must connect to an I/O buffer (vendor PR0018): an IBUF
             # feeding its data input, or an OBUF fed by its output
@@ -386,6 +404,9 @@ def netlist(batch, spec, pins, harness_io_type=None):
             if d != 'input' or w != 1 or port in conns:
                 continue
             if case.site == 'iol' and port in ('CLK', 'PCLK', 'FCLK'):
+                conns[port] = 'clk'
+                continue
+            if case.site == 'lone' and 'CLK' in port:
                 conns[port] = 'clk'
                 continue
             if case.site == 'clock':
@@ -413,6 +434,19 @@ def netlist(batch, spec, pins, harness_io_type=None):
             else:
                 conns[port] = f'{name}_{port}'
                 mod.wires.add(conns[port])
+        ports = spec[case.prim]['ports']
+        if 'DLLSTEP' in ports:
+            # DLLSTEP must come from a DLL (PR2015; DDRDLL on GW5A, PR0015)
+            dll = 'DLL' if 'DLL' in spec else 'DDRDLL'
+            inst(dll, f'{name}_dll', {'CLKIN': 'clk'})
+            conns['DLLSTEP'] = [f'{name}_dll_STEP_{b}' for b in range(ports['DLLSTEP'][1])][::-1]
+        if 'DQSIN' in ports:
+            # DQSIN must come from an input buffer (PR0014)
+            pad = f'{name}_dqs_pad'
+            mod.inputs.add(pad)
+            mod.wires.add(f'{name}_dqs')
+            inst('IBUF', f'{name}_dqs_buf', {'I': pad, 'O': f'{name}_dqs'})
+            conns['DQSIN'] = f'{name}_dqs'
         inst(case.prim, name, conns, () if case.site in IO_SITES else case.params)
         wiring[name] = conns
         if case.site in PIN_SITES:
@@ -433,11 +467,15 @@ def netlist(batch, spec, pins, harness_io_type=None):
     # a clock primitive drives the output; otherwise it would have no load
     clock_out = next((f'{name}_{port}' for name, (case, _) in names.items() if case.site == 'clock'
                       for port, (d, _) in spec[case.prim]['ports'].items() if d == 'output'), None)
-    if any(case.prim in DIVIDER_LOAD for case, _ in names.values()):
-        # these may only drive HCLK loads (vendor PR2060 on an OBUF): a CLKDIV
-        # with default settings passes them on
-        inst('CLKDIV', 'harness_div', {'HCLKIN': clock_out, 'RESETN': data[0]})
-        clock_out = 'harness_div_CLKOUT'
+    for name, (case, _) in names.items():
+        if case.prim in DIVIDER_LOAD:
+            # these may only drive HCLK loads (vendor PR2060 on an OBUF), and
+            # no output may dangle (PA2099): a CLKDIV with default settings on
+            # each clock output passes it on
+            outs = [p for p, (d, _) in spec[case.prim]['ports'].items() if d == 'output' and 'CLK' in p]
+            for k, port in enumerate(outs):
+                inst('CLKDIV', f'harness_div{k}', {'HCLKIN': f'{name}_{port}', 'RESETN': data[0]})
+            clock_out = 'harness_div0_CLKOUT'
     inst('OBUF', 'harness_ob', {'I': clock_out or data[0], 'O': 'out_pad'})
     cst.ports['out_pad'] = pins['out']
     if harness_io_type:
@@ -760,8 +798,8 @@ class Decoded:
             return {'cell': self.nl.cells[name]['type'] if name else None}
         if case.site == 'plla':
             return {'cell': 'PLLA'}  # compared through its bitstream slot in run_batch
-        if case.site == 'clock':
-            return {'cell': case.prim}  # gowin_unpack does not decode these; compared on fuses
+        if case.site in ('clock', 'lone'):
+            return {'cell': case.prim}  # compared on fuses
         if case.site == 'widelut':
             return {'cell': 'WIDELUT', 'tree': widelut_tree(self.luts, case)}
         if case.site == 'dsp':
@@ -816,8 +854,8 @@ def describe_generated(case, conns, spec):
         return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
     if case.site == 'widelut':
         return {'cell': 'WIDELUT', 'tree': 'ok'}
-    if case.site in ('plla', 'clock'):
-        return {'cell': case.prim if case.site == 'clock' else 'PLLA'}
+    if case.site in ('plla', 'clock', 'lone'):
+        return {'cell': 'PLLA' if case.site == 'plla' else case.prim}
     if case.site == 'iol':
         return {'cell': case.prim, 'params': {k: literal_value(v) for k, v in case.params}}
     if case.site in IO_SITES:
@@ -869,6 +907,9 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     vres = None if follow else run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
     if not follow and vres is None:
         return vendor_failed(workdir)
+    if vres is not None and any(case.site == 'lone' for case, _ in names.values()):
+        # pads of lone cases: nextpnr gets the pins the vendor chose
+        cst.ports.update(vendor_pins(os.path.join(workdir, 'vendor')))
     if vres is not None:
         # clock dividers: nextpnr follows the vendor's placement
         for name, (case, site) in list(names.items()):
@@ -955,7 +996,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         results[name] = res
         if site:
             loc = (site[0], site[1])
-        elif case.site in ('clock', 'widelut'):
+        elif case.site in ('clock', 'lone', 'widelut'):
             continue  # clock: alone in its design, owns every difference (see below)
         else:
             # the bel is named after the primitive (OSCA) or the site kind (OSC)
@@ -1062,7 +1103,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
 
     # a clock primitive is alone in its design and placed by the tools, so the
     # differences left over belong to it
-    clock_cases = [n for n, (case, _) in names.items() if case.site == 'clock']
+    clock_cases = [n for n, (case, _) in names.items() if case.site in ('clock', 'lone')]
     unattributed = {}
     for (r, c), bits in sorted(diffs.items()):
         for bit, v in sorted(bits):
@@ -1080,6 +1121,18 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
 
 
 SINGLETON_LOCS = {}
+
+
+def vendor_pins(vendor_dir):
+    """{port: pin} from the vendor's impl/pnr/top.io.cst, which lists every
+    port, including those it placed itself."""
+    pins = {}
+    path = os.path.join(vendor_dir, 'impl/pnr/top.io.cst')
+    if os.path.exists(path):
+        with open(path) as f:
+            for m in re.finditer(r'IO_LOC\s+"([^"]+)"\s+([^;\s]+)', f.read()):
+                pins[m.group(1)] = m.group(2).split(',')[0]
+    return pins
 
 
 HCLK_VALS = {v: k for k, v in attrids.hclk_attrvals.items()}
@@ -1152,8 +1205,8 @@ def main(argv):
                 d = json.load(f)
             batches.append([(ps.Case.from_json(d['case']), tuple(d['site']) if d['site'] else None)])
     else:
-        names = args.prims or [p for p in ps.SITES if p in prims.spec
-                               and p not in ps.UNAVAILABLE.get(args.device, ())]
+        names = [p for p in args.prims or sorted(prims.spec) if p in prims.spec
+                 and p not in ps.UNAVAILABLE.get(args.device, ()) and p not in ps.NOT_PRIMITIVES]
         cases = [c for p in names for c in set(ps.draw(prims.case(p), args.count, args.seed))]
         rng.shuffle(cases)
         batches = allocate(cases, sites)

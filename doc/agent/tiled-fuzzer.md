@@ -37,6 +37,14 @@ way; these were not.
     pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows;
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`.
+- **Missing handler, fixed:** `FLASH96K` had no `get_…_fuses` method, so GW1N-1
+  stopped with `AttributeError`. The vendor sets no fuses outside routing for it.
+- **GW5A `ADC`:** Apicula sets a `5A_PCLK_ENABLE` fuse the vendor does not.
+  `TLVDS_IBUF_ADC` on the vendor's pins raises "IO(0, 0) has ADC bus 0, but used
+  in bus 2".
+- **`I3C_IOBUF`** (GW1N-9C): the vendor sets `DRIVE`/`OPENDRAIN` rows in IOBB that
+  Apicula does not. **`MIPI_OBUF`**: Apicula sets an `IO_TYPE=…` IOB row and the
+  vendor a bank row instead.
 - **Rejects legal settings:**
   - `ALU_MODE=5` (no chipdb mode);
   - GW5A `OSCA` `FREQ_DIV=3`;
@@ -55,13 +63,24 @@ way; these were not.
 - `DCS_MODE` is read from attributes only (`globals.cc`), so a `defparam`, as in
   `examples/dcs.v`, is ignored and every DCS is packed as `RISING`.
 - `DCS` on GW5A-25A with inputs from I/O pins crashes in "Routing globals".
+- No cell for `LUT5`–`LUT8`, `MUX2`, `IDES14`, `IDES32`, `OSER14`, `DDRDLL`,
+  `DHCE`, `DCE`, `OTP`, `SAMB`, `CMSERA`, `ELVDS_IBUF_MIPI`, `IBUF_R`,
+  `IOBUF_R`, `ELVDS_IBUF_R`/`ELVDS_IOBUF_R`, `MIPI_IBUF_HS`/`_LP`.
+- `DPX9`, `SDPX9` and `ROMX9`: "Bel … of type 'BSRAM' does not match cell".
+- MIPI and I3C buffers on the pins the vendor chose: "Can't place MIPI … at
+  X36Y0/IOBA", "Not I3C capable"; `MIPI_OBUF_A`: "ports IL and I are in different
+  networks". GW5A `DLLDLY` cannot take its clock from an input pin.
+- Around user flash (`FLASH96K`, `FLASH608K`, `FLASH64KZ`) nextpnr adds LUTs and
+  flip-flops that the vendor does not.
 - BEL is ignored on `CLKDIV`/`CLKDIV2`; on GW5A-25A there is no `CLKDIV_1` bel
   where the vendor uses `HCLKDIV1`. No bel for `BUFS`.
 
 **Yosys cell library**
 - Latches use `CLK`/`CE` where the vendor has `G`/`GE`.
 - `DLP*`/`DLNP*` `INIT` default 0, vendor 1.
-- Missing primitives, such as `rROM`, `rSDP` and `IODELAYA/B/C`.
+- Missing primitives: `rROM`, `rROMX9`, `rSDP`, `rSDPX9`, `IODELAYA`, `IODELAYC`,
+  `DLL`, `DCC`, `MUX4`–`MUX32`, `ADC_DB` (Yosys fails with "Failed to get
+  direction for port").
 
 **`gowin_unpack`**
 - SSTL/HSTL `IBUF` decode as `OBUF`; `TBUF` as `IOBUF`; differential buffers as
@@ -72,8 +91,12 @@ way; these were not.
 - `OSCA` written as `OSC`.
 - No BSRAM parameters.
 
-**Fuzzer coverage still missing**
-- GW5A `DDRDLL`/`DLLDLY`, `ADC`, MIPI.
+**Fuzzer coverage still missing** (harness limits, see "Remaining primitives")
+- `_MEM` I/O logic (`IDDR_MEM`, `IDES4/8_MEM`, `ODDR_MEM`, `OSER4/8_MEM`) needs a
+  DQS-driven clock (PR2060); `DHCENC` needs I/O logic on `CLKOUTN` (PR0026);
+  `IEM` needs a buffer (PR0018); `OSIDES32/64` need differential fast clocks
+  (PR1113); `MUX2_MUX8`+ need `MUX4`… drivers (PA2068); `GW_JTAG` takes the JTAG
+  pins (PR1079).
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
 
@@ -594,6 +617,38 @@ each leaf ends up on the mux input that selects it.
   confirms the model; Apicula matching it confirms nextpnr and `gowin_pack`.
 - **Results** (`-n 4` on GW1N-9C, `-n 6` on GW2A-18C and GW5A-25A): all 64
   cases match on both sides, including `MUX2_LUT8` across two tiles.
+
+## Remaining primitives
+
+Every other `primitive.xml` primitive that exists in the device (not PA2085,
+`primitive_strategies.UNAVAILABLE`) now runs by default, with site kind `lone`
+unless it fits an existing one:
+
+- `DCC`, `DCCG`, `DHCENC`, `DHCE`, `DCE`, `CLKDIVG` are `clock`; `DCC`, `DHCE` and
+  `DHCENC` get a harness `CLKDIV` on each clock output (PR2060, PA2099).
+- `OSCZ`, `OSCH`, `OSCW`, `OSCO`, `OSCF`, `OSCB` are `osc`.
+- `IODELAYA`, `IODELAYC`, `IDES14`, `IDES32`, `OSER14` are `iol`; the X9 and `r`
+  BSRAM variants are `bsram`.
+- **`lone`:** one per design, both tools place it. Pads (inout ports, or the
+  pad side of an input or output buffer) become top-level ports. The vendor picks
+  their pins, and nextpnr gets the same ones from the vendor's
+  `impl/pnr/top.io.cst`. Ports with `CLK` in the name take the harness clock. A
+  `DLLSTEP` input gets a helper `DLL` (`DDRDLL` on GW5A) (PR2015/PR0015), and
+  `DQSIN` an input buffer (PR0014). Leftover fuse differences belong to the case.
+- `OSCEN` is now driven from a pin. Left undriven, the vendor cleared the
+  `OSCZ` `NORMAL`/`USERPOWER_SAVE` rows, which Apicula always sets.
+
+Results, `-n 2` (statuses as in the summary):
+
+- **ok:** `GSR` on all three; GW1NZ-1 `OSCZ` 5/5; GW1NS-4 `OSCZ`, `PLLVR` (2),
+  `EMCU`; GW1N-1 `OSCH` (2).
+- **Vendor rules found:** `OSCZ` `S_RATE` is only `SLOW` on GW1NZ-1 and only
+  `FAST` on GW1NS-4 (PA1002), though the XML lists both. `DLCEA`/`DLPEA` cannot
+  be placed (PR0003) on GW1N-9C or GW2A-18C. `CSHIFT` is in the GW5A XML but not
+  defined (PA2050).
+- **Not comparable:** `INV` (nextpnr makes a LUT, the vendor removes it);
+  user flash (nextpnr adds logic).
+- Everything else is unsupported or a harness limit; see the gaps list.
 
 ## Adding a primitive
 

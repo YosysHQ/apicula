@@ -44,14 +44,19 @@ SITES = {
     # wide LUTs: a MUX2_LUTn tree with LUT4 leaves
     **{f'MUX2_LUT{n}': 'widelut' for n in range(5, 9)},
     # clock buffers, dividers and selectors: one per design, driving the harness output
-    **{name: 'clock' for name in ['CLKDIV', 'CLKDIV2', 'DCS', 'DQCE', 'DHCEN', 'BUFG', 'BUFS']},
+    **{name: 'clock' for name in ['CLKDIV', 'CLKDIV2', 'DCS', 'DQCE', 'DHCEN', 'BUFG', 'BUFS',
+                                  'DCC', 'DCCG', 'DHCENC', 'DHCE', 'DCE', 'CLKDIVG']},
+    # oscillators of other devices
+    **{name: 'osc' for name in ['OSCZ', 'OSCH', 'OSCW', 'OSCO', 'OSCF', 'OSCB']},
     **{name: 'iob' for name in ['IBUF', 'OBUF', 'TBUF', 'IOBUF']},
     **{f'{kind}_{buf}': 'diob' for kind in ('TLVDS', 'ELVDS') for buf in ('IBUF', 'OBUF', 'TBUF', 'IOBUF')},
     # I/O logic: placed with an I/O buffer on a pin
     **{name: 'iol' for name in ['IDDR', 'IDDRC', 'ODDR', 'ODDRC', 'IDES4', 'IDES8', 'IDES10', 'IDES16',
-                                'OSER4', 'OSER8', 'OSER10', 'OSER16', 'IODELAY', 'IVIDEO', 'OVIDEO']},
+                                'OSER4', 'OSER8', 'OSER10', 'OSER16', 'IODELAY', 'IVIDEO', 'OVIDEO',
+                                'IODELAYA', 'IODELAYC', 'IDES14', 'IDES32', 'OSER14']},
     **{name: 'bsram' for name in ['SP', 'SPX9', 'pROM', 'pROMX9', 'ROM', 'SDP', 'SDPB', 'SDPX9B',
-                                  'DP', 'DPB', 'DPX9B']},
+                                  'DP', 'DPB', 'DPX9B', 'DPX9', 'SDPX9', 'ROMX9',
+                                  'rROM', 'rROMX9', 'rSDP', 'rSDPX9']},
 }
 
 # Parameters held at their default. BSRAM contents are not in the vendor
@@ -235,12 +240,33 @@ RULES = [
 # Primitives in a family's primitive.xml that a device does not have: the
 # vendor answers PA2085, "No '<primitive>' resource in current device"
 # (doc/agent/vendor-sweep.md). Only those the fuzzer would otherwise generate.
+# Not in the device: "PA2085: No '<primitive>' resource in current device",
+# from tools/vendor_sweep.py (doc/agent/vendor-sweep.md)
 UNAVAILABLE = {
-    'GW1N-9C': {'TLVDS_IOBUF'},
-    'GW2A-18C': {'IDES16', 'OSER16'},
-    'GW5A-25A': {'DFF', 'DFFC', 'DFFE', 'DFFN', 'DFFNC', 'DFFNCE', 'DFFNE', 'DFFNP', 'DFFNPE', 'DFFNR',
-                 'DFFNRE', 'DFFNS', 'DFFNSE', 'DFFP', 'DFFR', 'DFFS', 'OSC'},
+    'GW1N-9C': set('''TLVDS_IOBUF BANDGAP CLKDIVG DCCG DQS ELVDS_IBUF_R ELVDS_IOBUF_R EMCU FLASH128K
+        FLASH256K FLASH64K FLASH64KZ FLASH96K FLASH96KA I3C IBUF_R IDDR_MEM IDES4_MEM IDES8_MEM IEM
+        IOBUF_R IODELAYB MCU MIPI_DPHY_RX ODDR_MEM OSCH OSCO OSCW OSCZ OSER4_MEM OSER8_MEM OTP PLLO
+        PLLVR PWRGRD SAMB SPMI SPMI_DEBUG_GOWIN TLVDS_OEN_BK USB20_PHY'''.split()),
+    'GW2A-18C': set('''IDES16 OSER16 BANDGAP CLKDIVG DCC DCCG DHCENC EMCU FLASH128K FLASH256K
+        FLASH608K FLASH64K FLASH64KZ FLASH96K FLASH96KA I3C I3C_IOBUF IODELAYB IODELAYC MCU
+        MIPI_DPHY_RX MIPI_IBUF MIPI_IBUF_HS MIPI_IBUF_LP MIPI_OBUF MIPI_OBUF_A OSCH OSCO OSCW OSCZ OTP
+        PLLO PLLVR PWRGRD SAMB SPMI SPMI_DEBUG_GOWIN TLVDS_OEN_BK USB20_PHY'''.split()),
+    'GW5A-25A': set('''DFF DFFC DFFE DFFN DFFNC DFFNCE DFFNE DFFNP DFFNPE DFFNR DFFNRE DFFNS DFFNSE
+        DFFP DFFR DFFS OSC ADCA_DB ADCLRC ADCLRC_DB ADCULC ADCULC_DB ADC_SAR ADC_SAR_DB AE350_RAM
+        AE350_SOC CMSER CMSERB DL DLC DLCEA DLE DLN DLNC DLNCE DLNE DLNP DLNPE DLP DLPEA JPEG_DB LICD
+        MULTACC OSCB PLL RAM16S1 RAM16S2 RAM16S4 RAM16SDP1 RAM16SDP2 RAM16SDP4 SAMBA SDP136K
+        SDP36KE'''.split()),
 }
+
+# Constants and placeholders, not primitives to test. VIRTUAL_BUF is in the XML
+# but not defined (PA2050).
+NOT_PRIMITIVES = {'GND', 'VCC', 'VIRTUAL_BUF'}
+
+
+def site_kind(prim):
+    """Site kind of a primitive; everything without one of its own is 'lone':
+    one per design, placed by both tools."""
+    return SITES.get(prim, 'lone')
 
 # Real-valued parameters (the PLL and DCC input frequency FCLKIN) have no domain
 # in primitive.xml; draw typical frequencies in MHz.
@@ -262,7 +288,7 @@ class Case:
 
     @property
     def site(self):
-        return SITES[self.prim]
+        return site_kind(self.prim)
 
     def to_json(self):
         return {'prim': self.prim, 'params': dict(self.params)}
