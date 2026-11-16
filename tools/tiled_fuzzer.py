@@ -27,8 +27,9 @@ Each case is then checked twice:
 
 Statuses: ok; mismatch (vendor and Apicula differ); decode (they agree with
 each other but not with the generated case: an unpacker bug, or a mistake both
-make); invalid (the vendor rejected the case); unsupported (the Apicula flow
-failed on it). A design that fails in either flow is split in half and rerun
+make); invalid (the vendor rejected the case: a rule the generator should
+learn); unsupported (the Apicula flow failed on it: a failure to fix, like a
+mismatch). The exit status is 1 if any case failed. A design that fails in either flow is split in half and rerun
 until the failing case is alone. Failing cases are written out on
 their own for `--replay`.
 
@@ -566,9 +567,14 @@ def main(argv):
                 queue[:0] = [(f'{i}a', batch[:half]), (f'{i}b', batch[half:])]
                 continue
             case, site = batch[0]
+            # unsupported is a failure to fix in Apicula, not a case to drop
             status = 'unsupported' if 'Apicula' in report['error'] else 'invalid'
-            print(f'{i} {status}: {case.to_json()} at {site}: {report["error"]}')
-            for line in dict.fromkeys(report.get('why', [])):
+            res = {'case': case.to_json(), 'site': site, 'status': status, 'why': report.get('why', [])}
+            path = os.path.join(workdir, f'{status}_{case.prim}.json')
+            with open(path, 'w') as f:
+                json.dump(res, f, indent=1)
+            print(f'{i} {status}: {case.to_json()} at {site} -> {path}')
+            for line in dict.fromkeys(res['why']):
                 print('    ', line)
             totals[status] += 1
             continue
@@ -590,7 +596,9 @@ def main(argv):
             totals['unattributed tiles'] += 1
             print(f'batch{i} unattributed {tile}:', *bits, sep='\n       ')
     print('summary:', dict(totals))
+    # invalid cases are generator problems (a vendor rule to learn); the rest are failures
+    return 1 if totals.keys() & {'mismatch', 'decode', 'unsupported', 'unattributed tiles'} else 0
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))
