@@ -105,7 +105,12 @@ isolation.
 ## Results so far (GW1N-9C)
 
 - All 20 DFF types, LUT1–LUT4 and OSC (`FREQ_DIV` across its range) match:
-  167 cases in 27 designs, `-n 40 --seed 3`.
+  167 cases in 27 designs, `-n 40 --seed 3`, by fuses only.
+- With unpacked comparison, `-n 40 --seed 7`: 168 cases in 28 designs, no
+  mismatch or decode failure. 36 are ok and 132 partial. Every DFF is partial,
+  because of the clock spine. 92 LUTs are partial because the vendor routed
+  their inputs over long wires (`LBnn`) too. Joining long-wire taps in the
+  unpacked netlist would turn most partial results into full ones.
 - The harness alone (IBUFs, one OBUF and GND, on the QFN88P pins chosen by
   `pick_pins`) differs in 24 non-routing bits, in I/O and corner tiles R1C1, R1C2,
   R1C47, R15C1, R16C1, R21C1, R22C1, R25C1, R26C1 and R29C1. They are subtracted
