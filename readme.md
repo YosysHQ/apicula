@@ -117,3 +117,5 @@ You can also come chat on [Matrix](https://matrix.to/#/#apicula:matrix.org) or [
 ### Funding
 
 This project was funded through the <a href="https://nlnet.nl/PET">NGI0 PET</a> and [NGI Zero Entrust](https://nlnet.nl/entrust) Fund, a fund established by <a href="https://nlnet.nl">NLnet</a> with financial support from the European Commission's <a href="https://ngi.eu">Next Generation Internet</a> programme, under the aegis of DG Communications Networks, Content and Technology under grant agreement N<sup>o</sup> 825310 and 101069594.
+
+Maintainers use AI agents for reverse engineering, code, tests and documentation. Each AI-assisted commit names the model and says who did what. Contributors, see [AI_POLICY.md](AI_POLICY.md).
