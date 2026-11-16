@@ -67,6 +67,7 @@ DEVICES = {
     'GW5A-25A': ('GW5A-25A', 'GW5A-LV25MG121NC1/I0', 'MBGA121N'),
 }
 
+WIDELUTS_PER_DESIGN = 8
 DIVIDER_LOAD = {'CLKDIV2', 'DHCEN'}
 CLOCK_INPUTS = {'HCLKIN', 'CLKIN', 'CLKIN0', 'CLK0', 'I'}
 CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR', 'GE'}
@@ -221,6 +222,18 @@ def allocate(cases, sites):
     # clock primitives drive the harness output, so one per design; nextpnr and
     # the vendor place them
     batches += [[(case, None)] for case in queues.pop('clock', [])]
+    # wide LUT trees: placed by both tools, in designs of their own, with no
+    # LUT INIT used twice in a design
+    batch, inits = [], set()
+    for case in queues.pop('widelut', []):
+        mine = {v for _, v in case.params}
+        if len(batch) >= WIDELUTS_PER_DESIGN or mine & inits:
+            batches.append(batch)
+            batch, inits = [], set()
+        batch.append((case, None))
+        inits |= mine
+    if batch:
+        batches.append(batch)
     for kind in ('alu', 'ssram'):  # these use slices too, so in designs of their own
         group, free = queues.pop(kind, []), getattr(sites, kind)
         for i in range(0, len(group), len(free) or 1):
@@ -318,6 +331,31 @@ def netlist(batch, spec, pins, harness_io_type=None):
         name = f'inst{i}_{case.prim}'
         names[name] = (case, site)
         conns, sources = {}, data[i % len(data):] + data[:i % len(data)]
+        if case.site == 'widelut':
+            # MUX2_LUTn over two MUX2_LUT(n-1) ... over LUT4 leaves. Leaf inputs
+            # are dummy wires; each mux level selects from its own data pin.
+            inits = [v for _, v in case.params]
+
+            def tree(level, leaves, path):
+                if level == 4:
+                    out = f'{name}_f{path}'
+                    ins = {p: f'{name}_l{path}_{p}' for p in ('I0', 'I1', 'I2', 'I3')}
+                    mod.wires.update([out, *ins.values()])
+                    inst('LUT4', f'{name}_l{path}', {'F': out, **ins}, [('INIT', leaves[0])])
+                    return out
+                half = len(leaves) // 2
+                i0 = tree(level - 1, leaves[:half], path + '0')
+                i1 = tree(level - 1, leaves[half:], path + '1')
+                out = f'{name}_o{path}'
+                mod.wires.add(out)
+                inst(f'MUX2_LUT{level}', f'{name}_m{path}' if path else name,
+                     {'I0': i0, 'I1': i1, 'S0': sources[(level - 5) % len(sources)], 'O': out})
+                return out
+
+            tree(int(case.prim[-1]), inits, '')
+            names[name] = (case, site)
+            wiring[name] = {}
+            continue
         if case.site in IO_SITES:
             for k, (pad, pin) in enumerate(io_pads(case, site)):
                 conns[pad] = f'{name}_pad' + ('_n' if k else '')
@@ -639,11 +677,45 @@ def canonical(cell, params, inputs):
     return {'cell': kind, 'params': params, 'edge': 'neg' if neg else 'pos', 'sr': sr or None, 'ce': enable}
 
 
+def widelut_pattern(level, r, c, i=0):
+    """Leaf positions (row, col, LUT n) of a MUX2_LUT<level> tree in the order
+    of its select bits, from the hardwired muxes as gowin_unpack.make_muxes has
+    them: MUX2_LUT5 i takes F2i (I0) and F2i+1 (I1); MUX2_LUT6 i takes OF4i+2 and
+    OF4i; MUX2_LUT7 OF5 and OF1; MUX2_LUT8 OF3 of the next column and its own."""
+    if level == 5:
+        return [(r, c, 2 * i), (r, c, 2 * i + 1)]
+    if level == 6:
+        return widelut_pattern(5, r, c, 2 * i + 1) + widelut_pattern(5, r, c, 2 * i)
+    if level == 7:
+        return widelut_pattern(6, r, c, 1) + widelut_pattern(6, r, c, 0)
+    return widelut_pattern(7, r, c + 1) + widelut_pattern(7, r, c)
+
+
+def widelut_tree(luts, case):
+    """'ok' if the leaves sit where the hardwired tree reads them, 'missing' if
+    a leaf INIT is not in the bitstream, else the leaf positions found."""
+    level = int(case.prim[-1])
+    found = [luts.get(literal_value(v)) for _, v in case.params]
+    if not all(found):
+        return 'missing'
+    r, c, _ = found[-1][0]  # the last leaf is in the root's own tile
+    for i in range(4 >> (level - 5) if level < 7 else 1):
+        if all(p in f for p, f in zip(widelut_pattern(level, r, c, i), found)):
+            return 'ok'
+    return [f[0] for f in found]
+
+
 class Decoded:
     """Cells of an unpacked bitstream, looked up by the site a case was placed on."""
 
     def __init__(self, nl, spec):
         self.nl, self.spec = nl, spec
+        self.luts = collections.defaultdict(list)  # INIT -> [(row, col, n)]
+        for name, cell in nl.cells.items():
+            m = re.fullmatch(r'R(\d+)C(\d+)_LUT4_(\d)', name)
+            if m and 'INIT' in cell['params']:
+                self.luts[literal_value(cell['params']['INIT'])].append(
+                    (int(m.group(1)) - 1, int(m.group(2)) - 1, int(m.group(3))))
 
     def find(self, case, site):
         if site is None:
@@ -690,6 +762,8 @@ class Decoded:
             return {'cell': 'PLLA'}  # compared through its bitstream slot in run_batch
         if case.site == 'clock':
             return {'cell': case.prim}  # gowin_unpack does not decode these; compared on fuses
+        if case.site == 'widelut':
+            return {'cell': 'WIDELUT', 'tree': widelut_tree(self.luts, case)}
         if case.site == 'dsp':
             return {'cell': 'DSP'}  # gowin_unpack decodes fuse-level modes only; compared on fuses
         if case.site == 'ssram' and isinstance(site[2], int):
@@ -740,6 +814,8 @@ def describe_generated(case, conns, spec):
         return {'cell': 'SSRAM', 'params': {k: literal_value(v) for k, v in case.params}}
     if case.site == 'alu':
         return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
+    if case.site == 'widelut':
+        return {'cell': 'WIDELUT', 'tree': 'ok'}
     if case.site in ('plla', 'clock'):
         return {'cell': case.prim if case.site == 'clock' else 'PLLA'}
     if case.site == 'iol':
@@ -847,6 +923,8 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                          ('apicula', os.path.join(workdir, 'apicula/top.fs'))):
             nl = unpacked_netlist.unpack(args.device, fs, os.path.join(workdir, f'{side}_unpack.v'), REPO)
             decoded[side] = Decoded(nl, spec)
+    if any(case.site == 'widelut' for case, _ in names.values()):
+        diffs = {}  # placed freely by both tools; compared on leaf positions
     if baseline is not None:
         diffs = {k: v - baseline.get(k, set()) for k, v in diffs.items()}
         diffs = {k: v for k, v in diffs.items() if v}
@@ -877,8 +955,8 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         results[name] = res
         if site:
             loc = (site[0], site[1])
-        elif case.site == 'clock':
-            continue  # alone in its design: owns every difference (see below)
+        elif case.site in ('clock', 'widelut'):
+            continue  # clock: alone in its design, owns every difference (see below)
         else:
             # the bel is named after the primitive (OSCA) or the site kind (OSC)
             loc = SINGLETON_LOCS.setdefault(case.prim, find_bel(db, case.prim) or find_bel(db, case.site.upper()))

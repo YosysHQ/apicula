@@ -41,6 +41,8 @@ SITES = {
     'rPLL': 'pll',
     'PLL': 'pll',  # GW1N/GW2A non-reconfigurable PLL; same sites as rPLL
     'PLLA': 'plla',
+    # wide LUTs: a MUX2_LUTn tree with LUT4 leaves
+    **{f'MUX2_LUT{n}': 'widelut' for n in range(5, 9)},
     # clock buffers, dividers and selectors: one per design, driving the harness output
     **{name: 'clock' for name in ['CLKDIV', 'CLKDIV2', 'DCS', 'DQCE', 'DHCEN', 'BUFG', 'BUFS']},
     **{name: 'iob' for name in ['IBUF', 'OBUF', 'TBUF', 'IOBUF']},
@@ -323,6 +325,12 @@ class Primitives:
     def case(self, prim):
         if SITES.get(prim) in ('iob', 'diob'):
             return io_case(prim)
+        if SITES.get(prim) == 'widelut':
+            # leaf INITs, distinct and not constant, so each leaf can be found
+            # in a bitstream; leaf j is reached with select bits j (I0 = 0)
+            n = 1 << (int(prim[-1]) - 4)
+            return st.lists(st.integers(1, 0xfffe), min_size=n, max_size=n, unique=True).map(
+                lambda inits: Case(prim, tuple((f'INIT{j}', f"16'h{v:04x}") for j, v in enumerate(inits))))
         fields = {}
         for name, param in self.spec[prim]['params'].items():
             fixed = self.fixed(prim, name, param)

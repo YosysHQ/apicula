@@ -73,8 +73,6 @@ way; these were not.
 - No BSRAM parameters.
 
 **Fuzzer coverage still missing**
-- `LUT5`–`LUT8` and `MUX2_LUT*`. nextpnr has no `LUT5`+ primitive; the vendor
-  needs `MUX2_LUT*` driven by LUTs.
 - GW5A `DDRDLL`/`DLLDLY`, `ADC`, MIPI.
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
@@ -578,6 +576,24 @@ With a BEL attribute nextpnr does the following:
   cells and copies only `attrs[DCS_MODE]` from the user cell. The fuzzer copies
   the parameter to an attribute, so that `gowin_pack`'s encoding is still
   tested; the nextpnr bug is in the gaps list.
+
+## Wide LUTs
+
+`MUX2_LUT5` to `MUX2_LUT8`, site kind `widelut`. Each case is a tree: a
+`MUX2_LUT<n>` over two `MUX2_LUT<n-1>` and so on, down to `LUT4` leaves with
+distinct, non-constant random INITs. Leaf inputs are dummy wires (tied to GND,
+nextpnr folds the leaves into constants); each mux level's `S0` comes from its
+own data pin. The INIT bits themselves are not the point: the question is whether
+each leaf ends up on the mux input that selects it.
+
+- **Comparison.** Both tools place the trees freely. In each bitstream, the
+  leaves are found by INIT and must sit where the hardwired muxes read them, as
+  `gowin_unpack.make_muxes` has them: `MUX2_LUT5` i takes F2i (I0) and F2i+1
+  (I1), `MUX2_LUT6` i takes OF4i+2 and OF4i, `MUX2_LUT7` OF5 and OF1, and
+  `MUX2_LUT8` OF3 of the next column and of its own. The vendor matching this
+  confirms the model; Apicula matching it confirms nextpnr and `gowin_pack`.
+- **Results** (`-n 4` on GW1N-9C, `-n 6` on GW2A-18C and GW5A-25A): all 64
+  cases match on both sides, including `MUX2_LUT8` across two tiles.
 
 ## Adding a primitive
 
