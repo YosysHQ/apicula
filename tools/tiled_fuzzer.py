@@ -120,6 +120,8 @@ class Sites:
         # whose io16 role is MAIN; the AUX tile beside it is used as well
         self.iob16 = [s for s in self.iob if s[2] == 'IOBA'
                       and db.extra_func.get(s[:2], {}).get('io16', {}).get('role') == 'MAIN']
+        if not any('io16' in f for f in db.extra_func.values()):
+            self.iob16 = self.iob  # no X16 data in the chipdb (GW5A): let the vendor say
         # differential pairs: A is the positive pin; TLVDS needs true-LVDS pins
         self.tlvds, self.elvds = [], []
         names = {name: pin for pin, (name, funcs) in (pinout or {}).items() if not funcs and pin not in harness}
@@ -131,6 +133,8 @@ class Sites:
                     site = (r, c, 'IOBA', [pin, names[name[:-1] + 'B']])
                     (self.tlvds if bel.is_true_lvds else self.elvds).append(site)
         rng.shuffle(self.tlvds)
+        # emulated LVDS can use any differential pair
+        self.elvds += self.tlvds
         rng.shuffle(self.elvds)
 
 
@@ -186,6 +190,9 @@ def allocate(cases, sites):
         by_vccio[(ps.io_vccio(case), pool)].append(case)
     for (_, pool), group in by_vccio.items():
         free = getattr(sites, pool)
+        if not free:
+            print(f'no {pool} sites for {sorted({c.prim for c in group})}; {len(group)} cases not run')
+            continue
         for i in range(0, len(group), len(free)):
             batches.append(list(zip(group[i:i + len(free)], free)))
     while any(queues.values()):

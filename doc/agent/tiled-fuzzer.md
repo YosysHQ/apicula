@@ -296,6 +296,41 @@ placed with an LVCMOS33 buffer on a pin: an `IBUF` feeds `D`/`DI`, or the
   - It compared instead of assigning the decoded `CLKODDRMUX_ECLK` and
     `CLKIDDRMUX_ECLK` (`eclk == val`); now fixed.
 
+### I/O on GW2A-18C and GW5A-25A
+
+`-n 3`, single-ended, differential and I/O logic (`IDES16`/`OSER16` excluded
+on GW2A-18C, where they do not exist).
+
+**GW2A-18C**
+
+63 cases: 2 ok, 26 mismatch, 22 decode, 13 unsupported, and 25 unsupported
+combinations. It shows the GW1N patterns:
+
+- `BANK_VCCIO` row fuses on unused I/Os with an `ELVDS` buffer in the bank;
+- bank-tile `IO_TYPE=…,IO_BANK=I50/I55` and `IO_TYPE=BLVDS_E,…` rows;
+- input `CLAMP`;
+- `DRIVE,OPENDRAIN` rows;
+- I/O logic `CLKIDDRMUX_ECLK=ECLK1` set only by Apicula, and `GSR=DISGSR` /
+  `LSRIMUX`/`LSROMUX` rows set only by the vendor.
+
+The unsupported cases are the one-`IO_TYPE`-per-bank check.
+
+**GW5A-25A**
+
+- **Output buffers:** in nearly every output, tristate and bidirectional
+  buffer case (22 per type), the vendor sets `ODMUX_1` and several
+  `IO_TYPE=…,DRIVE=…` / `LVDS_OUT` row fuses on the A side that Apicula does not.
+  On GW5A a B bel's fuses are in a neighbouring cell (`fuse_cell_offset`), and
+  the fuzzer's IOBA/IOBB attribution does not model that yet. Check this before
+  reading it as a packer bug.
+- **Inputs:** the vendor sets `PULLMODE` and `IO_TYPE=…,HYSTERESIS=ON` row fuses
+  for inputs.
+- **I/O logic:** `FCLKSEL*` rows differ (fast clock source).
+- **`IODELAY`:** crashes nextpnr: "INTERNAL CHECK FAILED", after "net
+  '$PACKER_GND' user port 'DLYSTEP[0]' missing".
+- **Unpacker:** `OSER4`, `OSER8`, `IDDR`, `ODDR` and `IDES8` produce no cell;
+  `IDDR`/`ODDR` decode as `IDDRC`/`ODDRC`.
+
 ## Adding a primitive
 
 Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site

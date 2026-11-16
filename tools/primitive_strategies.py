@@ -28,6 +28,7 @@ SITES = {
     'OSC': 'osc',
     # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
     'rPLL': 'pll',
+    'PLLA': 'plla',
     **{name: 'iob' for name in ['IBUF', 'OBUF', 'TBUF', 'IOBUF']},
     **{f'{kind}_{buf}': 'diob' for kind in ('TLVDS', 'ELVDS') for buf in ('IBUF', 'OBUF', 'TBUF', 'IOBUF')},
     # I/O logic: placed with an I/O buffer on a pin
@@ -129,6 +130,46 @@ def io_case(prim):
         lambda d: Case(prim, tuple(sorted((k, v) for k, v in d.items() if v is not None))))
 
 
+# GW5A PLLA limits, from the vendor's PA2078 messages on GW5A-25A: PFD
+# (FCLKIN/IDIV_SEL) 19-400 MHz and VCO
+# (FCLKIN*FBDIV_SEL*(MDIV_SEL+MDIV_FRAC_SEL/8)/IDIV_SEL) 800-1600 MHz.
+PLLA_LIMITS = {'pfd': (19, 400), 'vco': (800, 1600)}
+
+
+@st.composite
+def plla_dividers(draw):
+    lo, hi = PLLA_LIMITS['pfd']
+    f = float(draw(st.sampled_from([v for v in REAL_VALUES if lo <= float(v) <= hi * 64])))
+    idiv = draw(st.sampled_from([i for i in range(1, 65) if lo <= f / i <= hi]))
+    fb = draw(st.integers(1, 64))
+    frac = draw(st.integers(0, 7))
+    vlo, vhi = PLLA_LIMITS['vco']
+    mdivs = [m for m in range(2, 129) if vlo <= f * fb * (m + frac / 8) / idiv <= vhi]
+    if not mdivs:
+        fb, frac = 1, 0
+        mdivs = [m for m in range(2, 129) if vlo <= f * (m + frac / 8) / idiv <= vhi] or [8]
+    m = draw(st.sampled_from(mdivs))
+    return {'FCLKIN': f'"{f:.1f}"', 'IDIV_SEL': str(idiv), 'FBDIV_SEL': str(fb),
+            'MDIV_SEL': str(m), 'MDIV_FRAC_SEL': str(frac)}
+
+
+def plla_fixup(p):
+    """Rules between PLLA channel settings, from vendor messages on GW5A-25A:
+    PA2096 CLKOUTn_PE_COARSE <= ODIVn_SEL; PA2115 channel n disabled when
+    CLKn_OUT_SEL=1'b1; PA2093 CLKn_IN_SEL=1'b1 needs CLKn_OUT_SEL=1'b1 under
+    some dynamic settings (avoided by not combining them)."""
+    p = dict(p)
+    for n in range(7):
+        pe, od = f'CLKOUT{n}_PE_COARSE', f'ODIV{n}_SEL'
+        if pe in p and od in p and int(p[pe]) > int(p[od]):
+            p[pe] = p[od]
+        if p.get(f'CLK{n}_OUT_SEL') == "1'b1":
+            p[f'CLKOUT{n}_EN'] = '"FALSE"'
+        elif p.get(f'CLK{n}_IN_SEL', "1'b0") not in ("1'b0", "2'b00"):
+            p[f'CLK{n}_IN_SEL'] = "2'b00" if n == 4 else "1'b0"
+    return p
+
+
 # Rules across parameters, or values the XML allows but the vendor rejects.
 # Found with tools/vendor_sweep.py; each is (primitive regex, predicate on the
 # case's {name: literal}, vendor message it avoids).
@@ -142,6 +183,7 @@ RULES = [
 # (doc/agent/vendor-sweep.md). Only those the fuzzer would otherwise generate.
 UNAVAILABLE = {
     'GW1N-9C': {'TLVDS_IOBUF'},
+    'GW2A-18C': {'IDES16', 'OSER16'},
     'GW5A-25A': {'DFF', 'DFFC', 'DFFE', 'DFFN', 'DFFNC', 'DFFNCE', 'DFFNE', 'DFFNP', 'DFFNPE', 'DFFNR',
                  'DFFNRE', 'DFFNS', 'DFFNSE', 'DFFP', 'DFFR', 'DFFS', 'OSC'},
 }
@@ -238,6 +280,10 @@ class Primitives:
             base = st.fixed_dictionaries(fields)
             return st.tuples(base, pll_dividers(self.spec[prim]['params'])).map(
                 lambda t: Case(prim, tuple(sorted({**t[0], **t[1]}.items()))))
+        if prim == 'PLLA':
+            base = st.fixed_dictionaries(fields)
+            return st.tuples(base, plla_dividers()).map(
+                lambda t: Case(prim, tuple(sorted(plla_fixup({**t[0], **t[1]}).items()))))
         return (st.fixed_dictionaries(fields).filter(lambda d: all(ok(d) for ok in rules))
                 .map(lambda d: Case(prim, tuple(sorted(d.items())))))
 
