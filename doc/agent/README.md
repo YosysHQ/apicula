@@ -15,6 +15,8 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
 - [bsram.md](bsram.md): BSRAM handlers compared with `gowin_pack`.
 - [timing.md](timing.md): how the IDE computes delays, the `.tm` formats, and how
   Apicula's and nextpnr's timing compare with it.
+- [primitive-params.md](primitive-params.md): primitive ports, parameters and
+  allowed values from the IDE's `primitive.xml`, compared with Yosys' cell library.
 - [hand-written-tables.md](hand-written-tables.md): which Apicula tables have a
   vendor source, and what each `logicinfo` table is for.
 
