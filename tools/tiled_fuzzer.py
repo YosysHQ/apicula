@@ -584,7 +584,7 @@ def main(argv):
                 path = os.path.join(workdir, f'{res["status"]}_{name}.json')
                 with open(path, 'w') as f:
                     json.dump(res, f, indent=1)
-                print(f'batch{i} {name} {res["status"]}: {res["case"]} at {res["site"]} -> {path}')
+                print(f'{i} {name} {res["status"]}: {res["case"]} at {res["site"]} -> {path}')
                 for side in ('generated', 'vendor', 'apicula'):
                     if side in res:
                         print(f'     {side:9}', res[side])
@@ -594,7 +594,7 @@ def main(argv):
                     print(f'     {tile}:', *bits, sep='\n       ')
         for tile, bits in report['unattributed'].items():
             totals['unattributed tiles'] += 1
-            print(f'batch{i} unattributed {tile}:', *bits, sep='\n       ')
+            print(f'{i} unattributed {tile}:', *bits, sep='\n       ')
     print('summary:', dict(totals))
     # invalid cases are generator problems (a vendor rule to learn); the rest are failures
     return 1 if totals.keys() & {'mismatch', 'decode', 'unsupported', 'unattributed tiles'} else 0

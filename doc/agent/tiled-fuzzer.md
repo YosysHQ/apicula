@@ -128,6 +128,34 @@ isolation.
   alone. These are routing fuses, so they are masked out. Whether the difference
   matters has not been checked.
 
+## BSRAM (GW1N-9C)
+
+BSRAM cases are placed with `INS_LOC "x" BSRAM_R<row>[n]` (the n-th BSRAM of
+the row, see SUG935) and nextpnr's BEL `X<c>Y<r>/BSRAM`. `gowin_unpack` does not
+decode BSRAM parameters, so BSRAM is compared on fuses over the BSRAM tile and
+its two `BSRAM_AUX` tiles. `INIT_RAM_*` stays at its default, because the vendor
+bitstream is built without BSRAM contents (`bit_incl_bsram_init` is 0). Yosys
+must also read `cells_xtra_<family>.v`, where `DPB`, `SDPB` and the ROMs are.
+
+First run, `-n 3` over the 11 types nextpnr lists as BSRAM: 33 cases, 16 ok.
+
+- **Unsupported (9 cases):** nextpnr stops with "Unsupported BSRAM type" for `SDP`,
+  `DP` and `ROM`, although `type_is_bsram` in `gowin.h` lists them.
+- **Mismatch (7 cases), all with `READ_MODE=1'b1`:** the differing fuses are the
+  output register rows `SPA/SPB_REGMODE`, `SDPA/SDPB_REGMODE` and
+  `ROMA/ROMB_REGMODE = OUTREG`. They are at (25, 11) and (25, 13) of the BSRAM
+  tile, and (25, 18) for one `SPX9`. `gowin_pack` sets both halves whenever
+  `READ_MODE` is 1. The vendor does not follow that rule:
+  - for `pROM` (`BIT_WIDTH` 2), `pROMX9` (9) and `SDPB`, it sets neither;
+  - for `SP` (16, `WRITE_MODE 2'b10`) and `SPX9` (18 and 36), it sets bits that
+    Apicula leaves clear.
+
+  Other pipelined cases match: `SP` 16 with `WRITE_MODE 2'b00`, `SDPX9B`, and
+  `DPB`. Two mismatches were rerun alone with `--replay` and reproduced. The
+  vendor's rule has not been read from `libgowin`.
+- **Decode (1 case):** a `DPX9B` with `READ_MODE0=1'b1` produced no BSRAM cell
+  from `gowin_unpack` for either bitstream, though the fuses agree.
+
 ## Adding a primitive
 
 Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site
