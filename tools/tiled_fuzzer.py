@@ -27,7 +27,9 @@ Each case is then checked twice:
 
 Statuses: ok; mismatch (vendor and Apicula differ); decode (they agree with
 each other but not with the generated case: an unpacker bug, or a mistake both
-make); invalid (the vendor rejected the case). Failing cases are written out on
+make); invalid (the vendor rejected the case); unsupported (the Apicula flow
+failed on it). A design that fails in either flow is split in half and rerun
+until the failing case is alone. Failing cases are written out on
 their own for `--replay`.
 
 Tools: YOSYS and NEXTPNR environment variables, else yosys/nextpnr-himbaechel,
@@ -79,17 +81,21 @@ def tool(env, *names):
 
 class Sites:
     """Free sites of each kind. A slice (CLS) holds two LUT cases or one DFF case,
-    because the two flip-flops of a slice share clock, CE and set/reset modes."""
+    because the two flip-flops of a slice share clock, CE and set/reset modes.
+    Sites are (row, col, cls, 'A'|'B') for slices and (row, col, 'BSRAM', n) for
+    the n-th BSRAM of a row, which is how the vendor numbers them in INS_LOC."""
 
     def __init__(self, db, rng):
         self.cls = [(r, c, cls) for r in range(db.rows) for c in range(db.cols)
                     for cls in range(4)
                     if {f'LUT{2 * cls}', f'LUT{2 * cls + 1}', f'DFF{2 * cls}'} <= db[r, c].bels.keys()]
         rng.shuffle(self.cls)
+        self.bsram = []
+        for r in range(db.rows):
+            cols = [c for c in range(db.cols) if 'BSRAM' in db[r, c].bels]
+            self.bsram += [(r, c, 'BSRAM', n) for n, c in enumerate(cols)]
+        rng.shuffle(self.bsram)
         self.singletons = {'osc'}
-
-    def capacity(self):
-        return {'lut': 2 * len(self.cls), 'dff': len(self.cls), 'osc': 1}
 
 
 def allocate(cases, sites):
@@ -111,6 +117,9 @@ def allocate(cases, sites):
                     batch.append((luts.pop(), (r, c, cls, 'B')))
             else:
                 break
+        for site in sites.bsram:
+            if queues['bsram']:
+                batch.append((queues['bsram'].pop(), site))
         for kind in sites.singletons:
             if queues[kind]:
                 batch.append((queues[kind].pop(), None))
@@ -182,7 +191,9 @@ def netlist(batch, spec, pins):
                 mod.wires.add(conns[port])
         inst(case.prim, name, conns, case.params)
         wiring[name] = conns
-        if site:
+        if site and site[2] == 'BSRAM':
+            cst.cells[name] = f'BSRAM_R{site[0] + 1}[{site[3]}]'
+        elif site:
             cst.cells[name] = (site[0] + 1, site[1] + 1, site[2], site[3])
 
     mod.outputs.add('out_pad')
@@ -193,6 +204,8 @@ def netlist(batch, spec, pins):
 
 def bel_name(case, site):
     r, c, cls, ab = site
+    if cls == 'BSRAM':
+        return f'X{c}Y{r}/BSRAM'
     kind = 'DFF' if case.site == 'dff' else 'LUT'
     return f'X{c}Y{r}/{kind}{2 * cls + "AB".index(ab)}'
 
@@ -216,7 +229,8 @@ def run_apicula(workdir, mod, cst, names, device, part):
     log = open(os.path.join(workdir, 'tools.log'), 'w')
     # yowasp tools only see the working directory, so use relative paths
     subprocess.run([tool('YOSYS', 'yosys', 'yowasp-yosys'), '-q', '-p',
-                    'read_verilog -lib +/gowin/cells_sim.v; read_verilog top.v; hierarchy -top top; '
+                    f'read_verilog -lib +/gowin/cells_sim.v; read_verilog -lib +/gowin/cells_xtra_{ps.family(device)}.v; '
+                    'read_verilog top.v; hierarchy -top top; '
                     'blackbox =A:whitebox; write_json syn.json'],
                    cwd=workdir, check=True, stdout=log, stderr=subprocess.STDOUT)
     path = os.path.join(workdir, 'syn.json')
@@ -292,6 +306,8 @@ def bit_owner(db, r, c, bit):
 
 def case_bel(case, site):
     r, c, cls, ab = site
+    if cls == 'BSRAM':
+        return 'BSRAM'
     return f'LUT{2 * cls + "AB".index(ab)}' if case.site == 'lut' else f'CLS{cls}'
 
 
@@ -352,6 +368,11 @@ class Decoded:
         if site is None:
             return next((n for n, c in self.nl.cells.items() if c['type'].startswith(case.site.upper())), None)
         r, c, cls, ab = site
+        if case.site == 'bsram':
+            # gowin_unpack names BSRAMs by a counter; find the one on this tile
+            prefix = f'R{r + 1}C{c + 1}_'
+            return next((n for n, cell in self.nl.cells.items() if cell['type'] == 'BSRAM'
+                         and any(w.startswith(prefix) for w in cell['ports'].values())), None)
         if case.site == 'lut':
             name = f'R{r + 1}C{c + 1}_LUT4_{2 * cls + "AB".index(ab)}'
             return name if name in self.nl.cells else None
@@ -361,6 +382,9 @@ class Decoded:
 
     def describe(self, case, site):
         name = self.find(case, site)
+        if case.site == 'bsram':
+            # gowin_unpack does not decode BSRAM parameters; the fuse comparison covers them
+            return {'cell': 'BSRAM' if name else None}
         if case.site == 'lut':
             if name:
                 return {'cell': 'LUT', 'init': literal_value(self.nl.cells[name]['params']['INIT'])}
@@ -381,6 +405,8 @@ class Decoded:
 
 
 def describe_generated(case, conns, spec):
+    if case.site == 'bsram':
+        return {'cell': 'BSRAM'}
     if case.site == 'lut':
         return {'cell': 'LUT', 'init': lut_init(case)}
     inputs = {p: 'VSS' if conns.get(p, 'gnd') == 'gnd' else 'sig'
@@ -404,8 +430,18 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
     mod, cst, names, wiring = netlist(batch, spec, pins)
     vres = run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
     if vres is None:
-        return {'error': 'vendor produced no bitstream; see vendor/impl/pnr/top.log'}, None
-    abm, placed = run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
+        log = os.path.join(workdir, 'vendor/impl/pnr/top.log')
+        why = []
+        if os.path.exists(log):
+            with open(log, errors='replace') as f:
+                why = [line.strip() for line in f if line.startswith('ERROR')]
+        return {'error': 'vendor produced no bitstream', 'why': why}, None
+    try:
+        abm, placed = run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
+    except subprocess.CalledProcessError:
+        with open(os.path.join(workdir, 'apicula/tools.log'), errors='replace') as f:
+            why = [line.strip() for line in f if 'ERROR' in line]
+        return {'error': 'the Apicula flow failed', 'why': why}, None
     vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
     at = chipdb.tile_bitmap(db, abm, empty=True)
     diffs = diff_bits(db, vt, at)
@@ -424,7 +460,8 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
     by_tile = collections.defaultdict(list)
     for name, (case, site) in names.items():
         res = {'case': case.to_json(), 'site': site, 'status': 'ok'}
-        problems = [f'{code} {INVALID_CODES[code]}' for (n, code) in vres.errs if n == name and code in INVALID_CODES]
+        problems = [msg for (n, code), msgs in vres.errs.items() if n == name
+                    for msg in msgs if code in INVALID_CODES or msg.startswith('ERROR')]
         if site and placed.get(name) != bel_name(case, site):
             problems.append(f'nextpnr placed it at {placed.get(name)}')
         if problems:
@@ -445,6 +482,11 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
         else:
             loc = SINGLETON_LOCS.setdefault(case.site, find_bel(db, case.site.upper()))
         by_tile[loc].append(name)
+        if site and site[2] == 'BSRAM':
+            # a BSRAM's fuses are in its tile and the BSRAM_AUX tiles to its right
+            for dc in (1, 2):
+                if loc[1] + dc < db.cols and 'BSRAM_AUX' in db[loc[0], loc[1] + dc].bels:
+                    by_tile[(loc[0], loc[1] + dc)].append(name)
         if site:
             by_bel[(*loc, case_bel(case, site))] = name
 
@@ -509,14 +551,26 @@ def main(argv):
               f'{" ".join(f"R{r + 1}C{c + 1}" for r, c in sorted(baseline))}')
 
     totals = collections.Counter()
-    for i, batch in enumerate(batches):
-        workdir = os.path.join(args.out, f'batch{i}')
+    queue = [(f'batch{i}', b) for i, b in enumerate(batches)]
+    while queue:
+        i, batch = queue.pop(0)
+        workdir = os.path.join(args.out, i)
         report, _ = run_batch(args, db, prims.spec, pins, batch, workdir, baseline)
         with open(os.path.join(workdir, 'report.json'), 'w') as f:
             json.dump(report, f, indent=1)
         if 'error' in report:
-            print(f'batch{i}: {report["error"]}')
-            totals['batch errors'] += 1
+            if len(batch) > 1:
+                # a vendor error stops the whole design: split it to find the case
+                half = len(batch) // 2
+                print(f'{i}: {report["error"]}; splitting')
+                queue[:0] = [(f'{i}a', batch[:half]), (f'{i}b', batch[half:])]
+                continue
+            case, site = batch[0]
+            status = 'unsupported' if 'Apicula' in report['error'] else 'invalid'
+            print(f'{i} {status}: {case.to_json()} at {site}: {report["error"]}')
+            for line in dict.fromkeys(report.get('why', [])):
+                print('    ', line)
+            totals[status] += 1
             continue
         for name, res in report['cases'].items():
             totals[res['status']] += 1

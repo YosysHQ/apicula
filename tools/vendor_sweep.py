@@ -163,7 +163,7 @@ def summary(device, results):
         codes = collections.Counter()
         for c in cases:
             msgs = c['messages'] + (c['design_messages'] if not c['bitstream'] else [])
-            codes.update(dict.fromkeys(m.split(':')[0] for m in msgs))
+            codes.update({m.split(':')[0] for m in msgs})
         lines.append(f'| {prim} | {ok} | {warn} | {fail} | {", ".join(f"{k} ×{v}" for k, v in sorted(codes.items()))} |')
     return '\n'.join(lines) + '\n'
 

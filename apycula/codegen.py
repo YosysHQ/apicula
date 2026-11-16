@@ -109,6 +109,9 @@ class Constraints:
 
     def write(self, f):
         for key, val in self.cells.items():
+            if isinstance(val, str):  # a location as written, e.g. BSRAM_R10[2]
+                f.write("INS_LOC \"{}\" {};\n".format(key, val))
+                continue
             row, col, side, lut = val
             f.write("INS_LOC \"{}\" R{}C{}[{}][{}];\n".format(key, row, col, side, lut))
         for key, val in self.ports.items():

@@ -10,6 +10,7 @@ design.
 """
 import dataclasses
 import os
+import re
 import sys
 
 from hypothesis import strategies as st
@@ -25,7 +26,22 @@ SITES = {
     **{f'LUT{n}': 'lut' for n in range(1, 5)},
     **{name: 'dff' for name in DFFS},
     'OSC': 'osc',
+    # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
+    **{name: 'bsram' for name in ['SP', 'SPX9', 'pROM', 'pROMX9', 'ROM', 'SDP', 'SDPB', 'SDPX9B',
+                                  'DP', 'DPB', 'DPX9B']},
 }
+
+# Parameters held at their default. BSRAM contents are not in the vendor
+# bitstream (bit_incl_bsram_init is off), so they cannot be compared yet.
+KEEP_DEFAULT = re.compile(r'INIT_RAM_[0-9A-F]{2}$')
+
+# Rules across parameters, or values the XML allows but the vendor rejects.
+# Found with tools/vendor_sweep.py; each is (primitive regex, predicate on the
+# case's {name: literal}, vendor message it avoids).
+RULES = [
+    (r'DP', lambda p: "2'b10" not in (p.get('WRITE_MODE0'), p.get('WRITE_MODE1')),
+     "PA2122: dual-port BSRAM does not support WRITE_MODE 2'b10"),
+]
 
 # Real-valued parameters (the PLL and DCC input frequency FCLKIN) have no domain
 # in primitive.xml; draw typical frequencies in MHz.
@@ -100,6 +116,8 @@ class Primitives:
         DEVICE parameters list the devices a primitive exists on; use this one."""
         if name == 'DEVICE' and param['kind'] == 'enum' and self.vendor_device in param['values']:
             return literal(param, self.vendor_device)
+        if KEEP_DEFAULT.match(name):
+            return f'"{param["default"]}"' if param['type'] == 'string' else param['default']
         return None
 
     def case(self, prim):
@@ -110,7 +128,9 @@ class Primitives:
                 fields[name] = st.just(fixed)
             else:
                 fields[name] = param_strategy(param).map(lambda v, p=param: literal(p, v))
-        return st.fixed_dictionaries(fields).map(lambda d: Case(prim, tuple(sorted(d.items()))))
+        rules = [ok for pat, ok, _ in RULES if re.match(pat, prim)]
+        return (st.fixed_dictionaries(fields).filter(lambda d: all(ok(d) for ok in rules))
+                .map(lambda d: Case(prim, tuple(sorted(d.items())))))
 
     def cases(self, prims=None):
         prims = sorted(prims or (p for p in SITES if p in self.spec))
