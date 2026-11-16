@@ -75,7 +75,7 @@ to do each.
 3. **Every new primitive has a hardware-in-the-loop test** for at least one
    configuration, on a board in the rig: a self-checking design in `examples/`
    with a reference in `examples/hil-references/`. If the rig has no board for
-   the family, the test is still required; add the board to the rig first.
+   the primitive's family, say so in the pull request.
 4. **Existing output does not change by accident.** Pack the same nextpnr JSON
    with `master` and your branch, and `cmp` the bitstreams for designs that do
    not use the feature. Explain every difference. For a chipdb change, compare

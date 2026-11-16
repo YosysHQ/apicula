@@ -98,9 +98,10 @@ Run it locally, with the board attached, with
 request; CI runs it.
 
 Cover at least one configuration of each new primitive, and the failing
-configuration of a hardware bug. Write it for a board of the primitive's family;
-if the rig has none yet, the board, its `hil-<board>` rules and its CI matrix
-entry are part of the work.
+configuration of a hardware bug, on a board of the primitive's family. If the
+rig has no board for the family, say so in the pull request. A GW5A board is
+coming, so check the `hil` matrix in `toolchain.yml` for the current boards
+before deciding there is none.
 
 ## Comparing with the vendor by hand
 
