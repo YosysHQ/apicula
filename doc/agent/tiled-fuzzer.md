@@ -660,10 +660,24 @@ Results, `-n 2` (statuses as in the summary):
 
 ## Adding a primitive
 
-Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site
-kind, `Sites` and `allocate` need to know the sites, and `bel_name` and
-`case_bel` need the bel names used by nextpnr and the bel that owns its fuses.
-`Decoded.find` needs the name `gowin_unpack` gives the cell.
+Add it to `SITES` in `primitive_strategies.py`, with a site kind; without one it
+runs as `lone`. Each site kind is a `Kind` subclass in `tiled_fuzzer.py`, which
+says how its cases are batched (`batch`) and placed (`placement`: INS_LOC and
+BEL, a pin, or one tool following the other), its INS_LOC and nextpnr bel, the
+bel and tiles its fuses belong to, how its inputs are driven and any extra
+netlist, and how a case is described from the unpacked bitstream and from the
+generated parameters. A new kind with a pool of sites also needs it in `Sites`.
 Device-dependent parameter values go in `Primitives.fixed`. Rules involving several
 parameters, such as the PLL VCO range in `gowin_pll.py`, are filters on the
 strategy.
+
+## CI
+
+`.github/workflows/fuzzer.yml` runs the fuzzer on GW1N-9C, GW2A-18C and
+GW5A-25A in the `pepijndevos/apicula:1.9.10.03` image, with `-n 2 --seed 7`,
+`PYTHONHASHSEED=0` (the drawn cases are de-duplicated through a set) and pinned
+Hypothesis, Yosys and nextpnr, so a run is reproducible. `--known
+tools/fuzz_known.json` reports the failures listed there as known broken and
+fails the run on any other: a case with another status, a new unattributed tile
+or a new failing combination. Cases that now pass are listed so the file can be
+updated with `fuzz_report.py --write-known`.

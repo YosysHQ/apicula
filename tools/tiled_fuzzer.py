@@ -43,12 +43,14 @@ import collections
 import concurrent.futures
 import copy
 import functools
+import glob
 import json
 import os
 import random
 import re
 import subprocess
 import sys
+import types
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TOOLS)
@@ -137,7 +139,6 @@ class Sites:
             for n, (r, c) in enumerate(plls):
                 if not db.extra_func.get((r, c), {}).get('disabled', {}).get('PLL'):
                     self.pll.append((r, c, 'PLL', side if len(plls) == 1 else f'{side}[{n}]'))
-        self.singletons = {'osc'}
         # GW5A PLLs (extra_func 'pll'), configured through a bitstream slot. The
         # vendor names them by side and row order (checked on GW5A-25A: PLL_L[0]
         # is slot 5, PLL_L[1] slot 6, PLL_R[0] slot 3, PLL_R[1] slot 2, PLL_T
@@ -188,8 +189,6 @@ def io_bank(db, r, c, ab):
 HARNESS_IO_TYPE = {'3.3': 'LVCMOS33', '2.5': 'LVCMOS25', '1.8': 'LVCMOS18', '1.5': 'LVCMOS15', '1.2': 'LVCMOS12'}
 IO_PAD = {'IBUF': 'I', 'OBUF': 'O', 'TBUF': 'O', 'IOBUF': 'IO'}
 DIFF_PAD = {'IBUF': ['I', 'IB'], 'OBUF': ['O', 'OB'], 'TBUF': ['O', 'OB'], 'IOBUF': ['IO', 'IOB']}
-IO_SITES = ('iob', 'diob')
-PIN_SITES = {'iob', 'diob', 'iol'}  # placed by IO_LOC on a pin
 IOL_INPUT = {'D', 'DI'}  # I/O logic port fed by the input buffer
 IOL_OUTPUT = {'Q', 'Q0', 'DO'}  # port that feeds the output buffer
 
@@ -204,7 +203,7 @@ def io_pads(case, site):
 
 def io_class(batch):
     """Bank voltage shared by the I/O cases of a batch, or None."""
-    return next((ps.io_vccio(c) for c, _ in batch if c.site in PIN_SITES), None)
+    return next((ps.io_vccio(c) for c, _ in batch if KINDS[c.site].batch == 'io'), None)
 
 
 def allocate(cases, sites):
@@ -212,12 +211,10 @@ def allocate(cases, sites):
     queues = collections.defaultdict(list)
     for case in cases:
         queues[case.site].append(case)
-    batches = []
-    # clock primitives drive the harness output, so one per design; nextpnr and
-    # the vendor place them
-    batches += [[(case, None)] for case in queues.pop('clock', []) + queues.pop('lone', [])]
-    # wide LUT trees: placed by both tools, in designs of their own, with no
-    # LUT INIT used twice in a design
+    by_batch = lambda b: [k for k, kind in KINDS.items() if kind.batch == b]
+    # alone: one per design, placed by the tools
+    batches = [[(case, None)] for k in by_batch('alone') for case in queues.pop(k, [])]
+    # wide LUT trees: in designs of their own, with no LUT INIT used twice in a design
     batch, inits = [], set()
     for case in queues.pop('widelut', []):
         mine = {v for _, v in case.params}
@@ -228,13 +225,13 @@ def allocate(cases, sites):
         inits |= mine
     if batch:
         batches.append(batch)
-    for kind in ('alu', 'ssram'):  # these use slices too, so in designs of their own
-        group, free = queues.pop(kind, []), getattr(sites, kind)
+    for k in by_batch('own'):  # these use slices too, so in designs of their own
+        group, free = queues.pop(k, []), getattr(sites, k)
         for i in range(0, len(group), len(free) or 1):
             batches.append(list(zip(group[i:i + len(free)], free)))
     # I/O cases: one bank voltage per design, since a bank has one VCCIO
     by_vccio = collections.defaultdict(list)
-    for case in queues.pop('iob', []) + queues.pop('diob', []) + queues.pop('iol', []):
+    for case in (case for k in by_batch('io') for case in queues.pop(k, [])):
         pool = (case.prim.split('_')[0].lower() if case.site == 'diob'
                 else 'iob16' if case.prim in ('IDES16', 'OSER16') else 'iob')
         by_vccio[(ps.io_vccio(case), pool)].append(case)
@@ -245,11 +242,12 @@ def allocate(cases, sites):
             continue
         for i in range(0, len(group), len(free)):
             batches.append(list(zip(group[i:i + len(free)], free)))
+    # the rest share designs: two LUTs or one flip-flop per slice, one case per
+    # site of the other kinds, and one of each single kind
     while any(queues.values()):
-        batch, free = [], iter(sites.cls)
-        luts = queues['lut']
-        dffs = queues['dff']
-        for r, c, cls in free:
+        batch = []
+        luts, dffs = queues['lut'], queues['dff']
+        for r, c, cls in sites.cls:
             if dffs and (not luts or len(dffs) * 2 >= len(luts)):
                 batch.append((dffs.pop(), (r, c, cls, 'A')))
             elif luts:
@@ -258,13 +256,10 @@ def allocate(cases, sites):
                     batch.append((luts.pop(), (r, c, cls, 'B')))
             else:
                 break
-        for kind, free in (('bsram', sites.bsram), ('pll', sites.pll), ('plla', sites.plla), ('dsp', sites.dsp)):
-            for site in free:
-                if queues[kind]:
-                    batch.append((queues[kind].pop(), site))
-        for kind in sites.singletons:
-            if queues[kind]:
-                batch.append((queues[kind].pop(), None))
+        for k in by_batch('shared'):
+            if k not in ('lut', 'dff'):
+                batch += [(queues[k].pop(), site) for site in getattr(sites, k) if queues[k]]
+        batch += [(queues[k].pop(), None) for k in by_batch('single') if queues[k]]
         batches.append(batch)
     return batches
 
@@ -278,15 +273,15 @@ def pick_pins(db, vendor_device, device, package):
     return {'clk': clocks[0], 'out': plain[0], 'in': plain[1:6]}
 
 
-def netlist(batch, spec, pins, harness_io_type=None):
-    """One design: an I/O harness and the cases. I/O cases get a top-level pad
-    with IO_LOC and their attributes as IO_PORT; the harness pins then use
-    `harness_io_type`, so that banks agree on VCCIO."""
-    mod, cst = codegen.Module(), codegen.Constraints()
+class Design:
+    """A netlist and its constraints, built for the vendor's netlist reader."""
 
-    def inst(typ, name, conns, params=()):
+    def __init__(self, spec):
+        self.spec, self.mod, self.cst = spec, codegen.Module(), codegen.Constraints()
+
+    def inst(self, typ, name, conns, params=()):
         p = codegen.Primitive(typ, name)
-        for port, (direction, width) in spec[typ]['ports'].items():
+        for port, (direction, width) in self.spec[typ]['ports'].items():
             if port in conns:
                 p.portmap[port] = conns[port]
             elif direction == 'input':  # the vendor rejects unconnected or constant ports
@@ -295,19 +290,26 @@ def netlist(batch, spec, pins, harness_io_type=None):
                 # the vendor reads netlists per bit: a `wire [7:0]` on a port is
                 # rejected with PA2060, a concatenation of 1-bit wires is not
                 wires = [f'{name}_{port}' + (f'_{b}' if width > 1 else '') for b in range(width)]
-                mod.wires.update(wires)
+                self.mod.wires.update(wires)
                 p.portmap[port] = wires[0] if width == 1 else wires[::-1]
         p.params = dict(params)
-        mod.primitives[name] = p
+        self.mod.primitives[name] = p
         return p
 
+
+def netlist(batch, spec, pins, harness_io_type=None):
+    """One design: an I/O harness and the cases. I/O cases get a top-level pad
+    with IO_LOC and their attributes as IO_PORT; the harness pins then use
+    `harness_io_type`, so that banks agree on VCCIO."""
+    d = Design(spec)
+    mod, cst = d.mod, d.cst
     mod.wires.add('gnd')
-    inst('GND', 'harness_gnd', {'G': 'gnd'})
+    d.inst('GND', 'harness_gnd', {'G': 'gnd'})
     data = []
     for i, pin in enumerate(['clk'] + [f'in{n}' for n in range(len(pins['in']))]):
         mod.inputs.add(f'{pin}_pad')
         mod.wires.add(pin)
-        inst('IBUF', f'harness_ib_{pin}', {'I': f'{pin}_pad', 'O': pin})
+        d.inst('IBUF', f'harness_ib_{pin}', {'I': f'{pin}_pad', 'O': pin})
         cst.ports[f'{pin}_pad'] = pins['clk'] if pin == 'clk' else pins['in'][i - 1]
         if harness_io_type:
             cst.attrs[f'{pin}_pad'] = {'IO_TYPE': harness_io_type}
@@ -317,163 +319,63 @@ def netlist(batch, spec, pins, harness_io_type=None):
     # As in the old tiled fuzzer, data inputs get their own undriven dummy wires
     # and outputs are left unconnected. Nothing is routed to a LUT, so neither
     # tool reorders its inputs, and no constant reaches a case. The vendor keeps
-    # cells whose outputs are unused. Slice control inputs (clock, CE, set/reset)
+    # cells whose outputs are unused. Control inputs (clock, CE, set/reset)
     # come from input pins: left undriven they become constants, which hides the
     # flip-flop type. They use dedicated slice ports, so they cannot be reordered.
     names, wiring = {}, {}
     for i, (case, site) in enumerate(batch):
+        kind = KINDS[case.site]
         name = f'inst{i}_{case.prim}'
         names[name] = (case, site)
         conns, sources = {}, data[i % len(data):] + data[:i % len(data)]
-        if case.site == 'widelut':
-            # MUX2_LUTn over two MUX2_LUT(n-1) ... over LUT4 leaves. Leaf inputs
-            # are dummy wires; each mux level selects from its own data pin.
-            inits = widelut_inits(case)
-
-            def tree(level, leaves, path):
-                if level == 4:
-                    out = f'{name}_f{path}'
-                    ins = {p: f'{name}_l{path}_{p}' for p in ('I0', 'I1', 'I2', 'I3')}
-                    mod.wires.update([out, *ins.values()])
-                    inst('LUT4', f'{name}_l{path}', {'F': out, **ins}, [('INIT', leaves[0])])
-                    return out
-                half = len(leaves) // 2
-                i0 = tree(level - 1, leaves[:half], path + '0')
-                i1 = tree(level - 1, leaves[half:], path + '1')
-                out = f'{name}_o{path}'
-                mod.wires.add(out)
-                inst(f'MUX2_LUT{level}', f'{name}_m{path}' if path else name,
-                     {'I0': i0, 'I1': i1, 'S0': sources[(level - 5) % len(sources)], 'O': out})
-                return out
-
-            tree(int(case.prim[-1]), inits, '')
-            wiring[name] = {}
+        wiring[name] = conns
+        if kind.wire(d, name, case, site, conns, sources):
             continue
-        if case.site in IO_SITES:
-            for k, (pad, pin) in enumerate(io_pads(case, site)):
-                conns[pad] = f'{name}_pad' + ('_n' if k else '')
-                direction = spec[case.prim]['ports'][pad][0]
-                getattr(mod, PORT_LISTS[direction]).add(conns[pad])
-                cst.ports[conns[pad]] = pin
-                cst.attrs[conns[pad]] = dict(case.params)
-        if case.site == 'lone':
-            # pads become top-level ports; the vendor picks their pins and
-            # nextpnr gets the same ones (run_batch)
-            for pad in lone_pads(spec[case.prim]['ports'], case.prim):
-                conns[pad] = f'{name}_{pad}'
-                getattr(mod, PORT_LISTS[spec[case.prim]['ports'][pad][0]]).add(conns[pad])
-        if case.site == 'iol':
-            # I/O logic must connect to an I/O buffer (vendor PR0018): an IBUF
-            # feeding its data input, or an OBUF fed by its output
-            ports = spec[case.prim]['ports']
-            data_in = next((p for p in ports if p in IOL_INPUT), None)
-            pad = f'{name}_pad'
-            if data_in:
-                conns[data_in] = f'{name}_in'
-                mod.wires.add(conns[data_in])
-                mod.inputs.add(pad)
-                inst('IBUF', f'{name}_buf', {'I': pad, 'O': conns[data_in]})
-            else:
-                out = next(p for p in ports if p in IOL_OUTPUT)
-                conns[out] = f'{name}_out'
-                mod.wires.add(conns[out])
-                mod.outputs.add(pad)
-                inst('OBUF', f'{name}_buf', {'I': conns[out], 'O': pad})
-            cst.ports[pad] = site[3]
-            cst.attrs[pad] = {'IO_TYPE': ps.IOL_IO_TYPE}
-        for port, (d, w) in spec[case.prim]['ports'].items():
-            if d != 'input' or w != 1 or port in conns:
+        ports = spec[case.prim]['ports']
+        for port, (direction, width) in ports.items():
+            if direction != 'input' or width != 1 or port in conns:
                 continue
-            if case.site == 'iol' and port in ('CLK', 'PCLK', 'FCLK'):
-                conns[port] = 'clk'
-                continue
-            if case.site == 'lone' and 'CLK' in port:
-                conns[port] = 'clk'
-                continue
-            if case.site == 'clock':
-                # the first clock input from the clock pin, the rest from data pins
-                # DCS: every clock input from the clock pin (nextpnr crashes
-                # routing GW5A DCS inputs from plain pins)
-                if port in CLOCK_INPUTS and 'clk' not in conns.values() \
-                        or case.prim == 'DCS' and port.startswith('CLK') and port != 'CLKSEL':
-                    conns[port] = 'clk'
-                elif sources:
-                    conns[port] = sources.pop(0)
-                continue
-            if case.site in IO_SITES and sources:
-                conns[port] = sources.pop(0)  # buffer data and enable inputs
-            elif port == 'CLKIN' and sources:
-                # a plain pin: nextpnr moves a PLL fed from a dedicated PLL input
-                # pin (the harness clock on GW2A-18C) before applying its BEL
+            src = kind.source(case, port, conns)
+            if src == 'data' and sources:
                 conns[port] = sources.pop(0)
-            elif port in ('CLK', 'G'):
-                conns[port] = 'clk'
-            elif case.site == 'alu' and port == 'CIN':
-                conns[port] = 'gnd'
-            elif port in CONTROL_PORTS and sources:
-                conns[port] = sources.pop(0)
+            elif src in ('clk', 'gnd'):
+                conns[port] = src
             else:
                 conns[port] = f'{name}_{port}'
                 mod.wires.add(conns[port])
-        ports = spec[case.prim]['ports']
         if 'DLLSTEP' in ports:
             # DLLSTEP must come from a DLL (PR2015; DDRDLL on GW5A, PR0015)
-            dll = 'DLL' if 'DLL' in spec else 'DDRDLL'
-            inst(dll, f'{name}_dll', {'CLKIN': 'clk'})
+            d.inst('DLL' if 'DLL' in spec else 'DDRDLL', f'{name}_dll', {'CLKIN': 'clk'})
             conns['DLLSTEP'] = [f'{name}_dll_STEP_{b}' for b in range(ports['DLLSTEP'][1])][::-1]
         if 'DQSIN' in ports:
             # DQSIN must come from an input buffer (PR0014)
-            pad = f'{name}_dqs_pad'
-            mod.inputs.add(pad)
+            mod.inputs.add(f'{name}_dqs_pad')
             mod.wires.add(f'{name}_dqs')
-            inst('IBUF', f'{name}_dqs_buf', {'I': pad, 'O': f'{name}_dqs'})
+            d.inst('IBUF', f'{name}_dqs_buf', {'I': f'{name}_dqs_pad', 'O': f'{name}_dqs'})
             conns['DQSIN'] = f'{name}_dqs'
-        inst(case.prim, name, conns, () if case.site in IO_SITES else case.params)
-        wiring[name] = conns
-        if case.site in PIN_SITES:
-            pass  # placed by IO_LOC
-        elif site and site[2] == 'BSRAM':
-            cst.cells[name] = f'BSRAM_R{site[0] + 1}[{site[3]}]'
-        elif site and site[2] in ('PLL', 'PLLA'):
-            cst.cells[name] = f'PLL_{site[3]}'
-        elif site and site[2] == 'DSP':
-            cst.cells[name] = f'DSP_R{site[0] + 1}[{site[3]}][A]'
-        elif site and site[2] == 'RAM16':
-            cst.cells[name] = f'R{site[0] + 1}C{site[1] + 1}'
-        elif site:
-            cst.cells[name] = (site[0] + 1, site[1] + 1, site[2], site[3])
+        d.inst(case.prim, name, conns, case.params if kind.cell_params else ())
+        loc = site and kind.ins_loc(case, site)
+        if loc:
+            cst.cells[name] = loc
 
     mod.outputs.add('out_pad')
     # a clock primitive drives the output; otherwise it would have no load
     clock_out = next((f'{name}_{port}' for name, (case, _) in names.items() if case.site == 'clock'
-                      for port, (d, _) in spec[case.prim]['ports'].items() if d == 'output'), None)
+                      for port, (direction, _) in spec[case.prim]['ports'].items() if direction == 'output'), None)
     for name, (case, _) in names.items():
         if case.prim in DIVIDER_LOAD:
             # these may only drive HCLK loads (vendor PR2060 on an OBUF), and
             # no output may dangle (PA2099): a CLKDIV with default settings on
             # each clock output passes it on
-            outs = [p for p, (d, _) in spec[case.prim]['ports'].items() if d == 'output' and 'CLK' in p]
+            outs = [p for p, (direction, _) in spec[case.prim]['ports'].items() if direction == 'output' and 'CLK' in p]
             for k, port in enumerate(outs):
-                inst('CLKDIV', f'harness_div{k}', {'HCLKIN': f'{name}_{port}', 'RESETN': data[0]})
+                d.inst('CLKDIV', f'harness_div{k}', {'HCLKIN': f'{name}_{port}', 'RESETN': data[0]})
             clock_out = 'harness_div0_CLKOUT'
-    inst('OBUF', 'harness_ob', {'I': clock_out or data[0], 'O': 'out_pad'})
+    d.inst('OBUF', 'harness_ob', {'I': clock_out or data[0], 'O': 'out_pad'})
     cst.ports['out_pad'] = pins['out']
     if harness_io_type:
         cst.attrs['out_pad'] = {'IO_TYPE': harness_io_type}
     return mod, cst, names, wiring
-
-
-def bel_name(case, site):
-    """nextpnr bel of a site, for the kinds placed with a BEL attribute (not
-    PIN_SITES or FOLLOW_NEXTPNR)."""
-    r, c, cls, ab = site
-    if cls == 'BEL':
-        return f'X{c}Y{r}/{ab}'
-    if cls == 'BSRAM':
-        return f'X{c}Y{r}/BSRAM'
-    if cls in ('PLL', 'PLLA'):
-        return f'X{c}Y{r}/PLL'
-    return f'X{c}Y{r}/{"DFF" if case.site == "dff" else "LUT"}{2 * cls + "AB".index(ab)}'
 
 
 # ---------------------------------------------------------------- flows
@@ -517,8 +419,10 @@ def run_apicula(workdir, mod, cst, names, device, part):
             # defparam is ignored and the DCS packed as RISING. Recorded in
             # doc/agent/tiled-fuzzer.md; passed as an attribute to test gowin_pack.
             cell['attributes']['DCS_MODE'] = cell['parameters']['DCS_MODE']
-        if name in names and names[name][1] and names[name][0].site not in PIN_SITES | FOLLOW_NEXTPNR:
-            cell['attributes']['BEL'] = bel_name(*names[name])  # nextpnr ignores INS_LOC
+        case, site = names.get(name, (None, None))
+        bel = site and KINDS[case.site].bel(case, site)
+        if bel:
+            cell['attributes']['BEL'] = bel  # nextpnr ignores INS_LOC
     with open(path, 'w') as f:
         json.dump(syn, f)
     subprocess.run([tool('NEXTPNR', 'nextpnr-himbaechel', 'yowasp-nextpnr-himbaechel-gowin'),
@@ -617,17 +521,6 @@ def bit_owner(db, r, c, bit):
     return _owners[ttyp].get(bit)
 
 
-def case_bel(case, site):
-    r, c, cls, ab = site
-    if case.site == 'iol':
-        return f'IOLOGIC{cls[-1]}'
-    if cls == 'BEL':
-        return ab
-    if cls in ('BSRAM', 'PLL', 'PLLA', 'RAM16', 'DSP') or str(cls).startswith('IOB'):
-        return cls
-    return f'LUT{2 * cls + "AB".index(ab)}' if case.site == 'lut' else f'CLS{cls}'
-
-
 def fuse_tables(db, r, c, bit):
     ttyp = db.grid[r][c]
     owners = [f'{name}{key}' for name, rows in db.shortval.get(ttyp, {}).items()
@@ -724,7 +617,7 @@ def widelut_tree(nl, luts, case):
 
 
 class Decoded:
-    """Cells of an unpacked bitstream, looked up by the site a case was placed on."""
+    """Cells of an unpacked bitstream; site kinds look up their case in it."""
 
     def __init__(self, nl, spec):
         self.nl, self.spec = nl, spec
@@ -733,70 +626,25 @@ class Decoded:
             if cell['type'] == 'LUT4' and 'INIT' in cell['params']:
                 self.luts[literal_value(cell['params']['INIT'])].append(name)
 
-    def find(self, case, site):
-        if site is None:
-            return next((n for n, c in self.nl.cells.items() if c['type'].startswith(case.site.upper())), None)
-        r, c, cls, ab = site
-        if case.site == 'iol' or case.site in IO_SITES:
-            # gowin_unpack names I/O logic and buffers R<r>C<c>_<MODE or TYPE>_<A|B>
-            prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{cls[-1]}'
-            match = ((lambda t: ps.SITES.get(t) == 'iol') if case.site == 'iol'
-                     else (lambda t: t.endswith('BUF')))
-            return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
-                         and match(cell['type'])), None)
-        if case.site in ('bsram', 'pll'):
-            # gowin_unpack names these by a counter; find the one on this tile
-            prefix, typ = f'R{r + 1}C{c + 1}_', {'bsram': 'BSRAM', 'pll': 'rPLL'}[case.site]
-            return next((n for n, cell in self.nl.cells.items() if cell['type'] == typ
-                         and any(str(w).startswith(prefix) for w in cell['ports'].values())), None)
-        if case.site in ('ssram', 'alu', 'lut'):
-            name = f'R{r + 1}C{c + 1}_' + ('RAM16' if case.site == 'ssram' else
-                                           f'{"ALU" if case.site == "alu" else "LUT4"}_{2 * cls + "AB".index(ab)}')
-            return name if name in self.nl.cells else None
-        prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{2 * cls}'
-        return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
-                     and cell['type'].startswith(('DFF', 'DL'))), None)  # flip-flops and latches
+    def named(self, site, suffix):
+        """The cell R<r>C<c>_<suffix> on a site's tile, or None."""
+        return self.nl.cells.get(f'R{site[0] + 1}C{site[1] + 1}_{suffix}')
 
-    def describe(self, case, site):
-        if case.site in FUSE_ONLY:
-            return describe_generated(case, None, None)
-        if case.site == 'widelut':
-            return {'cell': 'WIDELUT', 'tree': widelut_tree(self.nl, self.luts, case)}
-        if case.site == 'ssram' and isinstance(site[2], int):
-            # nextpnr implements ROM16 as a LUT; its INIT is the ROM contents
-            cell = self.nl.cells.get(f'R{site[0] + 1}C{site[1] + 1}_LUT4_{2 * site[2] + "AB".index(site[3])}')
-            return {'cell': 'SSRAM' if cell else None,
-                    'params': {'INIT_0': literal_value(cell['params']['INIT'])} if cell else {}}
-        name = self.find(case, site)
-        cell = self.nl.cells[name] if name else None
-        if case.site == 'iol':
-            return {'cell': cell and cell['type'], 'params': literals(cell['params'].items()) if cell else {}}
-        if case.site in IO_SITES:
-            # attributes are compared on fuses; gowin_unpack writes them to a .cst
-            return {'cell': cell and cell['type']}
-        if case.site == 'ssram':
-            # gowin_unpack writes every SSRAM as RAM16SDP4; compare INIT
-            return {'cell': 'SSRAM' if cell else None, 'params': literals(cell['params'].items()) if cell else {}}
-        if case.site == 'alu':
-            if cell is None:
-                return {'cell': None}
-            return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}}
-        if case.site == 'bsram':
-            # gowin_unpack does not decode BSRAM parameters; the fuse comparison covers them
-            return {'cell': 'BSRAM' if name else None}
-        if case.site == 'pll':
-            if name is None:
-                return {'cell': None, 'params': {}}
-            # DEVICE is not a fuse; it is unpacked as the family name
-            return {'cell': 'rPLL', 'params': literals(cell['params'].items(), skip={'DEVICE'})}
-        if case.site == 'lut':
-            if name:
-                return {'cell': 'LUT', 'init': literal_value(self.nl.cells[name]['params']['INIT'])}
-            # constant LUTs are written as an assign of the F wire to VCC or VSS
-            r, c, cls, ab = site
-            const = self.nl.find(f'R{r + 1}C{c + 1}_F{2 * cls + "AB".index(ab)}')
-            return {'cell': 'LUT', 'init': {'VCC': 0xffff, 'VSS': 0}.get(const)}
-        if name is None:
+    def first(self, match, site=None, suffix=''):
+        """The first cell whose type matches, named R<r>C<c>_..<suffix> when a site is given."""
+        prefix = f'R{site[0] + 1}C{site[1] + 1}_' if site else ''
+        return next((cell for n, cell in self.nl.cells.items()
+                     if n.startswith(prefix) and n.endswith(suffix) and match(cell['type'])), None)
+
+    def on_tile(self, typ, site):
+        """A cell gowin_unpack names by a counter (BSRAM, rPLL), found by its ports' tile."""
+        prefix = f'R{site[0] + 1}C{site[1] + 1}_'
+        return next((cell for cell in self.nl.cells.values() if cell['type'] == typ
+                     and any(str(w).startswith(prefix) for w in cell['ports'].values())), None)
+
+    def canonical(self, cell):
+        """A decoded cell as canonical() describes it, with constant inputs."""
+        if cell is None:
             return {'cell': None}
         ports = self.spec.get(cell['type'], {'ports': {}})['ports']
         inputs = {}
@@ -805,36 +653,6 @@ class Decoded:
                 root = self.nl.find(wire)
                 inputs[port] = root if root in ('VCC', 'VSS') else 'sig'
         return canonical(cell['type'], literals(cell['params'].items()), inputs)
-
-
-# Kinds compared on fuses only (or, for plla, on its bitstream slot in
-# run_batch): gowin_unpack does not decode them, so both sides describe them
-# as the generated case does.
-FUSE_ONLY = {'dsp', 'plla', 'clock', 'lone'}
-
-
-def describe_generated(case, conns, spec):
-    if case.site in FUSE_ONLY:
-        return {'cell': case.prim}
-    if case.site == 'ssram':
-        return {'cell': 'SSRAM', 'params': literals(case.params)}
-    if case.site == 'alu':
-        return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
-    if case.site == 'widelut':
-        return {'cell': 'WIDELUT', 'tree': 'ok'}
-    if case.site == 'iol':
-        return {'cell': case.prim, 'params': literals(case.params)}
-    if case.site in IO_SITES:
-        return {'cell': case.prim}
-    if case.site == 'bsram':
-        return {'cell': 'BSRAM'}
-    if case.site == 'pll':
-        return {'cell': 'rPLL', 'params': literals(case.params, skip={'DEVICE'})}
-    if case.site == 'lut':
-        return {'cell': 'LUT', 'init': lut_init(case)}
-    inputs = {p: 'VSS' if conns.get(p, 'gnd') == 'gnd' else 'sig'
-              for p, (d, _) in spec[case.prim]['ports'].items() if d == 'input'}
-    return canonical(case.prim, literals(case.params), inputs)
 
 
 def same(a, b):
@@ -848,11 +666,406 @@ def same(a, b):
     return all(x[k] == y[k] for k in x.keys() & y.keys())
 
 
-# Placed by nextpnr, and the vendor constrained to where nextpnr put them: ALU
-# clusters ignore BEL; SSRAM with a BEL makes nextpnr crash (RAM16SDP2/4) or
-# leave its blocker cells unplaced (RAM16SDP1); ROM16 becomes a LUT.
-# DSP clusters get DUMMY_CELLs that stay unplaced with a BEL.
-FOLLOW_NEXTPNR = {'alu', 'ssram', 'dsp'}
+# ---------------------------------------------------------------- site kinds
+#
+# Each kind says how its cases are batched, placed, wired and compared. A site
+# is (row, col, cls, ab); what cls and ab hold depends on the kind.
+
+class Kind:
+    batch = 'shared'   # shared, own (designs of their own), io (by bank voltage), alone (one per design),
+    #                    widelut, single (one per shared design, at no site)
+    placement = 'bel'  # bel (INS_LOC and BEL), pin (IO_LOC), nextpnr or vendor (that tool places, the
+    #                    other follows), free (both place)
+    compare_fuses, cell_params = True, True  # cell_params: params are cell parameters, not IO_PORT attributes
+    ins_loc_fmt = bel_fmt = None  # formatted with the site, and r1 = row + 1
+
+    def ins_loc(self, case, site):
+        return self.ins_loc_fmt and self.ins_loc_fmt.format(*site, r1=site[0] + 1)
+
+    def bel(self, case, site):
+        return self.bel_fmt and self.bel_fmt.format(*site)
+
+    def owner(self, case, site):  # the bel whose fuses belong to the case
+        return site[2]
+
+    def tiles(self, db, case, site):  # tiles whose differences belong to the case
+        return [site[:2]] if site else []
+
+    def from_placed(self, db, case, bel):  # (site, INS_LOC) where nextpnr placed it
+        return None
+
+    def vendor_site(self, db, vt, case):  # the site the vendor chose
+        return None
+
+    def source(self, case, port, conns):  # driver of a free 1-bit input: clk, data, gnd or None (dummy)
+        if port in ('CLK', 'G'):
+            return 'clk'
+        return 'data' if port == 'CLKIN' or port in CONTROL_PORTS else None
+
+    def wire(self, d, name, case, site, conns, sources):  # extra netlist; True if it made the case
+        return False
+
+    def describe(self, dec, case, site):  # by default compared on fuses only
+        return self.generated(case, None, None)
+
+    def generated(self, case, conns, spec):
+        return {'cell': case.prim}
+
+    def check(self, b, name, case, site, res):  # more comparison; returns the tiles it covers
+        return set()
+
+
+def slice_n(site):
+    return 2 * site[2] + 'AB'.index(site[3])
+
+
+def slice_site(r, c, n):
+    return (r, c, n // 2, 'AB'[n % 2]), (r + 1, c + 1, n // 2, 'AB'[n % 2])
+
+
+class Lut(Kind):
+    """Two per slice: (row, col, cls, 'A'|'B')."""
+
+    def ins_loc(self, case, site):
+        return (site[0] + 1, site[1] + 1, site[2], site[3])
+
+    def bel(self, case, site):
+        return f'X{site[1]}Y{site[0]}/LUT{slice_n(site)}'
+
+    def owner(self, case, site):
+        return f'LUT{slice_n(site)}'
+
+    def describe(self, dec, case, site):
+        cell = dec.named(site, f'LUT4_{slice_n(site)}')
+        # constant LUTs are written as an assign of the F wire to VCC or VSS
+        const = dec.nl.find(f'R{site[0] + 1}C{site[1] + 1}_F{slice_n(site)}')
+        return {'cell': 'LUT', 'init': literal_value(cell['params']['INIT']) if cell
+                else {'VCC': 0xffff, 'VSS': 0}.get(const)}
+
+    def generated(self, case, conns, spec):
+        return {'cell': 'LUT', 'init': lut_init(case)}
+
+
+class Dff(Lut):
+    """A flip-flop or latch: one per slice, as the two flip-flops of a slice
+    share clock, CE and set/reset modes."""
+
+    def bel(self, case, site):
+        return f'X{site[1]}Y{site[0]}/DFF{slice_n(site)}'
+
+    def owner(self, case, site):
+        return f'CLS{site[2]}'
+
+    def describe(self, dec, case, site):
+        return dec.canonical(dec.first(lambda t: t.startswith(('DFF', 'DL')), site, f'_{2 * site[2]}'))
+
+    def generated(self, case, conns, spec):
+        inputs = {p: 'VSS' if conns.get(p, 'gnd') == 'gnd' else 'sig'
+                  for p, (d, _) in spec[case.prim]['ports'].items() if d == 'input'}
+        return canonical(case.prim, literals(case.params), inputs)
+
+
+class Alu(Kind):
+    """In ALU1 (CLS0, B): with CIN tied to GND, nextpnr puts a carry-in head in
+    ALU0 of the same chain. ALU clusters ignore BEL, so nextpnr places them."""
+    batch, placement = 'own', 'nextpnr'
+    ins_loc = Lut.ins_loc  # until nextpnr has placed it
+
+    def owner(self, case, site):
+        return f'CLS{site[2]}'
+
+    def from_placed(self, db, case, bel):
+        m = re.fullmatch(r'X(\d+)Y(\d+)/(?:ALU|LUT)(\d)', bel or '')
+        return m and slice_site(int(m.group(2)), int(m.group(1)), int(m.group(3)))
+
+    def source(self, case, port, conns):
+        return 'gnd' if port == 'CIN' else super().source(case, port, conns)
+
+    def describe(self, dec, case, site):
+        cell = dec.named(site, f'ALU_{slice_n(site)}')
+        return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}} if cell \
+            else {'cell': None}
+
+    def generated(self, case, conns, spec):
+        return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
+
+
+class Ssram(Alu):
+    """A whole logic tile, (row, col, 'RAM16', '-'). A BEL makes nextpnr crash
+    (RAM16SDP2/4) or leave its blocker cells unplaced (RAM16SDP1), so nextpnr
+    places it. ROM16 becomes a LUT, at a slice site."""
+    source = Kind.source
+
+    def ins_loc(self, case, site):
+        return f'R{site[0] + 1}C{site[1] + 1}' if site[2] == 'RAM16' else Lut.ins_loc(self, case, site)
+
+    def owner(self, case, site):
+        return 'RAM16' if site[2] == 'RAM16' else f'CLS{site[2]}'
+
+    def from_placed(self, db, case, bel):
+        m = re.fullmatch(r'X(\d+)Y(\d+)/(RAM16SDP4|LUT)(\d?)', bel or '')
+        r, c = m and (int(m.group(2)), int(m.group(1))) or (0, 0)
+        return m and (((r, c, 'RAM16', '-'), f'R{r + 1}C{c + 1}') if m.group(3) == 'RAM16SDP4'
+                      else slice_site(r, c, int(m.group(4))))
+
+    def describe(self, dec, case, site):
+        # gowin_unpack writes every SSRAM as RAM16SDP4, and nextpnr's ROM16 LUT
+        # has the ROM contents as INIT
+        cell = dec.named(site, 'RAM16' if site[2] == 'RAM16' else f'LUT4_{slice_n(site)}')
+        params = cell and (literals(cell['params'].items()) if site[2] == 'RAM16'
+                           else {'INIT_0': literal_value(cell['params']['INIT'])})
+        return {'cell': 'SSRAM' if cell else None, 'params': params or {}}
+
+    def generated(self, case, conns, spec):
+        return {'cell': 'SSRAM', 'params': literals(case.params)}
+
+
+class Dsp(Kind):
+    """(row, col, 'DSP', n), the n-th block of its row as the vendor's
+    DSP_R<row>[n]. DSP clusters get DUMMY_CELLs that stay unplaced with a BEL,
+    so nextpnr places them. gowin_unpack decodes fuse-level modes only."""
+    placement, ins_loc_fmt = 'nextpnr', 'DSP_R{r1}[{3}][A]'
+
+    def tiles(self, db, case, site):
+        # the main tile and the DSP_AUX tiles to its right
+        r, c = site[:2]
+        n = 1
+        while c + n < db.cols and any(b.startswith('DSP_AUX') for b in db[r, c + n].bels):
+            n += 1
+        return [(r, c + i) for i in range(n)]
+
+    def from_placed(self, db, case, bel):
+        m = re.fullmatch(r'X(\d+)Y(\d+)/(\w+)', bel or '')
+        c, r = m and (int(m.group(1)), int(m.group(2))) or (0, 0)
+        cols = [cc for cc in range(db.cols) if m and 'DSP' in db[r, cc].bels]
+        if c not in cols:
+            return None
+        macro = m.group(3)[len(case.prim):][:1]  # DSP_R<row>[n][A|B]
+        return (r, c, 'DSP', cols.index(c)), f'DSP_R{r + 1}[{cols.index(c)}]' + (macro and f'[{"AB"[int(macro)]}]')
+
+
+class Bsram(Kind):
+    """(row, col, 'BSRAM', n): the n-th BSRAM of a row, as INS_LOC numbers them.
+    gowin_unpack does not decode BSRAM parameters."""
+    ins_loc_fmt, bel_fmt = 'BSRAM_R{r1}[{3}]', 'X{1}Y{0}/BSRAM'
+
+    def tiles(self, db, case, site):
+        # and the two tiles to its right: BSRAM_AUX bels on GW1N/GW2A, tiles
+        # with BSRAM tables but no bel on GW5A
+        r, c = site[:2]
+        return [(r, c)] + [(r, c + dc) for dc in (1, 2) if c + dc < db.cols and (
+            'BSRAM_AUX' in db[r, c + dc].bels or 'BSRAM' not in db[r, c + dc].bels
+            and 'BSRAM_SP' in db.shortval.get(db[r, c + dc].ttyp, {}))]
+
+    def describe(self, dec, case, site):
+        return {'cell': 'BSRAM' if dec.on_tile('BSRAM', site) else None}
+
+    def generated(self, case, conns, spec):
+        return {'cell': 'BSRAM'}
+
+
+class Pll(Kind):
+    """An rPLL: (row, col, 'PLL', side), which the vendor calls PLL_<side>."""
+    ins_loc_fmt, bel_fmt = 'PLL_{3}', 'X{1}Y{0}/PLL'
+
+    def tiles(self, db, case, site):
+        # and the adjacent RPLLB tiles
+        r, c = site[:2]
+        return [(r, c)] + [(r, c + dc) for dc in (-3, -2, -1, 1, 2, 3)
+                           if 0 <= c + dc < db.cols and 'RPLLB' in db[r, c + dc].bels]
+
+    def describe(self, dec, case, site):
+        cell = dec.on_tile('rPLL', site)
+        # DEVICE is not a fuse; it is unpacked as the family name
+        return {'cell': 'rPLL' if cell else None, 'params': literals(cell['params'].items(), {'DEVICE'}) if cell else {}}
+
+    def generated(self, case, conns, spec):
+        return {'cell': 'rPLL', 'params': literals(case.params, {'DEVICE'})}
+
+
+class Plla(Kind):
+    """A GW5A PLL, (row, col, 'PLLA', side), configured through a bitstream
+    slot, which is compared."""
+    ins_loc_fmt, bel_fmt = Pll.ins_loc_fmt, Pll.bel_fmt
+
+    def check(self, b, name, case, site, res):
+        slot = b.db.extra_func[(site[0], site[1])]['pll']['slot_idx']
+        vs, as_ = b.vslots.get(slot), b.aslots.get(slot)
+        bits = None if vs is None or as_ is None else \
+            sum(v != as_[y][x] for y, row in enumerate(vs) for x, v in enumerate(row))
+        if bits is None:
+            res['status'], res['why'] = 'mismatch', [f'slot {slot}: vendor {"has" if vs else "lacks"} it, '
+                                                     f'apicula {"has" if as_ else "lacks"} it']
+        elif bits:
+            dec = [gowin_unpack.parse_attrvals(s, b.db.rev_logicinfo('PLL'), b.db.shortval[1024]['PLL'],
+                                               attrids.pll_attrids, 'PLL') for s in (vs, as_)]
+            res['status'], res['why'] = 'mismatch', [f'slot {slot}: {bits} bits differ']
+            res['slot_attrs'] = {k: (dec[0].get(k), dec[1].get(k)) for k in dec[0].keys() | dec[1].keys()
+                                 if dec[0].get(k) != dec[1].get(k)}
+        return set()
+
+
+class Osc(Kind):
+    """One per device, at no site; its bel is named after the primitive (OSCA)
+    or the kind (OSC)."""
+    batch, placement = 'single', 'free'
+    generated = Dff.generated
+
+    def tiles(self, db, case, site):
+        return [singleton_loc(db, case.prim, 'osc')]
+
+    def describe(self, dec, case, site):
+        return dec.canonical(dec.first(lambda t: t.startswith('OSC')))
+
+
+class Io(Kind):
+    """An I/O buffer on a plain pin: (row, col, 'IOBA'|'IOBB', pin), or for a
+    differential buffer the A side and [pin, pin]. Its params are IO_PORT
+    attributes, compared on fuses (gowin_unpack writes them to a .cst)."""
+    batch, placement, cell_params = 'io', 'pin', False
+
+    def source(self, case, port, conns):
+        return 'data'  # buffer data and enable inputs
+
+    def wire(self, d, name, case, site, conns, sources):
+        for k, (pad, pin) in enumerate(io_pads(case, site)):
+            conns[pad] = f'{name}_pad' + ('_n' if k else '')
+            getattr(d.mod, PORT_LISTS[d.spec[case.prim]['ports'][pad][0]]).add(conns[pad])
+            d.cst.ports[conns[pad]] = pin
+            d.cst.attrs[conns[pad]] = dict(case.params)
+
+    def describe(self, dec, case, site):
+        cell = dec.first(lambda t: t.endswith('BUF'), site, f'_{site[2][-1]}')
+        return {'cell': cell and cell['type']}
+
+
+class Iol(Io):
+    """I/O logic, with an I/O buffer on its pin (vendor PR0018): an IBUF feeding
+    its data input, or an OBUF fed by its output."""
+    cell_params = True
+
+    def owner(self, case, site):
+        return f'IOLOGIC{site[2][-1]}'
+
+    def source(self, case, port, conns):
+        return 'clk' if port in ('CLK', 'PCLK', 'FCLK') else Kind.source(self, case, port, conns)
+
+    def wire(self, d, name, case, site, conns, sources):
+        ports, pad = d.spec[case.prim]['ports'], f'{name}_pad'
+        data_in = next((p for p in ports if p in IOL_INPUT), None)
+        if data_in:
+            conns[data_in] = f'{name}_in'
+            d.mod.inputs.add(pad)
+            d.inst('IBUF', f'{name}_buf', {'I': pad, 'O': conns[data_in]})
+        else:
+            conns[next(p for p in ports if p in IOL_OUTPUT)] = f'{name}_out'
+            d.mod.outputs.add(pad)
+            d.inst('OBUF', f'{name}_buf', {'I': f'{name}_out', 'O': pad})
+        d.mod.wires.add(f'{name}_in' if data_in else f'{name}_out')
+        d.cst.ports[pad] = site[3]
+        d.cst.attrs[pad] = {'IO_TYPE': ps.IOL_IO_TYPE}
+
+    def describe(self, dec, case, site):
+        cell = dec.first(lambda t: ps.SITES.get(t) == 'iol', site, f'_{site[2][-1]}')
+        return {'cell': cell and cell['type'], 'params': literals(cell['params'].items()) if cell else {}}
+
+    def generated(self, case, conns, spec):
+        return {'cell': case.prim, 'params': literals(case.params)}
+
+
+class Lone(Kind):
+    """Any other primitive: alone in its design, placed by both tools. Pads
+    become top-level ports; the vendor picks their pins, and nextpnr gets them."""
+    batch, placement = 'alone', 'vendor'
+
+    def source(self, case, port, conns):
+        return 'clk' if 'CLK' in port else super().source(case, port, conns)
+
+    def wire(self, d, name, case, site, conns, sources):
+        for pad in lone_pads(d.spec[case.prim]['ports'], case.prim):
+            conns[pad] = f'{name}_{pad}'
+            getattr(d.mod, PORT_LISTS[d.spec[case.prim]['ports'][pad][0]]).add(conns[pad])
+
+
+class Clock(Lone):
+    """A clock buffer, divider or selector, driving the harness output. The
+    vendor reports no position for CLKDIV and CLKDIV2, so nextpnr gets a BEL,
+    (row, col, 'BEL', bel), read from the vendor's HCLK fuses. nextpnr ignores
+    it, and places DHCEN by routing, so HCLK settings are compared without
+    their positions."""
+    bel_fmt = 'X{1}Y{0}/{3}'
+    wire = Kind.wire
+
+    def owner(self, case, site):
+        return site[3]
+
+    def source(self, case, port, conns):
+        # the first clock input from the clock pin, the rest from data pins. DCS:
+        # every clock input from the clock pin (nextpnr crashes routing GW5A DCS
+        # inputs from plain pins)
+        return 'clk' if port in CLOCK_INPUTS and 'clk' not in conns.values() \
+            or case.prim == 'DCS' and port.startswith('CLK') and port != 'CLKSEL' else 'data'
+
+    def vendor_site(self, db, vt, case):
+        site = vendor_clock_site(db, vt, case)
+        # GW5A-25A: the vendor uses HCLKDIV1 on X0Y1, where nextpnr has no
+        # CLKDIV_1 bel; compared without positions instead
+        return site if site and not re.fullmatch(r'CLKDIV_\d', site[3]) else None
+
+    def check(self, b, name, case, site, res):
+        # a CLKDIV or CLKDIV2 must select, in Apicula's fuses, the bel nextpnr placed it on
+        if case.prim in ('CLKDIV', 'CLKDIV2'):
+            asite = vendor_clock_site(b.db, b.at, case)
+            if asite is not None and b.placed.get(name) != self.bel(case, asite) or asite is None and site:
+                res['status'], res['why'] = 'mismatch', [f'Apicula fuses select {asite and self.bel(case, asite)}, '
+                                                         f'nextpnr placed it at {b.placed.get(name)}']
+                return set()
+            if asite is not None and asite == site:
+                return set()  # same bel: the fuse comparison applies
+            res['placed'] = {'vendor': site and self.bel(case, site), 'apicula': b.placed.get(name)}
+        vh, ah = hclk_settings(b.db, b.vt), hclk_settings(b.db, b.at)
+        if vh != ah:
+            res['status'], res['why'] = 'mismatch', [f'HCLK settings: vendor {vh}, apicula {ah}']
+        return {k for k in b.vt if 'HCLK' in b.db.shortval.get(b.db[k].ttyp, {})}
+
+
+class WideLut(Kind):
+    """A MUX2_LUTn tree over LUT4 leaves, placed by both tools and compared on
+    where its leaves end up (widelut_tree). Leaf inputs are dummy wires; each
+    mux level selects from its own data pin."""
+    batch, placement, compare_fuses = 'widelut', 'free', False
+
+    def wire(self, d, name, case, site, conns, sources):
+        def tree(level, leaves, path):
+            out = f'{name}_{"f" if level == 4 else "o"}{path}'
+            d.mod.wires.add(out)
+            if level == 4:
+                ins = {p: f'{name}_l{path}_{p}' for p in ('I0', 'I1', 'I2', 'I3')}
+                d.mod.wires.update(ins.values())
+                d.inst('LUT4', f'{name}_l{path}', {'F': out, **ins}, [('INIT', leaves[0])])
+            else:
+                half = len(leaves) // 2
+                d.inst(f'MUX2_LUT{level}', f'{name}_m{path}' if path else name,
+                       {'I0': tree(level - 1, leaves[:half], path + '0'), 'I1': tree(level - 1, leaves[half:], path + '1'),
+                        'S0': sources[(level - 5) % len(sources)], 'O': out})
+            return out
+
+        tree(int(case.prim[-1]), widelut_inits(case), '')
+        return True
+
+    def describe(self, dec, case, site):
+        return {'cell': 'WIDELUT', 'tree': widelut_tree(dec.nl, dec.luts, case)}
+
+    def generated(self, case, conns, spec):
+        return {'cell': 'WIDELUT', 'tree': 'ok'}
+
+
+# in allocation order within each batch class
+KINDS = {
+    'clock': Clock(), 'lone': Lone(), 'widelut': WideLut(), 'alu': Alu(), 'ssram': Ssram(),
+    'iob': Io(), 'diob': Io(), 'iol': Iol(), 'lut': Lut(), 'dff': Dff(),
+    'bsram': Bsram(), 'pll': Pll(), 'plla': Plla(), 'dsp': Dsp(), 'osc': Osc(),
+}
 
 
 def vendor_failed(workdir):
@@ -884,25 +1097,21 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         except subprocess.CalledProcessError:
             return None
 
-    # Cases nextpnr places itself (FOLLOW_NEXTPNR) run through Apicula first,
-    # and the vendor then gets the location nextpnr chose. Lone and clock cases
-    # run through the vendor first, and nextpnr gets its pins and clock divider
-    # bels. Otherwise the two flows are independent and run at the same time.
-    follow = any(case.site in FOLLOW_NEXTPNR for case, _ in names.values())
-    vendor_first = any(case.site in ('lone', 'clock') for case, _ in names.values())
-    if follow or vendor_first:
+    # With kinds nextpnr places, Apicula runs first and the vendor gets the
+    # location nextpnr chose; with kinds the vendor places, the vendor runs
+    # first and nextpnr gets its pins and sites. Otherwise the two flows are
+    # independent and run at the same time.
+    placements = {KINDS[case.site].placement for case, _ in names.values()}
+    follow = 'nextpnr' in placements
+    if follow or 'vendor' in placements:
         vres = None if follow else vendor()
         if vres is None and not follow:
             return vendor_failed(workdir)
-        if vendor_first:
+        if 'vendor' in placements:
             cst.ports.update(vendor_pins(os.path.join(workdir, 'vendor')))
             vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
             for name, (case, site) in list(names.items()):
-                site = vendor_clock_site(db, vt, case) if case.site == 'clock' else None
-                # GW5A-25A: the vendor uses HCLKDIV1 on X0Y1, where nextpnr has
-                # no CLKDIV_1 bel; compared without positions instead
-                if site and not re.fullmatch(r'CLKDIV_\d', site[3]):
-                    names[name] = (case, site)
+                names[name] = (case, KINDS[case.site].vendor_site(db, vt, case) or site)
         ares = apicula()
     else:
         with concurrent.futures.ThreadPoolExecutor(2) as pool:
@@ -916,36 +1125,17 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     abm, aslots, placed = ares
     if follow:
         for name, (case, site) in list(names.items()):
-            if case.site in FOLLOW_NEXTPNR:
-                m = re.fullmatch(r'X(\d+)Y(\d+)/(\w+)', placed.get(name) or '')
-                if m and case.site == 'dsp':
-                    # DSP_R<row>[n][A|B]: n-th DSP block of the row, macro from the bel name
-                    c, r, bel = int(m.group(1)), int(m.group(2)), m.group(3)
-                    cols = [cc for cc in range(db.cols) if 'DSP' in db[r, cc].bels]
-                    if c not in cols:
-                        continue
-                    macro = bel[len(case.prim):][:1]
-                    names[name] = (case, (r, c, 'DSP', cols.index(c)))
-                    cst.cells[name] = f'DSP_R{r + 1}[{cols.index(c)}]' + (f'[{"AB"[int(macro)]}]' if macro else '')
-                    continue
-                m = re.fullmatch(r'X(\d+)Y(\d+)/(ALU|LUT|RAM16SDP4)(\d?)', placed.get(name) or '')
-                if not m:
-                    continue
-                c, r = int(m.group(1)), int(m.group(2))
-                if m.group(3) == 'RAM16SDP4':
-                    site = (r, c, 'RAM16', '-')
-                    cst.cells[name] = f'R{r + 1}C{c + 1}'
-                else:
-                    n = int(m.group(4))
-                    site = (r, c, n // 2, 'AB'[n % 2])
-                    cst.cells[name] = (r + 1, c + 1, n // 2, 'AB'[n % 2])
-                names[name] = (case, site)
+            placement = KINDS[case.site].from_placed(db, case, placed.get(name))
+            if placement:
+                names[name] = (case, placement[0])
+                cst.cells[name] = placement[1]
         vres = vendor()
         if vres is None:
             return vendor_failed(workdir)
-    vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
-    at = chipdb.tile_bitmap(db, abm, empty=True)
-    diffs = diff_bits(db, vt, at)
+    b = types.SimpleNamespace(db=db, placed=placed, vslots=vres.extra_slots, aslots=aslots,
+                              vt=chipdb.tile_bitmap(db, vres.bitmap, empty=True),
+                              at=chipdb.tile_bitmap(db, abm, empty=True))
+    diffs = diff_bits(db, b.vt, b.at)
     decoded = {}
     if batch:
         fs = {'vendor': os.path.join(workdir, 'vendor/impl/pnr/top.fs'), 'apicula': os.path.join(workdir, 'apicula/top.fs')}
@@ -953,8 +1143,8 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
             nls = {side: pool.submit(unpacked_netlist.unpack, args.device, path,
                                      os.path.join(workdir, f'{side}_unpack.v'), REPO) for side, path in fs.items()}
             decoded = {side: Decoded(nl.result(), spec) for side, nl in nls.items()}
-    if any(case.site == 'widelut' for case, _ in names.values()):
-        diffs = {}  # placed freely by both tools; compared on leaf positions
+    if not all(KINDS[case.site].compare_fuses for case, _ in names.values()):
+        diffs = {}
     if baseline is not None:
         diffs = {k: v - baseline.get(k, set()) for k, v in diffs.items()}
         diffs = {k: v for k, v in diffs.items() if v}
@@ -963,131 +1153,50 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     by_bel = {}  # (row, col, bel) -> case name
     by_tile = collections.defaultdict(list)
     by_bank = collections.defaultdict(list)  # I/O cases per bank
+    accounted = set()  # tiles whose differences a kind's check covers
     for name, (case, site) in names.items():
+        kind = KINDS[case.site]
         res = {'case': case.to_json(), 'site': site, 'status': 'ok'}
         problems = [msg for (n, code), msgs in vres.errs.items() if n == name
                     for msg in msgs if code in INVALID_CODES or msg.startswith('ERROR')]
-        # I/O is placed by IO_LOC; nextpnr merges differential buffers into cells
-        # of other names, so check placement for the rest only
-        if site and case.site not in PIN_SITES | FOLLOW_NEXTPNR | {'clock'} and placed.get(name) != bel_name(case, site):
+        if site and kind.placement == 'bel' and placed.get(name) != kind.bel(case, site):
             problems.append(f'nextpnr placed it at {placed.get(name)}')
         if problems:
             res['status'] = 'invalid'
             res['why'] = problems
         else:
-            gen = describe_generated(case, wiring[name], spec)
-            dv, da = decoded['vendor'].describe(case, site), decoded['apicula'].describe(case, site)
+            gen = kind.generated(case, wiring[name], spec)
+            dv, da = (kind.describe(decoded[side], case, site) for side in ('vendor', 'apicula'))
             if not same(dv, da):
                 res['status'] = 'mismatch'
             elif not same(da, gen):
                 res['status'] = 'decode'
             if res['status'] != 'ok':
                 res['generated'], res['vendor'], res['apicula'] = gen, dv, da
+            else:
+                accounted |= kind.check(b, name, case, site, res)
         results[name] = res
+        for tile in kind.tiles(db, case, site):
+            by_tile[tile].append(name)
         if site:
-            loc = (site[0], site[1])
-        elif case.site in ('clock', 'lone', 'widelut'):
-            continue  # clock and lone: alone in their design, own every difference (see below)
-        else:
-            loc = singleton_loc(db, case.prim, case.site)
-        by_tile[loc].append(name)
-        if site and site[2] == 'BSRAM':
-            # a BSRAM's fuses are in its tile and the two tiles to its right:
-            # BSRAM_AUX bels on GW1N/GW2A, tiles with BSRAM tables but no bel on GW5A
-            for dc in (1, 2):
-                if loc[1] + dc < db.cols:
-                    aux = db[loc[0], loc[1] + dc]
-                    if 'BSRAM_AUX' in aux.bels or ('BSRAM' not in aux.bels
-                                                    and 'BSRAM_SP' in db.shortval.get(aux.ttyp, {})):
-                        by_tile[(loc[0], loc[1] + dc)].append(name)
-        if case.site in PIN_SITES:
+            by_bel[(*site[:2], kind.owner(case, site))] = name
+        if kind.placement == 'pin':
             # bank settings are shared by every I/O in the bank
             bank = io_bank(db, site[0], site[1], site[2][-1])
             by_bank[bank].append(name)
             if bank in db.bank_tiles:
                 by_tile[db.bank_tiles[bank]].append(name)
-        if site and site[2] == 'DSP':
-            # a DSP block's fuses are in its main tile and the DSP_AUX tiles to its right
-            dc = 1
-            while loc[1] + dc < db.cols and any(b.startswith('DSP_AUX') for b in db[loc[0], loc[1] + dc].bels):
-                by_tile[(loc[0], loc[1] + dc)].append(name)
-                dc += 1
-        if site and site[2] == 'PLL':
-            # an rPLL's fuses are in its RPLLA tile and the adjacent RPLLB tiles
-            for dc in (-3, -2, -1, 1, 2, 3):
-                if 0 <= loc[1] + dc < db.cols and 'RPLLB' in db[loc[0], loc[1] + dc].bels:
-                    by_tile[(loc[0], loc[1] + dc)].append(name)
-        if site:
-            by_bel[(*loc, case_bel(case, site))] = name
-
-    # GW5A PLLs: compare the slot bits and the slot's decoded PLL attributes
-    for name, (case, site) in names.items():
-        if case.site != 'plla' or results[name]['status'] != 'ok':
-            continue
-        slot = db.extra_func[(site[0], site[1])]['pll']['slot_idx']
-        vs, as_ = vres.extra_slots.get(slot), aslots.get(slot)
-        if vs is None or as_ is None:
-            results[name]['status'] = 'mismatch'
-            results[name]['why'] = [f'slot {slot}: vendor {"has" if vs else "lacks"} it, '
-                                    f'apicula {"has" if as_ else "lacks"} it']
-            continue
-        bits = [(y, x, v) for y, row in enumerate(vs) for x, v in enumerate(row) if v != as_[y][x]]
-        if bits:
-            dec = [gowin_unpack.parse_attrvals(b, db.rev_logicinfo('PLL'), db.shortval[1024]['PLL'],
-                                               attrids.pll_attrids, 'PLL') for b in (vs, as_)]
-            results[name]['status'] = 'mismatch'
-            results[name]['why'] = [f'slot {slot}: {len(bits)} bits differ']
-            results[name]['slot_attrs'] = {
-                k: (dec[0].get(k), dec[1].get(k)) for k in dec[0].keys() | dec[1].keys()
-                if dec[0].get(k) != dec[1].get(k)}
-
-    # Clock primitives: nextpnr ignores BEL on CLKDIV and CLKDIV2, and places
-    # DHCEN by routing, so it may use another HCLK tile or section than the
-    # vendor. The HCLK settings are then compared without their positions: names
-    # without digits, and no HCLKDCS_SEL, which follows from the section. A
-    # CLKDIV or CLKDIV2 must also select the bel nextpnr placed it on.
-    hclk_tiles = set()
-
-    def hclk_settings(tiles):
-        strip = lambda t: re.sub(r'\d', '', t)
-        return sorted((strip(k), v if k.endswith('_DIV') else strip(str(v)))
-                      for av in hclk_attrs(db, tiles).values() for k, v in av.items()
-                      if not k.startswith('HCLKDCS'))
-
-    for name, (case, site) in names.items():
-        if case.site != 'clock' or results[name]['status'] != 'ok':
-            continue
-        if case.prim in ('CLKDIV', 'CLKDIV2'):
-            asite = vendor_clock_site(db, at, case)
-            if asite is None and site is None:
-                pass  # no fuses of its own (GW5A CLKDIV2)
-            elif asite is None or placed.get(name) != bel_name(case, asite):
-                results[name]['status'] = 'mismatch'
-                results[name]['why'] = [f'Apicula fuses select {asite and bel_name(case, asite)}, '
-                                        f'nextpnr placed it at {placed.get(name)}']
-                continue
-            elif asite == site:
-                continue  # same bel: the fuse comparison applies
-            else:
-                results[name]['placed'] = {'vendor': site and bel_name(case, site), 'apicula': placed.get(name)}
-        vh, ah = hclk_settings(vt), hclk_settings(at)
-        if vh != ah:
-            results[name]['status'] = 'mismatch'
-            results[name]['why'] = [f'HCLK settings: vendor {vh}, apicula {ah}']
-        hclk_tiles |= {k for k in vt if 'HCLK' in db.shortval.get(db[k].ttyp, {})}
-    diffs = {k: v for k, v in diffs.items() if k not in hclk_tiles}
+    diffs = {k: v for k, v in diffs.items() if k not in accounted}
 
     # Unused I/Os are configured from their bank's settings, so differences in
     # an I/O tile with no case belong to the I/O cases of that bank.
     def bank_cases(r, c):
         if not any(b.startswith('IOB') for b in db[r, c].bels):
             return []
-        banks = {io_bank(db, r, c, ab) for ab in 'AB'}
-        return [n for b in banks for n in by_bank.get(b, [])]
+        return [n for bank in {io_bank(db, r, c, ab) for ab in 'AB'} for n in by_bank.get(bank, [])]
 
-    # a clock or lone case is alone in its design and placed by the tools, so
-    # the differences left over belong to it
-    alone = [n for n, (case, _) in names.items() if case.site in ('clock', 'lone')]
+    # a case alone in its design and placed by the tools owns the differences left over
+    alone = [n for n, (case, _) in names.items() if KINDS[case.site].batch == 'alone']
     unattributed = {}
     for (r, c), bits in sorted(diffs.items()):
         for bit, v in sorted(bits):
@@ -1142,6 +1251,14 @@ def hclk_attrs(db, tiles):
     return out
 
 
+def hclk_settings(db, tiles):
+    """Decoded HCLK attributes of all tiles without their positions: names
+    without digits, and no HCLKDCS_SEL, which follows from the section."""
+    strip = lambda t: re.sub(r'\d', '', t)
+    return sorted((strip(k), v if k.endswith('_DIV') else strip(str(v)))
+                  for av in hclk_attrs(db, tiles).values() for k, v in av.items() if not k.startswith('HCLKDCS'))
+
+
 def vendor_clock_site(db, tiles, case):
     """Where the vendor put a CLKDIV or CLKDIV2, read from its HCLK fuses, as a
     (row, col, 'BEL', bel) site for nextpnr. The vendor reports no position for
@@ -1180,6 +1297,8 @@ def main(argv):
     ap.add_argument('--replay', nargs='*', help='case JSON files to run, one per design')
     ap.add_argument('-o', '--out', default='fuzz-out')
     ap.add_argument('-j', '--jobs', type=int, default=1, help='designs run at the same time')
+    ap.add_argument('--known', help='JSON of known failures (fuzz_report.py --write-known): only other '
+                    'failures fail the run')
     args = ap.parse_args(argv)
 
     vendor_device, part, package = DEVICES[args.device]
@@ -1285,9 +1404,59 @@ def main(argv):
                 for j, half in record(i, batch, fut.result()):
                     running[pool.submit(run, j, half)] = (j, half)
     print('summary:', dict(totals))
+    if args.known:
+        with open(args.known) as f:
+            return compare_known(outcomes(args.out), json.load(f).get(args.device, {}))
     # invalid cases are generator problems (a vendor rule to learn); the rest are failures
     return 1 if totals.keys() & {'mismatch', 'decode', 'unsupported', 'unsupported combinations',
                                  'unattributed tiles'} else 0
+
+
+def case_key(case_json):
+    """A case as a known-list key: primitive and parameters, without those always
+    held at their default (BSRAM INIT_RAM_xx)."""
+    params = {k: v for k, v in case_json['params'].items() if not ps.KEEP_DEFAULT.match(k)}
+    return f'{case_json["prim"]} {json.dumps(params, sort_keys=True)}'
+
+
+def outcomes(out):
+    """{key: status} of everything that did not pass in an output directory:
+    cases by primitive and parameters, failing combinations and unattributed
+    tiles by design. With a fixed seed and the same tools, a run is
+    reproducible, so the keys are too."""
+    found = {}
+    for path in glob.glob(os.path.join(out, 'batch*', 'report.json')):
+        design = os.path.basename(os.path.dirname(path))
+        with open(path) as f:
+            report = json.load(f)
+        for res in report.get('cases', {}).values():
+            if res['status'] != 'ok':
+                found[case_key(res['case'])] = res['status']
+        for tile in report.get('unattributed', {}):
+            found[f'{design} unattributed {tile}'] = 'unattributed'
+        for status in ('invalid', 'unsupported'):
+            for single in glob.glob(os.path.join(os.path.dirname(path), f'{status}_*.json')):
+                with open(single) as f:
+                    res = json.load(f)
+                if 'case' in res:  # not unsupported_combination.json
+                    found[case_key(res['case'])] = status
+        if os.path.exists(os.path.join(os.path.dirname(path), 'unsupported_combination.json')):
+            found[f'{design} unsupported combination'] = 'unsupported combination'
+    return found
+
+
+def compare_known(found, known):
+    """Report known failures as broken; return 1 if anything else failed."""
+    unexpected = {k: (known.get(k), v) for k, v in found.items() if known.get(k) != v}
+    broken = [k for k, v in found.items() if known.get(k) == v]
+    fixed = [k for k in known if k not in found]
+    print(f'known broken: {len(broken)}; now passing (remove from the known list): {len(fixed)}; '
+          f'unexpected: {len(unexpected)}')
+    for k in fixed:
+        print('  now passing:', known[k], k)
+    for k, (was, now) in sorted(unexpected.items()):
+        print(f'  UNEXPECTED {now} (known: {was or "passing"}): {k}')
+    return 1 if unexpected else 0
 
 
 if __name__ == '__main__':
