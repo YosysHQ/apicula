@@ -181,7 +181,7 @@ HARNESS_IO_TYPE = {'3.3': 'LVCMOS33', '2.5': 'LVCMOS25', '1.8': 'LVCMOS18', '1.5
 IO_PAD = {'IBUF': 'I', 'OBUF': 'O', 'TBUF': 'O', 'IOBUF': 'IO'}
 DIFF_PAD = {'IBUF': ['I', 'IB'], 'OBUF': ['O', 'OB'], 'TBUF': ['O', 'OB'], 'IOBUF': ['IO', 'IOB']}
 IO_SITES = ('iob', 'diob')
-PIN_SITES = ('iob', 'diob', 'iol')  # placed by IO_LOC on a pin
+PIN_SITES = {'iob', 'diob', 'iol'}  # placed by IO_LOC on a pin
 IOL_INPUT = {'D', 'DI'}  # I/O logic port fed by the input buffer
 IOL_OUTPUT = {'Q', 'Q0', 'DO'}  # port that feeds the output buffer
 
@@ -416,7 +416,7 @@ def run_apicula(workdir, mod, cst, names, device, part):
     with open(path) as f:
         syn = json.load(f)
     for name, cell in syn['modules']['top']['cells'].items():
-        if name in names and names[name][1] and names[name][0].site not in PIN_SITES:  # I/O: IO_LOC
+        if name in names and names[name][1] and names[name][0].site not in PIN_SITES | FOLLOW_NEXTPNR:
             cell['attributes']['BEL'] = bel_name(*names[name])  # nextpnr ignores INS_LOC
     with open(path, 'w') as f:
         json.dump(syn, f)
@@ -660,17 +660,27 @@ def same(a, b):
     return all(x[k] == y[k] for k in x.keys() & y.keys())
 
 
+FOLLOW_NEXTPNR = {'alu'}  # nextpnr places ALU clusters itself and ignores BEL
+
+
+def vendor_failed(workdir):
+    log = os.path.join(workdir, 'vendor/impl/pnr/top.log')
+    why = []
+    if os.path.exists(log):
+        with open(log, errors='replace') as f:
+            why = [line.strip() for line in f if line.startswith('ERROR')]
+    return {'error': 'vendor produced no bitstream', 'why': why}, None
+
+
 def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=None):
     vendor_device, part, _ = DEVICES[args.device]
     mod, cst, names, wiring = netlist(batch, spec, pins, harness_io_type)
-    vres = run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
-    if vres is None:
-        log = os.path.join(workdir, 'vendor/impl/pnr/top.log')
-        why = []
-        if os.path.exists(log):
-            with open(log, errors='replace') as f:
-                why = [line.strip() for line in f if line.startswith('ERROR')]
-        return {'error': 'vendor produced no bitstream', 'why': why}, None
+    # Cases nextpnr places itself (FOLLOW_NEXTPNR) run through Apicula first;
+    # the vendor then gets the location nextpnr chose.
+    follow = any(case.site in FOLLOW_NEXTPNR for case, _ in names.values())
+    vres = None if follow else run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
+    if not follow and vres is None:
+        return vendor_failed(workdir)
     try:
         abm, aslots, placed = run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
     except subprocess.CalledProcessError:
@@ -678,6 +688,19 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
             why = [line.strip() for line in f
                    if 'ERROR' in line or re.match(r'\w*(Error|Exception): ', line)]
         return {'error': 'the Apicula flow failed', 'why': why}, None
+    if follow:
+        for name, (case, site) in list(names.items()):
+            if case.site in FOLLOW_NEXTPNR:
+                m = re.fullmatch(r'X(\d+)Y(\d+)/ALU(\d)', placed.get(name) or '')
+                if not m:
+                    continue
+                c, r, n = map(int, m.groups())
+                site = (r, c, n // 2, 'AB'[n % 2])
+                names[name] = (case, site)
+                cst.cells[name] = (r + 1, c + 1, n // 2, 'AB'[n % 2])
+        vres = run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
+        if vres is None:
+            return vendor_failed(workdir)
     vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
     at = chipdb.tile_bitmap(db, abm, empty=True)
     diffs = diff_bits(db, vt, at)
@@ -700,7 +723,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                     for msg in msgs if code in INVALID_CODES or msg.startswith('ERROR')]
         # I/O is placed by IO_LOC; nextpnr merges differential buffers into cells
         # of other names, so check placement for the rest only
-        if site and case.site not in PIN_SITES and placed.get(name) != bel_name(case, site):
+        if site and case.site not in PIN_SITES | FOLLOW_NEXTPNR and placed.get(name) != bel_name(case, site):
             problems.append(f'nextpnr placed it at {placed.get(name)}')
         if problems:
             res['status'] = 'invalid'

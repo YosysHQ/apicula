@@ -384,6 +384,31 @@ The unsupported cases are the one-`IO_TYPE`-per-bank check.
 - `gowin_unpack` writes an OSCA as `OSC`. `FREQ_DIV` decodes the same from both
   bitstreams.
 
+## Latches and ALUs (GW1N-9C)
+
+**Latches.** The 12 `DL*` types use the flip-flop slots.
+- The vendor names the gate `G` (and `GE` on `DLCE`), where Yosys' cell library
+  has `CLK` (and `CE`), so a vendor-style netlist with latches does not go
+  through Yosys. The fuzzer's Apicula side renames the ports to test the fuses.
+- `-n 2`: packing matches in all 24 cases.
+- The unpacker decoded every negative-gate latch as positive, because
+  `get_latch_type` defaulted `CLKMUX_CLK` to `SIG`. The CLS fuse of
+  `(LATCH, SIG)` is the one of `(FF, INV)`, so a latch without it has an inverted
+  gate. Fixed. Only the `DLN*` cells change in unpacked fuzzer bitstreams.
+
+**ALU.**
+- **Placement:** nextpnr places ALU clusters itself and ignores `BEL`, so ALU
+  cases run through Apicula first, and the vendor gets nextpnr's location as
+  `INS_LOC Rr Cc[cls][A|B]` (`FOLLOW_NEXTPNR`). `CIN` is tied to GND.
+- **Results,** `-n 10`: 1 ok, 8 mismatch, and 1 unsupported (plus its 4
+  combinations).
+  - **Constant carry-in:** the vendor folds a constant `CIN` into the ALU's own
+    LUT configuration, which decodes as a raw LUT ALU (54 LUT fuses). nextpnr
+    instead inserts a carry-in head ALU.
+  - **`ALU_MODE=5`** is allowed by `primitive.xml` and accepted by the vendor,
+    but the chipdb's ALU modes are 0–4, 6–9, `C2L`, `ONE2C` and `hadder`. So
+    `gowin_pack` raises `KeyError: '5'`.
+
 ## Adding a primitive
 
 Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site
