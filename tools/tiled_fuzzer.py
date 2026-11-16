@@ -43,7 +43,6 @@ import collections
 import concurrent.futures
 import copy
 import functools
-import glob
 import json
 import os
 import random
@@ -521,13 +520,46 @@ def bit_owner(db, r, c, bit):
     return _owners[ttyp].get(bit)
 
 
-def fuse_tables(db, r, c, bit):
+# fuse table -> (logicinfo table, attribute ids, value ids), to name table rows
+ROW_TABLES = {
+    'IOBA': ('IOB', attrids.iob_attrids, attrids.iob_attrvals),
+    'IOBB': ('IOB', attrids.iob_attrids, attrids.iob_attrvals),
+    'BANK': ('IOB', attrids.iob_attrids, attrids.iob_attrvals),
+    'CLS': ('SLICE', attrids.cls_attrids, attrids.cls_attrvals),
+    'BSRAM': ('BSRAM', attrids.bsram_attrids, attrids.bsram_attrvals),
+    'PLL': ('PLL', attrids.pll_attrids, attrids.pll_attrvals),
+    'IOLOGIC': ('IOLOGIC', attrids.iologic_attrids, attrids.iologic_attrvals),
+    'DSP': ('DSP', attrids.dsp_attrids, attrids.dsp_attrvals),
+    '5A_DSP': ('5A_DSP', attrids.dsp_5a_attrids, attrids.dsp_5a_attrvals),
+    'HCLK': ('HCLK', attrids.hclk_attrids, attrids.hclk_attrvals),
+}
+_row_names = {}
+
+
+def fuse_rows(db, r, c, bit):
+    """The fuse table rows a bit is in, by attribute names where known, such
+    as 'IOBA: IO_TYPE=LVCMOS18,DRIVE=8'; the shortest three."""
+    out = []
     ttyp = db.grid[r][c]
-    owners = [f'{name}{key}' for name, rows in db.shortval.get(ttyp, {}).items()
-              for key, bits in rows.items() if bit in bits]
-    owners += [f'{bel}.{flag}' for bel, b in db[r, c].bels.items()
-               for flag, bits in b.flags.items() if bit in bits]
-    return owners[:4]
+    for tables in (db.shortval, db.longval):
+        for name, rows in tables.get(ttyp, {}).items():
+            prefix = next((p for p in ROW_TABLES if name.startswith(p)), None)
+            for key, bits in rows.items():
+                if bit not in bits:
+                    continue
+                if prefix is None or ROW_TABLES[prefix][0] not in db.logicinfo:
+                    out.append(f'{name}{key}')
+                    continue
+                if prefix not in _row_names:
+                    li, an, av = ROW_TABLES[prefix]
+                    _row_names[prefix] = (db.rev_logicinfo(li), {v: k for k, v in an.items()},
+                                          {v: k for k, v in av.items()})
+                li, ids, vals = _row_names[prefix]
+                terms = [('!' if k < 0 else '') + f'{ids.get(li[abs(k)][0], li[abs(k)][0])}='
+                         f'{vals.get(li[abs(k)][1], li[abs(k)][1])}' for k in key if k and abs(k) in li]
+                out.append(f'{name}: ' + ','.join(terms))
+    out += [f'{bel}.{flag}' for bel, b in db[r, c].bels.items() for flag, bits in b.flags.items() if bit in bits]
+    return sorted(set(out), key=len)[:3]
 
 
 # ---------------------------------------------------------------- unpacked netlists
@@ -1215,14 +1247,14 @@ def apicula_errors(log):
         return [line.strip() for line in f if 'ERROR' in line or _apicula_error.match(line)]
 
 
-def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=None):
-    vendor_device, part, _ = DEVICES[args.device]
+def run_batch(device, db, spec, pins, batch, workdir, baseline, harness_io_type=None):
+    vendor_device, part, _ = DEVICES[device]
     mod, cst, names, wiring = netlist(batch, spec, pins, harness_io_type)
     vendor = functools.partial(run_vendor, os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
 
     def apicula():
         try:
-            return run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
+            return run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, device, part)
         except subprocess.CalledProcessError:
             return None
 
@@ -1269,7 +1301,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     if batch:
         fs = {'vendor': os.path.join(workdir, 'vendor/impl/pnr/top.fs'), 'apicula': os.path.join(workdir, 'apicula/top.fs')}
         with concurrent.futures.ThreadPoolExecutor(2) as pool:
-            nls = {side: pool.submit(unpacked_netlist.unpack, args.device, path,
+            nls = {side: pool.submit(unpacked_netlist.unpack, device, path,
                                      os.path.join(workdir, f'{side}_unpack.v'), REPO) for side, path in fs.items()}
             decoded = {side: Decoded(nl.result(), spec) for side, nl in nls.items()}
     if not all(KINDS[case.site].compare_fuses for case, _ in names.values()):
@@ -1331,7 +1363,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         for bit, v in sorted(bits):
             bel = bit_owner(db, r, c, bit)
             owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c)) or bank_cases(r, c) or alone
-            detail = f'{bit} vendor={v} apicula={1 - v} {bel or ""} {fuse_tables(db, r, c, bit)}'
+            detail = f'{bit} vendor={v} apicula={1 - v} {bel or ""} {" | ".join(fuse_rows(db, r, c, bit))}'
             if not owners:
                 unattributed.setdefault(f'R{r + 1}C{c + 1}', []).append(detail)
             for name in owners:
@@ -1417,113 +1449,104 @@ def find_bel(db, bel):
     return next(((r, c) for r in range(db.rows) for c in range(db.cols) if bel in db[r, c].bels), None)
 
 
-def main(argv):
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('-d', '--device', required=True, choices=sorted(DEVICES))
-    ap.add_argument('-n', '--count', type=int, default=10, help='cases per primitive')
-    ap.add_argument('--prims', nargs='*', help='primitives to fuzz (default: all supported)')
-    ap.add_argument('--seed', type=int, default=0)
-    ap.add_argument('--replay', nargs='*', help='case JSON files to run, one per design')
-    ap.add_argument('-o', '--out', default='fuzz-out')
-    ap.add_argument('-j', '--jobs', type=int, default=1, help='designs run at the same time')
-    ap.add_argument('--known', help='known failures (tools/fuzz_known.txt): only other failures fail the run')
-    args = ap.parse_args(argv)
+class Run:
+    """Results of a fuzzer run: `cases` has one result per case ('case',
+    'status', and for failures 'why', 'diffs' and the descriptions);
+    `unattributed` maps (design, tile) to differing bits no case owns;
+    `combinations` lists failing designs of several cases, each as
+    {'cases', 'why', 'alone_ok'}, where alone_ok means every case passed alone."""
 
-    vendor_device, part, package = DEVICES[args.device]
-    db = chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{args.device}.msgpack.xz'))
-    prims = ps.Primitives(args.device, vendor_device)
-    pins = pick_pins(db, vendor_device, args.device, package)
-    rng = random.Random(args.seed)
-    pinout = db.pinout.get(vendor_device, db.pinout[args.device])[package]
-    sites = Sites(db, rng, pins, pinout)
+    def __init__(self):
+        self.cases, self.unattributed, self.combinations = [], {}, []
 
-    if args.replay:
+    def failures(self, prim=None):
+        """Results that are neither ok nor invalid (a case the vendor rejected)."""
+        return [r for r in self.cases if r['status'] not in ('ok', 'invalid')
+                and (prim is None or r['case']['prim'] == prim)]
+
+
+def primitives(device):
+    """The primitives a run on `device` tries: all of its family's
+    primitive.xml that the device has."""
+    prims = ps.Primitives(device, DEVICES[device][0])
+    return [p for p in sorted(prims.spec) if p not in ps.UNAVAILABLE.get(device, ()) and p not in ps.NOT_PRIMITIVES]
+
+
+def fuzz(device, out, count=2, seed=0, jobs=1, prims=None, replay=None, log=print):
+    """Run the fuzzer on `device`: `count` cases of each primitive (default
+    all, see primitives()), or the cases of `replay` files. Writes reports to
+    `out` and returns a Run."""
+    vendor_device, part, package = DEVICES[device]
+    db = chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{device}.msgpack.xz'))
+    spec = ps.Primitives(device, vendor_device)
+    pins = pick_pins(db, vendor_device, device, package)
+    rng = random.Random(seed)
+    sites = Sites(db, rng, pins, db.pinout.get(vendor_device, db.pinout[device])[package])
+    if replay:
         batches = []
-        for path in args.replay:
+        for path in replay:
             with open(path) as f:
                 d = json.load(f)
             batches.append([(ps.Case.from_json(d['case']), tuple(d['site']) if d['site'] else None)])
     else:
-        names = [p for p in args.prims or sorted(prims.spec) if p in prims.spec
-                 and p not in ps.UNAVAILABLE.get(args.device, ()) and p not in ps.NOT_PRIMITIVES]
-        cases = [c for p in names for c in set(ps.draw(prims.case(p), args.count, args.seed))]
+        names = [p for p in prims or primitives(device) if p in spec.spec]
+        # dict.fromkeys drops repeated draws and, unlike a set, keeps their order
+        cases = [c for p in names for c in dict.fromkeys(ps.draw(spec.case(p), count, seed))]
         rng.shuffle(cases)
         batches = allocate(cases, sites)
-
-    print(f'{sum(map(len, batches))} cases in {len(batches)} designs; pins {pins}')
+    log(f'{sum(map(len, batches))} cases in {len(batches)} designs; pins {pins}')
 
     # Differences of the harness alone, with each harness I/O standard the
     # batches need. They are subtracted from the batches' differences.
     baselines = {}
     for vccio in dict.fromkeys(map(io_class, batches)):
         io_type = HARNESS_IO_TYPE.get(vccio)
-        _, b = run_batch(args, db, prims.spec, pins, [], os.path.join(args.out, f'baseline_{io_type}'), None, io_type)
+        _, b = run_batch(device, db, spec.spec, pins, [], os.path.join(out, f'baseline_{io_type}'), None, io_type)
         if b is None:
-            sys.exit(f'the harness alone ({io_type}) failed in the vendor flow')
-        print(f'harness ({io_type or "default I/O"}) differences, ignored: {sum(map(len, b.values()))} bits in '
-              f'{" ".join(f"R{r + 1}C{c + 1}" for r, c in sorted(b))}')
+            raise RuntimeError(f'the harness alone ({io_type}) failed in the vendor flow')
         baselines[vccio] = b
 
     def run(i, batch):
-        report, _ = run_batch(args, db, prims.spec, pins, batch, os.path.join(args.out, i),
+        report, _ = run_batch(device, db, spec.spec, pins, batch, os.path.join(out, i),
                               baselines[io_class(batch)], HARNESS_IO_TYPE.get(io_class(batch)))
-        with open(os.path.join(args.out, i, 'report.json'), 'w') as f:
+        with open(os.path.join(out, i, 'report.json'), 'w') as f:
             json.dump(report, f, indent=1)
         return report
 
-    totals = collections.Counter()
+    result = Run()
 
     def record(i, batch, report):
-        """Count and print a batch's results; returns the halves to run when a
-        design with several cases failed."""
-        workdir = os.path.join(args.out, i)
+        """Record a design's results; returns the halves to run when a design
+        with several cases failed."""
         if 'error' in report:
             if len(batch) > 1:
                 # an error stops the whole design: split it to find the case. If
                 # Apicula fails on a design the vendor accepts, that is a failure
                 # in itself, even when every case passes alone.
-                half = len(batch) // 2
-                print(f'{i}: {report["error"]}; splitting')
-                for line in dict.fromkeys(report.get('why', [])):
-                    print('    ', line)
+                log(f'{i}: {report["error"]}; splitting')
                 if 'Apicula' in report['error']:
-                    totals['unsupported combinations'] += 1
-                    with open(os.path.join(workdir, 'unsupported_combination.json'), 'w') as f:
-                        json.dump({'cases': [(c.to_json(), s) for c, s in batch], 'why': report.get('why', [])},
-                                  f, indent=1)
+                    result.combinations.append({'design': i, 'cases': [c.to_json() for c, _ in batch],
+                                                'why': report.get('why', [])})
+                half = len(batch) // 2
                 return [(f'{i}a', batch[:half]), (f'{i}b', batch[half:])]
             case, site = batch[0]
             # unsupported is a failure to fix in Apicula, not a case to drop
             status = 'unsupported' if 'Apicula' in report['error'] else 'invalid'
-            res = {'case': case.to_json(), 'site': site, 'status': status, 'why': report.get('why', [])}
-            path = os.path.join(workdir, f'{status}_{case.prim}.json')
-            with open(path, 'w') as f:
-                json.dump(res, f, indent=1)
-            print(f'{i} {status}: {case.to_json()} at {site} -> {path}')
-            for line in dict.fromkeys(res['why']):
-                print('    ', line)
-            totals[status] += 1
-            return []
+            report = {'cases': {f'inst0_{case.prim}': {'case': case.to_json(), 'site': site, 'status': status,
+                                                        'why': report.get('why', [])}}, 'unattributed': {}}
         for name, res in report['cases'].items():
-            totals[res['status']] += 1
+            res['design'] = i
+            result.cases.append(res)
             if res['status'] != 'ok':
-                path = os.path.join(workdir, f'{res["status"]}_{name}.json')
-                with open(path, 'w') as f:
+                # on its own, for --replay
+                with open(os.path.join(out, i, f'{res["status"]}_{name}.json'), 'w') as f:
                     json.dump(res, f, indent=1)
-                print(f'{i} {name} {res["status"]}: {res["case"]} at {res["site"]} -> {path}')
-                for side in ('generated', 'vendor', 'apicula'):
-                    if side in res:
-                        print(f'     {side:9}', res[side])
-                for line in res.get('why', []):
-                    print('    ', line)
-                for tile, bits in res.get('diffs', {}).items():
-                    print(f'     {tile}:', *bits, sep='\n       ')
+                log(f'{i} {res["status"]}: {describe_result(res)}')
         for tile, bits in report['unattributed'].items():
-            totals['unattributed tiles'] += 1
-            print(f'{i} unattributed {tile}:', *bits, sep='\n       ')
+            result.unattributed[(i, tile)] = bits
         return []
 
-    with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
+    with concurrent.futures.ThreadPoolExecutor(jobs) as pool:
         running = {pool.submit(run, i, b): (i, b) for i, b in ((f'batch{i}', b) for i, b in enumerate(batches))}
         while running:
             done, _ = concurrent.futures.wait(running, return_when=concurrent.futures.FIRST_COMPLETED)
@@ -1531,80 +1554,42 @@ def main(argv):
                 i, batch = running.pop(fut)
                 for j, half in record(i, batch, fut.result()):
                     running[pool.submit(run, j, half)] = (j, half)
-    print('summary:', dict(totals))
-    if args.known:
-        return compare_known(outcomes(args.out), read_known(args.known)[args.device])
+
+    unsupported = {json.dumps(r['case'], sort_keys=True) for r in result.cases if r['status'] == 'unsupported'}
+    for combo in result.combinations:
+        combo['alone_ok'] = not any(json.dumps(c, sort_keys=True) in unsupported for c in combo['cases'])
+    with open(os.path.join(out, 'results.json'), 'w') as f:
+        json.dump({'cases': result.cases, 'combinations': result.combinations,
+                   'unattributed': {f'{d} {t}': bits for (d, t), bits in result.unattributed.items()}}, f, indent=1)
+    return result
+
+
+def describe_result(res):
+    """A failed case's result, for logs: case, why, descriptions and the
+    differing fuses with their table rows."""
+    lines = [f'{res["case"]["prim"]} {res["case"]["params"]} at {res.get("site")} in {res.get("design")}']
+    lines += [f'  {side}: {res[side]}' for side in ('generated', 'vendor', 'apicula') if side in res]
+    lines += [f'  {why}' for why in dict.fromkeys(res.get('why', []))]
+    lines += [f'  {tile}: {bit}' for tile, bits in res.get('diffs', {}).items() for bit in bits]
+    return '\n'.join(lines)
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('-d', '--device', required=True, choices=sorted(DEVICES))
+    ap.add_argument('-n', '--count', type=int, default=10, help='cases per primitive')
+    ap.add_argument('--prims', nargs='*', help='primitives to fuzz (default: all the device has)')
+    ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--replay', nargs='*', help="failing cases' JSON files (<status>_<name>.json) to run, one per design")
+    ap.add_argument('-o', '--out', default='fuzz-out')
+    ap.add_argument('-j', '--jobs', type=int, default=1, help='designs run at the same time')
+    args = ap.parse_args(argv)
+    result = fuzz(args.device, args.out, args.count, args.seed, args.jobs, args.prims, args.replay)
+    print('summary:', dict(collections.Counter(r['status'] for r in result.cases)),
+          f'unattributed tiles: {len(result.unattributed)},',
+          f'failing combinations whose cases pass alone: {sum(c["alone_ok"] for c in result.combinations)}')
     # invalid cases are generator problems (a vendor rule to learn); the rest are failures
-    return 1 if totals.keys() & {'mismatch', 'decode', 'unsupported', 'unsupported combinations',
-                                 'unattributed tiles'} else 0
-
-
-def outcomes(out):
-    """Counts of what did not pass in an output directory, by (primitive,
-    status); unattributed tiles and failing combinations under primitive '*'."""
-    found = collections.Counter()
-    for path in glob.glob(os.path.join(out, 'batch*', 'report.json')):
-        with open(path) as f:
-            report = json.load(f)
-        for res in report.get('cases', {}).values():
-            if res['status'] != 'ok':
-                found[(res['case']['prim'], res['status'])] += 1
-        found[('*', 'unattributed')] += len(report.get('unattributed', {}))
-        if 'error' not in report:
-            continue
-        # a design that failed: a single case, or a combination that was split
-        workdir = os.path.dirname(path)
-        if os.path.exists(os.path.join(workdir, 'unsupported_combination.json')):
-            found[('*', 'unsupported-combination')] += 1
-        for status in ('invalid', 'unsupported'):
-            for single in glob.glob(os.path.join(workdir, f'{status}_*.json')):
-                with open(single) as f:
-                    res = json.load(f)
-                if 'case' in res:  # not unsupported_combination.json
-                    found[(res['case']['prim'], status)] += 1
-    return +found  # without zero counts
-
-
-def read_known(path):
-    """{device: {(primitive, status): count}} from a known-failures file: lines
-    of device, primitive, status and count; # starts a comment."""
-    known = collections.defaultdict(dict)
-    with open(path) as f:
-        for line in f:
-            fields = line.split('#')[0].split()
-            if fields:
-                device, prim, status, count = fields
-                known[device][(prim, status)] = int(count)
-    return known
-
-
-def write_known(path, device, found):
-    """Replace a device's lines in a known-failures file."""
-    comments, lines = [], []
-    if os.path.exists(path):
-        with open(path) as f:
-            for line in f:
-                if line.startswith('#'):
-                    comments.append(line)
-                elif line.split()[:1] != [device]:
-                    lines.append(line)
-    lines += [f'{device} {prim} {status} {n}\n' for (prim, status), n in found.items()]
-    with open(path, 'w') as f:
-        f.writelines(comments + sorted(lines))
-
-
-def compare_known(found, known):
-    """Report known failures as broken; return 1 if anything failed more often
-    than known, or a primitive failed in a way not known."""
-    more = {k: (known.get(k, 0), n) for k, n in found.items() if n > known.get(k, 0)}
-    fewer = {k: (n, found.get(k, 0)) for k, n in known.items() if found.get(k, 0) < n}
-    print(f'known broken: {sum(min(n, known.get(k, 0)) for k, n in found.items())}; '
-          f'fewer than known (update the list): {len(fewer)}; more than known: {len(more)}')
-    for (prim, status), (was, now) in sorted(fewer.items()):
-        print(f'  fewer: {prim} {status} {was} -> {now}')
-    for (prim, status), (was, now) in sorted(more.items()):
-        print(f'  UNEXPECTED: {prim} {status} {was} -> {now}')
-    return 1 if more else 0
+    return 1 if result.failures() or result.unattributed or any(c['alone_ok'] for c in result.combinations) else 0
 
 
 if __name__ == '__main__':

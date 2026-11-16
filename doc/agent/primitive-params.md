@@ -59,7 +59,7 @@ The netlist reader is stricter than Verilog:
   inputs to the output of a `GND` or `VCC` primitive, and write buses as
   concatenations of that net, which `codegen.Primitive` emits for list portmaps.
 
-## Yosys compared with the XML (from `compare-yosys`)
+## Yosys compared with the XML
 
 Things to know when synthesising against Yosys' library. None of these have been
 fixed:
@@ -74,3 +74,36 @@ fixed:
 - The `DL*` latches name their gate input `G` in the XML and `CLK` in Yosys.
 - `ID` parameters, and the FLASH timing parameters `*_S1`..`*_S5`, `IDLE` and
   `RD_S*`, appear only in Yosys.
+
+## More rules the XML does not have (checked by running the vendor)
+
+- **Dual-port BSRAM write mode.** `DP`, `DPB`, `DPX9`, `DPX9B` reject
+  `WRITE_MODE0/1 = 2'b10` (read-before-write): "PA2122: Not support ...
+  please change write mode to 2'b00 or 2'b01". Seen on all three devices. The
+  XML lists 2'b10. `primitive_strategies.RULES` filters it out.
+- **XML defaults the vendor cannot parse.** The default INIT of `LUT6`, `LUT7`
+  and `LUT8` is written with underscores (`64'h0000_0000_...`), and the netlist
+  reader rejects it with PA2000. Only the all-defaults cases failed.
+- **Bit-vector radix.** The vendor rejects a sized literal unless it uses the
+  radix of the XML default (PA1002): LUT3 INIT `8'b10010101` and DFF INIT `1'h1`
+  are rejected. Found with the tiled fuzzer.
+- **GW1N/GW2A rPLL:** VCO 400–1200 MHz on GW1NR-9C (PA2078). The tiled fuzzer
+  draws dividers within it.
+- **GW5A `PLLA`:**
+  - VCO 800–1600 MHz, and a PFD range (PA2078);
+  - channel n must be disabled when `CLKn_OUT_SEL=1'b1` (PA2115);
+  - `CLKOUTn_PE_COARSE <= ODIVn_SEL` (PA2096);
+  - `CLKn_IN_SEL=1'b1` with `CLKn_OUT_SEL=1'b0` is only allowed under some
+    `DYN_DPA_EN` setting (PA2093, message truncated);
+  - `FCLKIN` "3" and "10" gave PA1002, while the default "100.0" passed. Whether
+    the value or the missing decimal point is the problem has not been checked.
+- **GW5A `ADC`:** `BUF_BK0_VREF_EN`, `BUF_BK6_VREF_EN` and `BUF_EN[0..2]` cannot be
+  1 at the same time (PA2114).
+- **GW5A `CSHIFT`:** "PA2067: Not defined parameter 'INIT = CE0'", and
+  "PA2050: Module 'CSHIFT' is instantiated but not defined". The XML entry does
+  not match what the vendor accepts.
+
+Primitives a device lacks ("PA2085: No '<primitive>' resource in current
+device") are listed in `primitive_strategies.UNAVAILABLE`. On GW5A-25A these
+include every flip-flop and latch type except `DFFRE`, `DFFSE`, `DFFPE` and
+`DFFCE`, and all SSRAM.

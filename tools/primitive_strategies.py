@@ -228,7 +228,7 @@ def accload_fixup(p):
 
 
 # Rules across parameters, or values the XML allows but the vendor rejects.
-# Found with tools/vendor_sweep.py; each is (primitive regex, predicate on the
+# Found by running the vendor (doc/agent/primitive-params.md); each is (primitive regex, predicate on the
 # case's {name: literal}, vendor message it avoids).
 RULES = [
     (r'DP', lambda p: "2'b10" not in (p.get('WRITE_MODE0'), p.get('WRITE_MODE1')),
@@ -236,7 +236,7 @@ RULES = [
 ]
 
 # Not in the device: "PA2085: No '<primitive>' resource in current device",
-# from tools/vendor_sweep.py (doc/agent/vendor-sweep.md)
+# found by running every primitive through the vendor
 UNAVAILABLE = {
     'GW1N-9C': set('''TLVDS_IOBUF BANDGAP CLKDIVG DCCG DQS ELVDS_IBUF_R ELVDS_IOBUF_R EMCU FLASH128K
         FLASH256K FLASH64K FLASH64KZ FLASH96K FLASH96KA I3C IBUF_R IDDR_MEM IDES4_MEM IDES8_MEM IEM

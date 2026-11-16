@@ -174,9 +174,8 @@ new IDE version. Vendor enums are not committed; generate them when updating
 | `tools/gowin_extract.py check-attrids` | Compares `apycula/attrids.py` with vendor names |
 | `tools/gowin_attr_sites.py` | Lists attribute assignments with approximate guards; research aid, output not committed |
 | `tools/gowin_decompile.py` | Decompiles named functions with Ghidra, applying Gowin enums, parameter structs and signatures; no full analysis needed |
-| `tools/gowin_primitives.py` | Dumps primitive ports, parameters and allowed values from `primitive.xml`; compares them with Yosys' cell library. See `doc/agent/primitive-params.md` |
-| `tools/tiled_fuzzer.py` | Places Hypothesis-generated primitive instances in one design, runs the vendor and Apicula, and reports fuse differences per instance. See `doc/agent/tiled-fuzzer.md` |
-| `tools/vendor_sweep.py` | Runs every `primitive.xml` primitive through the vendor alone, to find availability and parameter rules. See `doc/agent/vendor-sweep.md` |
+| `tools/gowin_primitives.py` | Dumps primitive ports, parameters and allowed values from `primitive.xml`. See `doc/agent/primitive-params.md` |
+| `tools/tiled_fuzzer.py` | Places Hypothesis-generated primitive instances in one design, runs the vendor and Apicula, and reports fuse differences per instance; `tests/test_fuzz.py` runs it per device in CI. See `doc/agent/tiled-fuzzer.md` |
 | `tools/chipdb_compare.py` | Content comparison of chipdb directories |
 | `tools/timing/` | Timing research: list old `.tm` record fields from the getters, parse the GW5A `.tm` block, rebuild IDE routes from its bitstream, compare IDE, reimplemented vendor and nextpnr delays. See `doc/agent/timing.md` |
 
