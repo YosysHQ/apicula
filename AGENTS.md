@@ -1,185 +1,97 @@
 # Agent notes
 
-How to work on Apicula, and how to reverse engineer the Gowin IDE without
-rederiving it each session. Findings about the vendor code and data files live in
-[`doc/agent/`](doc/agent/README.md). Add to them when you learn something new.
+Rules for working on Apicula. The details live in [`doc/agent/`](doc/agent/README.md):
 
-## Issues, not pull requests, from outside contributors
+- [codebase.md](doc/agent/codebase.md): building, the modules, chipdbs, wire
+  names and supported devices;
+- [testing.md](doc/agent/testing.md): how to write and run each kind of test
+  required below;
+- [reverse-engineering.md](doc/agent/reverse-engineering.md): tools for reading
+  the IDE;
+- the other files: findings about the vendor code and data. Add to them when you
+  learn something new.
+
+## Pull requests: issue first for outside contributors, drafts for everyone
 
 Reviewing a generated pull request costs the maintainers more than writing the
-change. Before preparing a pull request, check the user's access:
+change, unless its scope and design were agreed beforehand. Before preparing a
+pull request, check the user's access:
 
     gh repo view YosysHQ/apicula --json viewerPermission -q .viewerPermission
 
 - `WRITE`, `MAINTAIN` or `ADMIN`: a maintainer. Go ahead.
-- Anything else, or no `gh` login: an outside contributor. Unless a maintainer
-  asked for a pull request, or the change is a few lines (a typo, a build fix),
-  draft an issue instead and do not push. The user posts it themselves. Describe
-  the problem and a small reproducer (the design, device and commands), and keep
-  the deeper analysis in a collapsed block. See [AI_POLICY.md](AI_POLICY.md).
+- Anything else, or no `gh` login: an outside contributor. A change of a few
+  lines (a typo, a build fix) can go straight to a pull request. Anything larger
+  needs an issue first, in which a maintainer has agreed the scope and design:
+  - With no such issue, draft one instead and do not push. The user posts it
+    themselves. Describe the problem, a small reproducer (the design, device and
+    commands) and the proposed approach, and keep the deeper analysis in a
+    collapsed block.
+  - With one, keep the pull request to what was agreed and link the issue. If
+    the work turns out to need a different scope or design, raise it in the
+    issue rather than changing course in the pull request.
 
-## Project Overview
+  See [AI_POLICY.md](AI_POLICY.md).
 
-Apicula (package name: Apycula) is an open-source toolkit for reverse-engineering and generating bitstreams for Gowin FPGA devices. It provides Python tools that convert hardware designs from Yosys/Nextpnr to binary FPGA configurations.
+Open every pull request as a draft (`gh pr create --draft`) unless the user
+asks otherwise. The user marks it ready after reviewing it.
 
-The workflow is: Verilog → Yosys (synthesis) → Nextpnr (place & route) → gowin_pack (bitstream) → openFPGALoader (program FPGA)
+## Project
 
-## Build Commands
+Apicula (package Apycula) generates bitstreams for Gowin FPGAs from nextpnr
+output, using device databases reverse engineered from the vendor IDE:
+Verilog → Yosys → nextpnr → `gowin_pack` → openFPGALoader. See
+[codebase.md](doc/agent/codebase.md).
 
-**Install for development:**
-```bash
-pip install -e .
-```
-
-**Build chip databases (requires Gowin EDA Tools v1.9.10.03):**
-```bash
-export GOWINHOME=/path/to/gowin
-make
-```
-
-**Build examples:**
-```bash
-cd examples
-make -j$(nproc) all
-```
-
-**Build a single example:**
-```bash
-cd examples
-make blinky-tangnano9k.fs
-```
-
-## Console Entry Points
-
-- `gowin_pack` - Convert Nextpnr JSON to bitstream (.fs file)
-- `gowin_unpack` - Reverse bitstream to Verilog for verification
-- `gowin_pll` - PLL configuration calculator
-
-## Architecture
-
-### Main Components (`apycula/`)
-
-- **gowin_pack.py** - Main bitstream packer. Reads Nextpnr JSON, configures fuses for routing/LUTs/IOBs, outputs binary bitstream
-- **gowin_unpack.py** - Reverse operation for verification
-- **chipdb.py** - Device database structures (Device, Tile, BEL, PIP, etc.) and utilities
-- **chipdb_builder.py** - Builds chip database from Gowin vendor files (parsing + SDRAM pin discovery)
-- **bslib.py** - Bitstream I/O and CRC operations
-- **wirenames.py** - Wire ID to name mappings (0-31: LUT inputs, 32-39: LUT outputs, etc.)
-- **attrids.py** - Attribute ID and value mappings
-- **fse_parser.py** - Parses Gowin `.fse` files (fuse configuration)
-- **dat_parser.py** - Parses Gowin `.dat` files
-- **tm_parser.py** - Parses Gowin `.tm` timing files
-
-### Chip Databases
-
-The `apycula/*.msgpack.xz` files are compressed device databases built by `chipdb_builder.py`. Each contains the complete FPGA architecture: tile grid, wire routing, fuse mappings, pin definitions, timing info.
-
-### Wire Naming Convention
-
-Wire IDs follow a pattern: `{direction}{length}{number}{segment}`
-- Direction: N/S/E/W
-- Length: 1 (one-hop), 2 (two-hop), 8 (eight-hop)
-- Example: W270 = west two-hop wire 7
-
-### Bitstream Structure
-
-Bitstreams are organized as frames (one row of bits across tile grid), padded to bytes, with CRC-16 checksums. Each tile is roughly 60x24 bits with LUTs in bottom 4 rows and routing multiplexers in top 20 rows.
-
-## Device Support
-
-- GW1N family: GW1N-1, GW1N-4, GW1N-9, GW1N-9C, GW1NZ-1
-- GW1NS family: GW1NS-2, GW1NS-4
-- GW2A family: GW2A-18, GW2A-18C
-- GW5A family: GW5A-25A
-- GW5AST family: GW5AST-138C
-
-**Note:** For "C" variant devices, pass the family (e.g., `GW1N-9C`) to both nextpnr's `--vopt family` and gowin_pack's `-d` flag, not the full device ID.
-
-## Documentation
-
-The `doc/` folder contains technical documentation about FPGA architecture, vendor file formats, and bitstream structure. Key files:
-- `architecture.md` - Tile layout, LUT/DFF structure, clock routing
-- `filestructure.md` - Vendor file format (.dat, .fse, .tm)
-- `commandstructure.md` - Bitstream command/frame structure
-- `longwires.md` - Long wire spine and tap routing
-
-## Environment
-
-- The supported IDE version is the one in the `GWVERSION` file, currently
-  **1.9.10.03**. Only analyse that version. Enums, table types and layouts change
-  between releases, and other releases are not supported.
+- The supported IDE version is the one in `GWVERSION`, currently **1.9.10.03**.
+  Only analyse that version. Enums, table types and layouts change between
+  releases.
 - Set `GOWINHOME` to the install root, the directory containing `IDE/`.
-- Use `.venv` for builds: `PATH=$PWD/.venv/bin:$PATH make -j4`. The chipdb build
+- Build with `.venv`: `PATH=$PWD/.venv/bin:$PATH make -j4`. The chipdb build
   fails on a Python without `msgspec`.
+- For "C" devices, pass the family (`GW1N-9C`) to nextpnr's `--vopt family` and
+  to `gowin_pack -d`.
 
-## Verifying changes
+## Testing
 
-This is critical. A change to bitstream generation is not done until both checks
-below pass, and the PR must say what was compared. Reading the vendor code is not
-enough, and neither is a design that builds.
+This is critical. A change is not done until it has the tests below, they pass,
+and the pull request says what was run. Reading the vendor code is not enough,
+and neither is a design that builds. [testing.md](doc/agent/testing.md) says how
+to do each.
 
-1. **It matches the vendor.** Build a design that exercises the feature with the
-   IDE and with Apicula, then decode both bitstreams and compare the attributes or
-   fuses. Set the feature's parameters to non-default values, and cover each value
-   you changed.
-2. **Existing output does not change by accident.** Pack the same nextpnr JSON with
-   `master` and with your branch, and `cmp` the two bitstreams for designs that do
-   not use the feature. Explain every difference.
-
-Before trusting a comparison:
-
-- Constrain every pin to the IDE's choice (`impl/pnr/top.pin.html`). The IDE picks
-  PLL input selects from the clock pin, so unconstrained designs differ for reasons
-  unrelated to your change.
-- Check the vendor log and netlist (`impl/gwsynthesis/top.vg`) to confirm your
-  parameters took effect. A later `defparam` silently overrides an earlier one.
-- `gowin_unpack.parse_attrvals` can misreport overlapping table rows, so confirm a
-  surprising difference against the fuses.
-
-## Checking a chipdb change
-
-Back up `apycula/*.msgpack.xz`, rebuild, then compare by content:
-
-    PYTHONPATH=. python3 tools/chipdb_compare.py BACKUP_DIR apycula
-
-Rebuilt files never match byte for byte, because sets serialize in a different
-order on each run. A raw msgpack comparison shows thousands of false differences.
+1. **Every fix has a regression test** that fails on `master` and passes with
+   the fix. Put it at the cheapest level that shows the bug: a test in `tests/`
+   for Python logic, a fuzzer case for a vendor mismatch, a hardware-in-the-loop
+   test for a bug seen only on hardware.
+2. **Every new primitive is tested against the vendor across a wide range of
+   parameters.** Add it to `tools/primitive_strategies.py`, so that
+   `tools/tiled_fuzzer.py` generates every parameter value the vendor accepts,
+   and run it on every fuzzer device that has the primitive. All cases must be
+   `ok`; explain any that are not. The same applies to a new parameter or mode
+   of an existing primitive, and to features that are not a single primitive,
+   such as routing, clocking or timing. If the fuzzer cannot generate the
+   feature yet, extend it, or build the comparison it needs. A one-off
+   comparison by hand does not replace this.
+3. **Every new primitive has a hardware-in-the-loop test** for at least one
+   configuration, on a board in the rig: a self-checking design in `examples/`
+   with a reference in `examples/hil-references/`. If the rig has no board for
+   the family, the test is still required; add the board to the rig first.
+4. **Existing output does not change by accident.** Pack the same nextpnr JSON
+   with `master` and your branch, and `cmp` the bitstreams for designs that do
+   not use the feature. Explain every difference. For a chipdb change, compare
+   with `tools/chipdb_compare.py`, not byte for byte.
 
 ## Reverse engineering the IDE
 
-`IDE/lib/libgowin.so` holds place and route and bitstream generation. It is
-**not stripped** and is built at **-O0**, so symbol names and very regular code
-are available.
+`IDE/lib/libgowin.so` holds place and route and bitstream generation, not
+stripped and built at -O0. Use the cheapest tool that answers the question:
+`nm`, then `objdump`, then `tools/gowin_decompile.py`. See
+[reverse-engineering.md](doc/agent/reverse-engineering.md) for the tools.
 
-Pick the cheapest tool that answers the question:
-
-1. `nm -DC` for names. Most of what you want is named; start with `fusegenMem::`.
-2. `objdump -d -C --start-address --stop-address` for single functions.
-   `nm -S` gives the address and size. -O0 disassembly is easy to follow.
-3. Python over `objdump` output for anything repeated. Jump tables are
-   `cmp; ja; lea table(%rip); movslq; add; jmp *%rax`, with 32-bit offsets
-   relative to the table.
-4. `tools/gowin_decompile.py` for real decompilation. It needs no full analysis
-   and takes seconds. REA's full analysis of this library takes hours, treats
-   `__dynamic_cast` as noreturn and truncates functions such as `setClsRegAttr`.
-
-Prefer static analysis over running vendor binaries. Do not modify the IDE or
-work around its licensing.
-
-`apycula/fse_formats.py` is committed, so extraction only needs re-running for a
-new IDE version. Vendor enums are not committed; generate them when updating
-`apycula/attrids.py`:
-
-| Tool | Purpose |
-|---|---|
-| `tools/gowin_extract.py extract` | Generates `apycula/fse_formats.py` and writes vendor enums to a local `enums.json` |
-| `tools/gowin_extract.py check-attrids` | Compares `apycula/attrids.py` with vendor names |
-| `tools/gowin_attr_sites.py` | Lists attribute assignments with approximate guards; research aid, output not committed |
-| `tools/gowin_decompile.py` | Decompiles named functions with Ghidra, applying Gowin enums, parameter structs and signatures; no full analysis needed |
-| `tools/chipdb_compare.py` | Content comparison of chipdb directories |
-| `tools/timing/` | Timing research: list old `.tm` record fields from the getters, parse the GW5A `.tm` block, rebuild IDE routes from its bitstream, compare IDE, reimplemented vendor and nextpnr delays. See `doc/agent/timing.md` |
-
-Do not edit `apycula/fse_formats.py` by hand.
+- Prefer static analysis over running vendor binaries.
+- Do not modify the IDE or work around its licensing.
+- Do not edit `apycula/fse_formats.py` by hand; it is generated by
+  `tools/gowin_extract.py`.
 
 ## Separating evidence from inference
 
@@ -201,9 +113,9 @@ trailers. Cover what applies:
 - **Iteration**: what the human corrected, rejected or redirected.
 - **Evidence**: what was read from vendor code, what was checked against IDE
   bitstreams, and what is inferred, as in the section above.
-- **Testing**: the vendor comparison and `master` comparison from
-  [Verifying changes](#verifying-changes): which designs, which attribute values
-  were compared, and how any differences were explained.
+- **Testing**: the tests from [Testing](#testing): the regression test, fuzzer
+  commands, seeds and totals, the HIL test, which designs were compared with the
+  vendor and with `master`, and how any differences were explained.
 
 Name who did what ("Claude traced...", "Pepijn rejected..."). Do not pad it: a
 one-line fix gets one line. Keep the `Co-Authored-By` trailer, which records the
@@ -222,8 +134,9 @@ Collaborative Work Statement:
   frequency.
 - Claude traced the FRAC attributes in fusegenMem::setPllAttr (IDE 1.9.10.03);
   Pepijn rejected deriving them from the GW1N tables, since the encoding differs.
-- Testing: IDE and Apicula bitstreams for pll-frac on GW5A-25A agree for
-  FRAC=0, 3 and 7; the other examples are byte-identical to master.
+- Testing: tests/test_pll.py checks the FRAC fuses for FRAC=3 and fails on
+  master; tiled_fuzzer -d GW5A-25A -n 20 --seed 1 --prims PLLA: 20 ok; the other
+  examples are byte-identical to master.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
