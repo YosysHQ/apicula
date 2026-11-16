@@ -672,190 +672,272 @@ def same(a, b):
 # is (row, col, cls, ab); what cls and ab hold depends on the kind.
 
 class Kind:
-    batch = 'shared'   # shared, own (designs of their own), io (by bank voltage), alone (one per design),
-    #                    widelut, single (one per shared design, at no site)
-    placement = 'bel'  # bel (INS_LOC and BEL), pin (IO_LOC), nextpnr or vendor (that tool places, the
-    #                    other follows), free (both place)
-    compare_fuses, cell_params = True, True  # cell_params: params are cell parameters, not IO_PORT attributes
-    ins_loc_fmt = bel_fmt = None  # formatted with the site, and r1 = row + 1
+    # how cases are put in designs: shared (with other kinds), own (designs of
+    # their own, from a pool of sites), io (grouped by bank voltage), alone (one
+    # case per design), widelut, or single (one per shared design, at no site)
+    batch = 'shared'
+    # bel: INS_LOC for the vendor and a BEL attribute for nextpnr; pin: IO_LOC;
+    # nextpnr: nextpnr places it and the vendor gets the same place; vendor:
+    # the other way round; free: both tools place it
+    placement = 'bel'
+    compare_fuses = True
+    cell_params = True  # False: the params are IO_PORT attributes, not cell parameters
 
+    # Methods a kind overrides, with their defaults. The vendor's INS_LOC and
+    # nextpnr's BEL attribute for a site, or None:
     def ins_loc(self, case, site):
-        return self.ins_loc_fmt and self.ins_loc_fmt.format(*site, r1=site[0] + 1)
+        return None
 
     def bel(self, case, site):
-        return self.bel_fmt and self.bel_fmt.format(*site)
+        return None
 
-    def owner(self, case, site):  # the bel whose fuses belong to the case
+    # the bel, and the tiles, whose fuse differences belong to the case
+    def owner(self, case, site):
         return site[2]
 
-    def tiles(self, db, case, site):  # tiles whose differences belong to the case
+    def tiles(self, db, case, site):
         return [site[:2]] if site else []
 
-    def from_placed(self, db, case, bel):  # (site, INS_LOC) where nextpnr placed it
+    # (site, INS_LOC) of where nextpnr placed the case (placement 'nextpnr'),
+    # and the site the vendor chose, from its bitstream (placement 'vendor')
+    def from_placed(self, db, case, bel):
         return None
 
-    def vendor_site(self, db, vt, case):  # the site the vendor chose
+    def vendor_site(self, db, vt, case):
         return None
 
-    def source(self, case, port, conns):  # driver of a free 1-bit input: clk, data, gnd or None (dummy)
+    # the driver of an unconnected 1-bit input: 'clk', 'data', 'gnd', or None
+    # for a dummy wire
+    def source(self, case, port, conns):
         if port in ('CLK', 'G'):
             return 'clk'
-        return 'data' if port == 'CLKIN' or port in CONTROL_PORTS else None
+        if port == 'CLKIN' or port in CONTROL_PORTS:
+            return 'data'
+        return None
 
-    def wire(self, d, name, case, site, conns, sources):  # extra netlist; True if it made the case
+    # extra netlist for the case; returns True if it instantiated the case
+    def wire(self, d, name, case, site, conns, sources):
         return False
 
-    def describe(self, dec, case, site):  # by default compared on fuses only
+    # the case as decoded from a bitstream, and as generated; by default the
+    # kind is compared on fuses only
+    def describe(self, dec, case, site):
         return self.generated(case, None, None)
 
     def generated(self, case, conns, spec):
         return {'cell': case.prim}
 
-    def check(self, b, name, case, site, res):  # more comparison; returns the tiles it covers
+    # comparison beyond cells and fuses; returns the tiles it accounts for
+    def check(self, b, name, case, site, res):
         return set()
 
 
-def slice_n(site):
+def slice_index(site):
+    """LUT/DFF/ALU number of a slice site: 2 * cls, plus 1 for B."""
     return 2 * site[2] + 'AB'.index(site[3])
 
 
-def slice_site(r, c, n):
-    return (r, c, n // 2, 'AB'[n % 2]), (r + 1, c + 1, n // 2, 'AB'[n % 2])
+def slice_ins_loc(site):
+    row, col, cls, ab = site
+    return (row + 1, col + 1, cls, ab)
 
 
-class Lut(Kind):
-    """Two per slice: (row, col, cls, 'A'|'B')."""
+def slice_site(row, col, n):
+    """The slice site of LUT/DFF/ALU n, and its INS_LOC."""
+    site = (row, col, n // 2, 'AB'[n % 2])
+    return site, slice_ins_loc(site)
+
+
+def generated_cell(case, conns, spec):
+    """A flip-flop, latch or other cell as generated, with the inputs tied to GND."""
+    inputs = {p: 'VSS' if conns.get(p, 'gnd') == 'gnd' else 'sig'
+              for p, (d, _) in spec[case.prim]['ports'].items() if d == 'input'}
+    return canonical(case.prim, literals(case.params), inputs)
+
+
+class Slice(Kind):
+    """A LUT (two per slice) or a flip-flop or latch (one per slice, as the two
+    flip-flops of a slice share clock, CE and set/reset modes): (row, col, cls,
+    'A'|'B')."""
+    bel_type = None
 
     def ins_loc(self, case, site):
-        return (site[0] + 1, site[1] + 1, site[2], site[3])
+        return slice_ins_loc(site)
 
     def bel(self, case, site):
-        return f'X{site[1]}Y{site[0]}/LUT{slice_n(site)}'
+        row, col = site[:2]
+        return f'X{col}Y{row}/{self.bel_type}{slice_index(site)}'
+
+
+class Lut(Slice):
+    bel_type = 'LUT'
 
     def owner(self, case, site):
-        return f'LUT{slice_n(site)}'
+        return f'LUT{slice_index(site)}'
 
     def describe(self, dec, case, site):
-        cell = dec.named(site, f'LUT4_{slice_n(site)}')
+        cell = dec.named(site, f'LUT4_{slice_index(site)}')
+        if cell:
+            return {'cell': 'LUT', 'init': literal_value(cell['params']['INIT'])}
         # constant LUTs are written as an assign of the F wire to VCC or VSS
-        const = dec.nl.find(f'R{site[0] + 1}C{site[1] + 1}_F{slice_n(site)}')
-        return {'cell': 'LUT', 'init': literal_value(cell['params']['INIT']) if cell
-                else {'VCC': 0xffff, 'VSS': 0}.get(const)}
+        row, col = site[:2]
+        const = dec.nl.find(f'R{row + 1}C{col + 1}_F{slice_index(site)}')
+        return {'cell': 'LUT', 'init': {'VCC': 0xffff, 'VSS': 0}.get(const)}
 
     def generated(self, case, conns, spec):
         return {'cell': 'LUT', 'init': lut_init(case)}
 
 
-class Dff(Lut):
-    """A flip-flop or latch: one per slice, as the two flip-flops of a slice
-    share clock, CE and set/reset modes."""
-
-    def bel(self, case, site):
-        return f'X{site[1]}Y{site[0]}/DFF{slice_n(site)}'
+class Dff(Slice):
+    bel_type = 'DFF'
 
     def owner(self, case, site):
         return f'CLS{site[2]}'
 
     def describe(self, dec, case, site):
-        return dec.canonical(dec.first(lambda t: t.startswith(('DFF', 'DL')), site, f'_{2 * site[2]}'))
+        is_ff = lambda typ: typ.startswith(('DFF', 'DL'))
+        return dec.canonical(dec.first(is_ff, site, f'_{2 * site[2]}'))
 
     def generated(self, case, conns, spec):
-        inputs = {p: 'VSS' if conns.get(p, 'gnd') == 'gnd' else 'sig'
-                  for p, (d, _) in spec[case.prim]['ports'].items() if d == 'input'}
-        return canonical(case.prim, literals(case.params), inputs)
+        return generated_cell(case, conns, spec)
 
 
 class Alu(Kind):
-    """In ALU1 (CLS0, B): with CIN tied to GND, nextpnr puts a carry-in head in
-    ALU0 of the same chain. ALU clusters ignore BEL, so nextpnr places them."""
-    batch, placement = 'own', 'nextpnr'
-    ins_loc = Lut.ins_loc  # until nextpnr has placed it
+    """An ALU in ALU1 (CLS0, B): with CIN tied to GND, nextpnr puts a carry-in
+    head in ALU0 of the same chain. ALU clusters ignore BEL, so nextpnr places
+    them."""
+    batch = 'own'
+    placement = 'nextpnr'
+
+    def ins_loc(self, case, site):
+        return slice_ins_loc(site)  # until nextpnr has placed it
 
     def owner(self, case, site):
         return f'CLS{site[2]}'
 
     def from_placed(self, db, case, bel):
         m = re.fullmatch(r'X(\d+)Y(\d+)/(?:ALU|LUT)(\d)', bel or '')
-        return m and slice_site(int(m.group(2)), int(m.group(1)), int(m.group(3)))
+        if not m:
+            return None
+        col, row, n = map(int, m.groups())
+        return slice_site(row, col, n)
 
     def source(self, case, port, conns):
-        return 'gnd' if port == 'CIN' else super().source(case, port, conns)
+        if port == 'CIN':
+            return 'gnd'
+        return super().source(case, port, conns)
 
     def describe(self, dec, case, site):
-        cell = dec.named(site, f'ALU_{slice_n(site)}')
-        return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}} if cell \
-            else {'cell': None}
+        cell = dec.named(site, f'ALU_{slice_index(site)}')
+        if cell is None:
+            return {'cell': None}
+        return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}}
 
     def generated(self, case, conns, spec):
         return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
 
 
-class Ssram(Alu):
+class Ssram(Kind):
     """A whole logic tile, (row, col, 'RAM16', '-'). A BEL makes nextpnr crash
     (RAM16SDP2/4) or leave its blocker cells unplaced (RAM16SDP1), so nextpnr
     places it. ROM16 becomes a LUT, at a slice site."""
-    source = Kind.source
+    batch = 'own'
+    placement = 'nextpnr'
 
     def ins_loc(self, case, site):
-        return f'R{site[0] + 1}C{site[1] + 1}' if site[2] == 'RAM16' else Lut.ins_loc(self, case, site)
+        row, col, cls, _ = site
+        if cls == 'RAM16':
+            return f'R{row + 1}C{col + 1}'
+        return slice_ins_loc(site)
 
     def owner(self, case, site):
-        return 'RAM16' if site[2] == 'RAM16' else f'CLS{site[2]}'
+        if site[2] == 'RAM16':
+            return 'RAM16'
+        return f'CLS{site[2]}'
 
     def from_placed(self, db, case, bel):
         m = re.fullmatch(r'X(\d+)Y(\d+)/(RAM16SDP4|LUT)(\d?)', bel or '')
-        r, c = m and (int(m.group(2)), int(m.group(1))) or (0, 0)
-        return m and (((r, c, 'RAM16', '-'), f'R{r + 1}C{c + 1}') if m.group(3) == 'RAM16SDP4'
-                      else slice_site(r, c, int(m.group(4))))
+        if not m:
+            return None
+        col, row = int(m.group(1)), int(m.group(2))
+        if m.group(3) == 'RAM16SDP4':
+            return (row, col, 'RAM16', '-'), f'R{row + 1}C{col + 1}'
+        return slice_site(row, col, int(m.group(4)))
 
     def describe(self, dec, case, site):
-        # gowin_unpack writes every SSRAM as RAM16SDP4, and nextpnr's ROM16 LUT
-        # has the ROM contents as INIT
-        cell = dec.named(site, 'RAM16' if site[2] == 'RAM16' else f'LUT4_{slice_n(site)}')
-        params = cell and (literals(cell['params'].items()) if site[2] == 'RAM16'
-                           else {'INIT_0': literal_value(cell['params']['INIT'])})
-        return {'cell': 'SSRAM' if cell else None, 'params': params or {}}
+        if site[2] == 'RAM16':
+            # gowin_unpack writes every SSRAM as RAM16SDP4; compare INIT
+            cell = dec.named(site, 'RAM16')
+            params = literals(cell['params'].items()) if cell else {}
+        else:
+            # nextpnr implements ROM16 as a LUT; its INIT is the ROM contents
+            cell = dec.named(site, f'LUT4_{slice_index(site)}')
+            params = {'INIT_0': literal_value(cell['params']['INIT'])} if cell else {}
+        return {'cell': 'SSRAM' if cell else None, 'params': params}
 
     def generated(self, case, conns, spec):
         return {'cell': 'SSRAM', 'params': literals(case.params)}
 
 
 class Dsp(Kind):
-    """(row, col, 'DSP', n), the n-th block of its row as the vendor's
+    """A DSP block, (row, col, 'DSP', n): the n-th of its row, as the vendor's
     DSP_R<row>[n]. DSP clusters get DUMMY_CELLs that stay unplaced with a BEL,
     so nextpnr places them. gowin_unpack decodes fuse-level modes only."""
-    placement, ins_loc_fmt = 'nextpnr', 'DSP_R{r1}[{3}][A]'
+    placement = 'nextpnr'
+
+    def ins_loc(self, case, site):
+        row, n = site[0], site[3]
+        return f'DSP_R{row + 1}[{n}][A]'
 
     def tiles(self, db, case, site):
         # the main tile and the DSP_AUX tiles to its right
-        r, c = site[:2]
-        n = 1
-        while c + n < db.cols and any(b.startswith('DSP_AUX') for b in db[r, c + n].bels):
-            n += 1
-        return [(r, c + i) for i in range(n)]
+        row, col = site[:2]
+        out = [(row, col)]
+        while col + len(out) < db.cols and any(b.startswith('DSP_AUX') for b in db[row, col + len(out)].bels):
+            out.append((row, col + len(out)))
+        return out
 
     def from_placed(self, db, case, bel):
         m = re.fullmatch(r'X(\d+)Y(\d+)/(\w+)', bel or '')
-        c, r = m and (int(m.group(1)), int(m.group(2))) or (0, 0)
-        cols = [cc for cc in range(db.cols) if m and 'DSP' in db[r, cc].bels]
-        if c not in cols:
+        if not m:
             return None
-        macro = m.group(3)[len(case.prim):][:1]  # DSP_R<row>[n][A|B]
-        return (r, c, 'DSP', cols.index(c)), f'DSP_R{r + 1}[{cols.index(c)}]' + (macro and f'[{"AB"[int(macro)]}]')
+        col, row = int(m.group(1)), int(m.group(2))
+        cols = [c for c in range(db.cols) if 'DSP' in db[row, c].bels]
+        if col not in cols:
+            return None
+        n = cols.index(col)
+        # DSP_R<row>[n][A|B]: the macro is the digit after the primitive name
+        macro = m.group(3)[len(case.prim):][:1]
+        loc = f'DSP_R{row + 1}[{n}]'
+        if macro:
+            loc += f'[{"AB"[int(macro)]}]'
+        return (row, col, 'DSP', n), loc
 
 
 class Bsram(Kind):
-    """(row, col, 'BSRAM', n): the n-th BSRAM of a row, as INS_LOC numbers them.
-    gowin_unpack does not decode BSRAM parameters."""
-    ins_loc_fmt, bel_fmt = 'BSRAM_R{r1}[{3}]', 'X{1}Y{0}/BSRAM'
+    """(row, col, 'BSRAM', n): the n-th BSRAM of a row, as the vendor numbers
+    them in INS_LOC. gowin_unpack does not decode BSRAM parameters."""
+
+    def ins_loc(self, case, site):
+        row, n = site[0], site[3]
+        return f'BSRAM_R{row + 1}[{n}]'
+
+    def bel(self, case, site):
+        row, col = site[:2]
+        return f'X{col}Y{row}/BSRAM'
 
     def tiles(self, db, case, site):
-        # and the two tiles to its right: BSRAM_AUX bels on GW1N/GW2A, tiles
-        # with BSRAM tables but no bel on GW5A
-        r, c = site[:2]
-        return [(r, c)] + [(r, c + dc) for dc in (1, 2) if c + dc < db.cols and (
-            'BSRAM_AUX' in db[r, c + dc].bels or 'BSRAM' not in db[r, c + dc].bels
-            and 'BSRAM_SP' in db.shortval.get(db[r, c + dc].ttyp, {}))]
+        # the BSRAM tile and the two to its right: BSRAM_AUX bels on GW1N/GW2A,
+        # tiles with BSRAM tables but no bel on GW5A
+        row, col = site[:2]
+        out = [(row, col)]
+        for c in (col + 1, col + 2):
+            if c < db.cols:
+                tile = db[row, c]
+                if 'BSRAM_AUX' in tile.bels or ('BSRAM' not in tile.bels
+                                                and 'BSRAM_SP' in db.shortval.get(tile.ttyp, {})):
+                    out.append((row, c))
+        return out
 
     def describe(self, dec, case, site):
         return {'cell': 'BSRAM' if dec.on_tile('BSRAM', site) else None}
@@ -864,190 +946,239 @@ class Bsram(Kind):
         return {'cell': 'BSRAM'}
 
 
-class Pll(Kind):
-    """An rPLL: (row, col, 'PLL', side), which the vendor calls PLL_<side>."""
-    ins_loc_fmt, bel_fmt = 'PLL_{3}', 'X{1}Y{0}/PLL'
+class PllSite(Kind):
+    """(row, col, 'PLL' or 'PLLA', side): the vendor calls it PLL_<side>, nextpnr
+    X<col>Y<row>/PLL."""
+
+    def ins_loc(self, case, site):
+        return f'PLL_{site[3]}'
+
+    def bel(self, case, site):
+        row, col = site[:2]
+        return f'X{col}Y{row}/PLL'
+
+
+class Pll(PllSite):
+    """An rPLL (GW1N/GW2A)."""
 
     def tiles(self, db, case, site):
-        # and the adjacent RPLLB tiles
-        r, c = site[:2]
-        return [(r, c)] + [(r, c + dc) for dc in (-3, -2, -1, 1, 2, 3)
-                           if 0 <= c + dc < db.cols and 'RPLLB' in db[r, c + dc].bels]
+        # the RPLLA tile and the adjacent RPLLB tiles
+        row, col = site[:2]
+        return [(row, col)] + [(row, c) for c in range(col - 3, col + 4)
+                               if c != col and 0 <= c < db.cols and 'RPLLB' in db[row, c].bels]
 
     def describe(self, dec, case, site):
         cell = dec.on_tile('rPLL', site)
+        if cell is None:
+            return {'cell': None, 'params': {}}
         # DEVICE is not a fuse; it is unpacked as the family name
-        return {'cell': 'rPLL' if cell else None, 'params': literals(cell['params'].items(), {'DEVICE'}) if cell else {}}
+        return {'cell': 'rPLL', 'params': literals(cell['params'].items(), skip={'DEVICE'})}
 
     def generated(self, case, conns, spec):
-        return {'cell': 'rPLL', 'params': literals(case.params, {'DEVICE'})}
+        return {'cell': 'rPLL', 'params': literals(case.params, skip={'DEVICE'})}
 
 
-class Plla(Kind):
-    """A GW5A PLL, (row, col, 'PLLA', side), configured through a bitstream
-    slot, which is compared."""
-    ins_loc_fmt, bel_fmt = Pll.ins_loc_fmt, Pll.bel_fmt
+class Plla(PllSite):
+    """A GW5A PLL, configured through a bitstream slot, which is compared."""
 
     def check(self, b, name, case, site, res):
         slot = b.db.extra_func[(site[0], site[1])]['pll']['slot_idx']
         vs, as_ = b.vslots.get(slot), b.aslots.get(slot)
-        bits = None if vs is None or as_ is None else \
-            sum(v != as_[y][x] for y, row in enumerate(vs) for x, v in enumerate(row))
-        if bits is None:
-            res['status'], res['why'] = 'mismatch', [f'slot {slot}: vendor {"has" if vs else "lacks"} it, '
-                                                     f'apicula {"has" if as_ else "lacks"} it']
-        elif bits:
+        if vs is None or as_ is None:
+            res['status'] = 'mismatch'
+            res['why'] = [f'slot {slot}: vendor {"has" if vs is not None else "lacks"} it, '
+                          f'apicula {"has" if as_ is not None else "lacks"} it']
+            return set()
+        bits = sum(v != as_[y][x] for y, row in enumerate(vs) for x, v in enumerate(row))
+        if bits:
             dec = [gowin_unpack.parse_attrvals(s, b.db.rev_logicinfo('PLL'), b.db.shortval[1024]['PLL'],
                                                attrids.pll_attrids, 'PLL') for s in (vs, as_)]
-            res['status'], res['why'] = 'mismatch', [f'slot {slot}: {bits} bits differ']
+            res['status'] = 'mismatch'
+            res['why'] = [f'slot {slot}: {bits} bits differ']
             res['slot_attrs'] = {k: (dec[0].get(k), dec[1].get(k)) for k in dec[0].keys() | dec[1].keys()
                                  if dec[0].get(k) != dec[1].get(k)}
         return set()
 
 
 class Osc(Kind):
-    """One per device, at no site; its bel is named after the primitive (OSCA)
-    or the kind (OSC)."""
-    batch, placement = 'single', 'free'
-    generated = Dff.generated
+    """An oscillator: one per device, at no site. Its bel is named after the
+    primitive (OSCA) or the kind (OSC)."""
+    batch = 'single'
+    placement = 'free'
 
     def tiles(self, db, case, site):
         return [singleton_loc(db, case.prim, 'osc')]
 
     def describe(self, dec, case, site):
-        return dec.canonical(dec.first(lambda t: t.startswith('OSC')))
+        return dec.canonical(dec.first(lambda typ: typ.startswith('OSC')))
+
+    def generated(self, case, conns, spec):
+        return generated_cell(case, conns, spec)
 
 
 class Io(Kind):
     """An I/O buffer on a plain pin: (row, col, 'IOBA'|'IOBB', pin), or for a
     differential buffer the A side and [pin, pin]. Its params are IO_PORT
     attributes, compared on fuses (gowin_unpack writes them to a .cst)."""
-    batch, placement, cell_params = 'io', 'pin', False
+    batch = 'io'
+    placement = 'pin'
+    cell_params = False
 
     def source(self, case, port, conns):
         return 'data'  # buffer data and enable inputs
 
     def wire(self, d, name, case, site, conns, sources):
+        ports = d.spec[case.prim]['ports']
         for k, (pad, pin) in enumerate(io_pads(case, site)):
             conns[pad] = f'{name}_pad' + ('_n' if k else '')
-            getattr(d.mod, PORT_LISTS[d.spec[case.prim]['ports'][pad][0]]).add(conns[pad])
+            getattr(d.mod, PORT_LISTS[ports[pad][0]]).add(conns[pad])
             d.cst.ports[conns[pad]] = pin
             d.cst.attrs[conns[pad]] = dict(case.params)
 
     def describe(self, dec, case, site):
-        cell = dec.first(lambda t: t.endswith('BUF'), site, f'_{site[2][-1]}')
-        return {'cell': cell and cell['type']}
+        cell = dec.first(lambda typ: typ.endswith('BUF'), site, f'_{site[2][-1]}')
+        return {'cell': cell['type'] if cell else None}
 
 
-class Iol(Io):
-    """I/O logic, with an I/O buffer on its pin (vendor PR0018): an IBUF feeding
-    its data input, or an OBUF fed by its output."""
-    cell_params = True
+class Iol(Kind):
+    """I/O logic, (row, col, 'IOBA'|'IOBB', pin), with an I/O buffer on its pin
+    (vendor PR0018): an IBUF feeding its data input, or an OBUF fed by its
+    output."""
+    batch = 'io'
+    placement = 'pin'
 
     def owner(self, case, site):
         return f'IOLOGIC{site[2][-1]}'
 
     def source(self, case, port, conns):
-        return 'clk' if port in ('CLK', 'PCLK', 'FCLK') else Kind.source(self, case, port, conns)
+        if port in ('CLK', 'PCLK', 'FCLK'):
+            return 'clk'
+        return super().source(case, port, conns)
 
     def wire(self, d, name, case, site, conns, sources):
-        ports, pad = d.spec[case.prim]['ports'], f'{name}_pad'
+        ports = d.spec[case.prim]['ports']
+        pad = f'{name}_pad'
         data_in = next((p for p in ports if p in IOL_INPUT), None)
         if data_in:
             conns[data_in] = f'{name}_in'
+            d.mod.wires.add(conns[data_in])
             d.mod.inputs.add(pad)
             d.inst('IBUF', f'{name}_buf', {'I': pad, 'O': conns[data_in]})
         else:
-            conns[next(p for p in ports if p in IOL_OUTPUT)] = f'{name}_out'
+            data_out = next(p for p in ports if p in IOL_OUTPUT)
+            conns[data_out] = f'{name}_out'
+            d.mod.wires.add(conns[data_out])
             d.mod.outputs.add(pad)
-            d.inst('OBUF', f'{name}_buf', {'I': f'{name}_out', 'O': pad})
-        d.mod.wires.add(f'{name}_in' if data_in else f'{name}_out')
+            d.inst('OBUF', f'{name}_buf', {'I': conns[data_out], 'O': pad})
         d.cst.ports[pad] = site[3]
         d.cst.attrs[pad] = {'IO_TYPE': ps.IOL_IO_TYPE}
 
     def describe(self, dec, case, site):
-        cell = dec.first(lambda t: ps.SITES.get(t) == 'iol', site, f'_{site[2][-1]}')
-        return {'cell': cell and cell['type'], 'params': literals(cell['params'].items()) if cell else {}}
+        cell = dec.first(lambda typ: ps.SITES.get(typ) == 'iol', site, f'_{site[2][-1]}')
+        if cell is None:
+            return {'cell': None, 'params': {}}
+        return {'cell': cell['type'], 'params': literals(cell['params'].items())}
 
     def generated(self, case, conns, spec):
         return {'cell': case.prim, 'params': literals(case.params)}
 
 
-class Lone(Kind):
-    """Any other primitive: alone in its design, placed by both tools. Pads
-    become top-level ports; the vendor picks their pins, and nextpnr gets them."""
-    batch, placement = 'alone', 'vendor'
+class Clock(Kind):
+    """A clock buffer, divider or selector, alone in its design and driving the
+    harness output. The vendor reports no position for CLKDIV and CLKDIV2, so
+    nextpnr gets a BEL, (row, col, 'BEL', bel), read from the vendor's HCLK
+    fuses. nextpnr ignores it, and places DHCEN by routing, so HCLK settings
+    are compared without their positions."""
+    batch = 'alone'
+    placement = 'vendor'
 
-    def source(self, case, port, conns):
-        return 'clk' if 'CLK' in port else super().source(case, port, conns)
-
-    def wire(self, d, name, case, site, conns, sources):
-        for pad in lone_pads(d.spec[case.prim]['ports'], case.prim):
-            conns[pad] = f'{name}_{pad}'
-            getattr(d.mod, PORT_LISTS[d.spec[case.prim]['ports'][pad][0]]).add(conns[pad])
-
-
-class Clock(Lone):
-    """A clock buffer, divider or selector, driving the harness output. The
-    vendor reports no position for CLKDIV and CLKDIV2, so nextpnr gets a BEL,
-    (row, col, 'BEL', bel), read from the vendor's HCLK fuses. nextpnr ignores
-    it, and places DHCEN by routing, so HCLK settings are compared without
-    their positions."""
-    bel_fmt = 'X{1}Y{0}/{3}'
-    wire = Kind.wire
+    def bel(self, case, site):
+        row, col, _, bel = site
+        return f'X{col}Y{row}/{bel}'
 
     def owner(self, case, site):
         return site[3]
 
     def source(self, case, port, conns):
-        # the first clock input from the clock pin, the rest from data pins. DCS:
-        # every clock input from the clock pin (nextpnr crashes routing GW5A DCS
-        # inputs from plain pins)
-        return 'clk' if port in CLOCK_INPUTS and 'clk' not in conns.values() \
-            or case.prim == 'DCS' and port.startswith('CLK') and port != 'CLKSEL' else 'data'
+        # the first clock input from the clock pin, the rest from data pins
+        if port in CLOCK_INPUTS and 'clk' not in conns.values():
+            return 'clk'
+        # DCS: every clock input from the clock pin (nextpnr crashes routing
+        # GW5A DCS inputs from plain pins)
+        if case.prim == 'DCS' and port.startswith('CLK') and port != 'CLKSEL':
+            return 'clk'
+        return 'data'
 
     def vendor_site(self, db, vt, case):
         site = vendor_clock_site(db, vt, case)
         # GW5A-25A: the vendor uses HCLKDIV1 on X0Y1, where nextpnr has no
         # CLKDIV_1 bel; compared without positions instead
-        return site if site and not re.fullmatch(r'CLKDIV_\d', site[3]) else None
+        if site and re.fullmatch(r'CLKDIV_\d', site[3]):
+            return None
+        return site
 
     def check(self, b, name, case, site, res):
-        # a CLKDIV or CLKDIV2 must select, in Apicula's fuses, the bel nextpnr placed it on
+        placed = b.placed.get(name)
         if case.prim in ('CLKDIV', 'CLKDIV2'):
+            # Apicula's fuses must select the bel nextpnr placed it on
             asite = vendor_clock_site(b.db, b.at, case)
-            if asite is not None and b.placed.get(name) != self.bel(case, asite) or asite is None and site:
-                res['status'], res['why'] = 'mismatch', [f'Apicula fuses select {asite and self.bel(case, asite)}, '
-                                                         f'nextpnr placed it at {b.placed.get(name)}']
+            selected = asite and self.bel(case, asite)
+            if asite is None and site is not None or asite is not None and selected != placed:
+                res['status'] = 'mismatch'
+                res['why'] = [f'Apicula fuses select {selected}, nextpnr placed it at {placed}']
                 return set()
             if asite is not None and asite == site:
-                return set()  # same bel: the fuse comparison applies
-            res['placed'] = {'vendor': site and self.bel(case, site), 'apicula': b.placed.get(name)}
-        vh, ah = hclk_settings(b.db, b.vt), hclk_settings(b.db, b.at)
-        if vh != ah:
-            res['status'], res['why'] = 'mismatch', [f'HCLK settings: vendor {vh}, apicula {ah}']
-        return {k for k in b.vt if 'HCLK' in b.db.shortval.get(b.db[k].ttyp, {})}
+                return set()  # the same bel: the fuse comparison applies
+            res['placed'] = {'vendor': site and self.bel(case, site), 'apicula': placed}
+        vendor, apicula = hclk_settings(b.db, b.vt), hclk_settings(b.db, b.at)
+        if vendor != apicula:
+            res['status'] = 'mismatch'
+            res['why'] = [f'HCLK settings: vendor {vendor}, apicula {apicula}']
+        return {tile for tile in b.vt if 'HCLK' in b.db.shortval.get(b.db[tile].ttyp, {})}
+
+
+class Lone(Kind):
+    """Any other primitive: alone in its design, placed by both tools. Pads
+    become top-level ports; the vendor picks their pins, and nextpnr gets them."""
+    batch = 'alone'
+    placement = 'vendor'
+
+    def source(self, case, port, conns):
+        if 'CLK' in port:
+            return 'clk'
+        return super().source(case, port, conns)
+
+    def wire(self, d, name, case, site, conns, sources):
+        ports = d.spec[case.prim]['ports']
+        for pad in lone_pads(ports, case.prim):
+            conns[pad] = f'{name}_{pad}'
+            getattr(d.mod, PORT_LISTS[ports[pad][0]]).add(conns[pad])
 
 
 class WideLut(Kind):
     """A MUX2_LUTn tree over LUT4 leaves, placed by both tools and compared on
     where its leaves end up (widelut_tree). Leaf inputs are dummy wires; each
     mux level selects from its own data pin."""
-    batch, placement, compare_fuses = 'widelut', 'free', False
+    batch = 'widelut'
+    placement = 'free'
+    compare_fuses = False
 
     def wire(self, d, name, case, site, conns, sources):
         def tree(level, leaves, path):
-            out = f'{name}_{"f" if level == 4 else "o"}{path}'
-            d.mod.wires.add(out)
             if level == 4:
+                out = f'{name}_f{path}'
                 ins = {p: f'{name}_l{path}_{p}' for p in ('I0', 'I1', 'I2', 'I3')}
-                d.mod.wires.update(ins.values())
+                d.mod.wires.update([out, *ins.values()])
                 d.inst('LUT4', f'{name}_l{path}', {'F': out, **ins}, [('INIT', leaves[0])])
-            else:
-                half = len(leaves) // 2
-                d.inst(f'MUX2_LUT{level}', f'{name}_m{path}' if path else name,
-                       {'I0': tree(level - 1, leaves[:half], path + '0'), 'I1': tree(level - 1, leaves[half:], path + '1'),
-                        'S0': sources[(level - 5) % len(sources)], 'O': out})
+                return out
+            half = len(leaves) // 2
+            i0 = tree(level - 1, leaves[:half], path + '0')
+            i1 = tree(level - 1, leaves[half:], path + '1')
+            out = f'{name}_o{path}'
+            d.mod.wires.add(out)
+            select = sources[(level - 5) % len(sources)]
+            d.inst(f'MUX2_LUT{level}', f'{name}_m{path}' if path else name,
+                   {'I0': i0, 'I1': i1, 'S0': select, 'O': out})
             return out
 
         tree(int(case.prim[-1]), widelut_inits(case), '')
@@ -1061,11 +1192,9 @@ class WideLut(Kind):
 
 
 # in allocation order within each batch class
-KINDS = {
-    'clock': Clock(), 'lone': Lone(), 'widelut': WideLut(), 'alu': Alu(), 'ssram': Ssram(),
-    'iob': Io(), 'diob': Io(), 'iol': Iol(), 'lut': Lut(), 'dff': Dff(),
-    'bsram': Bsram(), 'pll': Pll(), 'plla': Plla(), 'dsp': Dsp(), 'osc': Osc(),
-}
+KINDS = {'clock': Clock(), 'lone': Lone(), 'widelut': WideLut(), 'alu': Alu(), 'ssram': Ssram(),
+         'iob': Io(), 'diob': Io(), 'iol': Iol(), 'lut': Lut(), 'dff': Dff(),
+         'bsram': Bsram(), 'pll': Pll(), 'plla': Plla(), 'dsp': Dsp(), 'osc': Osc()}
 
 
 def vendor_failed(workdir):
@@ -1297,8 +1426,7 @@ def main(argv):
     ap.add_argument('--replay', nargs='*', help='case JSON files to run, one per design')
     ap.add_argument('-o', '--out', default='fuzz-out')
     ap.add_argument('-j', '--jobs', type=int, default=1, help='designs run at the same time')
-    ap.add_argument('--known', help='JSON of known failures (fuzz_report.py --write-known): only other '
-                    'failures fail the run')
+    ap.add_argument('--known', help='known failures (tools/fuzz_known.txt): only other failures fail the run')
     args = ap.parse_args(argv)
 
     vendor_device, part, package = DEVICES[args.device]
@@ -1405,58 +1533,78 @@ def main(argv):
                     running[pool.submit(run, j, half)] = (j, half)
     print('summary:', dict(totals))
     if args.known:
-        with open(args.known) as f:
-            return compare_known(outcomes(args.out), json.load(f).get(args.device, {}))
+        return compare_known(outcomes(args.out), read_known(args.known)[args.device])
     # invalid cases are generator problems (a vendor rule to learn); the rest are failures
     return 1 if totals.keys() & {'mismatch', 'decode', 'unsupported', 'unsupported combinations',
                                  'unattributed tiles'} else 0
 
 
-def case_key(case_json):
-    """A case as a known-list key: primitive and parameters, without those always
-    held at their default (BSRAM INIT_RAM_xx)."""
-    params = {k: v for k, v in case_json['params'].items() if not ps.KEEP_DEFAULT.match(k)}
-    return f'{case_json["prim"]} {json.dumps(params, sort_keys=True)}'
-
-
 def outcomes(out):
-    """{key: status} of everything that did not pass in an output directory:
-    cases by primitive and parameters, failing combinations and unattributed
-    tiles by design. With a fixed seed and the same tools, a run is
-    reproducible, so the keys are too."""
-    found = {}
+    """Counts of what did not pass in an output directory, by (primitive,
+    status); unattributed tiles and failing combinations under primitive '*'."""
+    found = collections.Counter()
     for path in glob.glob(os.path.join(out, 'batch*', 'report.json')):
-        design = os.path.basename(os.path.dirname(path))
         with open(path) as f:
             report = json.load(f)
         for res in report.get('cases', {}).values():
             if res['status'] != 'ok':
-                found[case_key(res['case'])] = res['status']
-        for tile in report.get('unattributed', {}):
-            found[f'{design} unattributed {tile}'] = 'unattributed'
+                found[(res['case']['prim'], res['status'])] += 1
+        found[('*', 'unattributed')] += len(report.get('unattributed', {}))
+        if 'error' not in report:
+            continue
+        # a design that failed: a single case, or a combination that was split
+        workdir = os.path.dirname(path)
+        if os.path.exists(os.path.join(workdir, 'unsupported_combination.json')):
+            found[('*', 'unsupported-combination')] += 1
         for status in ('invalid', 'unsupported'):
-            for single in glob.glob(os.path.join(os.path.dirname(path), f'{status}_*.json')):
+            for single in glob.glob(os.path.join(workdir, f'{status}_*.json')):
                 with open(single) as f:
                     res = json.load(f)
                 if 'case' in res:  # not unsupported_combination.json
-                    found[case_key(res['case'])] = status
-        if os.path.exists(os.path.join(os.path.dirname(path), 'unsupported_combination.json')):
-            found[f'{design} unsupported combination'] = 'unsupported combination'
-    return found
+                    found[(res['case']['prim'], status)] += 1
+    return +found  # without zero counts
+
+
+def read_known(path):
+    """{device: {(primitive, status): count}} from a known-failures file: lines
+    of device, primitive, status and count; # starts a comment."""
+    known = collections.defaultdict(dict)
+    with open(path) as f:
+        for line in f:
+            fields = line.split('#')[0].split()
+            if fields:
+                device, prim, status, count = fields
+                known[device][(prim, status)] = int(count)
+    return known
+
+
+def write_known(path, device, found):
+    """Replace a device's lines in a known-failures file."""
+    comments, lines = [], []
+    if os.path.exists(path):
+        with open(path) as f:
+            for line in f:
+                if line.startswith('#'):
+                    comments.append(line)
+                elif line.split()[:1] != [device]:
+                    lines.append(line)
+    lines += [f'{device} {prim} {status} {n}\n' for (prim, status), n in found.items()]
+    with open(path, 'w') as f:
+        f.writelines(comments + sorted(lines))
 
 
 def compare_known(found, known):
-    """Report known failures as broken; return 1 if anything else failed."""
-    unexpected = {k: (known.get(k), v) for k, v in found.items() if known.get(k) != v}
-    broken = [k for k, v in found.items() if known.get(k) == v]
-    fixed = [k for k in known if k not in found]
-    print(f'known broken: {len(broken)}; now passing (remove from the known list): {len(fixed)}; '
-          f'unexpected: {len(unexpected)}')
-    for k in fixed:
-        print('  now passing:', known[k], k)
-    for k, (was, now) in sorted(unexpected.items()):
-        print(f'  UNEXPECTED {now} (known: {was or "passing"}): {k}')
-    return 1 if unexpected else 0
+    """Report known failures as broken; return 1 if anything failed more often
+    than known, or a primitive failed in a way not known."""
+    more = {k: (known.get(k, 0), n) for k, n in found.items() if n > known.get(k, 0)}
+    fewer = {k: (n, found.get(k, 0)) for k, n in known.items() if found.get(k, 0) < n}
+    print(f'known broken: {sum(min(n, known.get(k, 0)) for k, n in found.items())}; '
+          f'fewer than known (update the list): {len(fewer)}; more than known: {len(more)}')
+    for (prim, status), (was, now) in sorted(fewer.items()):
+        print(f'  fewer: {prim} {status} {was} -> {now}')
+    for (prim, status), (was, now) in sorted(more.items()):
+        print(f'  UNEXPECTED: {prim} {status} {was} -> {now}')
+    return 1 if more else 0
 
 
 if __name__ == '__main__':

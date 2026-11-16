@@ -1,14 +1,14 @@
 name: Tiled fuzzer
 
 # Places random primitive configurations with the vendor tools and with
-# Apicula and compares the bitstreams (tools/tiled_fuzzer.py). Failures listed
-# in tools/fuzz_known.json are known and reported as broken; any other failure
-# fails the run. A fixed seed, PYTHONHASHSEED and pinned tools make the run
+# Apicula and compares the bitstreams (tools/tiled_fuzzer.py). Failures counted
+# in tools/fuzz_known.txt are known and reported as broken; a run with more
+# failures of a primitive and status than listed fails. A fixed seed, PYTHONHASHSEED and pinned tools make the run
 # reproducible, so its results can be compared with the list.
 #
 # To update the list after a fix or a new known issue, download the run's
 # fuzz-<device> artifact and run:
-#   python3 tools/fuzz_report.py -d <device> --write-known tools/fuzz_known.json fuzz-out
+#   python3 tools/fuzz_report.py -d <device> --write-known tools/fuzz_known.txt fuzz-out
 
 on:
   pull_request:
@@ -39,7 +39,7 @@ jobs:
             make apycula/${{ matrix.device }}.msgpack.xz &&
             pip install -q ${{ env.FUZZ_TOOLS }} &&
             python3 -u tools/tiled_fuzzer.py -d ${{ matrix.device }} -n 2 --seed 7 -j $(nproc) \
-              -o fuzz-out --known tools/fuzz_known.json"
+              -o fuzz-out --known tools/fuzz_known.txt"
     - name: Upload the reports
       if: always()
       uses: actions/upload-artifact@v7

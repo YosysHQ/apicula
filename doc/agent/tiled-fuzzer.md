@@ -676,8 +676,10 @@ strategy.
 `.github/workflows/fuzzer.yml` runs the fuzzer on GW1N-9C, GW2A-18C and
 GW5A-25A in the `pepijndevos/apicula:1.9.10.03` image, with `-n 2 --seed 7`,
 `PYTHONHASHSEED=0` (the drawn cases are de-duplicated through a set) and pinned
-Hypothesis, Yosys and nextpnr, so a run is reproducible. `--known
-tools/fuzz_known.json` reports the failures listed there as known broken and
-fails the run on any other: a case with another status, a new unattributed tile
-or a new failing combination. Cases that now pass are listed so the file can be
-updated with `fuzz_report.py --write-known`.
+Hypothesis, Yosys and nextpnr, so a run is reproducible. `tools/fuzz_known.txt`
+counts the known failures per device, primitive and status (plus unattributed
+tiles and failing combinations). With `--known`, those are reported as known
+broken, and the run fails if any primitive fails more often, or in another way,
+than listed. Fewer failures are reported so the list can be updated with
+`fuzz_report.py --write-known`. Counts do not notice one case of a primitive
+being fixed while another breaks the same way; the run's reports do.

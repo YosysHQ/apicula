@@ -19,7 +19,7 @@ import sys
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [os.path.dirname(TOOLS), TOOLS]
-from tiled_fuzzer import apicula_errors, outcomes  # noqa: E402
+from tiled_fuzzer import apicula_errors, outcomes, write_known  # noqa: E402
 from apycula import attrids, chipdb  # noqa: E402
 
 # fuse table -> (logicinfo table, attribute ids, value ids)
@@ -69,19 +69,13 @@ def main(argv):
     ap.add_argument('-d', '--device', required=True)
     ap.add_argument('out')
     ap.add_argument('--rows', type=int, default=15, help='fuse rows to show per primitive')
-    ap.add_argument('--write-known', metavar='JSON',
+    ap.add_argument('--write-known', metavar='FILE',
                     help="record this run's failures as the device's known failures, for tiled_fuzzer.py --known")
     args = ap.parse_args(argv)
     if args.write_known:
-        known = {}
-        if os.path.exists(args.write_known):
-            with open(args.write_known) as f:
-                known = json.load(f)
-        known[args.device] = dict(sorted(outcomes(args.out).items()))
-        with open(args.write_known, 'w') as f:
-            json.dump(known, f, indent=1, sort_keys=True)
-            f.write('\n')
-        print(f'{len(known[args.device])} known failures for {args.device} in {args.write_known}')
+        found = outcomes(args.out)
+        write_known(args.write_known, args.device, found)
+        print(f'{sum(found.values())} known failures for {args.device} in {args.write_known}')
         return
     db = chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{args.device}.msgpack.xz'))
 
