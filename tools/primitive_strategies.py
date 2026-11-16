@@ -28,6 +28,7 @@ SITES = {
     'OSC': 'osc',
     # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
     'rPLL': 'pll',
+    **{name: 'iob' for name in ['IBUF', 'OBUF', 'TBUF', 'IOBUF']},
     **{name: 'bsram' for name in ['SP', 'SPX9', 'pROM', 'pROMX9', 'ROM', 'SDP', 'SDPB', 'SDPX9B',
                                   'DP', 'DPB', 'DPX9B']},
 }
@@ -59,6 +60,36 @@ def pll_dividers(draw, spec):
         return {}
     fb, od = draw(st.sampled_from(choices))
     return {'FCLKIN': f'"{fclkin}"', 'IDIV_SEL': str(idiv), 'FBDIV_SEL': str(fb), 'ODIV_SEL': str(od)}
+
+
+# I/O settings are constraint-file attributes (IO_PORT), not primitive
+# parameters, so primitive.xml has no domain for them. Values are those the
+# chipdb's IOB logicinfo knows; IO_TYPE maps to the bank voltage it needs.
+# Single-ended standards only for now.
+IO_STANDARDS = {
+    'LVTTL33': '3.3', 'LVCMOS33': '3.3', 'PCI33': '3.3', 'SSTL33_I': '3.3', 'SSTL33_II': '3.3',
+    'LVCMOS25': '2.5', 'SSTL25_I': '2.5', 'SSTL25_II': '2.5',
+    'LVCMOS18': '1.8', 'SSTL18_I': '1.8', 'SSTL18_II': '1.8', 'HSTL18_I': '1.8', 'HSTL18_II': '1.8',
+    'LVCMOS15': '1.5', 'SSTL15': '1.5', 'HSTL15_I': '1.5',
+    'LVCMOS12': '1.2',
+}
+IO_INPUT_ATTRS = {'PULL_MODE': ['UP', 'DOWN', 'NONE', 'KEEPER'], 'HYSTERESIS': ['NONE', 'H2L', 'L2H', 'HIGH']}
+IO_OUTPUT_ATTRS = {'PULL_MODE': ['UP', 'DOWN', 'NONE', 'KEEPER'], 'DRIVE': ['4', '8', '12', '16', '24'],
+                   'SLEW_RATE': ['SLOW', 'FAST'], 'OPEN_DRAIN': ['ON', 'OFF']}
+
+
+def io_case(prim):
+    """An I/O buffer with IO_TYPE and a random subset of its attributes. The
+    Case params are the IO_PORT attributes."""
+    attrs = {}
+    if prim in ('IBUF', 'IOBUF'):
+        attrs.update(IO_INPUT_ATTRS)
+    if prim in ('OBUF', 'TBUF', 'IOBUF'):
+        attrs.update(IO_OUTPUT_ATTRS)
+    fields = {'IO_TYPE': st.sampled_from(sorted(IO_STANDARDS))}
+    fields.update({k: st.one_of(st.none(), st.sampled_from(v)) for k, v in attrs.items()})
+    return st.fixed_dictionaries(fields).map(
+        lambda d: Case(prim, tuple(sorted((k, v) for k, v in d.items() if v is not None))))
 
 
 # Rules across parameters, or values the XML allows but the vendor rejects.
@@ -147,6 +178,8 @@ class Primitives:
         return None
 
     def case(self, prim):
+        if SITES.get(prim) == 'iob':
+            return io_case(prim)
         fields = {}
         for name, param in self.spec[prim]['params'].items():
             fixed = self.fixed(prim, name, param)
