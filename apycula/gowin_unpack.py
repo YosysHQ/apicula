@@ -256,7 +256,18 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table, tableName)
     # find candidates from fuse table
     # the set bits are more unique
     attrvals = set()
-    cnd = {av: bits for av, bits in fuse_table.items() if is_pos_key(av) and bits.issubset(set_bits)}
+    # Rows keyed on a single attribute value. The vendor sets the fuses of every
+    # row whose keys all hold, so an attribute value whose own row's fuses are
+    # not set is not present. This separates rows with identical fuses, such as
+    # (REGMODE=FF, CLKMUX_CLK=INV) and (REGMODE=LATCH, CLKMUX_CLK=SIG) in CLS
+    # tables, where only REGMODE=LATCH alone has a fuse of its own.
+    single = {}
+    for av, bits in fuse_table.items():
+        keys = [k for k in av if k]
+        if len(keys) == 1 and keys[0] > 0:
+            single[keys[0]] = bits
+    cnd = {av: bits for av, bits in fuse_table.items() if is_pos_key(av) and bits.issubset(set_bits)
+           and all(single.get(k, set()).issubset(set_bits) for k in av if k > 0)}
     for av, bits in cnd.items():
         keep = True
         for bt in cnd.values():

@@ -14,20 +14,32 @@ checks many of them. Each design goes through:
 - Apicula: Yosys (no synthesis), nextpnr with the same placement given as BEL
   attributes, then gowin_pack.
 
-The two bitstreams are compared tile by tile on the bits that are not routing
-fuses. Differences also present in a design with no cases (the I/O harness) are
-subtracted. Each remaining difference is reported against the cases placed in
-that tile, and the case is written out on its own for `--replay`.
+Each case is then checked twice:
+
+- Both bitstreams are unpacked with gowin_unpack (tools/unpacked_netlist.py).
+  The case's cell is described by type, parameters and the harness pin feeding
+  each input, or for a LUT its truth table over those pins, which makes the
+  vendor's LUT input permutation irrelevant. The vendor and Apicula
+  descriptions must agree, and must agree with the generated case.
+- The bitstreams are compared tile by tile on the bits that are not routing
+  fuses, which catches fuses the unpacker does not decode. Differences also
+  present in a design with no cases (the I/O harness) are subtracted.
+
+Statuses: ok; partial (agrees, but some input could not be traced through the
+unpacked routing); mismatch (vendor and Apicula differ); decode (they agree with
+each other but not with the generated case: an unpacker bug, or a mistake both
+make); invalid (the vendor rejected the case). Failing cases are written out on
+their own for `--replay`.
 
 Tools: YOSYS and NEXTPNR environment variables, else yosys/nextpnr-himbaechel,
 else their yowasp- versions.
 """
 import argparse
 import collections
-import itertools
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +48,7 @@ TOOLS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TOOLS)
 sys.path[:0] = [REPO, TOOLS]  # this checkout's apycula, not an installed one
 import primitive_strategies as ps  # noqa: E402
+import unpacked_netlist  # noqa: E402
 from apycula import bslib, chipdb, codegen  # noqa: E402
 
 # device: (vendor device, part number, package). From legacy/tiled_fuzzer.py.
@@ -146,7 +159,7 @@ def netlist(batch, spec, pins):
     # Cases are independent: 1-bit inputs come from distinct input pins and
     # outputs are left unconnected. Chaining one case into the next lets the
     # vendor propagate constants between them; it keeps unloaded cells anyway.
-    names = {}
+    names, wiring = {}, {}
     for i, (case, site) in enumerate(batch):
         name = f'inst{i}_{case.prim}'
         names[name] = (case, site)
@@ -155,13 +168,14 @@ def netlist(batch, spec, pins):
         for port in ins:
             conns[port] = 'clk' if port == 'CLK' else sources.pop(0) if sources else 'gnd'
         inst(case.prim, name, conns, case.params)
+        wiring[name] = conns
         if site:
             cst.cells[name] = (site[0] + 1, site[1] + 1, site[2], site[3])
 
     mod.outputs.add('out_pad')
     inst('OBUF', 'harness_ob', {'I': data[0], 'O': 'out_pad'})
     cst.ports['out_pad'] = pins['out']
-    return mod, cst, names
+    return mod, cst, names, wiring
 
 
 def bel_name(case, site):
@@ -277,43 +291,171 @@ def fuse_tables(db, r, c, bit):
     return owners[:4]
 
 
-# ---------------------------------------------------------------- LUTs
+# ---------------------------------------------------------------- unpacked netlists
 
-def lut_init(db, tile, r, c, bel):
-    """16-bit INIT of a LUT bel; a set fuse means a 0 in the table."""
-    return sum((0 if all(tile[y][x] for y, x in bits) else 1) << i
-               for i, bits in db[r, c].bels[bel].flags.items())
-
-
-def lut_expected(case):
-    n = int(case.prim[3:])
-    init = int(dict(case.params)['INIT'].split("'")[1][1:], 2 if "'b" in dict(case.params)['INIT'] else 16)
-    return sum(((init >> (i & ((1 << n) - 1))) & 1) << i for i in range(16))
+def literal_value(text):
+    text = str(text).strip().strip('"')
+    m = re.fullmatch(r"(\d+)'([bhd])([0-9a-fA-F_]+)", text)
+    if m:
+        return int(m.group(3).replace('_', ''), {'b': 2, 'h': 16, 'd': 10}[m.group(2)])
+    return int(text) if re.fullmatch(r'-?\d+', text) else text.upper()
 
 
-def permuted(init, perm):
-    return sum(((init >> sum(((i >> k) & 1) << perm[k] for k in range(4))) & 1) << i for i in range(16))
+def truth_table(inputs, init):
+    """Canonical LUT function: {frozenset of (net, value) for the nets it reads: out}.
+    `inputs` are net labels per LUT input; VCC/VSS are constants. Inputs whose
+    net is unknown must not change the output, else the result is None."""
+    nets = sorted({n for n in inputs if n not in ('VCC', 'VSS')})
+    table = {}
+    for i in range(1 << len(nets)):
+        env = {n: (i >> k) & 1 for k, n in enumerate(nets)}
+        env.update(VCC=1, VSS=0)
+        idx = sum(env[n] << k for k, n in enumerate(inputs))
+        table[frozenset(env.items())] = (init >> idx) & 1
+    # drop nets the function does not depend on
+    for n in nets:
+        if all(table[k] == table[k ^ {(n, 0), (n, 1)}] for k in table if (n, 0) in k):
+            table = {k - {(n, 0), (n, 1)}: v for k, v in table.items()}
+    if any(n.startswith('?') for k in table for n, _ in k):
+        return None
+    return {k - {('VCC', 1), ('VSS', 0)}: v for k, v in table.items()}
 
 
-def check_lut(db, vt, at, case, site):
-    """The routers may connect the inputs to the LUT pins in any order and
-    rewrite INIT to match, so the vendor INIT is compared up to an input
-    permutation. Apicula keeps the pin order, so its INIT must match exactly."""
-    r, c = site[0], site[1]
-    bel = case_bel(case, site)
-    want = lut_expected(case)
-    got_v, got_a = lut_init(db, vt[(r, c)], r, c, bel), lut_init(db, at[(r, c)], r, c, bel)
-    problems = []
-    if got_a != want:
-        problems.append(f'{bel} apicula INIT {got_a:04x}, expected {want:04x}')
-    if not any(permuted(want, p) == got_v for p in itertools.permutations(range(4))):
-        problems.append(f'{bel} vendor INIT {got_v:04x} is no input permutation of {want:04x}')
-    return problems
+class Decoded:
+    """A case as found in an unpacked bitstream."""
+
+    def __init__(self, nl, spec, iob_nets):
+        self.nl, self.iob_nets = nl, iob_nets
+        nl.set_outputs({t: {p for p, (d, _) in v['ports'].items() if d == 'output'} for t, v in spec.items()})
+
+    def net(self, wire):
+        """Harness net label for a wire, following pass-through LUTs."""
+        root = self.nl.find(wire)
+        for _ in range(8):
+            if root in self.iob_nets:
+                return self.iob_nets[root]
+            if root in ('VCC', 'VSS'):
+                return root
+            drv = self.nl.driver.get(root)
+            if not drv or self.nl.cells[drv[0]]['type'] != 'LUT4':
+                break
+            cell = self.nl.cells[drv[0]]
+            init = literal_value(cell['params'].get('INIT', 0))
+            passthrough = [p for k, p in enumerate(('I0', 'I1', 'I2', 'I3'))
+                           if all(((init >> i) & 1) == ((i >> k) & 1) for i in range(16))]
+            if not passthrough:
+                break
+            root = self.nl.find(cell['ports'][passthrough[0]])
+        return f'?{root}'
+
+    def find(self, case, site):
+        if site is None:
+            return next((n for n, c in self.nl.cells.items() if c['type'].startswith(case.site.upper())), None)
+        r, c, cls, ab = site
+        if case.site == 'lut':
+            name = f'R{r + 1}C{c + 1}_LUT4_{2 * cls + "AB".index(ab)}'
+            return name if name in self.nl.cells else None
+        prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{2 * cls}'
+        return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
+                     and cell['type'].startswith(('DFF', 'DL'))), None)
+
+    def describe(self, case, site):
+        name = self.find(case, site)
+        if name is None and case.site == 'lut':
+            # constant LUTs are written as an assign of the F wire to VCC or VSS
+            r, c, cls, ab = site
+            const = self.nl.find(f'R{r + 1}C{c + 1}_F{2 * cls + "AB".index(ab)}')
+            if const in ('VCC', 'VSS'):
+                return {'cell': 'LUT', 'function': [f':{int(const == "VCC")}']}
+        if name is None:
+            return {'cell': None}
+        cell = self.nl.cells[name]
+        if case.site == 'lut':
+            inputs = [self.net(cell['ports'][p]) for p in ('I0', 'I1', 'I2', 'I3')]
+            return {'cell': 'LUT', 'function': table_str(truth_table(inputs, literal_value(cell['params']['INIT'])))}
+        ins = {p: self.net(w) for p, w in cell['ports'].items() if self.nl.driver.get(self.nl.find(w)) != (name, p)}
+        return canonical({'cell': cell['type'], 'params': {k: literal_value(v) for k, v in cell['params'].items()},
+                          'inputs': ins})
+
+
+def table_str(table):
+    if table is None:
+        return None
+    return sorted(f'{",".join(f"{n}={v}" for n, v in sorted(k))}:{out}' for k, out in table.items())
+
+
+_SR = {'S': 'SET', 'R': 'RESET', 'P': 'PRESET', 'C': 'CLEAR'}
+
+
+def canonical(desc):
+    """Flip-flops in one form: DFF without E has CE=VCC, and a set/reset input
+    tied to VSS is no set/reset. The unpacker emits e.g. DFFPE with CE=VCC for
+    a DFFP."""
+    m = re.fullmatch(r'DFF(N?)([SRPC]?)(E?)', desc.get('cell') or '')
+    if not m:
+        return desc
+    neg, sr, ce = m.groups()
+    ins = dict(desc['inputs'])
+    out = {'cell': 'DFF', 'params': desc['params'],
+           'inputs': {'D': ins.get('D'), 'CLK': ins.get('CLK'), 'CE': ins.get('CE') if ce else 'VCC'},
+           'edge': 'neg' if neg else 'pos', 'sr': None}
+    if sr and ins.get(_SR[sr]) != 'VSS':
+        out['sr'] = sr
+        out['inputs']['SR'] = ins.get(_SR[sr])
+    return out
+
+
+def describe_generated(case, conns, spec):
+    if case.site == 'lut':
+        n = int(case.prim[3:])
+        inputs = [conns[f'I{i}'] for i in range(n)]
+        return {'cell': 'LUT', 'function': table_str(truth_table(inputs, literal_value(dict(case.params)['INIT'])))}
+    ins = {p: conns.get(p, 'VSS') for p, (d, _) in spec[case.prim]['ports'].items() if d == 'input'}
+    return canonical({'cell': case.prim, 'params': {k: literal_value(v) for k, v in case.params},
+                      'inputs': {p: 'VSS' if n == 'gnd' else n for p, n in ins.items()}})
+
+
+def compare(a, b):
+    """(equal, partial). Only what both sides have is compared: the unpacker
+    does not emit every parameter. Nets the unpacked netlist could not trace
+    (labelled '?...', or a LUT function of None) match anything, and make the
+    comparison partial."""
+    partial = False
+    for key in ('cell', 'edge', 'sr'):
+        if a.get(key) != b.get(key):
+            return False, partial
+    fa, fb = a.get('function'), b.get('function')
+    if fa is None or fb is None:
+        partial = partial or a.get('cell') == 'LUT'
+    elif fa != fb:
+        return False, partial
+    for key in ('params', 'inputs'):
+        x, y = a.get(key) or {}, b.get(key) or {}
+        for k in x.keys() & y.keys():
+            if str(x[k]).startswith('?') or str(y[k]).startswith('?'):
+                partial = True
+            elif x[k] != y[k]:
+                return False, partial
+    return True, partial
+
+
+def iob_net_map(db, nl, pins, pinout):
+    """Root net of each harness input pin's IBUF output -> harness net label."""
+    out = {}
+    labels = {pins['clk']: 'clk', **{p: f'in{i}' for i, p in enumerate(pins['in'])}}
+    for pin, label in labels.items():
+        side, num, ab = re.fullmatch(r'IO([TBLR])(\d+)([A-Z])', pinout[pin][0]).groups()
+        num = int(num)
+        r, c = {'T': (1, num), 'B': (db.rows, num), 'L': (num, 1), 'R': (num, db.cols)}[side]
+        cell = nl.cells.get(f'R{r}C{c}_IBUF_{ab}')
+        if cell:
+            out[nl.find(cell['ports']['O'])] = label
+    return out
 
 
 def run_batch(args, db, spec, pins, batch, workdir, baseline):
     vendor_device, part, _ = DEVICES[args.device]
-    mod, cst, names = netlist(batch, spec, pins)
+    mod, cst, names, wiring = netlist(batch, spec, pins)
     vres = run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
     if vres is None:
         return {'error': 'vendor produced no bitstream; see vendor/impl/pnr/top.log'}, None
@@ -321,6 +463,13 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
     vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
     at = chipdb.tile_bitmap(db, abm, empty=True)
     diffs = diff_bits(db, vt, at)
+    decoded = {}
+    if batch:
+        pinout = db.pinout.get(vendor_device, db.pinout[args.device])[DEVICES[args.device][2]]
+        for side, fs in (('vendor', os.path.join(workdir, 'vendor/impl/pnr/top.fs')),
+                         ('apicula', os.path.join(workdir, 'apicula/top.fs'))):
+            nl = unpacked_netlist.unpack(args.device, fs, os.path.join(workdir, f'{side}_unpack.v'), REPO)
+            decoded[side] = Decoded(nl, spec, iob_net_map(db, nl, pins, pinout))
     if baseline is not None:
         diffs = {k: v - baseline.get(k, set()) for k, v in diffs.items()}
         diffs = {k: v for k, v in diffs.items() if v}
@@ -336,11 +485,19 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
         if problems:
             res['status'] = 'invalid'
             res['why'] = problems
-        elif case.site == 'lut':
-            problems = check_lut(db, vt, at, case, site)
-            if problems:
+        else:
+            gen = describe_generated(case, wiring[name], spec)
+            dv, da = decoded['vendor'].describe(case, site), decoded['apicula'].describe(case, site)
+            equal, partial_va = compare(dv, da)
+            decoded_ok, partial_vg = compare(dv, gen)
+            if not equal:
                 res['status'] = 'mismatch'
-                res['why'] = problems
+            elif not decoded_ok:
+                res['status'] = 'decode'
+            elif partial_va or partial_vg:
+                res['status'] = 'partial'
+            if res['status'] != 'ok':
+                res['generated'], res['vendor'], res['apicula'] = gen, dv, da
         results[name] = res
         if site:
             loc = (site[0], site[1])
@@ -355,7 +512,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
         for bit, v in sorted(bits):
             bel = bit_owner(db, r, c, bit)
             if bel and bel.startswith('LUT') and (r, c, bel) in by_bel:
-                continue  # LUT INIT is compared by check_lut
+                continue  # the vendor permutes LUT inputs; compared through the unpacked netlists
             owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c), [])
             detail = f'{bit} vendor={v} apicula={1 - v} {bel or ""} {fuse_tables(db, r, c, bit)}'
             if not owners:
@@ -424,11 +581,14 @@ def main(argv):
             continue
         for name, res in report['cases'].items():
             totals[res['status']] += 1
-            if res['status'] != 'ok':
+            if res['status'] not in ('ok', 'partial'):
                 path = os.path.join(workdir, f'{res["status"]}_{name}.json')
                 with open(path, 'w') as f:
                     json.dump(res, f, indent=1)
                 print(f'batch{i} {name} {res["status"]}: {res["case"]} at {res["site"]} -> {path}')
+                for side in ('generated', 'vendor', 'apicula'):
+                    if side in res:
+                        print(f'     {side:9}', res[side])
                 for line in res.get('why', []):
                     print('    ', line)
                 for tile, bits in res.get('diffs', {}).items():
