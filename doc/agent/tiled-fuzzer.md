@@ -7,6 +7,64 @@ vendor run answered many questions. Here the cases are random primitive
 configurations, and the question is whether Apicula and the vendor produce the
 same fuses for them. IDE **1.9.10.03**.
 
+## Gaps found, for future work
+
+Each item has a section below with the evidence. Trivial ones were fixed on the
+way; these were not.
+
+**`gowin_pack`**
+- **I/O:**
+  - one `IO_TYPE` per bank, where the vendor allows any standards of one
+    voltage (SSTL18 with HSTL18, SSTL33 with LVCMOS33);
+  - unused-I/O `BANK_VCCIO` fuses, and bank-tile `IO_TYPE=…,IO_BANK` /
+    `BLVDS…` rows;
+  - input `CLAMP`;
+  - `DRIVE,OPENDRAIN`, `ODMUX`, `PULLMODE`;
+  - GW5A output `ODMUX`/`DRIVE` rows (check `fuse_cell_offset` first).
+- **I/O logic:** `CLKIDDRMUX_ECLK`/`CLKODDRMUX_ECLK=ECLK1`, `GSR=DISGSR`,
+  `LSRIMUX`/`LSROMUX`, `ODDR` `OUTMODE`; GW5A `FCLKSEL*`.
+- **BSRAM:**
+  - pipelined (`READ_MODE=1`) output registers;
+  - byte enables (`BELB`/`BEHB`);
+  - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`.
+- **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
+  filter, `KVCO`, `ODIVn`, dynamic enables.
+- **Rejects legal settings:**
+  - `ALU_MODE=5` (no chipdb mode);
+  - GW5A `OSCA` `FREQ_DIV=3`;
+  - constant `CIN` is done with a head ALU, where the vendor folds it into the
+    ALU's LUTs.
+
+**nextpnr**
+- `INS_LOC` is parsed but never applied.
+- `SDP`, `DP` and `ROM` give "Unsupported BSRAM type".
+- A constrained `rPLL` on GW2A-18C is bound twice.
+- `IODELAY` on GW5A-25A fails an internal check (`DLLSTEP` port).
+
+**Yosys cell library**
+- Latches use `CLK`/`CE` where the vendor has `G`/`GE`.
+- `DLP*`/`DLNP*` `INIT` default 0, vendor 1.
+- Missing primitives, such as `rROM`, `rSDP` and `IODELAYA/B/C`.
+
+**`gowin_unpack`**
+- SSTL/HSTL `IBUF` decode as `OBUF`; `TBUF` as `IOBUF`; differential buffers as
+  their single-ended or tristate forms.
+- `IDDR`/`ODDR`/`IODELAY` and several `OSER`/`IDES` give no cell or the wrong one.
+- PLL reverse mapping: `PSDA_SEL`, `DUTYDA_SEL`, `DYN_SDIV_SEL`, delay steps.
+- No `rPLL` cell on GW2A.
+- `OSCA` written as `OSC`.
+- No BSRAM parameters.
+
+**Fuzzer coverage still missing**
+- Clock buffers and dividers (`BUFG`, `BUFS`, `DCS`, `DQCE`, `DHCEN`,
+  `CLKDIV`, `CLKDIV2`).
+- `LUT5`–`LUT8` and `MUX2_LUT*`.
+- SSRAM (`RAM16S*`, `RAM16SDP*`).
+- DSP.
+- GW2A `PLL`, GW5A `DDRDLL`/`DLLDLY`, `ADC`, MIPI.
+- I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
+  OPEN_DRAIN and DIFF_RESISTOR.
+
 ## Pipeline
 
 1. **Generate.** `tools/primitive_strategies.py` builds Hypothesis strategies from
