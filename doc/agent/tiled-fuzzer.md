@@ -112,6 +112,9 @@ isolation.
 
 - All 20 DFF types, LUT1–LUT4 and OSC (`FREQ_DIV` across its range) match:
   167 cases in 27 designs, `-n 40 --seed 3`, by fuses only.
+- With undriven data inputs and exact comparison, `-n 40 --seed 7`: all 168
+  cases in 28 designs ok. The only vendor warnings were dangling nets and the
+  unused clock pin.
 - With the unpacked comparison, `-n 3`: all 55 cases ok. Given the master
   unpacker's netlist instead, all 20 negative-edge DFF cases fail, and a LUT INIT
   off by one bit is rejected, so the check can fail.
