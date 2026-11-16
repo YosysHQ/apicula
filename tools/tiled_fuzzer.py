@@ -116,6 +116,10 @@ class Sites:
                 r, c, ab = io_loc(db, name)
                 self.iob.append((r, c, f'IOB{ab}', pin))
         rng.shuffle(self.iob)
+        # IDES16/OSER16 need an "X16 location" (vendor PR2046): pin A of a tile
+        # whose io16 role is MAIN; the AUX tile beside it is used as well
+        self.iob16 = [s for s in self.iob if s[2] == 'IOBA'
+                      and db.extra_func.get(s[:2], {}).get('io16', {}).get('role') == 'MAIN']
         # differential pairs: A is the positive pin; TLVDS needs true-LVDS pins
         self.tlvds, self.elvds = [], []
         names = {name: pin for pin, (name, funcs) in (pinout or {}).items() if not funcs and pin not in harness}
@@ -177,7 +181,8 @@ def allocate(cases, sites):
     # I/O cases: one bank voltage per design, since a bank has one VCCIO
     by_vccio = collections.defaultdict(list)
     for case in queues.pop('iob', []) + queues.pop('diob', []) + queues.pop('iol', []):
-        pool = case.prim.split('_')[0].lower() if case.site == 'diob' else 'iob'
+        pool = (case.prim.split('_')[0].lower() if case.site == 'diob'
+                else 'iob16' if case.prim in ('IDES16', 'OSER16') else 'iob')
         by_vccio[(ps.io_vccio(case), pool)].append(case)
     for (_, pool), group in by_vccio.items():
         free = getattr(sites, pool)
