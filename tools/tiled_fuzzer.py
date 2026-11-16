@@ -534,7 +534,8 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         abm, placed = run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
     except subprocess.CalledProcessError:
         with open(os.path.join(workdir, 'apicula/tools.log'), errors='replace') as f:
-            why = [line.strip() for line in f if 'ERROR' in line]
+            why = [line.strip() for line in f
+                   if 'ERROR' in line or re.match(r'\w+(Error|Exception): ', line)]
         return {'error': 'the Apicula flow failed', 'why': why}, None
     vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
     at = chipdb.tile_bitmap(db, abm, empty=True)

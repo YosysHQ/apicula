@@ -180,6 +180,69 @@ The VCO range is from the vendor's message for GW1NR-9C.
 - `DEVICE` is left out of the comparison. It sets no fuse, and the unpacker
   writes the family name (`GW1N-9C` for `GW1NR-9C`).
 
+## I/O buffers (GW1N-9C)
+
+`IBUF`, `OBUF`, `TBUF` and `IOBUF` cases carry IO_PORT attributes, not
+parameters: an `IO_TYPE` (single-ended standards for now) and a random subset of
+`PULL_MODE` and `HYSTERESIS` (inputs) and `DRIVE`, `SLEW_RATE`, `OPEN_DRAIN`
+(outputs). The values are those the chipdb's IOB logicinfo knows.
+
+- **Placement and wiring.** Each buffer goes on a plain package pin with
+  `IO_LOC`, which nextpnr honours, so no BEL attribute is needed. Its pad is a
+  top-level port. Its data and enable inputs come from the harness pins.
+- **Bank voltage.** Cases are grouped by the voltage their `IO_TYPE` needs. The
+  harness pins use the matching LVCMOS standard, and each voltage class gets its
+  own baseline.
+- **Fuse ownership.**
+  - bits only in the `IOBA` or `IOBB` longval table belong to that buffer;
+  - bank-tile bits belong to every I/O case in the bank;
+  - differences in I/O tiles with no case go to the I/O cases of the same bank,
+    because unused I/Os follow the bank settings.
+- **Combination failures.** When Apicula fails on a whole design that the vendor
+  accepts, that counts as a failure ("unsupported combinations"), even if every
+  case passes alone.
+
+### Results: `-n 15 --seed 11`, 60 cases
+
+| | Count |
+|---|---|
+| mismatch | 22 |
+| decode | 16 |
+| unsupported (single case) | 22 |
+| unsupported combinations | 48 designs |
+
+None ok. Each finding below was seen in at least one case. None has been
+checked against `libgowin`.
+
+**Apicula refuses designs the vendor builds**
+- **One `IO_TYPE` per bank.** `gowin_pack` raises "IO_TYPE conflict" when two
+  standards with the same voltage share a bank: SSTL18 with HSTL18, SSTL with a
+  LVCMOS33 or LVCMOS18 harness pin. The vendor accepts these. This causes all 48
+  combination failures and most single-case ones.
+- **Missing standards.** `PCI33` and `HSTL15_I` raise `KeyError` in `gowin_pack`,
+  and so does `HSTL18_II`, as `'HSTL'` after the alias.
+
+**Fuse differences**
+- **CLAMP:** for `IBUF`s with LVCMOS15, LVCMOS25 and PCI33, the vendor sets a fuse
+  in the `CLAMP=ON` / `CLAMP=PCI` rows that Apicula never sets. `gowin_pack`'s
+  input defaults have `CLAMP=OFF`.
+- **Unused I/Os:** with a PCI33 `IBUF` in bank 2, Apicula sets the
+  `BANK_VCCIO=1.2/1.8` row fuses on every unused I/O in the bank and the vendor
+  does not. Also, with the harness alone at LVCMOS33, 168 bits differ across the
+  unused I/O tiles of several banks; at LVCMOS18, 22 bits.
+- **DRIVE:** `OBUF` LVCMOS12 `DRIVE=16` gets different fuses in the
+  `IO_TYPE,DRIVE,OPENDRAIN` rows.
+- **Output mux, slew and pull:** for `OBUF` and `IOBUF` LVCMOS15, the `ODMUX_1`,
+  `SLEWRATE` and `PULLMODE` row fuses differ, in both directions depending on
+  the case.
+
+**Unpacker**
+- SSTL and HSTL `IBUF`s decode as `OBUF`, from both bitstreams.
+  `gowin_unpack` calls a buffer `OBUF` whenever `ODMUX` decodes; LVTTL33 and
+  LVCMOS `IBUF`s decode correctly.
+- `TBUF` decodes as `IOBUF`.
+- Some `TBUF`/`IOBUF` cases produce no buffer cell.
+
 ## Adding a primitive
 
 Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site
