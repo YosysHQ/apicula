@@ -6,17 +6,8 @@ reverse engineering. All of it refers to IDE **1.9.10.03** unless stated otherwi
 Treat these notes as working documents. Claims are marked as read from code,
 checked against data, or inferred. Correct them when they turn out to be wrong.
 
-Working notes, referenced from `AGENTS.md`:
-
-- [codebase.md](codebase.md): building, the modules, chipdbs, wire names and
-  supported devices.
-- [testing.md](testing.md): regression tests, vendor tests with the tiled
-  fuzzer, hardware-in-the-loop tests, and comparisons with `master`.
-- [reverse-engineering.md](reverse-engineering.md): tools for reading
-  `libgowin.so` and the IDE's data, and the scripts in `tools/`.
-
-Findings:
-
+- [codebase.md](codebase.md), [testing.md](testing.md) and
+  [reverse-engineering.md](reverse-engineering.md): details for `AGENTS.md`.
 - [primitive-to-fuse.md](primitive-to-fuse.md): how the vendor turns primitives
   into fuses, and how that compares with Apicula's structures.
 - [fse-format.md](fse-format.md): `.fse` table types, per-device layouts and open
@@ -29,4 +20,4 @@ Findings:
 - [hand-written-tables.md](hand-written-tables.md): which Apicula tables have a
   vendor source, and what each `logicinfo` table is for.
 
-The rules are in [`AGENTS.md`](../../AGENTS.md).
+Process notes and tooling are in [`AGENTS.md`](../../AGENTS.md).

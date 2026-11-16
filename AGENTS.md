@@ -1,45 +1,29 @@
 # Agent notes
 
-Rules for working on Apicula. The details live in [`doc/agent/`](doc/agent/README.md):
+Rules for working on Apicula. Details, and findings about the vendor code and
+data, live in [`doc/agent/`](doc/agent/README.md). Add to them when you learn
+something new.
 
-- [codebase.md](doc/agent/codebase.md): building, the modules, chipdbs, wire
-  names and supported devices;
-- [testing.md](doc/agent/testing.md): how to write and run each kind of test
-  required below;
-- [reverse-engineering.md](doc/agent/reverse-engineering.md): tools for reading
-  the IDE;
-- the other files: findings about the vendor code and data. Add to them when you
-  learn something new.
-
-## Pull requests: issue first for outside contributors, drafts for everyone
+## Issues and draft pull requests
 
 Reviewing a generated pull request costs the maintainers more than writing the
-change, unless its scope and design were agreed beforehand. Before preparing a
-pull request, check the user's access:
+change. Before preparing a pull request, check the user's access:
 
     gh repo view YosysHQ/apicula --json viewerPermission -q .viewerPermission
 
 - `WRITE`, `MAINTAIN` or `ADMIN`: a maintainer. Go ahead.
-- Anything else, or no `gh` login: an outside contributor. A change of a few
-  lines (a typo, a build fix) can go straight to a pull request. Anything larger
-  needs an issue first, in which a maintainer has agreed the scope and design:
-  - With no such issue, draft one instead and do not push. The user posts it
-    themselves. Describe the problem, a small reproducer (the design, device and
-    commands) and the proposed approach, and keep the deeper analysis in a
-    collapsed block.
-  - With one, keep the pull request to what was agreed and link the issue. If
-    the work turns out to need a different scope or design, raise it in the
-    issue rather than changing course in the pull request.
+- Anything else, or no `gh` login: an outside contributor. Unless the change is
+  a few lines (a typo, a build fix), or a maintainer agreed its scope and design
+  in an issue, draft an issue instead and do not push. The user posts it
+  themselves. Describe the problem, a small reproducer (the design, device and
+  commands) and the proposed approach, and keep the deeper analysis in a
+  collapsed block. See [AI_POLICY.md](AI_POLICY.md).
 
-  See [AI_POLICY.md](AI_POLICY.md).
-
-Open every pull request as a draft (`gh pr create --draft`) unless the user
-asks otherwise. The user marks it ready after reviewing it.
+Open pull requests as drafts (`gh pr create --draft`) unless the user asks
+otherwise.
 
 ## Project
 
-Apicula (package Apycula) generates bitstreams for Gowin FPGAs from nextpnr
-output, using device databases reverse engineered from the vendor IDE:
 Verilog → Yosys → nextpnr → `gowin_pack` → openFPGALoader. See
 [codebase.md](doc/agent/codebase.md).
 
@@ -47,39 +31,26 @@ Verilog → Yosys → nextpnr → `gowin_pack` → openFPGALoader. See
   Only analyse that version. Enums, table types and layouts change between
   releases.
 - Set `GOWINHOME` to the install root, the directory containing `IDE/`.
-- Build with `.venv`: `PATH=$PWD/.venv/bin:$PATH make -j4`. The chipdb build
+- Use `.venv` for builds: `PATH=$PWD/.venv/bin:$PATH make -j4`. The chipdb build
   fails on a Python without `msgspec`.
 - For "C" devices, pass the family (`GW1N-9C`) to nextpnr's `--vopt family` and
   to `gowin_pack -d`.
 
 ## Testing
 
-This is critical. A change is not done until it has the tests below, they pass,
-and the pull request says what was run. Reading the vendor code is not enough,
-and neither is a design that builds. [testing.md](doc/agent/testing.md) says how
-to do each.
+A change is not done until it has these tests and the pull request says what was
+run. See [testing.md](doc/agent/testing.md).
 
-1. **Every fix has a regression test** that fails on `master` and passes with
-   the fix. Put it at the cheapest level that shows the bug: a test in `tests/`
-   for Python logic, a fuzzer case for a vendor mismatch, a hardware-in-the-loop
-   test for a bug seen only on hardware.
-2. **Every new primitive is tested against the vendor across a wide range of
-   parameters.** Add it to `tools/primitive_strategies.py`, so that
-   `tools/tiled_fuzzer.py` generates every parameter value the vendor accepts,
-   and run it on every fuzzer device that has the primitive. All cases must be
-   `ok`; explain any that are not. The same applies to a new parameter or mode
-   of an existing primitive, and to features that are not a single primitive,
-   such as routing, clocking or timing. If the fuzzer cannot generate the
-   feature yet, extend it, or build the comparison it needs. A one-off
-   comparison by hand does not replace this.
+1. **Every fix has a regression test** that fails on `master`.
+2. **Every new primitive, parameter or feature is tested against the vendor**
+   across a wide range of parameters with `tools/tiled_fuzzer.py`, on every
+   device that has it. If the fuzzer cannot generate it yet (routing, clocking,
+   timing), extend it; a one-off comparison by hand does not count.
 3. **Every new primitive has a hardware-in-the-loop test** for at least one
-   configuration, on a board in the rig: a self-checking design in `examples/`
-   with a reference in `examples/hil-references/`. If the rig has no board for
-   the primitive's family, say so in the pull request.
+   configuration, or the pull request says the rig has no board for its family.
 4. **Existing output does not change by accident.** Pack the same nextpnr JSON
-   with `master` and your branch, and `cmp` the bitstreams for designs that do
-   not use the feature. Explain every difference. For a chipdb change, compare
-   with `tools/chipdb_compare.py`, not byte for byte.
+   with `master` and your branch, `cmp` the bitstreams for designs that do not
+   use the feature, and explain every difference.
 
 ## Reverse engineering the IDE
 
@@ -113,9 +84,8 @@ trailers. Cover what applies:
 - **Iteration**: what the human corrected, rejected or redirected.
 - **Evidence**: what was read from vendor code, what was checked against IDE
   bitstreams, and what is inferred, as in the section above.
-- **Testing**: the tests from [Testing](#testing): the regression test, fuzzer
-  commands, seeds and totals, the HIL test, which designs were compared with the
-  vendor and with `master`, and how any differences were explained.
+- **Testing**: the tests from [Testing](#testing), and how any differences
+  were explained.
 
 Name who did what ("Claude traced...", "Pepijn rejected..."). Do not pad it: a
 one-line fix gets one line. Keep the `Co-Authored-By` trailer, which records the
@@ -134,9 +104,8 @@ Collaborative Work Statement:
   frequency.
 - Claude traced the FRAC attributes in fusegenMem::setPllAttr (IDE 1.9.10.03);
   Pepijn rejected deriving them from the GW1N tables, since the encoding differs.
-- Testing: tests/test_pll.py checks the FRAC fuses for FRAC=3 and fails on
-  master; tiled_fuzzer -d GW5A-25A -n 20 --seed 1 --prims PLLA: 20 ok; the other
-  examples are byte-identical to master.
+- Testing: IDE and Apicula bitstreams for pll-frac on GW5A-25A agree for
+  FRAC=0, 3 and 7; the other examples are byte-identical to master.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ```
