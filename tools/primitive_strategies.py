@@ -39,6 +39,7 @@ SITES = {
     **{name: 'ssram' for name in ['RAM16SDP1', 'RAM16SDP2', 'RAM16SDP4', 'ROM16', 'RAM16S1', 'RAM16S2', 'RAM16S4']},
     # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
     'rPLL': 'pll',
+    'PLL': 'pll',  # GW1N/GW2A non-reconfigurable PLL; same sites as rPLL
     'PLLA': 'plla',
     **{name: 'iob' for name in ['IBUF', 'OBUF', 'TBUF', 'IOBUF']},
     **{f'{kind}_{buf}': 'diob' for kind in ('TLVDS', 'ELVDS') for buf in ('IBUF', 'OBUF', 'TBUF', 'IOBUF')},
@@ -332,7 +333,7 @@ class Primitives:
             return (st.fixed_dictionaries(fields).map(accload_fixup)
                     .filter(lambda d: all(ok(d) for ok in rules))
                     .map(lambda d: Case(prim, tuple(sorted(d.items())))))
-        if prim == 'rPLL':
+        if prim in ('rPLL', 'PLL'):
             base = st.fixed_dictionaries(fields)
             return st.tuples(base, pll_dividers(self.spec[prim]['params'])).map(
                 lambda t: Case(prim, tuple(sorted({**t[0], **t[1]}.items()))))

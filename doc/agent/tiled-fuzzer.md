@@ -51,6 +51,7 @@ way; these were not.
 - A BEL attribute on `RAM16SDP2/4` crashes nextpnr, and on `RAM16SDP1` or a DSP
   leaves helper cells unplaced. ALU clusters ignore BEL.
 - `RAM16SDP1` fails to route; there is no bel for `RAM16S1/2/4`.
+- No bel for the GW1N/GW2A `PLL` primitive, only `rPLL`.
 
 **Yosys cell library**
 - Latches use `CLK`/`CE` where the vendor has `G`/`GE`.
@@ -71,7 +72,7 @@ way; these were not.
   `CLKDIV`, `CLKDIV2`).
 - `LUT5`–`LUT8` and `MUX2_LUT*`. nextpnr has no `LUT5`+ primitive; the vendor
   needs `MUX2_LUT*` driven by LUTs.
-- GW2A `PLL`, GW5A `DDRDLL`/`DLLDLY`, `ADC`, MIPI.
+- GW5A `DDRDLL`/`DLLDLY`, `ADC`, MIPI.
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
 
@@ -524,6 +525,21 @@ With a BEL attribute nextpnr does the following:
     plus `CASO`, `MULT27X36=ENABLE` and `CE*_MUX`, that Apicula does not.
   - `MULTALU27X18`: `PRELOAD_BIT_*` and `DYN_P_ADDSUB` rows differ.
 - **Vendor routing:** the vendor failed to route some designs (PR0004).
+
+## Slice primitives on GW2A-18C and GW5A-25A
+
+- **GW2A-18C** (`-n 2`):
+  - all 12 latch types match, 24/24, including `DLN*` after the unpacker fix;
+  - `RAM16SDP4` shows the GW1N `LSRONMUX`/`LSR_MUX` rows;
+  - `ROM16`: no vendor cell where nextpnr put its LUT (26 vendor-only fuses);
+  - ALU: the constant carry-in difference;
+  - `PLL` (not `rPLL`): nextpnr only has `rPLL` bels ("Bel … of type 'rPLL'
+    does not match cell … of type 'PLL'").
+- **GW5A-25A** (`-n 3`):
+  - `DFFRE`, `DFFSE`, `DFFPE`, `DFFCE`, `DLCE`, `DLPE` and `LUT4` all match (15
+    cases);
+  - ALU: Apicula also sets `MODE_5A_1=ALU` in CLS0, which the vendor does not
+    with a constant carry-in, and `ALU_MODE=5` raises `KeyError`.
 
 ## Adding a primitive
 
