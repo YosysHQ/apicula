@@ -29,6 +29,14 @@ way; these were not.
   - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`.
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
+- **SSRAM:**
+  - `RAM16SDP4` CLS `LSRONMUX`/`LSR_MUX` rows;
+  - no `RAM16SDP2` handler.
+- **DSP:**
+  - GW1N/GW2A input register muxes (`AIRMUX`/`BIRMUX`), `RSTGEN*MUX`, and the
+    pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows;
+  - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
+  - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`.
 - **Rejects legal settings:**
   - `ALU_MODE=5` (no chipdb mode);
   - GW5A `OSCA` `FREQ_DIV=3`;
@@ -40,6 +48,9 @@ way; these were not.
 - `SDP`, `DP` and `ROM` give "Unsupported BSRAM type".
 - A constrained `rPLL` on GW2A-18C is bound twice.
 - `IODELAY` on GW5A-25A fails an internal check (`DLLSTEP` port).
+- A BEL attribute on `RAM16SDP2/4` crashes nextpnr, and on `RAM16SDP1` or a DSP
+  leaves helper cells unplaced. ALU clusters ignore BEL.
+- `RAM16SDP1` fails to route; there is no bel for `RAM16S1/2/4`.
 
 **Yosys cell library**
 - Latches use `CLK`/`CE` where the vendor has `G`/`GE`.
@@ -58,9 +69,8 @@ way; these were not.
 **Fuzzer coverage still missing**
 - Clock buffers and dividers (`BUFG`, `BUFS`, `DCS`, `DQCE`, `DHCEN`,
   `CLKDIV`, `CLKDIV2`).
-- `LUT5`–`LUT8` and `MUX2_LUT*`.
-- SSRAM (`RAM16S*`, `RAM16SDP*`).
-- DSP.
+- `LUT5`–`LUT8` and `MUX2_LUT*`. nextpnr has no `LUT5`+ primitive; the vendor
+  needs `MUX2_LUT*` driven by LUTs.
 - GW2A `PLL`, GW5A `DDRDLL`/`DLLDLY`, `ADC`, MIPI.
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
@@ -466,6 +476,54 @@ The unsupported cases are the one-`IO_TYPE`-per-bank check.
   - **`ALU_MODE=5`** is allowed by `primitive.xml` and accepted by the vendor,
     but the chipdb's ALU modes are 0–4, 6–9, `C2L`, `ONE2C` and `hadder`. So
     `gowin_pack` raises `KeyError: '5'`.
+
+## SSRAM and DSP
+
+Both are placed by nextpnr first, and the vendor is constrained to where
+nextpnr put them (`FOLLOW_NEXTPNR`): `INS_LOC Rr Cc` for SSRAM,
+`DSP_R<row>[n][A|B]` for DSP (n-th block of the row, macro from the bel name).
+With a BEL attribute nextpnr does the following:
+- **`RAM16SDP2/4`:** crashes (a Wasm trap in YoWASP's nextpnr).
+- **`RAM16SDP1`:** leaves its `BLOCKER_LUT`/`BLOCKER_FF` cells unplaced.
+- **DSP:** leaves `DUMMY_CELL`s unplaced.
+
+**SSRAM** (GW1N-9C, `-n 3`)
+- **`RAM16SDP4`:** the CLS2 row `!LSRONMUX=LSRMUX` is set by the vendor, and
+  `LSR_MUX_1`/`LSR_MUX_LSR=INV` by Apicula.
+- **`RAM16SDP2`:** `gowin_pack` has no `get_RAM16SDP2_fuses`.
+- **`RAM16SDP1`:** nextpnr fails to route ("No wire found for port DO").
+- **`RAM16S1/2/4`:** nextpnr has no bel for single-port SSRAM.
+- **`ROM16`:** nextpnr implements it as a LUT; its INIT is compared as the ROM
+  contents.
+- **Unpacker:** every SSRAM decodes as `RAM16SDP4`.
+
+**DSP**
+- **Comparison:** fuses over the main tile and its `DSP_AUX` tiles. The rows
+  that only pick a block's clock, CE or reset line (`CLKINn`, `CEINn`, `RSTINn`)
+  are masked as routing, because the tools route the same nets to different
+  lines. A fuse those rows share with a configuration row is masked too.
+- **Rules,** from vendor messages:
+  - GW1N/GW2A PA2079: the ACCLOAD path may not have more register stages than
+    the data path. Which input register counts is inferred.
+  - GW5A PA2113: register clocks may not be `BYPASS` with `SOA_PREG_EN`,
+    `FB_PREG_EN` or `DYN_ACC_SEL`.
+- **Fixed:** B-side pre-adder register attributes. `gowin_pack` named them
+  like the A side (`IRNS_PRAD0BL_0` instead of `_2`), so every `PADD` with
+  `BREG` raised `KeyError`. Replayed cases now pack, with no `IRNS/IRBY_PRAD`
+  differences.
+- **GW1N-9C** (`-n 3`, before the line mask): 2 ok, 18 mismatch.
+  - `AIRMUX1_SEL`/`BIRMUX0_*` input register muxes for `MULT9X9`/`MULT18X18`/`ALU54D`;
+  - `RSTGEN*MUX_REG*=SYNC`;
+  - `PRAD_MUXA1_*`, `PRAD_FBB1` and `MATCH*` for `PADD9`/`PADD18`;
+  - `RCISEL_*` for `MULTALU18X18`.
+- **GW2A-18C** (`-n 2`): 3 ok, 12 mismatch, with the same `AIRMUX`/`BIRMUX` and
+  `PRAD_*` rows.
+- **GW5A-25A** (`-n 3`):
+  - `MULT12X12` 3/3 and `MULTADDALU12X12` 2/2 ok.
+  - `MULT27X36` mismatches: the vendor sets 28 `MULT_RESET_MODE=ASYNC` row fuses,
+    plus `CASO`, `MULT27X36=ENABLE` and `CE*_MUX`, that Apicula does not.
+  - `MULTALU27X18`: `PRELOAD_BIT_*` and `DYN_P_ADDSUB` rows differ.
+- **Vendor routing:** the vendor failed to route some designs (PR0004).
 
 ## Adding a primitive
 

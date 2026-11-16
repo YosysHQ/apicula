@@ -188,12 +188,25 @@ def plla_fixup(p):
     return p
 
 
+def gw5a_dsp_clock_fixup(p):
+    """PA2113 on GW5A-25A: a register clock may not be BYPASS when a feature
+    needs the register. MULTALU27X18: AREG_CLK with SOA_PREG_EN, OREG_CLK with
+    FB_PREG_EN; MULTADDALU12X12: OREG_CLK with DYN_ACC_SEL (dynamic
+    accumulation). Applied to every GW5A DSP that has these parameters."""
+    p = dict(p)
+    for feature, clock in (('SOA_PREG_EN', 'AREG_CLK'), ('FB_PREG_EN', 'OREG_CLK'), ('DYN_ACC_SEL', 'OREG_CLK')):
+        if p.get(feature) == '"TRUE"' and p.get(clock) == '"BYPASS"':
+            p[clock] = '"CLK0"'
+    return p
+
+
 def accload_fixup(p):
     """PA2079 on GW1N-9C MULTALU36X18: "Level of ACCLOAD-path ... should not be
     more than data-path(INPUT_REG + PIPE_REG)'s via register". Rejected with
     ACCLOAD_REG0/1 = 1/1 and AREG/BREG/PIPE_REG = 0/1/0. Which input register
     counts is inferred: the larger of the A and B registers, plus the pipeline
     registers. ACCLOAD stages are dropped until they fit."""
+    p = gw5a_dsp_clock_fixup(p)
     if 'ACCLOAD_REG0' not in p:
         return p
     p = dict(p)

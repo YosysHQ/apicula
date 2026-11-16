@@ -480,8 +480,26 @@ def route_mask(db, r, c):
             for srcs in table.values():
                 for _, fuses in srcs:
                     bits |= fuses
+        bits |= dsp_line_select_bits(db, ttyp)
         _masks[ttyp] = bits
     return _masks[ttyp]
+
+
+def dsp_line_select_bits(db, ttyp):
+    """Fuses of DSP rows that only pick which of a block's clock, CE or reset
+    lines (CLKINn, CEINn, RSTINn) a register uses. That follows from routing:
+    the tools pick different lines for the same nets."""
+    li = db.rev_logicinfo('DSP') if 'DSP' in db.logicinfo else {}
+    names = {v: k for k, v in attrids.dsp_attrvals.items()}
+    out = set()
+    for table, rows in db.shortval.get(ttyp, {}).items():
+        if not table.startswith('DSP'):
+            continue
+        for key, bits in rows.items():
+            vals = [names.get(li[k][1], '') for k in key if k > 0 and k in li]
+            if vals and all(re.fullmatch(r'(CLK|CE|RST)IN\d', v) for v in vals):
+                out |= bits
+    return out
 
 
 def diff_bits(db, vt, at):

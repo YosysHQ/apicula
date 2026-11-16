@@ -29,6 +29,7 @@ TABLES = {
     'PLL': ('PLL', attrids.pll_attrids, attrids.pll_attrvals),
     'IOLOGIC': ('IOLOGIC', attrids.iologic_attrids, attrids.iologic_attrvals),
     'DSP': ('DSP', attrids.dsp_attrids, attrids.dsp_attrvals),
+    '5A_DSP': ('5A_DSP', attrids.dsp_5a_attrids, attrids.dsp_5a_attrvals),
 }
 
 
