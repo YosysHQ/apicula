@@ -154,7 +154,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        board: [tec0117, tangnano20k]
+        board: [tangnano9k, tangnano20k]
     steps:
     - uses: actions/checkout@v7
     - name: Download bitstreams
