@@ -62,8 +62,13 @@ class Case:
 def literal(param, value):
     """Verilog literal for a value drawn from `param`'s domain."""
     if param['kind'] == 'bits':
+        # in the radix of the default in primitive.xml: the vendor rejects LUT3
+        # INIT 8'b10010101 and DFF INIT 1'h1 with PA1002 (invalid value), and
+        # the XML has 8'h00 and 1'b0
         w = param['width']
-        return f"{w}'b{value:0{w}b}" if w <= 8 else f"{w}'h{value:0{(w + 3) // 4}x}"
+        if "'b" in param['default']:
+            return f"{w}'b{value:0{w}b}"
+        return f"{w}'h{value:0{(w + 3) // 4}x}"
     if param['type'] == 'string':
         return f'"{value}"'
     return str(value)

@@ -23,22 +23,19 @@ same fuses for them. IDE **1.9.10.03**.
 4. **Compare through the unpacker.** The chipdb exists by the time the fuzzer
    runs, so both bitstreams are unpacked with `gowin_unpack`.
    Each case sits on a known bel, so only the cell found there is compared:
-   type, parameters, LUT INIT, and which inputs are tied to a constant. Nets
-   are dummies and are not traced. `tools/unpacked_netlist.py` joins the
+   type, parameters (LUT INIT included), and which inputs are tied to a
+   constant. Nets are not traced. `tools/unpacked_netlist.py` joins the
    `assign` and `` `define `` statements only to see whether an input is VCC or
    VSS. Flip-flops are put in one form: no E means CE=VCC, and a set/reset
    input tied to VSS means no set/reset.
-   - vendor ≠ Apicula: **mismatch**, a packer difference. The vendor's LUT INIT
-     only has to match up to an input permutation;
+   - vendor ≠ Apicula: **mismatch**, a packer difference;
    - vendor = Apicula, but Apicula ≠ generated: **decode**, an unpacker bug or a
-     mistake both make. nextpnr keeps LUT pin order, so Apicula's INIT must match
-     exactly.
+     mistake both make.
 5. **Compare fuses.** As a backstop for fuses the unpacker does not decode, both
    bitstreams are also split into tiles. Routing fuses are masked: `pips`,
    `clock_pips`, `alonenode` and `alonenode_6`. Each remaining difference is
    assigned to a bel (LUT INIT fuses, the `CLSn` slice table) and so to the case
-   placed there. LUT INIT fuses are skipped, because of the permutation.
-   Differences that a design with no cases also shows (the I/O harness) are
+   placed there. Differences that a design with no cases also shows (the I/O harness) are
    subtracted.
 
 `--replay` reruns saved cases, one per design, to confirm a mismatch in
@@ -52,19 +49,30 @@ isolation.
 - **The two flip-flops of a slice share clock, CE and set/reset modes.** Giving
   them different DFF types makes the vendor drop one with `CT1094 can't be
   placed according to constraint`.
-- **Cases must not drive each other.** With one case's output chained into the
-  next, the vendor propagated a constant and turned `LUT1` INIT `2'b10` into a
-  constant `ffff`. The vendor keeps cells whose outputs are unused (a LUT4's INIT
-  fuses were identical with and without a load), so outputs are left unconnected
-  and inputs come from input pins.
-- **The vendor permutes LUT inputs.** It connects the nets to A–D in its own order
-  and rewrites INIT to match. 15 of 16 LUT mismatches in the first run were exact
-  input permutations. The 16th was the constant propagation above. So the
-  vendor's INIT is compared up to an input permutation.
+- **Dummy nets, as in the old tiled fuzzer.** Data inputs (LUT `I0`–`I3`, DFF
+  `D`) get their own undriven wire, and outputs are left unconnected. The vendor
+  keeps cells whose outputs are unused: a LUT4's INIT fuses were identical with
+  and without a load. Two earlier wirings failed:
+  - Chaining one case's output into the next let the vendor propagate a
+    constant, turning `LUT1` INIT `2'b10` into a constant `ffff`.
+  - Driving LUT inputs from input pins made the vendor's router connect them to
+    A–D in its own order and rewrite INIT to match. 15 of 16 LUT differences were
+    exact input permutations. With undriven inputs the vendor's INIT matched the
+    generated one exactly in 12 of 12 LUTs.
+- **Slice control inputs are driven.** Undriven CE and set/reset inputs become
+  constants in both flows, so a DFFRE decodes as a DFFR with CE=VCC, and the
+  flip-flop type cannot be checked. CLK, CE and SET/RESET/PRESET/CLEAR therefore
+  come from input pins. They use dedicated slice ports, so nothing can be
+  reordered.
 - **The netlist dialect.** Every port must be connected (PA2058), and sized
-  constants on ports are rejected (PA2000). Unused inputs go to a `GND` cell's
-  net. `PA1002` (invalid parameter value) and `CT1094` mark a case invalid rather
-  than a mismatch.
+  constants on ports are rejected (PA2000). Bus inputs go to a `GND` cell's net.
+  Bit-vector parameters must be written in the radix of their default in
+  `primitive.xml`: LUT3 INIT `8'b10010101` and DFF INIT `1'h1` are both rejected
+  with PA1002 (invalid parameter value), while `8'h95` and `1'b1` are accepted.
+  `PA1002` and `CT1094` mark a case invalid rather than a mismatch.
+- **`codegen.Pnr.read_err_log` recorded nothing** until this branch. It kept only
+  lines starting with `Warning` or `Error`, while 1.9.10.03 writes `WARN` and
+  `ERROR`.
 - **Bus outputs.** The vendor rejected a `wire [7:0]` connected to the output
   bus of `DLL` with PA2060, "crosses the bits border". Primitives with bus
   outputs will need a different way of leaving outputs unconnected.

@@ -17,11 +17,10 @@ checks many of them. Each design goes through:
 Each case is then checked twice:
 
 - Both bitstreams are unpacked with gowin_unpack (tools/unpacked_netlist.py),
-  and the cell on the case's site is compared: type and parameters, which
-  inputs are tied to a constant, and LUT INIT. The vendor permutes LUT inputs,
-  so its INIT only has to match up to a permutation. Nets are dummies and are
-  not traced. Vendor and Apicula must agree, and Apicula must agree with the
-  generated case.
+  and the cell on the case's site is compared: type and parameters (LUT INIT
+  included) and which inputs are tied to a constant. Nets are not traced.
+  Vendor and Apicula must agree, and Apicula must agree with the generated
+  case.
 - The bitstreams are compared tile by tile on the bits that are not routing
   fuses, which catches fuses the unpacker does not decode. Differences also
   present in a design with no cases (the I/O harness) are subtracted.
@@ -38,7 +37,6 @@ import argparse
 import collections
 import json
 import os
-import itertools
 import random
 import re
 import shutil
@@ -63,6 +61,8 @@ DEVICES = {
     'GW2A-18': ('GW2A-18', 'GW2A-LV18PG256C8/I7', 'PBGA256'),
     'GW2A-18C': ('GW2A-18C', 'GW2A-LV18PG256SC8/I7', 'PBGA256S'),
 }
+
+CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR'}
 
 # Vendor log codes that make a case invalid rather than a mismatch.
 INVALID_CODES = {'PA1002': 'invalid parameter value', 'CT1094': 'not placed at its constraint'}
@@ -157,17 +157,27 @@ def netlist(batch, spec, pins):
         if pin != 'clk':
             data.append(pin)
 
-    # Cases are independent: 1-bit inputs come from distinct input pins and
-    # outputs are left unconnected. Chaining one case into the next lets the
-    # vendor propagate constants between them; it keeps unloaded cells anyway.
+    # As in the old tiled fuzzer, data inputs get their own undriven dummy wires
+    # and outputs are left unconnected. Nothing is routed to a LUT, so neither
+    # tool reorders its inputs, and no constant reaches a case. The vendor keeps
+    # cells whose outputs are unused. Slice control inputs (clock, CE, set/reset)
+    # come from input pins: left undriven they become constants, which hides the
+    # flip-flop type. They use dedicated slice ports, so they cannot be reordered.
     names, wiring = {}, {}
     for i, (case, site) in enumerate(batch):
         name = f'inst{i}_{case.prim}'
         names[name] = (case, site)
-        ins = [p for p, (d, w) in spec[case.prim]['ports'].items() if d == 'input' and w == 1]
         conns, sources = {}, data[i % len(data):] + data[:i % len(data)]
-        for port in ins:
-            conns[port] = 'clk' if port == 'CLK' else sources.pop(0) if sources else 'gnd'
+        for port, (d, w) in spec[case.prim]['ports'].items():
+            if d != 'input' or w != 1:
+                continue
+            if port == 'CLK':
+                conns[port] = 'clk'
+            elif port in CONTROL_PORTS and sources:
+                conns[port] = sources.pop(0)
+            else:
+                conns[port] = f'{name}_{port}'
+                mod.wires.add(conns[port])
         inst(case.prim, name, conns, case.params)
         wiring[name] = conns
         if site:
@@ -306,10 +316,6 @@ def literal_value(text):
     return int(text) if re.fullmatch(r'-?\d+', text) else text.upper()
 
 
-def permuted(init, perm):
-    return sum(((init >> sum(((i >> k) & 1) << perm[k] for k in range(4))) & 1) << i for i in range(16))
-
-
 def lut_init(case):
     """16-bit INIT of a generated LUTn: unused inputs do not matter."""
     n = int(case.prim[3:])
@@ -380,22 +386,13 @@ def describe_generated(case, conns, spec):
     return canonical(case.prim, {k: literal_value(v) for k, v in case.params}, inputs)
 
 
-def same(a, b, permute=False):
+def same(a, b):
     """Compare descriptions. Parameters are compared where both sides have them,
-    because the unpacker does not emit every parameter. With `permute`, LUT INIT
-    may differ by an input permutation: the vendor connects LUT inputs in its
-    own order and rewrites INIT to match. nextpnr keeps the order."""
+    because the unpacker does not emit every parameter."""
     if a.keys() != b.keys():
         return False
-    for key in a.keys() - {'params', 'init'}:
-        if a[key] != b[key]:
-            return False
-    if 'init' in a:
-        if a['init'] is None or b['init'] is None:
-            return a['init'] == b['init']
-        perms = itertools.permutations(range(4)) if permute else [(0, 1, 2, 3)]
-        if not any(permuted(a['init'], p) == b['init'] for p in perms):
-            return False
+    if any(a[k] != b[k] for k in a.keys() - {'params'}):
+        return False
     x, y = a.get('params') or {}, b.get('params') or {}
     return all(x[k] == y[k] for k in x.keys() & y.keys())
 
@@ -434,7 +431,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
         else:
             gen = describe_generated(case, wiring[name], spec)
             dv, da = decoded['vendor'].describe(case, site), decoded['apicula'].describe(case, site)
-            if not same(dv, da, permute=True):
+            if not same(dv, da):
                 res['status'] = 'mismatch'
             elif not same(da, gen):
                 res['status'] = 'decode'
@@ -453,8 +450,6 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline):
     for (r, c), bits in sorted(diffs.items()):
         for bit, v in sorted(bits):
             bel = bit_owner(db, r, c, bit)
-            if bel and bel.startswith('LUT') and (r, c, bel) in by_bel:
-                continue  # the vendor permutes LUT inputs; compared through the unpacked netlists
             owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c), [])
             detail = f'{bit} vendor={v} apicula={1 - v} {bel or ""} {fuse_tables(db, r, c, bit)}'
             if not owners:

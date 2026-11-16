@@ -235,7 +235,7 @@ run pnr
                 if res:
                     line_type, code, name = res.groups()
                     text = res.group(0)
-                    if line_type in ["Warning", "Error"]:
+                    if line_type in ["Warning", "Error", "WARN", "ERROR"]:  # 1.9.10.03 writes WARN/ERROR
                         errs.setdefault((name, code), []).append(text)
         return errs
 
