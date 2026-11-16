@@ -301,7 +301,7 @@ hil-dsp-mult9x9-%: HIL_SETTLE = 10
 
 # --- tangnano9k (GW1N-9C) ---
 hil-%-tangnano9k: %-tangnano9k.fs hil-references/%.txt
-	openFPGALoader -c dirtyJtag -b tangnano9k $<
+	openFPGALoader -c dirtyJtag --usb-serial-num 000054f5634c -b tangnano9k $<
 	$(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_000054f5634c-if01) | diff hil-references/$*.txt -
 	@echo "PASS: $* (tangnano9k)"
 
@@ -322,7 +322,7 @@ hil-tangnano9k: \
 
 # --- tangnano20k (GW2A-18C) ---
 hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
-	openFPGALoader -c dirtyJtag -b tangnano20k $<
+	openFPGALoader -c dirtyJtag --usb-serial-num 0200 -b tangnano20k $<
 	$(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_0200-if01) | diff hil-references/$*.txt -
 	@echo "PASS: $* (tangnano20k)"
 
