@@ -67,6 +67,8 @@ DEVICES = {
     'GW5A-25A': ('GW5A-25A', 'GW5A-LV25MG121NC1/I0', 'MBGA121N'),
 }
 
+DIVIDER_LOAD = {'CLKDIV2', 'DHCEN'}
+CLOCK_INPUTS = {'HCLKIN', 'CLKIN', 'CLKIN0', 'CLK0', 'I'}
 CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR', 'GE'}
 
 # Ports the vendor and Yosys' cell library name differently. The Apicula side
@@ -216,6 +218,9 @@ def allocate(cases, sites):
     for case in cases:
         queues[case.site].append(case)
     batches = []
+    # clock primitives drive the harness output, so one per design; nextpnr and
+    # the vendor place them
+    batches += [[(case, None)] for case in queues.pop('clock', [])]
     for kind in ('alu', 'ssram'):  # these use slices too, so in designs of their own
         group, free = queues.pop(kind, []), getattr(sites, kind)
         for i in range(0, len(group), len(free) or 1):
@@ -345,6 +350,16 @@ def netlist(batch, spec, pins, harness_io_type=None):
             if case.site == 'iol' and port in ('CLK', 'PCLK', 'FCLK'):
                 conns[port] = 'clk'
                 continue
+            if case.site == 'clock':
+                # the first clock input from the clock pin, the rest from data pins
+                # DCS: every clock input from the clock pin (nextpnr crashes
+                # routing GW5A DCS inputs from plain pins)
+                if port in CLOCK_INPUTS and 'clk' not in conns.values() \
+                        or case.prim == 'DCS' and port.startswith('CLK') and port != 'CLKSEL':
+                    conns[port] = 'clk'
+                elif sources:
+                    conns[port] = sources.pop(0)
+                continue
             if case.site in IO_SITES and sources:
                 conns[port] = sources.pop(0)  # buffer data and enable inputs
             elif port == 'CLKIN' and sources:
@@ -377,7 +392,15 @@ def netlist(batch, spec, pins, harness_io_type=None):
             cst.cells[name] = (site[0] + 1, site[1] + 1, site[2], site[3])
 
     mod.outputs.add('out_pad')
-    inst('OBUF', 'harness_ob', {'I': data[0], 'O': 'out_pad'})
+    # a clock primitive drives the output; otherwise it would have no load
+    clock_out = next((f'{name}_{port}' for name, (case, _) in names.items() if case.site == 'clock'
+                      for port, (d, _) in spec[case.prim]['ports'].items() if d == 'output'), None)
+    if any(case.prim in DIVIDER_LOAD for case, _ in names.values()):
+        # these may only drive HCLK loads (vendor PR2060 on an OBUF): a CLKDIV
+        # with default settings passes them on
+        inst('CLKDIV', 'harness_div', {'HCLKIN': clock_out, 'RESETN': data[0]})
+        clock_out = 'harness_div_CLKOUT'
+    inst('OBUF', 'harness_ob', {'I': clock_out or data[0], 'O': 'out_pad'})
     cst.ports['out_pad'] = pins['out']
     if harness_io_type:
         cst.attrs['out_pad'] = {'IO_TYPE': harness_io_type}
@@ -398,6 +421,8 @@ def dsp_bel(db, r, c, prim):
 
 def bel_name(case, site):
     r, c, cls, ab = site
+    if cls == 'BEL':
+        return f'X{c}Y{r}/{ab}'
     if cls == 'DSP':
         return f'X{c}Y{r}/{DSP_BEL.get((r, c, case.prim))}'
     if cls == 'BSRAM':
@@ -449,6 +474,11 @@ def run_apicula(workdir, mod, cst, names, device, part):
     with open(path) as f:
         syn = json.load(f)
     for name, cell in syn['modules']['top']['cells'].items():
+        if cell['type'] == 'DCS' and 'DCS_MODE' in cell['parameters']:
+            # nextpnr reads DCS_MODE from attributes only (globals.cc), so a
+            # defparam is ignored and the DCS packed as RISING. Recorded in
+            # doc/agent/tiled-fuzzer.md; passed as an attribute to test gowin_pack.
+            cell['attributes']['DCS_MODE'] = cell['parameters']['DCS_MODE']
         if name in names and names[name][1] and names[name][0].site not in PIN_SITES | FOLLOW_NEXTPNR:
             cell['attributes']['BEL'] = bel_name(*names[name])  # nextpnr ignores INS_LOC
     with open(path, 'w') as f:
@@ -482,6 +512,10 @@ def route_mask(db, r, c):
                     bits |= fuses
         bits |= dsp_line_select_bits(db, ttyp)
         _masks[ttyp] = bits
+    # HCLK routing is per location, not per tile type
+    hclk = db.hclk_pips.get((r, c))
+    if hclk:
+        return _masks[ttyp] | {bit for srcs in hclk.values() for fuses in srcs.values() for bit in fuses}
     return _masks[ttyp]
 
 
@@ -549,6 +583,8 @@ def case_bel(case, site):
     r, c, cls, ab = site
     if case.site == 'iol':
         return f'IOLOGIC{cls[-1]}'
+    if cls == 'BEL':
+        return ab
     if cls in ('BSRAM', 'PLL', 'PLLA', 'RAM16', 'DSP') or str(cls).startswith('IOB'):
         return cls
     return f'LUT{2 * cls + "AB".index(ab)}' if case.site == 'lut' else f'CLS{cls}'
@@ -652,6 +688,8 @@ class Decoded:
             return {'cell': self.nl.cells[name]['type'] if name else None}
         if case.site == 'plla':
             return {'cell': 'PLLA'}  # compared through its bitstream slot in run_batch
+        if case.site == 'clock':
+            return {'cell': case.prim}  # gowin_unpack does not decode these; compared on fuses
         if case.site == 'dsp':
             return {'cell': 'DSP'}  # gowin_unpack decodes fuse-level modes only; compared on fuses
         if case.site == 'ssram' and isinstance(site[2], int):
@@ -702,8 +740,8 @@ def describe_generated(case, conns, spec):
         return {'cell': 'SSRAM', 'params': {k: literal_value(v) for k, v in case.params}}
     if case.site == 'alu':
         return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
-    if case.site == 'plla':
-        return {'cell': 'PLLA'}
+    if case.site in ('plla', 'clock'):
+        return {'cell': case.prim if case.site == 'clock' else 'PLLA'}
     if case.site == 'iol':
         return {'cell': case.prim, 'params': {k: literal_value(v) for k, v in case.params}}
     if case.site in IO_SITES:
@@ -755,6 +793,15 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     vres = None if follow else run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
     if not follow and vres is None:
         return vendor_failed(workdir)
+    if vres is not None:
+        # clock dividers: nextpnr follows the vendor's placement
+        for name, (case, site) in list(names.items()):
+            if case.site == 'clock' and site is None:
+                site = vendor_clock_site(db, chipdb.tile_bitmap(db, vres.bitmap, empty=True), case)
+                # GW5A-25A: the vendor uses HCLKDIV1 on X0Y1, where nextpnr has
+                # no CLKDIV_1 bel; compared without positions instead
+                if site and not re.fullmatch(r'CLKDIV_\d', site[3]):
+                    names[name] = (case, site)
     try:
         abm, aslots, placed = run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
     except subprocess.CalledProcessError:
@@ -813,7 +860,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                     for msg in msgs if code in INVALID_CODES or msg.startswith('ERROR')]
         # I/O is placed by IO_LOC; nextpnr merges differential buffers into cells
         # of other names, so check placement for the rest only
-        if site and case.site not in PIN_SITES | FOLLOW_NEXTPNR and placed.get(name) != bel_name(case, site):
+        if site and case.site not in PIN_SITES | FOLLOW_NEXTPNR | {'clock'} and placed.get(name) != bel_name(case, site):
             problems.append(f'nextpnr placed it at {placed.get(name)}')
         if problems:
             res['status'] = 'invalid'
@@ -830,6 +877,8 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         results[name] = res
         if site:
             loc = (site[0], site[1])
+        elif case.site == 'clock':
+            continue  # alone in its design: owns every difference (see below)
         else:
             # the bel is named after the primitive (OSCA) or the site kind (OSC)
             loc = SINGLETON_LOCS.setdefault(case.prim, find_bel(db, case.prim) or find_bel(db, case.site.upper()))
@@ -883,6 +932,43 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                 k: (dec[0].get(k), dec[1].get(k)) for k in dec[0].keys() | dec[1].keys()
                 if dec[0].get(k) != dec[1].get(k)}
 
+    # Clock primitives: nextpnr ignores BEL on CLKDIV and CLKDIV2, and places
+    # DHCEN by routing, so it may use another HCLK tile or section than the
+    # vendor. The HCLK settings are then compared without their positions: names
+    # without digits, and no HCLKDCS_SEL, which follows from the section. A
+    # CLKDIV or CLKDIV2 must also select the bel nextpnr placed it on.
+    hclk_tiles = set()
+    atiles = chipdb.tile_bitmap(db, abm, empty=True)
+
+    def hclk_settings(tiles):
+        strip = lambda t: re.sub(r'\d', '', t)
+        return sorted((strip(k), v if k.endswith('_DIV') else strip(str(v)))
+                      for av in hclk_attrs(db, tiles).values() for k, v in av.items()
+                      if not k.startswith('HCLKDCS'))
+
+    for name, (case, site) in names.items():
+        if case.site != 'clock' or results[name]['status'] != 'ok':
+            continue
+        if case.prim in ('CLKDIV', 'CLKDIV2'):
+            asite = vendor_clock_site(db, atiles, case)
+            if asite is None and site is None:
+                pass  # no fuses of its own (GW5A CLKDIV2)
+            elif asite is None or placed.get(name) != bel_name(case, asite):
+                results[name]['status'] = 'mismatch'
+                results[name]['why'] = [f'Apicula fuses select {asite and bel_name(case, asite)}, '
+                                        f'nextpnr placed it at {placed.get(name)}']
+                continue
+            elif asite == site:
+                continue  # same bel: the fuse comparison applies
+            else:
+                results[name]['placed'] = {'vendor': site and bel_name(case, site), 'apicula': placed.get(name)}
+        vh, ah = hclk_settings(vt), hclk_settings(atiles)
+        if vh != ah:
+            results[name]['status'] = 'mismatch'
+            results[name]['why'] = [f'HCLK settings: vendor {vh}, apicula {ah}']
+        hclk_tiles |= {k for k in vt if 'HCLK' in db.shortval.get(db[k].ttyp, {})}
+    diffs = {k: v for k, v in diffs.items() if k not in hclk_tiles}
+
     # Unused I/Os are configured from their bank's settings, so differences in
     # an I/O tile with no case belong to the I/O cases of that bank.
     by_bank = collections.defaultdict(list)
@@ -896,11 +982,14 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         banks = {db.pin_bank.get(io_name(db, r, c, ab)) for ab in 'AB'}
         return [n for b in banks for n in by_bank.get(b, [])]
 
+    # a clock primitive is alone in its design and placed by the tools, so the
+    # differences left over belong to it
+    clock_cases = [n for n, (case, _) in names.items() if case.site == 'clock']
     unattributed = {}
     for (r, c), bits in sorted(diffs.items()):
         for bit, v in sorted(bits):
             bel = bit_owner(db, r, c, bit)
-            owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c)) or bank_cases(r, c)
+            owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c)) or bank_cases(r, c) or clock_cases
             detail = f'{bit} vendor={v} apicula={1 - v} {bel or ""} {fuse_tables(db, r, c, bit)}'
             if not owners:
                 unattributed.setdefault(f'R{r + 1}C{c + 1}', []).append(detail)
@@ -913,6 +1002,46 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
 
 
 SINGLETON_LOCS = {}
+
+
+HCLK_VALS = {v: k for k, v in attrids.hclk_attrvals.items()}
+
+
+def hclk_attrs(db, tiles):
+    """Decoded HCLK attributes per tile: {(row, col): {attr: value}}."""
+    out = {}
+    for (r, c), bm in tiles.items():
+        table = db.shortval.get(db[r, c].ttyp, {}).get('HCLK')
+        if table:
+            av = gowin_unpack.parse_attrvals(bm, db.rev_logicinfo('HCLK'), table, attrids.hclk_attrids, 'HCLK')
+            if av:
+                out[(r, c)] = {k: HCLK_VALS.get(v, v) for k, v in av.items()}
+    return out
+
+
+def vendor_clock_site(db, tiles, case):
+    """Where the vendor put a CLKDIV or CLKDIV2, read from its HCLK fuses, as a
+    (row, col, 'BEL', bel) site for nextpnr. The vendor reports no position for
+    them. Other clock primitives return None and nextpnr places them."""
+    for (r, c), av in hclk_attrs(db, tiles).items():
+        clkdiv = db.extra_func.get((r, c), {}).get('clkdiv')
+        if clkdiv:
+            # GW5A: CLKDIV_<n> is configured by HCLKDIV<n>; CLKDIV2 has no fuses
+            n = next((n for n in clkdiv['bels'] if f'HCLKDIV{n}_DIV' in av), None)
+            if case.prim == 'CLKDIV' and n is not None:
+                return (r, c, 'BEL', f'CLKDIV_{n}')
+            continue
+        for h in '01':
+            if case.prim == 'CLKDIV' and f'HCLKDIV{h}_DIV' in av:
+                bel = f'CLKDIV_HCLK{h}_SECT{1 if f"HCLKDCS{h}_SEL" in av else 0}'
+            elif case.prim == 'CLKDIV2':
+                sect = next((s for s in '01' if av.get(f'BK{s}MUX{h}_OUTSEL') == 'DIV2'), None)
+                bel = sect and f'CLKDIV2_HCLK{h}_SECT{sect}'
+            else:
+                bel = None
+            if bel and bel in db[r, c].bels:
+                return (r, c, 'BEL', bel)
+    return None
 
 
 def find_bel(db, bel):

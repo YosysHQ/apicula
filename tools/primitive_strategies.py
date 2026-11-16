@@ -41,6 +41,8 @@ SITES = {
     'rPLL': 'pll',
     'PLL': 'pll',  # GW1N/GW2A non-reconfigurable PLL; same sites as rPLL
     'PLLA': 'plla',
+    # clock buffers, dividers and selectors: one per design, driving the harness output
+    **{name: 'clock' for name in ['CLKDIV', 'CLKDIV2', 'DCS', 'DQCE', 'DHCEN', 'BUFG', 'BUFS']},
     **{name: 'iob' for name in ['IBUF', 'OBUF', 'TBUF', 'IOBUF']},
     **{f'{kind}_{buf}': 'diob' for kind in ('TLVDS', 'ELVDS') for buf in ('IBUF', 'OBUF', 'TBUF', 'IOBUF')},
     # I/O logic: placed with an I/O buffer on a pin

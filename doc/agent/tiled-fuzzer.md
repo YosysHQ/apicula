@@ -52,6 +52,11 @@ way; these were not.
   leaves helper cells unplaced. ALU clusters ignore BEL.
 - `RAM16SDP1` fails to route; there is no bel for `RAM16S1/2/4`.
 - No bel for the GW1N/GW2A `PLL` primitive, only `rPLL`.
+- `DCS_MODE` is read from attributes only (`globals.cc`), so a `defparam`, as in
+  `examples/dcs.v`, is ignored and every DCS is packed as `RISING`.
+- `DCS` on GW5A-25A with inputs from I/O pins crashes in "Routing globals".
+- BEL is ignored on `CLKDIV`/`CLKDIV2`; on GW5A-25A there is no `CLKDIV_1` bel
+  where the vendor uses `HCLKDIV1`. No bel for `BUFS`.
 
 **Yosys cell library**
 - Latches use `CLK`/`CE` where the vendor has `G`/`GE`.
@@ -68,8 +73,6 @@ way; these were not.
 - No BSRAM parameters.
 
 **Fuzzer coverage still missing**
-- Clock buffers and dividers (`BUFG`, `BUFS`, `DCS`, `DQCE`, `DHCEN`,
-  `CLKDIV`, `CLKDIV2`).
 - `LUT5`–`LUT8` and `MUX2_LUT*`. nextpnr has no `LUT5`+ primitive; the vendor
   needs `MUX2_LUT*` driven by LUTs.
 - GW5A `DDRDLL`/`DLLDLY`, `ADC`, MIPI.
@@ -540,6 +543,41 @@ With a BEL attribute nextpnr does the following:
     cases);
   - ALU: Apicula also sets `MODE_5A_1=ALU` in CLS0, which the vendor does not
     with a constant carry-in, and `ALU_MODE=5` raises `KeyError`.
+
+## Clock primitives
+
+`BUFG`, `BUFS`, `DCS`, `DQCE`, `DHCEN`, `CLKDIV` and `CLKDIV2`, site kind
+`clock`. IDE 1.9.10.03, checked by running both flows.
+
+- **One per design.** The primitive's output drives the harness output pin, so
+  it has a load. Its first clock input comes from the harness clock pin, the
+  others and its control inputs from data pins. `DCS` gets the clock pin on every
+  clock input. Fuse differences left after the baseline belong to it.
+- **`CLKDIV2` and `DHCEN` may not drive an OBUF** (vendor PR2060: "The connection
+  … is incorrect"). A harness `CLKDIV` with default settings sits in between.
+- **Placement.** The vendor reports no position for these, so the fuzzer reads it
+  from the vendor's HCLK fuses (`HCLKDIV<h>_DIV`, with `HCLKDCS<h>_SEL` for
+  section 1; `BK<s>MUX<h>_OUTSEL=DIV2` for `CLKDIV2`) and gives nextpnr a BEL.
+  nextpnr ignores it: with the same clock pin on GW1N-9C, the vendor used
+  `CLKDIV_HCLK1_SECT1` and nextpnr `CLKDIV_HCLK0_SECT1` or `HCLK1_SECT0`.
+  `DHCEN` and `DCS` are chosen during routing.
+- **Comparison.** HCLK routing (`db.hclk_pips`) is masked for every case. Where
+  the placements differ, the decoded HCLK attributes are compared without
+  positions (digits dropped, `HCLKDCS*_SEL` left out), and a `CLKDIV`/`CLKDIV2`
+  must select, in Apicula's fuses, the bel nextpnr placed it on.
+- **Results** (`-n 6`):
+  - GW1N-9C and GW2A-18C: 15 of 16 match each: `CLKDIV` (4), `CLKDIV2` (2),
+    `DCS` (6 modes), `DHCEN`, `DQCE`, `BUFG`. `BUFS` is unsupported, with no bel in
+    nextpnr.
+  - GW5A-25A (no `DQCE`/`DHCEN`/`BUFG` in its `primitive.xml`): `CLKDIV` and
+    `CLKDIV2` 7 of 7 match. `CLKDIV2` has no fuses of its own there. All 6 `DCS`
+    cases crash nextpnr.
+- **`DCS_MODE` in nextpnr.** Before the fuzzer passed `DCS_MODE` as an attribute,
+  every GW1N-9C `DCS` case was a mismatch: the vendor set the `DCS6` long-fuse
+  row for the mode, Apicula the `RISING` row. nextpnr creates `$PACKER_DCS_*`
+  cells and copies only `attrs[DCS_MODE]` from the user cell. The fuzzer copies
+  the parameter to an attribute, so that `gowin_pack`'s encoding is still
+  tested; the nextpnr bug is in the gaps list.
 
 ## Adding a primitive
 
