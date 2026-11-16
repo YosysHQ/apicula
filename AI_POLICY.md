@@ -6,9 +6,9 @@ This makes the value of most AI contributions negative: It saves minimal effort 
 With that in mind:
 
 - If you're not a maintainer, please open an issue before opening a PR for anything more than a few lines
+- Spend your tokens on issues with an agreed scoped and design
 - Never submit code you don't understand
-- Communication between humans is sacred, and shows that you care, don't let your agent do the talking
-- But you may `>` quote your agent for extra details
+- Prefer human-authored communication for anything you care about
 
 ## As maintainers
 
