@@ -26,6 +26,7 @@ SITES = {
     **{f'LUT{n}': 'lut' for n in range(1, 5)},
     **{name: 'dff' for name in DFFS},
     'OSC': 'osc',
+    'OSCA': 'osc',
     # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
     'rPLL': 'pll',
     'PLLA': 'plla',
@@ -155,14 +156,21 @@ def plla_dividers(draw):
 
 def plla_fixup(p):
     """Rules between PLLA channel settings, from vendor messages on GW5A-25A:
-    PA2096 CLKOUTn_PE_COARSE <= ODIVn_SEL; PA2115 channel n disabled when
-    CLKn_OUT_SEL=1'b1; PA2093 CLKn_IN_SEL=1'b1 needs CLKn_OUT_SEL=1'b1 under
-    some dynamic settings (avoided by not combining them)."""
+    - PA2096: CLKOUTn_PE_COARSE < ODIVn_SEL. The message says "less than or
+      equal", but every case with equal values was rejected (7 cases);
+    - PA2115: channel n disabled when CLKn_OUT_SEL=1'b1;
+    - PA2093: DEn_EN and DYN_PEn_SEL must be FALSE when DYN_DPA_EN=FALSE, and
+      CLKn_IN_SEL=1'b1 needs CLKn_OUT_SEL=1'b1 under some dynamic settings
+      (avoided by not combining them)."""
     p = dict(p)
     for n in range(7):
         pe, od = f'CLKOUT{n}_PE_COARSE', f'ODIV{n}_SEL'
-        if pe in p and od in p and int(p[pe]) > int(p[od]):
-            p[pe] = p[od]
+        if pe in p and od in p and int(p[pe]) >= int(p[od]):
+            p[pe] = str(int(p[od]) - 1)
+        if p.get('DYN_DPA_EN') != '"TRUE"':
+            for k in (f'DE{n}_EN', f'DYN_PE{n}_SEL'):
+                if k in p:
+                    p[k] = '"FALSE"'
         if p.get(f'CLK{n}_OUT_SEL') == "1'b1":
             p[f'CLKOUT{n}_EN'] = '"FALSE"'
         elif p.get(f'CLK{n}_IN_SEL', "1'b0") not in ("1'b0", "2'b00"):
@@ -239,7 +247,10 @@ def param_strategy(param):
         return st.sampled_from(param['values'])
     if kind == 'range':
         lo, hi, step = param['min'], param['max'], param['step']
-        return st.integers(0, (hi - lo) // step).map(lambda i: lo + i * step)
+        values = st.integers(0, (hi - lo) // step).map(lambda i: lo + i * step)
+        if param.get('extra'):
+            values = st.one_of(values, st.sampled_from(param['extra']))
+        return values
     if kind == 'bits':
         return st.integers(0, (1 << param['width']) - 1)
     if kind == 'real':

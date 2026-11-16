@@ -25,7 +25,10 @@ optional `PARAM_VAL` entries:
 
 - Three entries `min`, `max`, `normal` form an inclusive range with step 1, for
   example `rPLL.IDIV_SEL` 0..63. With `even` instead of `normal` the step is 2, for
-  example `OSC.FREQ_DIV` 2..128. GW5A uses only `normal`.
+  example `OSC.FREQ_DIV` 2..128. GW5A uses `even` only for the `FREQ_DIV` of
+  `OSC`, `OSCA` and `OSCB`.
+- Entries after the range tag are allowed too. GW5A `OSCA.FREQ_DIV` is 2..126
+  `even` plus `3`.
 - Any other list is an enumeration, for example `rPLL.ODIV_SEL` 2, 4, 8, ... 128.
 - With no entries, the default is a sized literal such as `16'h0000`, meaning any
   value of that width. The exceptions are the real-valued `FCLKIN` of the PLLs and

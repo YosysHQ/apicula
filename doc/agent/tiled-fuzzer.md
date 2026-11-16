@@ -331,6 +331,59 @@ The unsupported cases are the one-`IO_TYPE`-per-bank check.
 - **Unpacker:** `OSER4`, `OSER8`, `IDDR`, `ODDR` and `IDES8` produce no cell;
   `IDDR`/`ODDR` decode as `IDDRC`/`ODDRC`.
 
+## PLLs and oscillators on GW2A-18C and GW5A-25A
+
+**GW2A-18C rPLL**
+- Apicula's chipdb marks the two row-10 PLLs disabled, and nextpnr does not
+  offer them, so cases use row 46 as `PLL_L[1]`/`PLL_R[1]`. Whether the vendor
+  can use the row-10 PLLs has not been checked.
+- **nextpnr binds a constrained rPLL twice:** "Cell 'inst0_rPLL' cannot be bound
+  to bel 'X55Y45/PLL' since it is already bound to cell 'inst0_rPLL'". This
+  happens even with `CLKIN` on a plain pin; GW1N-9C does not do it.
+- **`FBSEL` differs** in cases that got through, and `gowin_unpack` finds no
+  `rPLL` cell on GW2A.
+
+**GW5A-25A PLLA**
+- Six PLLs, configured through bitstream slots rather than tiles. The vendor
+  names them by side and row order. Checked by placing one PLL per name and
+  seeing which slot has data:
+
+  | Name | Slot | Tile (row, col) |
+  |---|---|---|
+  | `PLL_L[0]` | 5 | (0, 0) |
+  | `PLL_L[1]` | 6 | (27, 0) |
+  | `PLL_R[0]` | 3 | (0, 91) |
+  | `PLL_R[1]` | 2 | (27, 91) |
+  | `PLL_T` | 4 | (0, 45) |
+  | `PLL_B` | 8 | (36, 45) |
+
+  nextpnr's BEL is `X<c>Y<r>/PLL`.
+- **Comparison:** the fuzzer compares the slot bits, and the slot decoded with
+  `parse_attrvals` on `shortval[1024]['PLL']`.
+- **Rules,** all from vendor messages:
+  - PFD `FCLKIN/IDIV_SEL` 19–400 MHz;
+  - VCO `FCLKIN·FBDIV_SEL·(MDIV_SEL+MDIV_FRAC_SEL/8)/IDIV_SEL` 800–1600 MHz;
+  - `CLKOUTn_PE_COARSE < ODIVn_SEL`. The PA2096 message says "less than or
+    equal", but all 7 cases with equal values were rejected;
+  - channel n disabled when `CLKn_OUT_SEL=1'b1`;
+  - `DEn_EN` and `DYN_PEn_SEL` FALSE unless `DYN_DPA_EN`.
+- **Results,** `-n 8`: 7 of 8 cases decode differently from the two bitstreams.
+  - phase and duty (`CLKOUTn_PE_COARSE/FINE`, `DT_DIR`, `DT_STEP`);
+  - charge pump and loop filter (`ICP_SEL`, `LPF_RES_SEL`, `LPF_CAP_SEL`) and
+    `KVCO`;
+  - `ODIVn_SEL` rows that only Apicula's decode shows;
+  - `DEn_EN`/`DYN_PEn_SEL` set by Apicula, and `DYN_DPA_EN`/`SSC_EN`/
+    `FLDCOUNT` set by the vendor.
+
+  Apicula's PLLA encoding needs work. The decode of overlapping rows should be
+  checked against the fuses first, as AGENTS.md advises.
+
+**GW5A-25A OSCA**
+- `FREQ_DIV` is 2..126 even, plus 3. The vendor accepts 3, but `gowin_pack`
+  raises "Divisor ... must be even".
+- `gowin_unpack` writes an OSCA as `OSC`. `FREQ_DIV` decodes the same from both
+  bitstreams.
+
 ## Adding a primitive
 
 Add it to `SITES` in `primitive_strategies.py`, with a site kind. For a new site

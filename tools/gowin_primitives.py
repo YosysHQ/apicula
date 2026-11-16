@@ -55,14 +55,16 @@ def load(path):
 def classify(default, vals):
     """Turn PARAM_VAL entries into a domain.
 
-    Three entries `min, max, normal|even` are an inclusive range, with step 1 or 2.
+    Entries `min, max, normal|even` are an inclusive range, with step 1 or 2;
+    any entries after those are allowed values outside the range.
     Other lists are enumerations. Without entries, a sized default such as 16'h0000
     means any value of that width, and a real default (FCLKIN) is unconstrained.
     """
-    if len(vals) == 3 and _num.fullmatch(vals[0]) and _num.fullmatch(vals[1]) \
+    if len(vals) >= 3 and _num.fullmatch(vals[0]) and _num.fullmatch(vals[1]) \
             and vals[2] in ('normal', 'even'):
+        # entries after the range tag are allowed too (GW5A OSCA FREQ_DIV: 2..126 even, and 3)
         return {'kind': 'range', 'min': int(vals[0]), 'max': int(vals[1]),
-                'step': 2 if vals[2] == 'even' else 1}
+                'step': 2 if vals[2] == 'even' else 1, 'extra': [int(v) for v in vals[3:]]}
     if vals:
         return {'kind': 'enum', 'values': vals}
     m = _sized.fullmatch(default)

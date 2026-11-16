@@ -51,7 +51,7 @@ REPO = os.path.dirname(TOOLS)
 sys.path[:0] = [REPO, TOOLS]  # this checkout's apycula, not an installed one
 import primitive_strategies as ps  # noqa: E402
 import unpacked_netlist  # noqa: E402
-from apycula import bslib, chipdb, codegen  # noqa: E402
+from apycula import attrids, bslib, chipdb, codegen, gowin_unpack  # noqa: E402
 
 # device: (vendor device, part number, package). From legacy/tiled_fuzzer.py.
 DEVICES = {
@@ -107,6 +107,17 @@ class Sites:
                 if not db.extra_func.get((r, c), {}).get('disabled', {}).get('PLL'):
                     self.pll.append((r, c, 'PLL', side if len(plls) == 1 else f'{side}[{n}]'))
         self.singletons = {'osc'}
+        # GW5A PLLs (extra_func 'pll'), configured through a bitstream slot. The
+        # vendor names them by side and row order (checked on GW5A-25A: PLL_L[0]
+        # is slot 5, PLL_L[1] slot 6, PLL_R[0] slot 3, PLL_R[1] slot 2, PLL_T
+        # slot 4, PLL_B slot 8).
+        by_side = collections.defaultdict(list)
+        for (r, c), f in sorted(db.extra_func.items()):
+            if 'pll' in f:
+                side = 'L' if c == 0 else 'R' if c == db.cols - 1 else 'T' if r == 0 else 'B'
+                by_side[side].append((r, c))
+        self.plla = [(r, c, 'PLLA', side if len(locs) == 1 else f'{side}[{n}]')
+                     for side, locs in by_side.items() for n, (r, c) in enumerate(locs)]
         # I/O: plain package pins (no special function) not used by the harness,
         # as (row, col, 'IOBA'|'IOBB', pin number)
         harness = {pins['clk'], pins['out'], *pins['in']} if pins else set()
@@ -208,7 +219,7 @@ def allocate(cases, sites):
                     batch.append((luts.pop(), (r, c, cls, 'B')))
             else:
                 break
-        for kind, free in (('bsram', sites.bsram), ('pll', sites.pll)):
+        for kind, free in (('bsram', sites.bsram), ('pll', sites.pll), ('plla', sites.plla)):
             for site in free:
                 if queues[kind]:
                     batch.append((queues[kind].pop(), site))
@@ -326,7 +337,7 @@ def netlist(batch, spec, pins, harness_io_type=None):
             pass  # placed by IO_LOC
         elif site and site[2] == 'BSRAM':
             cst.cells[name] = f'BSRAM_R{site[0] + 1}[{site[3]}]'
-        elif site and site[2] == 'PLL':
+        elif site and site[2] in ('PLL', 'PLLA'):
             cst.cells[name] = f'PLL_{site[3]}'
         elif site:
             cst.cells[name] = (site[0] + 1, site[1] + 1, site[2], site[3])
@@ -343,7 +354,7 @@ def bel_name(case, site):
     r, c, cls, ab = site
     if cls == 'BSRAM':
         return f'X{c}Y{r}/BSRAM'
-    if cls == 'PLL':
+    if cls in ('PLL', 'PLLA'):
         return f'X{c}Y{r}/PLL'
     if str(cls).startswith('IOB'):
         return f'X{c}Y{r}/{cls}'
@@ -396,7 +407,8 @@ def run_apicula(workdir, mod, cst, names, device, part):
                    env={**os.environ, 'PYTHONPATH': REPO})
     with open(os.path.join(workdir, 'pnr.json')) as f:
         placed = {n: c['attributes'].get('NEXTPNR_BEL') for n, c in json.load(f)['modules']['top']['cells'].items()}
-    return bslib.read_bitstream(os.path.join(workdir, 'top.fs'))[0], placed
+    bm, _, _, slots = bslib.read_bitstream(os.path.join(workdir, 'top.fs'))
+    return bm, slots, placed
 
 
 # ---------------------------------------------------------------- compare
@@ -464,7 +476,7 @@ def case_bel(case, site):
     r, c, cls, ab = site
     if case.site == 'iol':
         return f'IOLOGIC{cls[-1]}'
-    if cls in ('BSRAM', 'PLL') or str(cls).startswith('IOB'):
+    if cls in ('BSRAM', 'PLL', 'PLLA') or str(cls).startswith('IOB'):
         return cls
     return f'LUT{2 * cls + "AB".index(ab)}' if case.site == 'lut' else f'CLS{cls}'
 
@@ -559,6 +571,8 @@ class Decoded:
         if case.site in IO_SITES:
             # attributes are compared on fuses; gowin_unpack writes them to a .cst
             return {'cell': self.nl.cells[name]['type'] if name else None}
+        if case.site == 'plla':
+            return {'cell': 'PLLA'}  # compared through its bitstream slot in run_batch
         if case.site == 'bsram':
             # gowin_unpack does not decode BSRAM parameters; the fuse comparison covers them
             return {'cell': 'BSRAM' if name else None}
@@ -587,6 +601,8 @@ class Decoded:
 
 
 def describe_generated(case, conns, spec):
+    if case.site == 'plla':
+        return {'cell': 'PLLA'}
     if case.site == 'iol':
         return {'cell': case.prim, 'params': {k: literal_value(v) for k, v in case.params}}
     if case.site in IO_SITES:
@@ -625,7 +641,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                 why = [line.strip() for line in f if line.startswith('ERROR')]
         return {'error': 'vendor produced no bitstream', 'why': why}, None
     try:
-        abm, placed = run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
+        abm, aslots, placed = run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
     except subprocess.CalledProcessError:
         with open(os.path.join(workdir, 'apicula/tools.log'), errors='replace') as f:
             why = [line.strip() for line in f
@@ -671,7 +687,8 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         if site:
             loc = (site[0], site[1])
         else:
-            loc = SINGLETON_LOCS.setdefault(case.site, find_bel(db, case.site.upper()))
+            # the bel is named after the primitive (OSCA) or the site kind (OSC)
+            loc = SINGLETON_LOCS.setdefault(case.prim, find_bel(db, case.prim) or find_bel(db, case.site.upper()))
         by_tile[loc].append(name)
         if site and site[2] == 'BSRAM':
             # a BSRAM's fuses are in its tile and the two tiles to its right:
@@ -694,6 +711,27 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                     by_tile[(loc[0], loc[1] + dc)].append(name)
         if site:
             by_bel[(*loc, case_bel(case, site))] = name
+
+    # GW5A PLLs: compare the slot bits and the slot's decoded PLL attributes
+    for name, (case, site) in names.items():
+        if case.site != 'plla' or results[name]['status'] != 'ok':
+            continue
+        slot = db.extra_func[(site[0], site[1])]['pll']['slot_idx']
+        vs, as_ = vres.extra_slots.get(slot), aslots.get(slot)
+        if vs is None or as_ is None:
+            results[name]['status'] = 'mismatch'
+            results[name]['why'] = [f'slot {slot}: vendor {"has" if vs else "lacks"} it, '
+                                    f'apicula {"has" if as_ else "lacks"} it']
+            continue
+        bits = [(y, x, v) for y, row in enumerate(vs) for x, v in enumerate(row) if v != as_[y][x]]
+        if bits:
+            dec = [gowin_unpack.parse_attrvals(b, db.rev_logicinfo('PLL'), db.shortval[1024]['PLL'],
+                                               attrids.pll_attrids, 'PLL') for b in (vs, as_)]
+            results[name]['status'] = 'mismatch'
+            results[name]['why'] = [f'slot {slot}: {len(bits)} bits differ']
+            results[name]['slot_attrs'] = {
+                k: (dec[0].get(k), dec[1].get(k)) for k in dec[0].keys() | dec[1].keys()
+                if dec[0].get(k) != dec[1].get(k)}
 
     # Unused I/Os are configured from their bank's settings, so differences in
     # an I/O tile with no case belong to the I/O cases of that bank.
