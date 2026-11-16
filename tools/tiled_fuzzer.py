@@ -34,16 +34,19 @@ until the failing case is alone. Failing cases are written out on
 their own for `--replay`.
 
 Tools: YOSYS and NEXTPNR environment variables, else yosys/nextpnr-himbaechel,
-else their yowasp- versions.
+else their yowasp- versions. `-j` runs several designs at the same time; the
+vendor and Apicula flows of a design also run at the same time when neither
+needs the other's placement.
 """
 import argparse
 import collections
+import concurrent.futures
 import copy
+import functools
 import json
 import os
 import random
 import re
-import shutil
 import subprocess
 import sys
 
@@ -52,33 +55,20 @@ REPO = os.path.dirname(TOOLS)
 sys.path[:0] = [REPO, TOOLS]  # this checkout's apycula, not an installed one
 import primitive_strategies as ps  # noqa: E402
 import unpacked_netlist  # noqa: E402
+from gowin_primitives import tool, read_cell_library  # noqa: E402
 from apycula import attrids, bslib, chipdb, codegen, gowin_unpack  # noqa: E402
+from apycula.chipdb_builder import DEVICE_PARAMS  # noqa: E402
 
-# device: (vendor device, part number, package). From legacy/tiled_fuzzer.py.
-DEVICES = {
-    'GW1N-1': ('GW1N-1', 'GW1N-LV1LQ144C6/I5', 'LQFP144'),
-    'GW1NZ-1': ('GW1NZ-1', 'GW1NZ-LV1QN48C6/I5', 'QFN48'),
-    'GW1N-4': ('GW1N-4', 'GW1N-LV4PG256C6/I5', 'PBGA256'),
-    'GW1N-9': ('GW1N-9', 'GW1N-LV9PG256C6/I5', 'PBGA256'),
-    'GW1N-9C': ('GW1NR-9C', 'GW1NR-LV9QN88PC6/I5', 'QFN88P'),
-    'GW1NS-4': ('GW1NSR-4C', 'GW1NSR-LV4CQN48PC7/I6', 'QFN48P'),
-    'GW2A-18': ('GW2A-18', 'GW2A-LV18PG256C8/I7', 'PBGA256'),
-    'GW2A-18C': ('GW2A-18C', 'GW2A-LV18PG256SC8/I7', 'PBGA256S'),
-    'GW5A-25A': ('GW5A-25A', 'GW5A-LV25MG121NC1/I0', 'MBGA121N'),
-}
+# device: (vendor device, part number, package), as the chipdbs are built. The
+# vendor runs on GW5A-25A used the production part rather than the ES one.
+PART_OVERRIDES = {'GW5A-25A': 'GW5A-LV25MG121NC1/I0'}
+DEVICES = {dev: (p['device'], PART_OVERRIDES.get(dev, p['partnumber']), p['package'])
+           for dev, p in DEVICE_PARAMS.items()}
+
+# Module port lists, by port direction
+PORT_LISTS = {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}
 
 WIDELUTS_PER_DESIGN = 8
-def lone_pads(ports, prim):
-    """Pad ports of an I/O primitive without a site kind: its inouts, else the
-    inputs of an input buffer or the outputs of an output buffer."""
-    pads = [p for p, (d, _) in ports.items() if d == 'inout']
-    if pads or 'BUF' not in prim:
-        return pads
-    if 'IBUF' in prim:
-        return [p for p, (d, w) in ports.items() if d == 'input' and w == 1 and re.fullmatch(r'IB?\d?', p)]
-    return [p for p, (d, w) in ports.items() if d == 'output' and w == 1 and re.fullmatch(r'OB?\d?', p)]
-
-
 DIVIDER_LOAD = {'CLKDIV2', 'DHCEN', 'DHCENC', 'DHCE', 'DCC'}
 CLOCK_INPUTS = {'HCLKIN', 'CLKIN', 'CLKIN0', 'CLK0', 'I'}
 CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR', 'GE', 'OSCEN'}
@@ -89,15 +79,19 @@ CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR', 'GE', 'OSCEN'}
 # go through Yosys).
 YOSYS_PORTS = {re.compile(r'DLN?[CP]?E?$'): {'G': 'CLK', 'GE': 'CE'}}
 
+
+def lone_pads(ports, prim):
+    """Pad ports of an I/O primitive without a site kind: its inouts, else the
+    inputs of an input buffer or the outputs of an output buffer."""
+    pads = [p for p, (d, _) in ports.items() if d == 'inout']
+    if pads or 'BUF' not in prim:
+        return pads
+    if 'IBUF' in prim:
+        return [p for p, (d, w) in ports.items() if d == 'input' and w == 1 and re.fullmatch(r'IB?\d?', p)]
+    return [p for p, (d, w) in ports.items() if d == 'output' and w == 1 and re.fullmatch(r'OB?\d?', p)]
+
 # Vendor log codes that make a case invalid rather than a mismatch.
 INVALID_CODES = {'PA1002': 'invalid parameter value', 'CT1094': 'not placed at its constraint'}
-
-
-def tool(env, *names):
-    path = os.environ.get(env) or next(filter(None, map(shutil.which, names)), None)
-    if not path:
-        sys.exit(f'none of {names} found; set {env}')
-    return path
 
 
 # ---------------------------------------------------------------- sites
@@ -108,7 +102,7 @@ class Sites:
     Sites are (row, col, cls, 'A'|'B') for slices and (row, col, 'BSRAM', n) for
     the n-th BSRAM of a row, which is how the vendor numbers them in INS_LOC."""
 
-    def __init__(self, db, rng, pins=None, pinout=None):
+    def __init__(self, db, rng, pins, pinout):
         self.cls = [(r, c, cls) for r in range(db.rows) for c in range(db.cols)
                     for cls in range(4)
                     if {f'LUT{2 * cls}', f'LUT{2 * cls + 1}', f'DFF{2 * cls}'} <= db[r, c].bels.keys()]
@@ -157,11 +151,11 @@ class Sites:
                      for side, locs in by_side.items() for n, (r, c) in enumerate(locs)]
         # I/O: plain package pins (no special function) not used by the harness,
         # as (row, col, 'IOBA'|'IOBB', pin number)
-        harness = {pins['clk'], pins['out'], *pins['in']} if pins else set()
+        harness = {pins['clk'], pins['out'], *pins['in']}
         self.iob = []
-        for pin, (name, funcs) in (pinout or {}).items():
+        for pin, (name, funcs) in pinout.items():
             if not funcs and pin not in harness:
-                r, c, ab = io_loc(db, name)
+                r, c, ab = gowin_unpack.tbrl2rc(db, name)
                 self.iob.append((r, c, f'IOB{ab}', pin))
         rng.shuffle(self.iob)
         # IDES16/OSER16 need an "X16 location" (vendor PR2046): pin A of a tile
@@ -172,10 +166,10 @@ class Sites:
             self.iob16 = self.iob  # no X16 data in the chipdb (GW5A): let the vendor say
         # differential pairs: A is the positive pin; TLVDS needs true-LVDS pins
         self.tlvds, self.elvds = [], []
-        names = {name: pin for pin, (name, funcs) in (pinout or {}).items() if not funcs and pin not in harness}
+        names = {name: pin for pin, (name, funcs) in pinout.items() if not funcs and pin not in harness}
         for name, pin in names.items():
             if name.endswith('A') and name[:-1] + 'B' in names:
-                r, c, _ = io_loc(db, name)
+                r, c, _ = gowin_unpack.tbrl2rc(db, name)
                 bel = db[r, c].bels.get('IOBA')
                 if bel and bel.is_diff:
                     site = (r, c, 'IOBA', [pin, names[name[:-1] + 'B']])
@@ -186,20 +180,9 @@ class Sites:
         rng.shuffle(self.elvds)
 
 
-_io_name = re.compile(r'IO([TBLR])(\d+)([A-Z])')
-
-
-def io_loc(db, name):
-    """(row, col, 'A'|'B') of a pin name such as IOT2A or IOL16B."""
-    side, num, ab = _io_name.fullmatch(name).groups()
-    num = int(num) - 1
-    r, c = {'T': (0, num), 'B': (db.rows - 1, num), 'L': (num, 0), 'R': (num, db.cols - 1)}[side]
-    return r, c, ab
-
-
-def io_name(db, r, c, ab):
-    side = 'T' if r == 0 else 'B' if r == db.rows - 1 else 'L' if c == 0 else 'R'
-    return f'IO{side}{c + 1 if side in "TB" else r + 1}{ab}'
+def io_bank(db, r, c, ab):
+    """Bank of the I/O at row, col, 'A'|'B'."""
+    return db.pin_bank.get(chipdb.rc2tbrl_0(db, r, c, ab))
 
 
 HARNESS_IO_TYPE = {'3.3': 'LVCMOS33', '2.5': 'LVCMOS25', '1.8': 'LVCMOS18', '1.5': 'LVCMOS15', '1.2': 'LVCMOS12'}
@@ -345,7 +328,7 @@ def netlist(batch, spec, pins, harness_io_type=None):
         if case.site == 'widelut':
             # MUX2_LUTn over two MUX2_LUT(n-1) ... over LUT4 leaves. Leaf inputs
             # are dummy wires; each mux level selects from its own data pin.
-            inits = [v for _, v in case.params]
+            inits = widelut_inits(case)
 
             def tree(level, leaves, path):
                 if level == 4:
@@ -364,23 +347,21 @@ def netlist(batch, spec, pins, harness_io_type=None):
                 return out
 
             tree(int(case.prim[-1]), inits, '')
-            names[name] = (case, site)
             wiring[name] = {}
             continue
         if case.site in IO_SITES:
             for k, (pad, pin) in enumerate(io_pads(case, site)):
                 conns[pad] = f'{name}_pad' + ('_n' if k else '')
                 direction = spec[case.prim]['ports'][pad][0]
-                getattr(mod, {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}[direction]).add(conns[pad])
+                getattr(mod, PORT_LISTS[direction]).add(conns[pad])
                 cst.ports[conns[pad]] = pin
                 cst.attrs[conns[pad]] = dict(case.params)
         if case.site == 'lone':
             # pads become top-level ports; the vendor picks their pins and
             # nextpnr gets the same ones (run_batch)
             for pad in lone_pads(spec[case.prim]['ports'], case.prim):
-                direction, width = spec[case.prim]['ports'][pad]
                 conns[pad] = f'{name}_{pad}'
-                getattr(mod, {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}[direction]).add(conns[pad])
+                getattr(mod, PORT_LISTS[spec[case.prim]['ports'][pad][0]]).add(conns[pad])
         if case.site == 'iol':
             # I/O logic must connect to an I/O buffer (vendor PR0018): an IBUF
             # feeding its data input, or an OBUF fed by its output
@@ -457,7 +438,6 @@ def netlist(batch, spec, pins, harness_io_type=None):
             cst.cells[name] = f'PLL_{site[3]}'
         elif site and site[2] == 'DSP':
             cst.cells[name] = f'DSP_R{site[0] + 1}[{site[3]}][A]'
-            dsp_bel(DB[0], site[0], site[1], case.prim)
         elif site and site[2] == 'RAM16':
             cst.cells[name] = f'R{site[0] + 1}C{site[1] + 1}'
         elif site:
@@ -483,34 +463,17 @@ def netlist(batch, spec, pins, harness_io_type=None):
     return mod, cst, names, wiring
 
 
-DSP_BEL = {}  # (row, col, primitive) -> bel
-DB = [None]  # the device, for dsp_bel from netlist()
-
-
-def dsp_bel(db, r, c, prim):
-    """First bel of a DSP primitive in a block's main tile, e.g. MULT18X1800
-    (macro 0, unit 0). Its fuses are compared over the whole block."""
-    if (r, c, prim) not in DSP_BEL:
-        DSP_BEL[(r, c, prim)] = min((b for b in db[r, c].bels if re.fullmatch(prim + r'\d*', b)), default=None)
-    return DSP_BEL[(r, c, prim)]
-
-
 def bel_name(case, site):
+    """nextpnr bel of a site, for the kinds placed with a BEL attribute (not
+    PIN_SITES or FOLLOW_NEXTPNR)."""
     r, c, cls, ab = site
     if cls == 'BEL':
         return f'X{c}Y{r}/{ab}'
-    if cls == 'DSP':
-        return f'X{c}Y{r}/{DSP_BEL.get((r, c, case.prim))}'
     if cls == 'BSRAM':
         return f'X{c}Y{r}/BSRAM'
     if cls in ('PLL', 'PLLA'):
         return f'X{c}Y{r}/PLL'
-    if cls == 'RAM16':
-        return f'X{c}Y{r}/RAM16SDP4'
-    if str(cls).startswith('IOB'):
-        return f'X{c}Y{r}/{cls}'
-    kind = {'dff': 'DFF', 'alu': 'ALU'}.get(case.site, 'LUT')
-    return f'X{c}Y{r}/{kind}{2 * cls + "AB".index(ab)}'
+    return f'X{c}Y{r}/{"DFF" if case.site == "dff" else "LUT"}{2 * cls + "AB".index(ab)}'
 
 
 # ---------------------------------------------------------------- flows
@@ -537,8 +500,7 @@ def run_apicula(workdir, mod, cst, names, device, part):
     log = open(os.path.join(workdir, 'tools.log'), 'w')
     # yowasp tools only see the working directory, so use relative paths
     subprocess.run([tool('YOSYS', 'yosys', 'yowasp-yosys'), '-q', '-p',
-                    f'read_verilog -lib +/gowin/cells_sim.v; read_verilog -lib +/gowin/cells_xtra_{ps.family(device)}.v; '
-                    'read_verilog top.v; hierarchy -top top; '
+                    f'{read_cell_library(ps.family(device))}read_verilog top.v; hierarchy -top top; '
                     # as synth_gowin does: differential buffers' pads get IBUF/OBUF cells,
                     # which nextpnr merges; pads that already have a buffer are skipped
                     # (enables not inverted: an inverter would need synthesis to map)
@@ -715,32 +677,50 @@ def canonical(cell, params, inputs):
     return {'cell': kind, 'params': params, 'edge': 'neg' if neg else 'pos', 'sr': sr or None, 'ce': enable}
 
 
-def widelut_pattern(level, r, c, i=0):
-    """Leaf positions (row, col, LUT n) of a MUX2_LUT<level> tree in the order
-    of its select bits, from the hardwired muxes as gowin_unpack.make_muxes has
-    them: MUX2_LUT5 i takes F2i (I0) and F2i+1 (I1); MUX2_LUT6 i takes OF4i+2 and
-    OF4i; MUX2_LUT7 OF5 and OF1; MUX2_LUT8 OF3 of the next column and its own."""
-    if level == 5:
-        return [(r, c, 2 * i), (r, c, 2 * i + 1)]
-    if level == 6:
-        return widelut_pattern(5, r, c, 2 * i + 1) + widelut_pattern(5, r, c, 2 * i)
-    if level == 7:
-        return widelut_pattern(6, r, c, 1) + widelut_pattern(6, r, c, 0)
-    return widelut_pattern(7, r, c + 1) + widelut_pattern(7, r, c)
+def literals(items, skip=()):
+    """{name: value} of (name, literal) pairs, without the names in `skip`."""
+    return {k: literal_value(v) for k, v in items if k not in skip}
 
 
-def widelut_tree(luts, case):
-    """'ok' if the leaves sit where the hardwired tree reads them, 'missing' if
-    a leaf INIT is not in the bitstream, else the leaf positions found."""
-    level = int(case.prim[-1])
-    found = [luts.get(literal_value(v)) for _, v in case.params]
-    if not all(found):
-        return 'missing'
-    r, c, _ = found[-1][0]  # the last leaf is in the root's own tile
-    for i in range(4 >> (level - 5) if level < 7 else 1):
-        if all(p in f for p, f in zip(widelut_pattern(level, r, c, i), found)):
-            return 'ok'
-    return [f[0] for f in found]
+def widelut_inits(case):
+    """Leaf INITs of a wide LUT case by leaf index (INIT0, INIT1, ... INIT15;
+    Case.from_json sorts them by name)."""
+    return [v for _, v in sorted(case.params, key=lambda kv: int(kv[0][4:]))]
+
+
+def widelut_tree(nl, luts, case):
+    """'ok' if every leaf of a MUX2_LUTn tree reaches one root through the mux
+    inputs its index selects (bit i of the leaf index at the i-th mux level, I1
+    for 1), following the MUX2 cells gowin_unpack writes for the hardwired
+    wide-LUT muxes by wire name (resolving nets would join them to routing).
+    Else 'missing' if a leaf INIT is not in the bitstream, or
+    the (root, index) pairs each leaf can reach."""
+    levels = int(case.prim[-1]) - 4
+    into = collections.defaultdict(list)  # net -> [(mux O net, 0 for I0 or 1 for I1)]
+    for cell in nl.cells.values():
+        if cell['type'] == 'MUX2':
+            for k, port in enumerate(('I0', 'I1')):
+                into[cell['ports'][port]].append((cell['ports']['O'], k))
+
+    def reach(net, level):
+        """(root, index) pairs `level` muxes up from `net`; an OF3 output feeds
+        two MUX2_LUT8s, its own and its west neighbour's."""
+        if level == 0:
+            return {(net, 0)}
+        return {(root, (idx << 1) | bit) for out, bit in into.get(net, ())
+                for root, idx in reach(out, level - 1)}
+
+    reached = []
+    for init in widelut_inits(case):
+        leaf = luts.get(literal_value(init))
+        if not leaf:
+            return 'missing'
+        # the root's select is the top bit of the index, the lowest mux's the bottom
+        reached.append(reach(nl.cells[leaf[0]]['ports']['F'], levels))
+    roots = {root for root, _ in reached[0]}
+    if any(all((root, j) in r for j, r in enumerate(reached)) for root in roots):
+        return 'ok'
+    return [sorted(idx for _, idx in r) for r in reached]
 
 
 class Decoded:
@@ -748,84 +728,67 @@ class Decoded:
 
     def __init__(self, nl, spec):
         self.nl, self.spec = nl, spec
-        self.luts = collections.defaultdict(list)  # INIT -> [(row, col, n)]
+        self.luts = collections.defaultdict(list)  # INIT -> [LUT4 cell names]
         for name, cell in nl.cells.items():
-            m = re.fullmatch(r'R(\d+)C(\d+)_LUT4_(\d)', name)
-            if m and 'INIT' in cell['params']:
-                self.luts[literal_value(cell['params']['INIT'])].append(
-                    (int(m.group(1)) - 1, int(m.group(2)) - 1, int(m.group(3))))
+            if cell['type'] == 'LUT4' and 'INIT' in cell['params']:
+                self.luts[literal_value(cell['params']['INIT'])].append(name)
 
     def find(self, case, site):
         if site is None:
             return next((n for n, c in self.nl.cells.items() if c['type'].startswith(case.site.upper())), None)
         r, c, cls, ab = site
-        if case.site == 'iol':
-            # gowin_unpack names I/O logic R<r>C<c>_<MODE>_<A|B>
+        if case.site == 'iol' or case.site in IO_SITES:
+            # gowin_unpack names I/O logic and buffers R<r>C<c>_<MODE or TYPE>_<A|B>
             prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{cls[-1]}'
+            match = ((lambda t: ps.SITES.get(t) == 'iol') if case.site == 'iol'
+                     else (lambda t: t.endswith('BUF')))
             return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
-                         and cell['type'] in ps.SITES and ps.SITES[cell['type']] == 'iol'), None)
-        if case.site in IO_SITES:
-            # gowin_unpack names I/O buffers R<r>C<c>_<TYPE>_<A|B>
-            prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{cls[-1]}'
-            return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
-                         and cell['type'].endswith('BUF')), None)
+                         and match(cell['type'])), None)
         if case.site in ('bsram', 'pll'):
             # gowin_unpack names these by a counter; find the one on this tile
             prefix, typ = f'R{r + 1}C{c + 1}_', {'bsram': 'BSRAM', 'pll': 'rPLL'}[case.site]
             return next((n for n, cell in self.nl.cells.items() if cell['type'] == typ
                          and any(str(w).startswith(prefix) for w in cell['ports'].values())), None)
-        if case.site == 'ssram':
-            name = f'R{r + 1}C{c + 1}_RAM16'
-            return name if name in self.nl.cells else None
-        if case.site == 'alu':
-            name = f'R{r + 1}C{c + 1}_ALU_{2 * cls + "AB".index(ab)}'
-            return name if name in self.nl.cells else None
-        if case.site == 'lut':
-            name = f'R{r + 1}C{c + 1}_LUT4_{2 * cls + "AB".index(ab)}'
+        if case.site in ('ssram', 'alu', 'lut'):
+            name = f'R{r + 1}C{c + 1}_' + ('RAM16' if case.site == 'ssram' else
+                                           f'{"ALU" if case.site == "alu" else "LUT4"}_{2 * cls + "AB".index(ab)}')
             return name if name in self.nl.cells else None
         prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{2 * cls}'
         return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
                      and cell['type'].startswith(('DFF', 'DL'))), None)  # flip-flops and latches
 
     def describe(self, case, site):
-        name = self.find(case, site)
-        if case.site == 'iol':
-            cell = self.nl.cells[name] if name else None
-            return {'cell': cell['type'] if cell else None,
-                    'params': {k: literal_value(v) for k, v in cell['params'].items()} if cell else {}}
-        if case.site in IO_SITES:
-            # attributes are compared on fuses; gowin_unpack writes them to a .cst
-            return {'cell': self.nl.cells[name]['type'] if name else None}
-        if case.site == 'plla':
-            return {'cell': 'PLLA'}  # compared through its bitstream slot in run_batch
-        if case.site in ('clock', 'lone'):
-            return {'cell': case.prim}  # compared on fuses
+        if case.site in FUSE_ONLY:
+            return describe_generated(case, None, None)
         if case.site == 'widelut':
-            return {'cell': 'WIDELUT', 'tree': widelut_tree(self.luts, case)}
-        if case.site == 'dsp':
-            return {'cell': 'DSP'}  # gowin_unpack decodes fuse-level modes only; compared on fuses
+            return {'cell': 'WIDELUT', 'tree': widelut_tree(self.nl, self.luts, case)}
         if case.site == 'ssram' and isinstance(site[2], int):
             # nextpnr implements ROM16 as a LUT; its INIT is the ROM contents
             cell = self.nl.cells.get(f'R{site[0] + 1}C{site[1] + 1}_LUT4_{2 * site[2] + "AB".index(site[3])}')
             return {'cell': 'SSRAM' if cell else None,
                     'params': {'INIT_0': literal_value(cell['params']['INIT'])} if cell else {}}
+        name = self.find(case, site)
+        cell = self.nl.cells[name] if name else None
+        if case.site == 'iol':
+            return {'cell': cell and cell['type'], 'params': literals(cell['params'].items()) if cell else {}}
+        if case.site in IO_SITES:
+            # attributes are compared on fuses; gowin_unpack writes them to a .cst
+            return {'cell': cell and cell['type']}
         if case.site == 'ssram':
             # gowin_unpack writes every SSRAM as RAM16SDP4; compare INIT
-            cell = self.nl.cells.get(name) if name else None
-            return {'cell': 'SSRAM' if cell else None,
-                    'params': {k: literal_value(v) for k, v in cell['params'].items()} if cell else {}}
+            return {'cell': 'SSRAM' if cell else None, 'params': literals(cell['params'].items()) if cell else {}}
         if case.site == 'alu':
-            cell = self.nl.cells.get(name) if name else None
-            return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}
-                    if cell else {}} if cell else {'cell': None}
+            if cell is None:
+                return {'cell': None}
+            return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}}
         if case.site == 'bsram':
             # gowin_unpack does not decode BSRAM parameters; the fuse comparison covers them
             return {'cell': 'BSRAM' if name else None}
         if case.site == 'pll':
             if name is None:
                 return {'cell': None, 'params': {}}
-            return {'cell': 'rPLL', 'params': {k: literal_value(v) for k, v in self.nl.cells[name]['params'].items()
-                                               if k != 'DEVICE'}}  # not a fuse; unpacked as the family name
+            # DEVICE is not a fuse; it is unpacked as the family name
+            return {'cell': 'rPLL', 'params': literals(cell['params'].items(), skip={'DEVICE'})}
         if case.site == 'lut':
             if name:
                 return {'cell': 'LUT', 'init': literal_value(self.nl.cells[name]['params']['INIT'])}
@@ -835,40 +798,43 @@ class Decoded:
             return {'cell': 'LUT', 'init': {'VCC': 0xffff, 'VSS': 0}.get(const)}
         if name is None:
             return {'cell': None}
-        cell = self.nl.cells[name]
         ports = self.spec.get(cell['type'], {'ports': {}})['ports']
         inputs = {}
         for port, wire in cell['ports'].items():
             if ports.get(port, ('input',))[0] == 'input':
                 root = self.nl.find(wire)
                 inputs[port] = root if root in ('VCC', 'VSS') else 'sig'
-        return canonical(cell['type'], {k: literal_value(v) for k, v in cell['params'].items()}, inputs)
+        return canonical(cell['type'], literals(cell['params'].items()), inputs)
+
+
+# Kinds compared on fuses only (or, for plla, on its bitstream slot in
+# run_batch): gowin_unpack does not decode them, so both sides describe them
+# as the generated case does.
+FUSE_ONLY = {'dsp', 'plla', 'clock', 'lone'}
 
 
 def describe_generated(case, conns, spec):
-    if case.site == 'dsp':
-        return {'cell': 'DSP'}
+    if case.site in FUSE_ONLY:
+        return {'cell': case.prim}
     if case.site == 'ssram':
-        return {'cell': 'SSRAM', 'params': {k: literal_value(v) for k, v in case.params}}
+        return {'cell': 'SSRAM', 'params': literals(case.params)}
     if case.site == 'alu':
         return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
     if case.site == 'widelut':
         return {'cell': 'WIDELUT', 'tree': 'ok'}
-    if case.site in ('plla', 'clock', 'lone'):
-        return {'cell': 'PLLA' if case.site == 'plla' else case.prim}
     if case.site == 'iol':
-        return {'cell': case.prim, 'params': {k: literal_value(v) for k, v in case.params}}
+        return {'cell': case.prim, 'params': literals(case.params)}
     if case.site in IO_SITES:
         return {'cell': case.prim}
     if case.site == 'bsram':
         return {'cell': 'BSRAM'}
     if case.site == 'pll':
-        return {'cell': 'rPLL', 'params': {k: literal_value(v) for k, v in case.params if k != 'DEVICE'}}
+        return {'cell': 'rPLL', 'params': literals(case.params, skip={'DEVICE'})}
     if case.site == 'lut':
         return {'cell': 'LUT', 'init': lut_init(case)}
     inputs = {p: 'VSS' if conns.get(p, 'gnd') == 'gnd' else 'sig'
               for p, (d, _) in spec[case.prim]['ports'].items() if d == 'input'}
-    return canonical(case.prim, {k: literal_value(v) for k, v in case.params}, inputs)
+    return canonical(case.prim, literals(case.params), inputs)
 
 
 def same(a, b):
@@ -898,34 +864,56 @@ def vendor_failed(workdir):
     return {'error': 'vendor produced no bitstream', 'why': why}, None
 
 
+_apicula_error = re.compile(r'\w*(Error|Exception): ')
+
+
+def apicula_errors(log):
+    """Error lines of an Apicula flow log (Yosys, nextpnr, gowin_pack)."""
+    with open(log, errors='replace') as f:
+        return [line.strip() for line in f if 'ERROR' in line or _apicula_error.match(line)]
+
+
 def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=None):
     vendor_device, part, _ = DEVICES[args.device]
     mod, cst, names, wiring = netlist(batch, spec, pins, harness_io_type)
-    # Cases nextpnr places itself (FOLLOW_NEXTPNR) run through Apicula first;
-    # the vendor then gets the location nextpnr chose.
+    vendor = functools.partial(run_vendor, os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
+
+    def apicula():
+        try:
+            return run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
+        except subprocess.CalledProcessError:
+            return None
+
+    # Cases nextpnr places itself (FOLLOW_NEXTPNR) run through Apicula first,
+    # and the vendor then gets the location nextpnr chose. Lone and clock cases
+    # run through the vendor first, and nextpnr gets its pins and clock divider
+    # bels. Otherwise the two flows are independent and run at the same time.
     follow = any(case.site in FOLLOW_NEXTPNR for case, _ in names.values())
-    vres = None if follow else run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
-    if not follow and vres is None:
-        return vendor_failed(workdir)
-    if vres is not None and any(case.site == 'lone' for case, _ in names.values()):
-        # pads of lone cases: nextpnr gets the pins the vendor chose
-        cst.ports.update(vendor_pins(os.path.join(workdir, 'vendor')))
-    if vres is not None:
-        # clock dividers: nextpnr follows the vendor's placement
-        for name, (case, site) in list(names.items()):
-            if case.site == 'clock' and site is None:
-                site = vendor_clock_site(db, chipdb.tile_bitmap(db, vres.bitmap, empty=True), case)
+    vendor_first = any(case.site in ('lone', 'clock') for case, _ in names.values())
+    if follow or vendor_first:
+        vres = None if follow else vendor()
+        if vres is None and not follow:
+            return vendor_failed(workdir)
+        if vendor_first:
+            cst.ports.update(vendor_pins(os.path.join(workdir, 'vendor')))
+            vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
+            for name, (case, site) in list(names.items()):
+                site = vendor_clock_site(db, vt, case) if case.site == 'clock' else None
                 # GW5A-25A: the vendor uses HCLKDIV1 on X0Y1, where nextpnr has
                 # no CLKDIV_1 bel; compared without positions instead
                 if site and not re.fullmatch(r'CLKDIV_\d', site[3]):
                     names[name] = (case, site)
-    try:
-        abm, aslots, placed = run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, args.device, part)
-    except subprocess.CalledProcessError:
-        with open(os.path.join(workdir, 'apicula/tools.log'), errors='replace') as f:
-            why = [line.strip() for line in f
-                   if 'ERROR' in line or re.match(r'\w*(Error|Exception): ', line)]
-        return {'error': 'the Apicula flow failed', 'why': why}, None
+        ares = apicula()
+    else:
+        with concurrent.futures.ThreadPoolExecutor(2) as pool:
+            vfut, afut = pool.submit(vendor), pool.submit(apicula)
+            vres, ares = vfut.result(), afut.result()
+    # a design the vendor rejects is invalid, whatever Apicula does with it
+    if not follow and vres is None:
+        return vendor_failed(workdir)
+    if ares is None:
+        return {'error': 'the Apicula flow failed', 'why': apicula_errors(os.path.join(workdir, 'apicula/tools.log'))}, None
+    abm, aslots, placed = ares
     if follow:
         for name, (case, site) in list(names.items()):
             if case.site in FOLLOW_NEXTPNR:
@@ -952,7 +940,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                     site = (r, c, n // 2, 'AB'[n % 2])
                     cst.cells[name] = (r + 1, c + 1, n // 2, 'AB'[n % 2])
                 names[name] = (case, site)
-        vres = run_vendor(os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
+        vres = vendor()
         if vres is None:
             return vendor_failed(workdir)
     vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
@@ -960,10 +948,11 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     diffs = diff_bits(db, vt, at)
     decoded = {}
     if batch:
-        for side, fs in (('vendor', os.path.join(workdir, 'vendor/impl/pnr/top.fs')),
-                         ('apicula', os.path.join(workdir, 'apicula/top.fs'))):
-            nl = unpacked_netlist.unpack(args.device, fs, os.path.join(workdir, f'{side}_unpack.v'), REPO)
-            decoded[side] = Decoded(nl, spec)
+        fs = {'vendor': os.path.join(workdir, 'vendor/impl/pnr/top.fs'), 'apicula': os.path.join(workdir, 'apicula/top.fs')}
+        with concurrent.futures.ThreadPoolExecutor(2) as pool:
+            nls = {side: pool.submit(unpacked_netlist.unpack, args.device, path,
+                                     os.path.join(workdir, f'{side}_unpack.v'), REPO) for side, path in fs.items()}
+            decoded = {side: Decoded(nl.result(), spec) for side, nl in nls.items()}
     if any(case.site == 'widelut' for case, _ in names.values()):
         diffs = {}  # placed freely by both tools; compared on leaf positions
     if baseline is not None:
@@ -973,6 +962,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     results = {}
     by_bel = {}  # (row, col, bel) -> case name
     by_tile = collections.defaultdict(list)
+    by_bank = collections.defaultdict(list)  # I/O cases per bank
     for name, (case, site) in names.items():
         res = {'case': case.to_json(), 'site': site, 'status': 'ok'}
         problems = [msg for (n, code), msgs in vres.errs.items() if n == name
@@ -997,10 +987,9 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         if site:
             loc = (site[0], site[1])
         elif case.site in ('clock', 'lone', 'widelut'):
-            continue  # clock: alone in its design, owns every difference (see below)
+            continue  # clock and lone: alone in their design, own every difference (see below)
         else:
-            # the bel is named after the primitive (OSCA) or the site kind (OSC)
-            loc = SINGLETON_LOCS.setdefault(case.prim, find_bel(db, case.prim) or find_bel(db, case.site.upper()))
+            loc = singleton_loc(db, case.prim, case.site)
         by_tile[loc].append(name)
         if site and site[2] == 'BSRAM':
             # a BSRAM's fuses are in its tile and the two tiles to its right:
@@ -1013,7 +1002,8 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                         by_tile[(loc[0], loc[1] + dc)].append(name)
         if case.site in PIN_SITES:
             # bank settings are shared by every I/O in the bank
-            bank = db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))
+            bank = io_bank(db, site[0], site[1], site[2][-1])
+            by_bank[bank].append(name)
             if bank in db.bank_tiles:
                 by_tile[db.bank_tiles[bank]].append(name)
         if site and site[2] == 'DSP':
@@ -1057,7 +1047,6 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     # without digits, and no HCLKDCS_SEL, which follows from the section. A
     # CLKDIV or CLKDIV2 must also select the bel nextpnr placed it on.
     hclk_tiles = set()
-    atiles = chipdb.tile_bitmap(db, abm, empty=True)
 
     def hclk_settings(tiles):
         strip = lambda t: re.sub(r'\d', '', t)
@@ -1069,7 +1058,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         if case.site != 'clock' or results[name]['status'] != 'ok':
             continue
         if case.prim in ('CLKDIV', 'CLKDIV2'):
-            asite = vendor_clock_site(db, atiles, case)
+            asite = vendor_clock_site(db, at, case)
             if asite is None and site is None:
                 pass  # no fuses of its own (GW5A CLKDIV2)
             elif asite is None or placed.get(name) != bel_name(case, asite):
@@ -1081,7 +1070,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                 continue  # same bel: the fuse comparison applies
             else:
                 results[name]['placed'] = {'vendor': site and bel_name(case, site), 'apicula': placed.get(name)}
-        vh, ah = hclk_settings(vt), hclk_settings(atiles)
+        vh, ah = hclk_settings(vt), hclk_settings(at)
         if vh != ah:
             results[name]['status'] = 'mismatch'
             results[name]['why'] = [f'HCLK settings: vendor {vh}, apicula {ah}']
@@ -1090,25 +1079,20 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
 
     # Unused I/Os are configured from their bank's settings, so differences in
     # an I/O tile with no case belong to the I/O cases of that bank.
-    by_bank = collections.defaultdict(list)
-    for name, (case, site) in names.items():
-        if case.site in PIN_SITES:
-            by_bank[db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))].append(name)
-
     def bank_cases(r, c):
         if not any(b.startswith('IOB') for b in db[r, c].bels):
             return []
-        banks = {db.pin_bank.get(io_name(db, r, c, ab)) for ab in 'AB'}
+        banks = {io_bank(db, r, c, ab) for ab in 'AB'}
         return [n for b in banks for n in by_bank.get(b, [])]
 
-    # a clock primitive is alone in its design and placed by the tools, so the
-    # differences left over belong to it
-    clock_cases = [n for n, (case, _) in names.items() if case.site in ('clock', 'lone')]
+    # a clock or lone case is alone in its design and placed by the tools, so
+    # the differences left over belong to it
+    alone = [n for n, (case, _) in names.items() if case.site in ('clock', 'lone')]
     unattributed = {}
     for (r, c), bits in sorted(diffs.items()):
         for bit, v in sorted(bits):
             bel = bit_owner(db, r, c, bit)
-            owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c)) or bank_cases(r, c) or clock_cases
+            owners = [by_bel[(r, c, bel)]] if (r, c, bel) in by_bel else by_tile.get((r, c)) or bank_cases(r, c) or alone
             detail = f'{bit} vendor={v} apicula={1 - v} {bel or ""} {fuse_tables(db, r, c, bit)}'
             if not owners:
                 unattributed.setdefault(f'R{r + 1}C{c + 1}', []).append(detail)
@@ -1120,7 +1104,15 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     return report, diffs
 
 
-SINGLETON_LOCS = {}
+_singleton_locs = {}
+
+
+def singleton_loc(db, prim, kind):
+    """Tile of a one-per-device bel, named after the primitive (OSCA) or the
+    site kind (OSC)."""
+    if prim not in _singleton_locs:
+        _singleton_locs[prim] = find_bel(db, prim) or find_bel(db, kind.upper())
+    return _singleton_locs[prim]
 
 
 def vendor_pins(vendor_dir):
@@ -1187,11 +1179,11 @@ def main(argv):
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--replay', nargs='*', help='case JSON files to run, one per design')
     ap.add_argument('-o', '--out', default='fuzz-out')
+    ap.add_argument('-j', '--jobs', type=int, default=1, help='designs run at the same time')
     args = ap.parse_args(argv)
 
     vendor_device, part, package = DEVICES[args.device]
     db = chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{args.device}.msgpack.xz'))
-    DB[0] = db
     prims = ps.Primitives(args.device, vendor_device)
     pins = pick_pins(db, vendor_device, args.device, package)
     rng = random.Random(args.seed)
@@ -1212,32 +1204,32 @@ def main(argv):
         batches = allocate(cases, sites)
 
     print(f'{sum(map(len, batches))} cases in {len(batches)} designs; pins {pins}')
-    baselines = {}
 
-    def baseline_for(batch):
-        """Differences of the harness alone, with the harness I/O standard the
-        batch needs. They are subtracted from the batch's differences."""
-        vccio = io_class(batch)
-        if vccio not in baselines:
-            io_type = HARNESS_IO_TYPE.get(vccio)
-            _, b = run_batch(args, db, prims.spec, pins, [], os.path.join(args.out, f'baseline_{io_type}'),
-                             None, io_type)
-            if b is None:
-                sys.exit(f'the harness alone ({io_type}) failed in the vendor flow')
-            print(f'harness ({io_type or "default I/O"}) differences, ignored: {sum(map(len, b.values()))} bits in '
-                  f'{" ".join(f"R{r + 1}C{c + 1}" for r, c in sorted(b))}')
-            baselines[vccio] = b
-        return baselines[vccio]
+    # Differences of the harness alone, with each harness I/O standard the
+    # batches need. They are subtracted from the batches' differences.
+    baselines = {}
+    for vccio in dict.fromkeys(map(io_class, batches)):
+        io_type = HARNESS_IO_TYPE.get(vccio)
+        _, b = run_batch(args, db, prims.spec, pins, [], os.path.join(args.out, f'baseline_{io_type}'), None, io_type)
+        if b is None:
+            sys.exit(f'the harness alone ({io_type}) failed in the vendor flow')
+        print(f'harness ({io_type or "default I/O"}) differences, ignored: {sum(map(len, b.values()))} bits in '
+              f'{" ".join(f"R{r + 1}C{c + 1}" for r, c in sorted(b))}')
+        baselines[vccio] = b
+
+    def run(i, batch):
+        report, _ = run_batch(args, db, prims.spec, pins, batch, os.path.join(args.out, i),
+                              baselines[io_class(batch)], HARNESS_IO_TYPE.get(io_class(batch)))
+        with open(os.path.join(args.out, i, 'report.json'), 'w') as f:
+            json.dump(report, f, indent=1)
+        return report
 
     totals = collections.Counter()
-    queue = [(f'batch{i}', b) for i, b in enumerate(batches)]
-    while queue:
-        i, batch = queue.pop(0)
+
+    def record(i, batch, report):
+        """Count and print a batch's results; returns the halves to run when a
+        design with several cases failed."""
         workdir = os.path.join(args.out, i)
-        report, _ = run_batch(args, db, prims.spec, pins, batch, workdir, baseline_for(batch),
-                              HARNESS_IO_TYPE.get(io_class(batch)))
-        with open(os.path.join(workdir, 'report.json'), 'w') as f:
-            json.dump(report, f, indent=1)
         if 'error' in report:
             if len(batch) > 1:
                 # an error stops the whole design: split it to find the case. If
@@ -1252,8 +1244,7 @@ def main(argv):
                     with open(os.path.join(workdir, 'unsupported_combination.json'), 'w') as f:
                         json.dump({'cases': [(c.to_json(), s) for c, s in batch], 'why': report.get('why', [])},
                                   f, indent=1)
-                queue[:0] = [(f'{i}a', batch[:half]), (f'{i}b', batch[half:])]
-                continue
+                return [(f'{i}a', batch[:half]), (f'{i}b', batch[half:])]
             case, site = batch[0]
             # unsupported is a failure to fix in Apicula, not a case to drop
             status = 'unsupported' if 'Apicula' in report['error'] else 'invalid'
@@ -1265,7 +1256,7 @@ def main(argv):
             for line in dict.fromkeys(res['why']):
                 print('    ', line)
             totals[status] += 1
-            continue
+            return []
         for name, res in report['cases'].items():
             totals[res['status']] += 1
             if res['status'] != 'ok':
@@ -1283,6 +1274,16 @@ def main(argv):
         for tile, bits in report['unattributed'].items():
             totals['unattributed tiles'] += 1
             print(f'{i} unattributed {tile}:', *bits, sep='\n       ')
+        return []
+
+    with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
+        running = {pool.submit(run, i, b): (i, b) for i, b in ((f'batch{i}', b) for i, b in enumerate(batches))}
+        while running:
+            done, _ = concurrent.futures.wait(running, return_when=concurrent.futures.FIRST_COMPLETED)
+            for fut in done:
+                i, batch = running.pop(fut)
+                for j, half in record(i, batch, fut.result()):
+                    running[pool.submit(run, j, half)] = (j, half)
     print('summary:', dict(totals))
     # invalid cases are generator problems (a vendor rule to learn); the rest are failures
     return 1 if totals.keys() & {'mismatch', 'decode', 'unsupported', 'unsupported combinations',

@@ -10,13 +10,16 @@ error messages.
 """
 import argparse
 import collections
+import functools
 import glob
 import json
 import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+TOOLS = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.dirname(TOOLS), TOOLS]
+from tiled_fuzzer import apicula_errors  # noqa: E402
 from apycula import attrids, chipdb  # noqa: E402
 
 # fuse table -> (logicinfo table, attribute ids, value ids)
@@ -33,6 +36,13 @@ TABLES = {
 }
 
 
+@functools.cache
+def reverse(prefix):
+    """Attribute and value names by id for a TABLES entry."""
+    _, an, av = TABLES[prefix]
+    return {v: k for k, v in an.items()}, {v: k for k, v in av.items()}
+
+
 def row_names(db, ttyp, bit):
     """Fuse table rows containing `bit`, as 'TABLE: ATTR=VAL,...', shortest first."""
     out = []
@@ -41,10 +51,8 @@ def row_names(db, ttyp, bit):
             prefix = next((p for p in TABLES if name.startswith(p)), None)
             if not prefix:
                 continue
-            li_name, an, av = TABLES[prefix]
-            li = db.rev_logicinfo(li_name)
-            ids = {v: k for k, v in an.items()}
-            vals = {v: k for k, v in av.items()}
+            li = db.rev_logicinfo(TABLES[prefix][0])
+            ids, vals = reverse(prefix)
             for key, bits in rows.items():
                 if bit in bits:
                     terms = []
@@ -89,8 +97,7 @@ def main(argv):
         why = res.get('why')
         log = os.path.join(os.path.dirname(path), 'apicula', 'tools.log')
         if not why and os.path.exists(log):  # older runs missed bare 'Exception:' lines
-            with open(log, errors='replace') as f:
-                why = [line.strip() for line in f if 'ERROR' in line or re.match(r'\w*(Error|Exception): ', line)]
+            why = apicula_errors(log)
         why = why or ['(no message)']
         prim = 'combination' if 'cases' in res else res['case']['prim']
         for line in dict.fromkeys(why):

@@ -11,7 +11,8 @@ values (`PARAM_VAL`). `classify` turns the values into a domain; see
 doc/agent/primitive-params.md.
 
 `compare-yosys` checks the XML against Yosys' Gowin cell library, which Apicula
-designs are synthesised against. It needs `yosys` or `yowasp-yosys` on PATH.
+designs are synthesised against. It needs `yosys` or `yowasp-yosys` on PATH, or
+YOSYS set.
 """
 import argparse
 import json
@@ -75,15 +76,25 @@ def classify(default, vals):
     return {'kind': 'unknown'}
 
 
+def tool(env, *names):
+    """Path of a tool: the environment variable `env`, else the first of `names`
+    on PATH."""
+    path = os.environ.get(env) or next(filter(None, map(shutil.which, names)), None)
+    if not path:
+        sys.exit(f'none of {names} found; set {env}')
+    return path
+
+
+def read_cell_library(family):
+    """Yosys commands that read Yosys' Gowin cell library as black boxes."""
+    return f'read_verilog -lib +/gowin/cells_sim.v; read_verilog -lib +/gowin/cells_xtra_{family}.v; '
+
+
 def yosys_cells(family):
-    yosys = shutil.which('yosys') or shutil.which('yowasp-yosys')
-    if not yosys:
-        sys.exit('yosys not found')
     with tempfile.TemporaryDirectory(dir='.') as tmp:
         out = os.path.join(os.path.basename(tmp), 'cells.json')  # yowasp only sees the cwd
-        subprocess.run([yosys, '-q', '-p',
-                        f'read_verilog -lib +/gowin/cells_sim.v; read_verilog -lib +/gowin/cells_xtra_{family}.v; '
-                        f'blackbox =A:whitebox; write_json {out}'], check=True)
+        subprocess.run([tool('YOSYS', 'yosys', 'yowasp-yosys'), '-q', '-p',
+                        f'{read_cell_library(family)}blackbox =A:whitebox; write_json {out}'], check=True)
         with open(out) as f:
             return json.load(f)['modules']
 

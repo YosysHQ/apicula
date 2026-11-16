@@ -4707,10 +4707,6 @@ class GW1N_1(GW1N):
         # the vendor sets no fuses outside routing for it (checked on GW1N-LV1)
         return []
 
-
-    #==============================
-    #========== Misc
-    #==============================
     def get_BUFG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         """ Logic -> clock gate """
         return []

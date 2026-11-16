@@ -109,7 +109,10 @@ way; these were not.
    shrunk, because a case is already a single primitive.
 2. **Batch.** Each case gets a site. A slice holds two LUT cases or one DFF case.
    Primitives that exist once per chip, such as OSC, get one design each.
-3. **Run.** The same netlist and `.cst` go to both flows:
+3. **Run.** The same netlist and `.cst` go to both flows, at the same time unless
+   one needs the other's placement (`FOLLOW_NEXTPNR`, and the vendor's pins and
+   clock divider bels for `lone` and `clock` cases). `-j` runs several designs
+   at once.
    - vendor: `codegen.Pnr.run_pnr`, with placement fixed by `INS_LOC`;
    - Apicula: Yosys (read only, no synthesis), nextpnr, then `gowin_pack`.
      Placement is fixed by `BEL` attributes added to the Yosys JSON.
@@ -256,8 +259,10 @@ rPLLs are placed with `INS_LOC "x" PLL_L` or `PLL_R`, and nextpnr's BEL
 clock pin. Fuses are compared over the `RPLLA` tile and its `RPLLB` neighbours.
 Random dividers almost never meet the vendor's frequency checks (PA2078), so
 `pll_dividers` in `primitive_strategies.py` draws FCLKIN, IDIV_SEL, FBDIV_SEL
-and ODIV_SEL within PFD 3–400 MHz, VCO 400–1200 MHz and output 3.125–600 MHz.
-The VCO range is from the vendor's message for GW1NR-9C.
+and ODIV_SEL within the device's PFD, VCO and output limits from
+`gowin_pll.DEVICE_LIMITS` (GW1NR-9 C6/I5: PFD 3–400 MHz, VCO 400–1200 MHz,
+output 3.125–600 MHz). The VCO range agrees with the vendor's message for
+GW1NR-9C.
 
 `-n 8 --seed 5` (8 cases) and an earlier pair:
 
@@ -609,12 +614,15 @@ nextpnr folds the leaves into constants); each mux level's `S0` comes from its
 own data pin. The INIT bits themselves are not the point: the question is whether
 each leaf ends up on the mux input that selects it.
 
-- **Comparison.** Both tools place the trees freely. In each bitstream, the
-  leaves are found by INIT and must sit where the hardwired muxes read them, as
-  `gowin_unpack.make_muxes` has them: `MUX2_LUT5` i takes F2i (I0) and F2i+1
-  (I1), `MUX2_LUT6` i takes OF4i+2 and OF4i, `MUX2_LUT7` OF5 and OF1, and
-  `MUX2_LUT8` OF3 of the next column and of its own. The vendor matching this
-  confirms the model; Apicula matching it confirms nextpnr and `gowin_pack`.
+- **Comparison.** Both tools place the trees freely. In each unpacked
+  bitstream, the leaves are found by INIT and followed up through the MUX2
+  cells `gowin_unpack.make_muxes` writes for the hardwired muxes (by wire name;
+  resolved nets also join routing). Every leaf must reach one root through the
+  mux inputs its index selects. Each tile's OF3 feeds two `MUX2_LUT8`s, its own
+  (I1) and its west neighbour's (I0), so all roots a leaf reaches are tried.
+  The vendor matching this confirms the model; Apicula matching it confirms
+  nextpnr and `gowin_pack`. Swapping two leaves' INITs is rejected on every
+  stored case.
 - **Results** (`-n 4` on GW1N-9C, `-n 6` on GW2A-18C and GW5A-25A): all 64
   cases match on both sides, including `MUX2_LUT8` across two tiles.
 

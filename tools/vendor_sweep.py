@@ -26,23 +26,9 @@ TOOLS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TOOLS)
 sys.path[:0] = [REPO, TOOLS]
 import primitive_strategies as ps  # noqa: E402
+from tiled_fuzzer import DEVICES, PORT_LISTS, run_vendor  # noqa: E402
 from apycula import codegen  # noqa: E402
 
-# device: (vendor device, part number)
-DEVICES = {
-    'GW1N-1': ('GW1N-1', 'GW1N-LV1LQ144C6/I5'),
-    'GW1NZ-1': ('GW1NZ-1', 'GW1NZ-LV1QN48C6/I5'),
-    'GW1N-4': ('GW1N-4', 'GW1N-LV4PG256C6/I5'),
-    'GW1N-9': ('GW1N-9', 'GW1N-LV9PG256C6/I5'),
-    'GW1N-9C': ('GW1NR-9C', 'GW1NR-LV9QN88PC6/I5'),
-    'GW1NS-4': ('GW1NSR-4C', 'GW1NSR-LV4CQN48PC7/I6'),
-    'GW2A-18': ('GW2A-18', 'GW2A-LV18PG256C8/I7'),
-    'GW2A-18C': ('GW2A-18C', 'GW2A-LV18PG256SC8/I7'),
-    'GW5A-25A': ('GW5A-25A', 'GW5A-LV25MG121NC1/I0'),
-    'GW5AST-138C': ('GW5AST-138C', 'GW5AST-LV138PG484AC1/I0'),
-}
-
-SKIP = {'GND', 'VCC'}
 _io_buffer = re.compile(r'(I|O|T|IO)BUF')
 _log = re.compile(r'^(WARN|ERROR)\s+\((\w+)\)\s*:\s*(.*)$')
 IGNORED = {'PA1000'}  # dangling nets: the sweep leaves inputs undriven on purpose
@@ -52,10 +38,8 @@ def cases_for(prims, prim, n, seed):
     spec = prims.spec[prim]
     defaults = []
     for name, param in spec['params'].items():
-        fixed = prims.fixed(prim, name, param)
-        if fixed is None:
-            fixed = f'"{param["default"]}"' if param['type'] == 'string' else param['default']
-        defaults.append((name, fixed))
+        fixed = prims.fixed(name, param)
+        defaults.append((name, ps.default_literal(param) if fixed is None else fixed))
     out = [ps.Case(prim, tuple(sorted(defaults)))]
     if n > 1 and spec['params']:
         out += [c for c in dict.fromkeys(ps.draw(prims.case(prim), n - 1, seed)) if c != out[0]]
@@ -85,7 +69,7 @@ def netlist(cases, spec):
             pad = direction == 'inout' or io_buffer and (
                 direction == 'input' and port in ('I', 'IB') or direction == 'output' and port in ('O', 'OB'))
             if pad:
-                getattr(mod, {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}[direction]).update(wires)
+                getattr(mod, PORT_LISTS[direction]).update(wires)
             elif direction == 'input' and 'CLK' in port and width == 1:
                 wires = ['clk']
             elif direction == 'input' and width > 1:
@@ -120,27 +104,23 @@ def read_log(path, names):
 
 def run(job):
     device, workdir, cases, spec = job
-    vendor_device, part = DEVICES[device]
+    vendor_device, part, _ = DEVICES[device]
     mod, cst, names = netlist(cases, spec)
-    pnr = codegen.Pnr()
-    pnr.device, pnr.partnumber, pnr.netlist, pnr.cst = vendor_device, part, mod, cst
-    os.makedirs(workdir, exist_ok=True)
-    with open(os.path.join(workdir, 'gw_sh.log'), 'w') as log:
-        res = pnr.run_pnr(workdir=workdir, stdout=log)
+    res = run_vendor(workdir, mod, cst, vendor_device, part)
     per, other = read_log(os.path.join(workdir, 'impl/pnr/top.log'), names)
     return {'bitstream': res is not None, 'per': per, 'other': other, 'names': names}
 
 
 def sweep(device, prims, args, pool):
-    names = [p for p in sorted(prims.spec) if p not in SKIP and (not args.prims or p in args.prims)]
+    names = [p for p in sorted(prims.spec) if p not in ps.NOT_PRIMITIVES and (not args.prims or p in args.prims)]
     jobs = [(device, os.path.join(args.out, device, p), cases_for(prims, p, args.count, args.seed), prims.spec)
             for p in names]
     results = {}
-    for (dev, workdir, cases, spec), r in zip(jobs, pool.imap(run, jobs)):
+    for (_, workdir, cases, spec), r in zip(jobs, pool.imap(run, jobs)):
         prim = cases[0].prim
         if not r['bitstream'] and len(cases) > 1:
             # find out which cases the design failed for
-            singles = pool.map(run, [(dev, f'{workdir}/case{i}', [c], spec) for i, c in enumerate(cases)])
+            singles = pool.map(run, [(device, f'{workdir}/case{i}', [c], spec) for i, c in enumerate(cases)])
             per_case = [(c, s['bitstream'], s['per'].get('inst0_' + prim, []), s['other'])
                         for c, s in zip(cases, singles)]
         else:

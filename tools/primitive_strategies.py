@@ -15,8 +15,11 @@ import sys
 
 from hypothesis import strategies as st
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+TOOLS = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.dirname(TOOLS), TOOLS]  # this checkout's apycula
 import gowin_primitives  # noqa: E402
+from apycula import gowin_pll  # noqa: E402
+from apycula.gowin_pack import BankDesc  # noqa: E402
 
 # Which kind of site each supported primitive occupies. The tiled fuzzer knows
 # how to place each site kind.
@@ -37,7 +40,6 @@ SITES = {
                                 'MULT12X12', 'MULT27X36', 'MULTADDALU12X12', 'MULTALU27X18']},
     # SSRAM: a whole logic tile
     **{name: 'ssram' for name in ['RAM16SDP1', 'RAM16SDP2', 'RAM16SDP4', 'ROM16', 'RAM16S1', 'RAM16S2', 'RAM16S4']},
-    # the BSRAM types nextpnr packs (type_is_bsram in himbaechel/uarch/gowin/gowin.h)
     'rPLL': 'pll',
     'PLL': 'pll',  # GW1N/GW2A non-reconfigurable PLL; same sites as rPLL
     'PLLA': 'plla',
@@ -63,25 +65,31 @@ SITES = {
 # bitstream (bit_incl_bsram_init is off), so they cannot be compared yet.
 KEEP_DEFAULT = re.compile(r'INIT_RAM_[0-9A-F]{2}$')
 
-# PLL frequency limits in MHz, from the vendor's PA2078 message for GW1NR-9C
-# ("suitable range is from 400MHz to 1200MHz"); PFD and output limits as in
-# apycula/gowin_pll.py. Too few valid divider combinations survive a filter, so
-# rPLL dividers are drawn to satisfy them (see pll_dividers).
-PLL_LIMITS = {'pfd': (3, 400), 'vco': (400, 1200), 'clkout': (3.125, 600)}
+# rPLL frequency limits: apycula/gowin_pll.py's table, by device and the speed
+# grade of the part the fuzzer uses. GW1NR-9 C6/I5 (VCO 400-1200 MHz) agrees
+# with the vendor's PA2078 message for GW1NR-9C. Too few valid divider
+# combinations survive a filter, so rPLL dividers are drawn to satisfy them
+# (see pll_dividers).
+PLL_LIMITS = {
+    'GW1N-1': 'GW1N-1 C6/I5', 'GW1NZ-1': 'GW1NZ-1 C6/I5', 'GW1N-4': 'GW1NR-4 C6/I5',
+    'GW1N-9': 'GW1NR-9 C6/I5', 'GW1N-9C': 'GW1NR-9 C6/I5', 'GW1NS-4': 'GW1NSR-4C C7/I6',
+    'GW2A-18': 'GW2A-18 C8/I7', 'GW2A-18C': 'GW2A-18 C8/I7',
+}
 
 
 @st.composite
-def pll_dividers(draw, spec):
-    """FCLKIN, IDIV_SEL, FBDIV_SEL and ODIV_SEL of an rPLL within PLL_LIMITS:
-    PFD = FCLKIN/(IDIV+1), CLKOUT = PFD*(FBDIV+1), VCO = CLKOUT*ODIV."""
-    lo, hi = PLL_LIMITS['pfd']
+def pll_dividers(draw, spec, device):
+    """FCLKIN, IDIV_SEL, FBDIV_SEL and ODIV_SEL of an rPLL within the device's
+    limits: PFD = FCLKIN/(IDIV+1), CLKOUT = PFD*(FBDIV+1), VCO = CLKOUT*ODIV."""
+    lim = gowin_pll.DEVICE_LIMITS[PLL_LIMITS[device]]
+    lo, hi = lim['pfd_min'], lim['pfd_max']
     fclkin = draw(st.sampled_from([f for f in REAL_VALUES if float(f) >= lo]))
     f = float(fclkin)
     idiv = draw(st.sampled_from([i for i in range(64) if lo <= f / (i + 1) <= hi]))
     pfd = f / (idiv + 1)
     choices = [(fb, od) for fb in range(64) for od in map(int, spec['ODIV_SEL']['values'])
-               if PLL_LIMITS['clkout'][0] <= pfd * (fb + 1) <= PLL_LIMITS['clkout'][1]
-               and PLL_LIMITS['vco'][0] <= pfd * (fb + 1) * od <= PLL_LIMITS['vco'][1]]
+               if lim['clkout_min'] <= pfd * (fb + 1) <= lim['clkout_max']
+               and lim['vco_min'] <= pfd * (fb + 1) * od <= lim['vco_max']]
     if not choices:
         return {}
     fb, od = draw(st.sampled_from(choices))
@@ -90,23 +98,18 @@ def pll_dividers(draw, spec):
 
 # I/O settings are constraint-file attributes (IO_PORT), not primitive
 # parameters, so primitive.xml has no domain for them. Values are those the
-# chipdb's IOB logicinfo knows; IO_TYPE maps to the bank voltage it needs.
-# Single-ended standards only for now.
-IO_STANDARDS = {
-    'LVTTL33': '3.3', 'LVCMOS33': '3.3', 'PCI33': '3.3', 'SSTL33_I': '3.3', 'SSTL33_II': '3.3',
-    'LVCMOS25': '2.5', 'SSTL25_I': '2.5', 'SSTL25_II': '2.5',
-    'LVCMOS18': '1.8', 'SSTL18_I': '1.8', 'SSTL18_II': '1.8', 'HSTL18_I': '1.8', 'HSTL18_II': '1.8',
-    'LVCMOS15': '1.5', 'SSTL15': '1.5', 'HSTL15_I': '1.5',
-    'LVCMOS12': '1.2',
-}
+# chipdb's IOB logicinfo knows. The bank voltage each IO_TYPE needs is
+# gowin_pack's (BankDesc._vcc_ios), so cases are grouped by bank as it groups them.
+IO_STANDARDS = ['LVTTL33', 'LVCMOS33', 'PCI33', 'SSTL33_I', 'SSTL33_II',
+                'LVCMOS25', 'SSTL25_I', 'SSTL25_II',
+                'LVCMOS18', 'SSTL18_I', 'SSTL18_II', 'HSTL18_I', 'HSTL18_II',
+                'LVCMOS15', 'SSTL15', 'HSTL15_I', 'LVCMOS12']
 # Differential standards: true LVDS buffers (TLVDS_*) need true-LVDS pins,
 # emulated ones (ELVDS_*) use a pair of single-ended drivers.
 DIFF_STANDARDS = {
-    'TLVDS': {'LVDS25': '2.5', 'RSDS': '2.5', 'MINILVDS': '2.5', 'PPLVDS': '2.5', 'LVPECL33': '3.3'},
-    'ELVDS': {'LVDS25E': '2.5', 'BLVDS25E': '2.5', 'MLVDS25E': '2.5', 'RSDS25E': '2.5', 'LVPECL33E': '3.3',
-              'SSTL15D': '1.5', 'SSTL18D_I': '1.8', 'SSTL25D_I': '2.5', 'SSTL33D_I': '3.3',
-              'HSTL15D_I': '1.5', 'HSTL18D_I': '1.8',
-              'LVCMOS33D': '3.3', 'LVCMOS25D': '2.5', 'LVCMOS18D': '1.8', 'LVCMOS15D': '1.5', 'LVCMOS12D': '1.2'},
+    'TLVDS': ['LVDS25', 'RSDS', 'MINILVDS', 'PPLVDS', 'LVPECL33'],
+    'ELVDS': ['LVDS25E', 'BLVDS25E', 'MLVDS25E', 'RSDS25E', 'LVPECL33E', 'SSTL15D', 'SSTL18D_I', 'SSTL25D_I',
+              'SSTL33D_I', 'HSTL15D_I', 'HSTL18D_I', 'LVCMOS33D', 'LVCMOS25D', 'LVCMOS18D', 'LVCMOS15D', 'LVCMOS12D'],
 }
 
 
@@ -115,13 +118,8 @@ IOL_IO_TYPE = 'LVCMOS33'  # standard of the buffer an I/O logic case is placed w
 
 def io_vccio(case):
     """Bank voltage an I/O case needs."""
-    if SITES.get(case.prim) == 'iol':
-        return IO_STANDARDS[IOL_IO_TYPE]
-    io_type = dict(case.params)['IO_TYPE']
-    for table in (IO_STANDARDS, *DIFF_STANDARDS.values()):
-        if io_type in table:
-            return table[io_type]
-    raise KeyError(io_type)
+    io_type = IOL_IO_TYPE if case.site == 'iol' else dict(case.params)['IO_TYPE']
+    return BankDesc._vcc_ios[io_type]
 
 
 IO_INPUT_ATTRS = {'PULL_MODE': ['UP', 'DOWN', 'NONE', 'KEEPER'], 'HYSTERESIS': ['NONE', 'H2L', 'L2H', 'HIGH']}
@@ -237,9 +235,6 @@ RULES = [
      "PA2122: dual-port BSRAM does not support WRITE_MODE 2'b10"),
 ]
 
-# Primitives in a family's primitive.xml that a device does not have: the
-# vendor answers PA2085, "No '<primitive>' resource in current device"
-# (doc/agent/vendor-sweep.md). Only those the fuzzer would otherwise generate.
 # Not in the device: "PA2085: No '<primitive>' resource in current device",
 # from tools/vendor_sweep.py (doc/agent/vendor-sweep.md)
 UNAVAILABLE = {
@@ -267,6 +262,7 @@ def site_kind(prim):
     """Site kind of a primitive; everything without one of its own is 'lone':
     one per design, placed by both tools."""
     return SITES.get(prim, 'lone')
+
 
 # Real-valued parameters (the PLL and DCC input frequency FCLKIN) have no domain
 # in primitive.xml; draw typical frequencies in MHz.
@@ -296,6 +292,11 @@ class Case:
     @staticmethod
     def from_json(d):
         return Case(d['prim'], tuple(sorted(d['params'].items())))
+
+
+def default_literal(param):
+    """Verilog literal of a parameter's primitive.xml default."""
+    return f'"{param["default"]}"' if param['type'] == 'string' else param['default']
 
 
 def literal(param, value):
@@ -337,21 +338,22 @@ class Primitives:
         gowinhome = gowinhome or os.environ['GOWINHOME']
         xml = os.path.join(gowinhome, gowin_primitives.XML_PATHS[family(device)])
         self.spec = gowin_primitives.load(xml)
-        self.vendor_device = vendor_device
+        self.device, self.vendor_device = device, vendor_device
 
-    def fixed(self, prim, name, param):
+    def fixed(self, name, param):
         """Literal for a parameter whose value depends on the device, else None.
         DEVICE parameters list the devices a primitive exists on; use this one."""
         if name == 'DEVICE' and param['kind'] == 'enum' and self.vendor_device in param['values']:
             return literal(param, self.vendor_device)
         if KEEP_DEFAULT.match(name):
-            return f'"{param["default"]}"' if param['type'] == 'string' else param['default']
+            return default_literal(param)
         return None
 
     def case(self, prim):
-        if SITES.get(prim) in ('iob', 'diob'):
+        kind = site_kind(prim)
+        if kind in ('iob', 'diob'):
             return io_case(prim)
-        if SITES.get(prim) == 'widelut':
+        if kind == 'widelut':
             # leaf INITs, distinct and not constant, so each leaf can be found
             # in a bitstream; leaf j is reached with select bits j (I0 = 0)
             n = 1 << (int(prim[-1]) - 4)
@@ -359,30 +361,24 @@ class Primitives:
                 lambda inits: Case(prim, tuple((f'INIT{j}', f"16'h{v:04x}") for j, v in enumerate(inits))))
         fields = {}
         for name, param in self.spec[prim]['params'].items():
-            fixed = self.fixed(prim, name, param)
+            fixed = self.fixed(name, param)
             if fixed is not None:
                 fields[name] = st.just(fixed)
             else:
                 fields[name] = param_strategy(param).map(lambda v, p=param: literal(p, v))
+        # parameters drawn together to satisfy frequency rules, and fixups for
+        # rules between parameters
+        extra, fixup = st.just({}), (lambda d: d)
+        if kind == 'dsp':
+            fixup = accload_fixup
+        elif prim in ('rPLL', 'PLL'):
+            extra = pll_dividers(self.spec[prim]['params'], self.device)
+        elif prim == 'PLLA':
+            extra, fixup = plla_dividers(), plla_fixup
         rules = [ok for pat, ok, _ in RULES if re.match(pat, prim)]
-        if SITES.get(prim) == 'dsp':
-            return (st.fixed_dictionaries(fields).map(accload_fixup)
-                    .filter(lambda d: all(ok(d) for ok in rules))
-                    .map(lambda d: Case(prim, tuple(sorted(d.items())))))
-        if prim in ('rPLL', 'PLL'):
-            base = st.fixed_dictionaries(fields)
-            return st.tuples(base, pll_dividers(self.spec[prim]['params'])).map(
-                lambda t: Case(prim, tuple(sorted({**t[0], **t[1]}.items()))))
-        if prim == 'PLLA':
-            base = st.fixed_dictionaries(fields)
-            return st.tuples(base, plla_dividers()).map(
-                lambda t: Case(prim, tuple(sorted(plla_fixup({**t[0], **t[1]}).items()))))
-        return (st.fixed_dictionaries(fields).filter(lambda d: all(ok(d) for ok in rules))
+        return (st.tuples(st.fixed_dictionaries(fields), extra).map(lambda t: fixup({**t[0], **t[1]}))
+                .filter(lambda d: all(ok(d) for ok in rules))
                 .map(lambda d: Case(prim, tuple(sorted(d.items())))))
-
-    def cases(self, prims=None):
-        prims = sorted(prims or (p for p in SITES if p in self.spec))
-        return st.sampled_from(prims).flatmap(self.case)
 
 
 def draw(strategy, n, seed=0):
