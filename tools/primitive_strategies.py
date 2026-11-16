@@ -100,6 +100,14 @@ RULES = [
      "PA2122: dual-port BSRAM does not support WRITE_MODE 2'b10"),
 ]
 
+# Primitives in a family's primitive.xml that a device does not have: the
+# vendor answers PA2085, "No '<primitive>' resource in current device"
+# (doc/agent/vendor-sweep.md). Only those the fuzzer would otherwise generate.
+UNAVAILABLE = {
+    'GW5A-25A': {'DFF', 'DFFC', 'DFFE', 'DFFN', 'DFFNC', 'DFFNCE', 'DFFNE', 'DFFNP', 'DFFNPE', 'DFFNR',
+                 'DFFNRE', 'DFFNS', 'DFFNSE', 'DFFP', 'DFFR', 'DFFS', 'OSC'},
+}
+
 # Real-valued parameters (the PLL and DCC input frequency FCLKIN) have no domain
 # in primitive.xml; draw typical frequencies in MHz.
 REAL_VALUES = ['3', '10', '24', '27', '50', '100', '200', '400']

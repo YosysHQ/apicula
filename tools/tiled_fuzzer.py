@@ -63,6 +63,7 @@ DEVICES = {
     'GW1NS-4': ('GW1NSR-4C', 'GW1NSR-LV4CQN48PC7/I6', 'QFN48P'),
     'GW2A-18': ('GW2A-18', 'GW2A-LV18PG256C8/I7', 'PBGA256'),
     'GW2A-18C': ('GW2A-18C', 'GW2A-LV18PG256SC8/I7', 'PBGA256S'),
+    'GW5A-25A': ('GW5A-25A', 'GW5A-LV25MG121NC1/I0', 'MBGA121N'),
 }
 
 CONTROL_PORTS = {'CE', 'SET', 'RESET', 'PRESET', 'CLEAR'}
@@ -96,9 +97,15 @@ class Sites:
             cols = [c for c in range(db.cols) if 'BSRAM' in db[r, c].bels]
             self.bsram += [(r, c, 'BSRAM', n) for n, c in enumerate(cols)]
         rng.shuffle(self.bsram)
-        # rPLLs: the vendor names them PLL_L and PLL_R by side
-        self.pll = [(r, c, 'PLL', 'L' if c < db.cols // 2 else 'R')
-                    for r in range(db.rows) for c in range(db.cols) if 'RPLLA' in db[r, c].bels]
+        # rPLLs: the vendor names them PLL_L and PLL_R by side, and PLL_L[n] when a
+        # side has several (n counted top to bottom). Skip PLLs the chipdb marks
+        # disabled, which nextpnr does not offer (GW2A-18C rows 10).
+        self.pll = []
+        for side, cols in (('L', range(db.cols // 2)), ('R', range(db.cols // 2, db.cols))):
+            plls = [(r, c) for r in range(db.rows) for c in cols if 'RPLLA' in db[r, c].bels]
+            for n, (r, c) in enumerate(plls):
+                if not db.extra_func.get((r, c), {}).get('disabled', {}).get('PLL'):
+                    self.pll.append((r, c, 'PLL', side if len(plls) == 1 else f'{side}[{n}]'))
         self.singletons = {'osc'}
         # I/O: plain package pins (no special function) not used by the harness,
         # as (row, col, 'IOBA'|'IOBB', pin number)
@@ -578,10 +585,14 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
             loc = SINGLETON_LOCS.setdefault(case.site, find_bel(db, case.site.upper()))
         by_tile[loc].append(name)
         if site and site[2] == 'BSRAM':
-            # a BSRAM's fuses are in its tile and the BSRAM_AUX tiles to its right
+            # a BSRAM's fuses are in its tile and the two tiles to its right:
+            # BSRAM_AUX bels on GW1N/GW2A, tiles with BSRAM tables but no bel on GW5A
             for dc in (1, 2):
-                if loc[1] + dc < db.cols and 'BSRAM_AUX' in db[loc[0], loc[1] + dc].bels:
-                    by_tile[(loc[0], loc[1] + dc)].append(name)
+                if loc[1] + dc < db.cols:
+                    aux = db[loc[0], loc[1] + dc]
+                    if 'BSRAM_AUX' in aux.bels or ('BSRAM' not in aux.bels
+                                                    and 'BSRAM_SP' in db.shortval.get(aux.ttyp, {})):
+                        by_tile[(loc[0], loc[1] + dc)].append(name)
         if case.site == 'iob':
             # bank settings are shared by every I/O in the bank
             bank = db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))
@@ -656,7 +667,8 @@ def main(argv):
                 d = json.load(f)
             batches.append([(ps.Case.from_json(d['case']), tuple(d['site']) if d['site'] else None)])
     else:
-        names = args.prims or [p for p in ps.SITES if p in prims.spec]
+        names = args.prims or [p for p in ps.SITES if p in prims.spec
+                               and p not in ps.UNAVAILABLE.get(args.device, ())]
         cases = [c for p in names for c in set(ps.draw(prims.case(p), args.count, args.seed))]
         rng.shuffle(cases)
         batches = allocate(cases, sites)

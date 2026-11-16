@@ -835,7 +835,9 @@ class BankDesc:
                 'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVDS25E': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3', 'MIPI': '1.2',
                 'SSTL15': '1.5', 'SSTL18_I': '1.8', 'SSTL18_II': '1.8', 'SSTL25_I': '2.5', 'SSTL25_II': '2.5',
                 'SSTL33_I': '3.3', 'SSTL33_II': '3.3', 'SSTL15D': '1.5', 'SSTL18D_I': '1.8', 'SSTL18D_II': '1.8',
-                'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3', 'MIPI': '2.5'}
+                'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3', 'MIPI': '2.5',
+                'PCI33': '3.3', 'LVTTL33': '3.3', 'HSTL15': '1.5', 'HSTL15_I': '1.5', 'HSTL18_I': '1.8',
+                'HSTL18_II': '1.8', 'HSTL15D': '1.5', 'HSTL15D_I': '1.5', 'HSTL18D_I': '1.8', 'HSTL18D_II': '1.8'}
 
     def __init__(self, x: int, y: int):
         self.x, self.y = x, y
@@ -1079,11 +1081,11 @@ class Device:
                 frozenset({"BLVDS25E"}): "BLVDS_E",
                 frozenset({"LVTTL33"}): "LVCMOS33",
                 frozenset({"LVCMOS12D", "LVCMOS15D", "LVCMOS18D", "LVCMOS25D", "LVCMOS33D", }): "LVCMOS_D",
-                frozenset({"HSTL15", "HSTL18_I", "HSTL18_II"}): "HSTL",
+                frozenset({"HSTL15", "HSTL15_I", "HSTL18_I", "HSTL18_II"}): "HSTL",
                 frozenset({"SSTL15", "SSTL18_I", "SSTL18_II", "SSTL25_I", "SSTL25_II", "SSTL33_I", "SSTL33_II"}): "SSTL",
                 frozenset({"MLVDS25E"}): "MLVDS_E",
                 frozenset({"SSTL15D", "SSTL18D_I", "SSTL18D_II", "SSTL25D_I", "SSTL25D_II", "SSTL33D_I", "SSTL33D_II"}): "SSTL_D",
-                frozenset({"HSTL15D", "HSTL18D_I", "HSTL18D_II"}): "HSTL_D",
+                frozenset({"HSTL15D", "HSTL15D_I", "HSTL18D_I", "HSTL18D_II"}): "HSTL_D",
                 frozenset({"RSDS"}): "RSDS25",
                 frozenset({"RSDS25E"}): "RSDS_E",
                 }
