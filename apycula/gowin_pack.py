@@ -837,7 +837,11 @@ class BankDesc:
                 'SSTL33_I': '3.3', 'SSTL33_II': '3.3', 'SSTL15D': '1.5', 'SSTL18D_I': '1.8', 'SSTL18D_II': '1.8',
                 'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3', 'MIPI': '2.5',
                 'PCI33': '3.3', 'LVTTL33': '3.3', 'HSTL15': '1.5', 'HSTL15_I': '1.5', 'HSTL18_I': '1.8',
-                'HSTL18_II': '1.8', 'HSTL15D': '1.5', 'HSTL15D_I': '1.5', 'HSTL18D_I': '1.8', 'HSTL18D_II': '1.8'}
+                'HSTL18_II': '1.8', 'HSTL15D': '1.5', 'HSTL15D_I': '1.5', 'HSTL18D_I': '1.8', 'HSTL18D_II': '1.8',
+                'LVCMOS12D': '1.2', 'LVCMOS15D': '1.5', 'LVCMOS18D': '1.8', 'LVCMOS25D': '2.5',
+                'MINILVDS': '2.5', 'PPLVDS': '2.5', 'RSDS': '2.5', 'RSDS25': '2.5', 'RSDS25E': '2.5',
+                'BLVDS25': '2.5', 'BLVDS25E': '2.5', 'MLVDS25': '2.5', 'MLVDS25E': '2.5',
+                'LVPECL33': '3.3', 'LVPECL33E': '3.3'}
 
     def __init__(self, x: int, y: int):
         self.x, self.y = x, y

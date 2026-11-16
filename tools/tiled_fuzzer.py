@@ -150,6 +150,9 @@ HARNESS_IO_TYPE = {'3.3': 'LVCMOS33', '2.5': 'LVCMOS25', '1.8': 'LVCMOS18', '1.5
 IO_PAD = {'IBUF': 'I', 'OBUF': 'O', 'TBUF': 'O', 'IOBUF': 'IO'}
 DIFF_PAD = {'IBUF': ['I', 'IB'], 'OBUF': ['O', 'OB'], 'TBUF': ['O', 'OB'], 'IOBUF': ['IO', 'IOB']}
 IO_SITES = ('iob', 'diob')
+PIN_SITES = ('iob', 'diob', 'iol')  # placed by IO_LOC on a pin
+IOL_INPUT = {'D', 'DI'}  # I/O logic port fed by the input buffer
+IOL_OUTPUT = {'Q', 'Q0', 'DO'}  # port that feeds the output buffer
 
 
 def io_pads(case, site):
@@ -162,7 +165,7 @@ def io_pads(case, site):
 
 def io_class(batch):
     """Bank voltage shared by the I/O cases of a batch, or None."""
-    return next((ps.io_vccio(c) for c, _ in batch if c.site in IO_SITES), None)
+    return next((ps.io_vccio(c) for c, _ in batch if c.site in PIN_SITES), None)
 
 
 def allocate(cases, sites):
@@ -173,8 +176,8 @@ def allocate(cases, sites):
     batches = []
     # I/O cases: one bank voltage per design, since a bank has one VCCIO
     by_vccio = collections.defaultdict(list)
-    for case in queues.pop('iob', []) + queues.pop('diob', []):
-        pool = 'iob' if case.site == 'iob' else case.prim.split('_')[0].lower()
+    for case in queues.pop('iob', []) + queues.pop('diob', []) + queues.pop('iol', []):
+        pool = case.prim.split('_')[0].lower() if case.site == 'diob' else 'iob'
         by_vccio[(ps.io_vccio(case), pool)].append(case)
     for (_, pool), group in by_vccio.items():
         free = getattr(sites, pool)
@@ -267,8 +270,30 @@ def netlist(batch, spec, pins, harness_io_type=None):
                 getattr(mod, {'input': 'inputs', 'output': 'outputs', 'inout': 'inouts'}[direction]).add(conns[pad])
                 cst.ports[conns[pad]] = pin
                 cst.attrs[conns[pad]] = dict(case.params)
+        if case.site == 'iol':
+            # I/O logic must connect to an I/O buffer (vendor PR0018): an IBUF
+            # feeding its data input, or an OBUF fed by its output
+            ports = spec[case.prim]['ports']
+            data_in = next((p for p in ports if p in IOL_INPUT), None)
+            pad = f'{name}_pad'
+            if data_in:
+                conns[data_in] = f'{name}_in'
+                mod.wires.add(conns[data_in])
+                mod.inputs.add(pad)
+                inst('IBUF', f'{name}_buf', {'I': pad, 'O': conns[data_in]})
+            else:
+                out = next(p for p in ports if p in IOL_OUTPUT)
+                conns[out] = f'{name}_out'
+                mod.wires.add(conns[out])
+                mod.outputs.add(pad)
+                inst('OBUF', f'{name}_buf', {'I': conns[out], 'O': pad})
+            cst.ports[pad] = site[3]
+            cst.attrs[pad] = {'IO_TYPE': ps.IOL_IO_TYPE}
         for port, (d, w) in spec[case.prim]['ports'].items():
             if d != 'input' or w != 1 or port in conns:
+                continue
+            if case.site == 'iol' and port in ('CLK', 'PCLK', 'FCLK'):
+                conns[port] = 'clk'
                 continue
             if case.site in IO_SITES and sources:
                 conns[port] = sources.pop(0)  # buffer data and enable inputs
@@ -285,7 +310,7 @@ def netlist(batch, spec, pins, harness_io_type=None):
                 mod.wires.add(conns[port])
         inst(case.prim, name, conns, () if case.site in IO_SITES else case.params)
         wiring[name] = conns
-        if case.site in IO_SITES:
+        if case.site in PIN_SITES:
             pass  # placed by IO_LOC
         elif site and site[2] == 'BSRAM':
             cst.cells[name] = f'BSRAM_R{site[0] + 1}[{site[3]}]'
@@ -335,13 +360,18 @@ def run_apicula(workdir, mod, cst, names, device, part):
     subprocess.run([tool('YOSYS', 'yosys', 'yowasp-yosys'), '-q', '-p',
                     f'read_verilog -lib +/gowin/cells_sim.v; read_verilog -lib +/gowin/cells_xtra_{ps.family(device)}.v; '
                     'read_verilog top.v; hierarchy -top top; '
+                    # as synth_gowin does: differential buffers' pads get IBUF/OBUF cells,
+                    # which nextpnr merges; pads that already have a buffer are skipped
+                    # (enables not inverted: an inverter would need synthesis to map)
+                    'iopadmap -bits -inpad IBUF O:I -outpad OBUF I:O -toutpad TBUF OEN:I:O '
+                    '-tinoutpad IOBUF OEN:O:I:IO top; '
                     'blackbox =A:whitebox; write_json syn.json'],
                    cwd=workdir, check=True, stdout=log, stderr=subprocess.STDOUT)
     path = os.path.join(workdir, 'syn.json')
     with open(path) as f:
         syn = json.load(f)
     for name, cell in syn['modules']['top']['cells'].items():
-        if name in names and names[name][1] and names[name][0].site not in IO_SITES:  # I/O: IO_LOC
+        if name in names and names[name][1] and names[name][0].site not in PIN_SITES:  # I/O: IO_LOC
             cell['attributes']['BEL'] = bel_name(*names[name])  # nextpnr ignores INS_LOC
     with open(path, 'w') as f:
         json.dump(syn, f)
@@ -404,6 +434,10 @@ def bit_owner(db, r, c, bit):
             if bel.startswith('LUT'):
                 for bits in b.flags.values():
                     own.update(dict.fromkeys(bits, bel))
+        for name, rows in db.shortval.get(ttyp, {}).items():
+            if name in ('IOLOGICA', 'IOLOGICB'):
+                for bits in rows.values():
+                    own.update(dict.fromkeys(bits, name))
         # I/O: bits in only one of the IOBA and IOBB tables belong to that bel
         io = {name: set().union(*rows.values()) for name, rows in db.longval.get(ttyp, {}).items()
               if name in ('IOBA', 'IOBB') and rows}
@@ -416,6 +450,8 @@ def bit_owner(db, r, c, bit):
 
 def case_bel(case, site):
     r, c, cls, ab = site
+    if case.site == 'iol':
+        return f'IOLOGIC{cls[-1]}'
     if cls in ('BSRAM', 'PLL') or str(cls).startswith('IOB'):
         return cls
     return f'LUT{2 * cls + "AB".index(ab)}' if case.site == 'lut' else f'CLS{cls}'
@@ -480,6 +516,11 @@ class Decoded:
         if site is None:
             return next((n for n, c in self.nl.cells.items() if c['type'].startswith(case.site.upper())), None)
         r, c, cls, ab = site
+        if case.site == 'iol':
+            # gowin_unpack names I/O logic R<r>C<c>_<MODE>_<A|B>
+            prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{cls[-1]}'
+            return next((n for n, cell in self.nl.cells.items() if n.startswith(prefix) and n.endswith(suffix)
+                         and cell['type'] in ps.SITES and ps.SITES[cell['type']] == 'iol'), None)
         if case.site in IO_SITES:
             # gowin_unpack names I/O buffers R<r>C<c>_<TYPE>_<A|B>
             prefix, suffix = f'R{r + 1}C{c + 1}_', f'_{cls[-1]}'
@@ -499,6 +540,10 @@ class Decoded:
 
     def describe(self, case, site):
         name = self.find(case, site)
+        if case.site == 'iol':
+            cell = self.nl.cells[name] if name else None
+            return {'cell': cell['type'] if cell else None,
+                    'params': {k: literal_value(v) for k, v in cell['params'].items()} if cell else {}}
         if case.site in IO_SITES:
             # attributes are compared on fuses; gowin_unpack writes them to a .cst
             return {'cell': self.nl.cells[name]['type'] if name else None}
@@ -530,6 +575,8 @@ class Decoded:
 
 
 def describe_generated(case, conns, spec):
+    if case.site == 'iol':
+        return {'cell': case.prim, 'params': {k: literal_value(v) for k, v in case.params}}
     if case.site in IO_SITES:
         return {'cell': case.prim}
     if case.site == 'bsram':
@@ -592,7 +639,9 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
         res = {'case': case.to_json(), 'site': site, 'status': 'ok'}
         problems = [msg for (n, code), msgs in vres.errs.items() if n == name
                     for msg in msgs if code in INVALID_CODES or msg.startswith('ERROR')]
-        if site and placed.get(name) != bel_name(case, site):
+        # I/O is placed by IO_LOC; nextpnr merges differential buffers into cells
+        # of other names, so check placement for the rest only
+        if site and case.site not in PIN_SITES and placed.get(name) != bel_name(case, site):
             problems.append(f'nextpnr placed it at {placed.get(name)}')
         if problems:
             res['status'] = 'invalid'
@@ -621,7 +670,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
                     if 'BSRAM_AUX' in aux.bels or ('BSRAM' not in aux.bels
                                                     and 'BSRAM_SP' in db.shortval.get(aux.ttyp, {})):
                         by_tile[(loc[0], loc[1] + dc)].append(name)
-        if case.site in IO_SITES:
+        if case.site in PIN_SITES:
             # bank settings are shared by every I/O in the bank
             bank = db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))
             if bank in db.bank_tiles:
@@ -638,7 +687,7 @@ def run_batch(args, db, spec, pins, batch, workdir, baseline, harness_io_type=No
     # an I/O tile with no case belong to the I/O cases of that bank.
     by_bank = collections.defaultdict(list)
     for name, (case, site) in names.items():
-        if case.site in IO_SITES:
+        if case.site in PIN_SITES:
             by_bank[db.pin_bank.get(io_name(db, site[0], site[1], site[2][-1]))].append(name)
 
     def bank_cases(r, c):

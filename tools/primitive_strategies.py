@@ -30,6 +30,9 @@ SITES = {
     'rPLL': 'pll',
     **{name: 'iob' for name in ['IBUF', 'OBUF', 'TBUF', 'IOBUF']},
     **{f'{kind}_{buf}': 'diob' for kind in ('TLVDS', 'ELVDS') for buf in ('IBUF', 'OBUF', 'TBUF', 'IOBUF')},
+    # I/O logic: placed with an I/O buffer on a pin
+    **{name: 'iol' for name in ['IDDR', 'IDDRC', 'ODDR', 'ODDRC', 'IDES4', 'IDES8', 'IDES10', 'IDES16',
+                                'OSER4', 'OSER8', 'OSER10', 'OSER16', 'IODELAY', 'IVIDEO', 'OVIDEO']},
     **{name: 'bsram' for name in ['SP', 'SPX9', 'pROM', 'pROMX9', 'ROM', 'SDP', 'SDPB', 'SDPX9B',
                                   'DP', 'DPB', 'DPX9B']},
 }
@@ -85,8 +88,13 @@ DIFF_STANDARDS = {
 }
 
 
+IOL_IO_TYPE = 'LVCMOS33'  # standard of the buffer an I/O logic case is placed with
+
+
 def io_vccio(case):
     """Bank voltage an I/O case needs."""
+    if SITES.get(case.prim) == 'iol':
+        return IO_STANDARDS[IOL_IO_TYPE]
     io_type = dict(case.params)['IO_TYPE']
     for table in (IO_STANDARDS, *DIFF_STANDARDS.values()):
         if io_type in table:
@@ -133,6 +141,7 @@ RULES = [
 # vendor answers PA2085, "No '<primitive>' resource in current device"
 # (doc/agent/vendor-sweep.md). Only those the fuzzer would otherwise generate.
 UNAVAILABLE = {
+    'GW1N-9C': {'TLVDS_IOBUF'},
     'GW5A-25A': {'DFF', 'DFFC', 'DFFE', 'DFFN', 'DFFNC', 'DFFNCE', 'DFFNE', 'DFFNP', 'DFFNPE', 'DFFNR',
                  'DFFNRE', 'DFFNS', 'DFFNSE', 'DFFP', 'DFFR', 'DFFS', 'OSC'},
 }

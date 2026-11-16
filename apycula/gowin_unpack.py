@@ -1006,10 +1006,10 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                         disable_oddr = False
                     continue
                 if param == 'CLKODDRMUX_ECLK':
-                    eclk == val
+                    eclk = val
                     continue
                 if param == 'CLKIDDRMUX_ECLK':
-                    eclk == val
+                    eclk = val
                     continue
                 iol_params[param] = val
             name = f"R{row}C{col}_{iol_mode}_{idx}"
