@@ -45,7 +45,6 @@ BROKEN = {
     **broken('I3C_IOBUF', 'I3C: DRIVE/OPENDRAIN rows; nextpnr: pin not I3C capable on GW5A'),
     **broken('MIPI_OBUF', 'MIPI: Apicula sets an IOB row where the vendor sets a bank row'),
     # nextpnr
-    **broken('RAM16SDP1', 'nextpnr: RAM16SDP1 scalar DI/DO not mapped to bel pins (fix pending upstream)'),
     **broken('ROM16', 'nextpnr: ROM16 becomes a LUT'),
     **broken('SDP DP ROM pROM DPX9 SDPX9 ROMX9', 'nextpnr: unsupported BSRAM type, or bel type mismatch'),
     **broken('PLL BUFS RAM16S1 RAM16S2 RAM16S4 LUT5 LUT6 LUT7 LUT8 MUX2 IDES14 IDES32 OSER14 DDRDLL DHCE DCE '
