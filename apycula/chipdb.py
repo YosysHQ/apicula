@@ -4632,6 +4632,8 @@ def set_chip_flags(dev, device):
         dev.chip_flags.append("HAS_BANDGAP")
     if device in _hclk_to_pll:
         dev.chip_flags.append("HAS_PLL_HCLK")
+    if device in {'GW1N-2'}:
+        dev.chip_flags.append("HAS_DFF6")
     if device in {'GW2A-18', 'GW2A-18C'}:
         dev.chip_flags.append("HAS_CLKDIV_HCLK")
     if device in {'GW5A-25A'}:
@@ -4742,8 +4744,8 @@ def from_fse(device, fse, dat: Datfile):
         dev.tile_types['D5A'] = dev.tile_types['D']
         dev.tile_types['D'] = set()
 
-    # GW5 series have DFF6 and DFF7, so leave Q6 and Q7 as is
-    if device not in {'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}:
+    # some series have DFF6 and DFF7, so leave Q6 and Q7 as is
+    if device not in {'GW1N-2', 'GW5A-25A', 'GW5AT-60B', 'GW5AST-138C'}:
         create_vcc_pips(dev, tiles)
     create_default_pips(tiles)
 
