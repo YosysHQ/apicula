@@ -510,7 +510,9 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             else:
                 continue
             gsren = attrvals.get('GSR') != attrids.iologic_attrvals['DISGSR']
-            if name in bels:
+            # checked on GW1N/GW2A only: GW5A-25A packs ENGSR and LSROMUX_0 as
+            # constants, so there the rows don't carry the parameters
+            if name in bels and not chipdb.is_GW5_family(_device):
                 bels[name].update({f'GSREN="{str(gsren).lower()}"',
                                    f'LSREN="{str(lsren).lower()}"'})
             if 'CLKODDRMUX_ECLK' in attrvals.keys():
