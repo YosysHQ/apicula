@@ -2230,12 +2230,19 @@ class Device:
         """ IN iologic attrs """
         attr_vals = []
         cell_parms = bel.cell.parms
+        # The LSRIMUX_0 and CLKOMUX_1 rules were checked against the vendor on GW1N/GW2A only
+        gw5 = chipdb.is_GW5_family(self.device_name)
 
         if bel.cell.typ not in {'IDDR', 'IDDRC'}:
             attr_vals.append(AttrVal('CLKIMUX_1', '1'))
-            # With LSREN=false the I register reset pin is a constant
-            lsr_en = self.iologic_main_cell(bel.cell).parms.get('LSREN', 'TRUE') == 'TRUE'
-            attr_vals.append(AttrVal('LSRIMUX_0', '1' if lsr_en else '0'))
+            if gw5:
+                attr_vals.append(AttrVal('LSRIMUX_0', '1'))
+                if cell_parms['INMODE'] == 'IDDRX8' or cell_parms['INMODE'] == 'DDRENABLE16':
+                    attr_vals.append(AttrVal('LSRIMUX_0', '0'))
+            else:
+                # With LSREN=false the I register reset pin is a constant
+                lsr_en = self.iologic_main_cell(bel.cell).parms.get('LSREN', 'TRUE') == 'TRUE'
+                attr_vals.append(AttrVal('LSRIMUX_0', '1' if lsr_en else '0'))
             if cell_parms['INMODE'] == 'DDRENABLE16':
                 attr_vals.append(AttrVal('INMODE', 'DDRENABLE'))
                 attr_vals.append(AttrVal('ISI', 'ENABLE'))
@@ -2253,7 +2260,8 @@ class Device:
 
         attr_vals.append(AttrVal('LSROMUX_0', '0'))
         attr_vals.append(AttrVal('CLKIMUX', 'ENABLE'))
-        attr_vals.append(AttrVal('CLKOMUX_1', '1'))
+        if not gw5:
+            attr_vals.append(AttrVal('CLKOMUX_1', '1'))
 
         # in fclk
         if bel.fclk in {'SPINE12', 'SPINE13'}:
@@ -2372,8 +2380,9 @@ class Device:
         iol_bel = self.make_IologicBelDesc(bel)
         attr_vals = self.common_iologic_handler(iol_bel)
         # A standalone input IODELAY has no register and so no reset pin to
-        # read: it keeps the vendor's initIolAttr defaults
-        if bel.cell.attrs.get('IODELAY') == 'IN' and 'HAS_REG' not in bel.cell.attrs:
+        # read: it keeps the vendor's initIolAttr defaults. Checked on GW1N/GW2A only.
+        if (not chipdb.is_GW5_family(self.device_name)
+                and bel.cell.attrs.get('IODELAY') == 'IN' and 'HAS_REG' not in bel.cell.attrs):
             attr_vals = [av for av in attr_vals if av.attr != 'CLKOMUX']
             attr_vals += [AttrVal('LSRIMUX_0', '0'), AttrVal('LSROMUX_0', '0'), AttrVal('CLKOMUX_1', '1')]
 
