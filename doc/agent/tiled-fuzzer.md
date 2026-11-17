@@ -21,14 +21,15 @@ the fuse table rows that differ, are in the test output of
     `BLVDS…` rows;
   - `DRIVE,OPENDRAIN`, `ODMUX`, `PULLMODE`;
   - GW5A output `ODMUX`/`DRIVE` rows (check `fuse_cell_offset` first).
-- **I/O logic:** `LSRIMUX`/`LSROMUX` and `GSR` on the pin sites of
-  `IDES16`/`OSER16` (read from nextpnr's auxiliary cell, which has no
-  `GSREN`/`LSREN`), `ODDR` `OUTMODE`; GW5A-25A `FCLKSEL*` and
+- **I/O logic:** `ODDR` `OUTMODE`; GW5A-25A `FCLKSEL*` and
   `LSRIMUX_0`/`LSROMUX_0`. Fixed: the second half of a two-site primitive (an
   `IOLOGIC_DUMMY`, as in `OSER8`/`OSER10`) took `GSR` from its own, empty
   parameters instead of the main cell's `GSREN`, and `LSREN=false` left
   `LSROMUX_0=1` on `OSER4` and on the `DDRENABLE` half of `OSER8`/`OSER10`
-  (`fusegenMem::setIolODDR @0x308ac42`). On GW1N-9C the harness puts an `OSER`'s output
+  (`fusegenMem::setIolODDR @0x308ac42`). `IDES16`/`OSER16` take `GSR` and the LSR mux
+  on their two pin sites from `GSREN`/`LSREN`, which nextpnr copies onto those
+  cells (YosysHQ/nextpnr#1919); the helper site in the next tile stays at
+  `ENGSR` and mux 1. On GW1N-9C the harness puts an `OSER`'s output
   pad in bank 3, which is locked to 1.8 V (CT1136); the vendor moves
   it and sets IOB `ODMUX`/`TRI_MUX`/`SLEWRATE` rows Apicula does not.
 - **BSRAM:**
