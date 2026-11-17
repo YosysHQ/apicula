@@ -351,12 +351,6 @@ _iologic_mode = {
 # BSRAM has 3 cells: BSRAM, BSRAM0 and BSRAM1
 # { (row, col) : idx }
 _bsram_cells = {}
-def get_bsram_main_cell(db, row, col, typ):
-    if typ[-4:] == '_AUX':
-        col -= 1
-        if 'BSRAM_AUX' in db[row, col].bels:
-            col -= 1
-    return row, col
 
 # The DSP has 9 cells: the main one and a group of auxiliary ones.
 def get_dsp_main_cell(db, row, col, typ):
@@ -432,16 +426,18 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
                 bels[name] = modes
             continue
         if name.startswith("BSRAM"):
-            # disabled BSRAM cells have no fuse tables
-            if 'BSRAM_SP' not in db.shortval[tiledata.ttyp]:
+            # The block spans the main tile and two aux tiles to its right. A
+            # configuration can set fuses on the aux tiles only, so the main tile
+            # looks at all three. Tiles without fuses are absent from bm, and
+            # disabled BSRAM cells have no fuse tables.
+            if name != "BSRAM" or bm is None:
                 continue
-            idx = _bsram_cells.setdefault(get_bsram_main_cell(db, row, col, name), len(_bsram_cells))
-            #print(row, col, name, idx, tiledata.ttyp)
-            attrvals = parse_attrvals(tile, db.rev_logicinfo('BSRAM'), db.shortval[tiledata.ttyp]['BSRAM_SP'], attrids.bsram_attrids, "BSRAM")
-            if not attrvals:
-                continue
-            #print(row, col, name, idx, tiledata.ttyp, attrvals)
-            bels[f'{name}{idx}'] = {}
+            for c in range(col, col + 3):
+                ttyp = db[row, c].ttyp
+                if (row, c) in bm and 'BSRAM_SP' in db.shortval[ttyp] and parse_attrvals(bm[row, c], db.rev_logicinfo('BSRAM'), db.shortval[ttyp]['BSRAM_SP'], attrids.bsram_attrids, "BSRAM"):
+                    idx = _bsram_cells.setdefault((row, col), len(_bsram_cells))
+                    bels[f'{name}{idx}'] = {}
+                    break
             continue
         if name.startswith("ALU54D"):
             continue
