@@ -616,8 +616,6 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
         for flag, bits in bel.flags.items():
             used_bits = {tile[row][col] for row, col in bits}
             if all(used_bits):
-                if name == "RAM16" and not name in bels:
-                    continue
                 bels.setdefault(name, set()).add(flag)
         # revert BUFS flags
         if name.startswith('BUFS'):
@@ -788,6 +786,8 @@ def ram16_remove_bels(bels):
     bels_to_remove = []
     for bel in bels:
         if bel == "RAM16":
+            # the four LUTs hold INIT_0..3
+            bels[bel] |= {16 * i + f for i in range(4) for f in bels.get(f"LUT{i}", ())}
             bels_to_remove.extend(f"LUT{x}" for x in range(6))
             bels_to_remove.extend(f"DFF{x}" for x in range(4, 6))
     for bel in bels_to_remove:

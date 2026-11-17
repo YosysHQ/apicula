@@ -1386,7 +1386,7 @@ class Device:
 
         fuses = []
         for i in range(4):
-            init = str(bel.cell.parms[f'INIT_{i}'])
+            init = str(bel.cell.parms.get(f'INIT_{i}', '0' * 16))
             if len(init) > 16:
                 init = init[-16:]
             else:
@@ -1405,6 +1405,9 @@ class Device:
 
         self.used_slices.add_slice_attrs(bel.x, bel.y, 2, False, False, [AttrVal('LSRONMUX', 'LSRMUX'), AttrVal('LSR_MUX_LSR', 'INV'), AttrVal('CLKMUX_1', 'UNKNOWN'), AttrVal('CLKMUX_CLK', 'SIG')])
         return fuses
+
+    def get_RAM16SDP2_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        return self.get_RAM16SDP4_fuses(bel)
 
     #==============================
     #========== DFFs

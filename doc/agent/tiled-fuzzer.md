@@ -31,9 +31,6 @@ the fuse table rows that differ, are in the test output of
     widths has not yet been implemented").
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
-- **SSRAM:**
-  - `RAM16SDP4` CLS `LSRONMUX`/`LSR_MUX` rows;
-  - no `RAM16SDP2` handler.
 - **DSP:**
   - GW1N/GW2A input register muxes (`AIRMUX`/`BIRMUX`), `RSTGEN*MUX`, and the
     pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows;
@@ -170,7 +167,8 @@ design, to confirm a failure in isolation.
   constants in both flows, so a DFFRE decodes as a DFFR with CE=VCC, and the
   flip-flop type cannot be checked. CLK, CE and SET/RESET/PRESET/CLEAR therefore
   come from input pins. They use dedicated slice ports, so nothing can be
-  reordered.
+  reordered. SSRAM `WRE` comes from a pin too: the vendor folds a constant
+  `WRE` into the slice's LSR mux rows, which Apicula does not.
 - **The netlist dialect.** Every port must be connected (PA2058), and sized
   constants on ports are rejected (PA2000). Bus inputs go to a `GND` cell's net.
   Bit-vector parameters must be written in the radix of their default in
