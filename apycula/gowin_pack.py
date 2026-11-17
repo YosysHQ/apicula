@@ -970,6 +970,12 @@ class BankDesc:
 ################################################################
 class Device:
     """ Base chip. The fuses for a specific chip are set in a class that inherits from this one. """
+    # I/O logic primitives whose GSREN defaults to false. ODDR/IDDR have no
+    # GSREN and the vendor enables GSR for them. OSER16/IDES16 default to false
+    # too, but reach gowin_pack as IOLOGIC cells, so listing them does nothing.
+    _gsren_default_false = frozenset({'OSER4', 'OSER8', 'OSER10', 'OVIDEO',
+                                      'IDES4', 'IDES8', 'IDES10', 'IVIDEO'})
+
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         self.cli_args = cli_args
         self.device_name = cli_args.get_device()
@@ -2184,11 +2190,8 @@ class Device:
         val = cell_parms.get('HWL', 'FALSE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('UPDATE', 'SAME'))
-        # The SERDES primitives default GSREN to false; ODDR/IDDR have no
-        # GSREN and the vendor enables GSR for them.
         main = self.iologic_main_cell(bel.cell)
-        serdes = {'OSER4', 'OSER8', 'OSER10', 'OVIDEO', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}
-        val = self.iologic_sr_param(bel.cell, 'GSREN', 'FALSE' if main.typ in serdes else 'TRUE')
+        val = self.iologic_sr_param(bel.cell, 'GSREN', 'FALSE' if main.typ in self._gsren_default_false else 'TRUE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('GSR', 'ENGSR'))
         else:
@@ -5413,6 +5416,9 @@ class GW2A_18C(GW2A):
 ################################################################
 class GW5A(Device):
     """ GW5A series """
+    # GW5A primitive.xml has no GSREN, so keep GSR enabled (unchecked against the IDE).
+    _gsren_default_false = frozenset()
+
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
         # PLLA, ADC etc
