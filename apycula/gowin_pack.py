@@ -2932,8 +2932,10 @@ class Device:
                 self.chipdb.get_bsram_attr_val(AttrVal(f'CSB_{i}', 'SET'), av)
 
         # bit width
+        default_bw = bin(36 if self.is_9bit_bsram(bsram_bel) else 32)
+        val_b = int(bsram_bel.cell.parms.get('BIT_WIDTH_1', default_bw), 2)
         # Port A
-        val = int(bsram_bel.cell.parms.get('BIT_WIDTH_0', bin(36 if self.is_9bit_bsram(bsram_bel) else 32)), 2)
+        val = int(bsram_bel.cell.parms.get('BIT_WIDTH_0', default_bw), 2)
         bw = self.get_bsram_bitwidth(val)
         nets = bel.cell.connections
         if val < 32:
@@ -2946,8 +2948,13 @@ class Device:
                 else:
                     self.chipdb.get_bsram_attr_val(AttrVal('SDPA_BEHB', 'DISABLE'), av)
                     self.chipdb.get_bsram_attr_val(AttrVal('SDPA_BELB', 'DISABLE'), av)
-                self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BEHB', 'DISABLE'), av)
-                self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BELB', 'DISABLE'), av)
+                # the vendor enables port B too when it reads 16 bits or more
+                if constant_byte_enable and val_b >= 16:
+                    self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BEHB', 'ENABLE'), av)
+                    self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BELB', 'ENABLE'), av)
+                else:
+                    self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BEHB', 'DISABLE'), av)
+                    self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BELB', 'DISABLE'), av)
             else:
                 self.chipdb.get_bsram_attr_val(AttrVal('SDPA_BEHB', 'DISABLE'), av)
                 self.chipdb.get_bsram_attr_val(AttrVal('SDPA_BELB', 'DISABLE'), av)
@@ -2968,9 +2975,8 @@ class Device:
                 self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BEHB', 'DISABLE'), av)
                 self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BELB', 'DISABLE'), av)
         # Port B
-        val = int(bsram_bel.cell.parms.get('BIT_WIDTH_1', bin(36 if self.is_9bit_bsram(bsram_bel) else 32)), 2)
-        bw = self.get_bsram_bitwidth(val)
-        if val < 32:
+        bw = self.get_bsram_bitwidth(val_b)
+        if val_b < 32:
             self.chipdb.get_bsram_attr_val(AttrVal('SDPB_DATA_WIDTH', bw), av)
         else:
             self.chipdb.get_bsram_attr_val(AttrVal('DBLWB', bw), av)

@@ -25,9 +25,12 @@ the fuse table rows that differ, are in the test output of
 - **I/O logic:** `CLKIDDRMUX_ECLK`/`CLKODDRMUX_ECLK=ECLK1`, `GSR=DISGSR`,
   `LSRIMUX`/`LSROMUX`, `ODDR` `OUTMODE`; GW5A `FCLKSEL*`.
 - **BSRAM:**
-  - pipelined (`READ_MODE=1`) output registers;
-  - byte enables (`BELB`/`BEHB`);
-  - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`.
+  - pipelined (`READ_MODE=1`) output registers on `SDPB`/`SDPX9B` with a
+    read port narrower than 16 bits: nextpnr's `pack_SDPB` does not call
+    `bsram_fix_outreg`;
+  - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`;
+  - an `SDPB` case (`BIT_WIDTH` 8/4) that unpacks to no cell from either
+    bitstream.
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
 - **SSRAM:**
