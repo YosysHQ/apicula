@@ -232,9 +232,9 @@ skipped: a generator limit, not an Apicula failure. Reports are in
 `--fuzz-out/<device>`, with `results.json` holding every case.
 
 CI (the `fuzz` job in `.github/workflows/toolchain.yml`) runs the tests for
-GW1N-9C, GW2A-18C and GW5A-25A with the dev Yosys and nextpnr that workflow
-builds, the IDE from the `pepijndevos/apicula:1.9.10.03` image, pinned
-Hypothesis and a fixed seed.
+GW1N-9C, GW2A-18C and GW5A-25A in the `pepijndevos/apicula:1.9.10.03` image,
+with the dev Yosys and nextpnr that workflow builds in the same image, the
+chipdb from the `python-dist` wheel, pinned Hypothesis and a fixed seed.
 
 ## Adding a primitive
 
