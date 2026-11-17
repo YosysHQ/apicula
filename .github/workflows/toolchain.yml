@@ -14,20 +14,19 @@ on:
         type: string
 
 jobs:
+  # The tools are built, and run, in the apicula image, so that the fuzz job
+  # can use them next to the IDE.
   build-tools:
     runs-on: ubuntu-latest
+    container: pepijndevos/apicula:1.9.10.03
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.12'
     - name: Install build deps
       run: |
-        sudo apt-get update
-        sudo apt-get install build-essential clang bison flex \
+        apt-get update
+        apt-get install -y build-essential clang bison flex cmake ccache \
           libreadline-dev gawk tcl-dev libffi-dev git libfl-dev \
-          graphviz xdot pkg-config python3 libboost-system-dev \
+          graphviz xdot pkg-config libboost-system-dev \
           libboost-python-dev libboost-filesystem-dev zlib1g-dev \
           libboost-thread-dev libboost-program-options-dev libboost-iostreams-dev libboost-dev \
           libeigen3-dev
@@ -58,7 +57,7 @@ jobs:
         cd yosys
         cmake -B build . -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         cmake --build build --config Release --parallel $(nproc)
-        cmake --install build --prefix ${{ github.workspace }}/staging/usr/local --strip
+        cmake --install build --prefix $GITHUB_WORKSPACE/staging/usr/local --strip
     - name: Build nextpnr
       run: |
         git clone https://github.com/YosysHQ/nextpnr.git
@@ -73,7 +72,7 @@ jobs:
           -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         make -C build -j$(nproc)
-        make -C build install DESTDIR=${{ github.workspace }}/staging
+        make -C build install DESTDIR=$GITHUB_WORKSPACE/staging
     - name: Package tools
       run: tar czf tools.tar.gz -C staging/usr/local .
     - name: Upload tools
@@ -84,6 +83,7 @@ jobs:
 
   example:
     runs-on: ubuntu-latest
+    container: pepijndevos/apicula:1.9.10.03
     needs: [build-tools]
     strategy:
       fail-fast: false
@@ -103,21 +103,17 @@ jobs:
           - {target: tangconsole60k, dir: examples/gw5a}
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python
-      uses: actions/setup-python@v7
-      with:
-        python-version: '3.12'
     - name: Download tools
       uses: actions/download-artifact@v8
       with:
         name: tools-${{ inputs.name }}
     - name: Install runtime deps
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libboost-filesystem1.90.0 libboost-program-options1.90.0 \
-          libboost-iostreams1.90.0 libboost-thread1.90.0 libboost-system1.88.0
+        apt-get update
+        apt-get install -y libboost-filesystem1.83.0 libboost-program-options1.83.0 \
+          libboost-iostreams1.83.0 libboost-thread1.83.0 libboost-system1.83.0
     - name: Install tools
-      run: sudo tar xzf tools.tar.gz -C /usr/local && sudo ldconfig
+      run: tar xzf tools.tar.gz -C /usr/local && ldconfig
     - name: Download python package
       uses: actions/download-artifact@v8
       with:
@@ -126,6 +122,7 @@ jobs:
     - name: Install apycula
       run: |
         if [ "${{ matrix.board.pure }}" = "true" ]; then
+          pip uninstall -y numpy fastcrc msgspec  # preinstalled in the image
           pip install --no-deps dist/*.whl
           pip install msgpack cattrs
         else
@@ -146,6 +143,63 @@ jobs:
         for f in *-unpacked.v; do
           yosys -p "read_verilog $f; read_verilog -lib +/gowin/cells_sim.v; clean -purge; select -assert-any t:DFF*; select -assert-any t:*BUF;";
         done
+
+  # Places random primitive configurations with the vendor tools and with
+  # Apicula and compares the bitstreams: tests/test_fuzz.py, one test per
+  # primitive. Known broken primitives are marked there and logged as xfail;
+  # any other failure fails the run. The image has the IDE in $GOWINHOME.
+  fuzz:
+    if: inputs.name == 'dev'
+    runs-on: ubuntu-latest
+    container: pepijndevos/apicula:1.9.10.03
+    needs: [build-tools]
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [GW1N-9C, GW2A-18C, GW5A-25A]
+    steps:
+    - uses: actions/checkout@v7
+    - name: Download tools
+      uses: actions/download-artifact@v8
+      with:
+        name: tools-${{ inputs.name }}
+    - name: Install runtime deps
+      run: |
+        apt-get update
+        apt-get install -y libboost-filesystem1.83.0 libboost-program-options1.83.0 \
+          libboost-iostreams1.83.0 libboost-thread1.83.0 libboost-system1.83.0
+    - name: Install tools
+      run: |
+        tar xzf tools.tar.gz -C /usr/local && ldconfig
+        yosys --version
+        nextpnr-himbaechel --version
+    - name: Download python package
+      uses: actions/download-artifact@v8
+      with:
+        name: python-dist
+        path: dist
+    - name: Install the chipdb
+      # The fuzzer imports this checkout's apycula, so put the wheel's chipdb there.
+      run: |
+        python3 -m zipfile -e dist/*.whl wheel
+        cp wheel/apycula/${{ matrix.device }}.msgpack.xz apycula/
+    - name: Run the fuzzer
+      env:
+        YOSYS: /usr/local/bin/yosys
+        NEXTPNR: /usr/local/bin/nextpnr-himbaechel
+      run: |
+        pip install pytest hypothesis==6.170.15
+        python3 -m pytest tests/test_fuzz.py --device ${{ matrix.device }} --fuzz-jobs $(nproc) -rxX
+    - name: Upload the reports
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: fuzz-${{ matrix.device }}
+        path: |
+          fuzz-out/**/*.json
+          fuzz-out/**/tools.log
+          fuzz-out/**/top.log
 
   hil:
     runs-on: [self-hosted, fpga]
