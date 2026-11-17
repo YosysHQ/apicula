@@ -185,7 +185,9 @@ def get_latch_type(dff_idx, in_attrs):
     if 'CLKMUX_CLK' in in_attrs.keys():
         attrs['CLKMUX_CLK'] = get_attrval_name(in_attrs['CLKMUX_CLK'])
     else:
-        attrs['CLKMUX_CLK'] = 'SIG'
+        # The CLS fuse of (REGMODE=LATCH, CLKMUX_CLK=SIG) is the one of
+        # (REGMODE=FF, CLKMUX_CLK=INV), so a latch without it has an inverted gate
+        attrs['CLKMUX_CLK'] = 'INV'
     if 'SRMODE' in in_attrs.keys():
         attrs['SRMODE'] = get_attrval_name(in_attrs['SRMODE'])
     else:
@@ -256,7 +258,18 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table, tableName)
     # find candidates from fuse table
     # the set bits are more unique
     attrvals = set()
-    cnd = {av: bits for av, bits in fuse_table.items() if is_pos_key(av) and bits.issubset(set_bits)}
+    # Rows keyed on a single attribute value. The vendor sets the fuses of every
+    # row whose keys all hold, so an attribute value whose own row's fuses are
+    # not set is not present. This separates rows with identical fuses, such as
+    # (REGMODE=FF, CLKMUX_CLK=INV) and (REGMODE=LATCH, CLKMUX_CLK=SIG) in CLS
+    # tables, where only REGMODE=LATCH alone has a fuse of its own.
+    single = {}
+    for av, bits in fuse_table.items():
+        keys = [k for k in av if k]
+        if len(keys) == 1 and keys[0] > 0:
+            single[keys[0]] = bits
+    cnd = {av: bits for av, bits in fuse_table.items() if is_pos_key(av) and bits.issubset(set_bits)
+           and all(single.get(k, set()).issubset(set_bits) for k in av if k > 0)}
     for av, bits in cnd.items():
         keep = True
         for bt in cnd.values():
@@ -995,10 +1008,10 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                         disable_oddr = False
                     continue
                 if param == 'CLKODDRMUX_ECLK':
-                    eclk == val
+                    eclk = val
                     continue
                 if param == 'CLKIDDRMUX_ECLK':
-                    eclk == val
+                    eclk = val
                     continue
                 iol_params[param] = val
             name = f"R{row}C{col}_{iol_mode}_{idx}"

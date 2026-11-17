@@ -1,0 +1,46 @@
+name: Tiled fuzzer
+
+# Places random primitive configurations with the vendor tools and with
+# Apicula and compares the bitstreams: tests/test_fuzz.py, one test per
+# primitive. Known broken primitives are marked there and logged as xfail;
+# any other failure fails the run. A fixed seed and pinned tools make runs
+# reproducible.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  APICULA_IMAGE: pepijndevos/apicula:1.9.10.03
+  FUZZ_TOOLS: pytest hypothesis==6.170.15 yowasp-yosys==0.71.0.0.post1285 yowasp-nextpnr-himbaechel-gowin==0.11.1.0.post826
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [GW1N-9C, GW2A-18C, GW5A-25A]
+    steps:
+    - uses: actions/checkout@v7
+    - name: Build the chipdb and run the fuzzer
+      run: |
+        docker pull ${{ env.APICULA_IMAGE }}
+        docker run -v $(pwd):/usr/src/apicula -w /usr/src/apicula -e GOWINHOME=/usr/src/gowin \
+          ${{ env.APICULA_IMAGE }} bash -c "
+            make apycula/${{ matrix.device }}.msgpack.xz &&
+            pip install -q ${{ env.FUZZ_TOOLS }} &&
+            python3 -m pytest tests/test_fuzz.py --device ${{ matrix.device }} --fuzz-jobs $(nproc) -rxX"
+    - name: Upload the reports
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: fuzz-${{ matrix.device }}
+        path: |
+          fuzz-out/**/*.json
+          fuzz-out/**/tools.log
+          fuzz-out/**/top.log

@@ -835,7 +835,13 @@ class BankDesc:
                 'LVCMOS33': '3.3', 'LVDS25': '2.5', 'LVDS25E': '2.5', 'LVCMOS33D': '3.3', 'LVCMOS_D': '3.3', 'MIPI': '1.2',
                 'SSTL15': '1.5', 'SSTL18_I': '1.8', 'SSTL18_II': '1.8', 'SSTL25_I': '2.5', 'SSTL25_II': '2.5',
                 'SSTL33_I': '3.3', 'SSTL33_II': '3.3', 'SSTL15D': '1.5', 'SSTL18D_I': '1.8', 'SSTL18D_II': '1.8',
-                'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3', 'MIPI': '2.5'}
+                'SSTL25D_I': '2.5', 'SSTL25D_II': '2.5', 'SSTL33D_I': '3.3', 'SSTL33D_II': '3.3', 'MIPI': '2.5',
+                'PCI33': '3.3', 'LVTTL33': '3.3', 'HSTL15': '1.5', 'HSTL15_I': '1.5', 'HSTL18_I': '1.8',
+                'HSTL18_II': '1.8', 'HSTL15D': '1.5', 'HSTL15D_I': '1.5', 'HSTL18D_I': '1.8', 'HSTL18D_II': '1.8',
+                'LVCMOS12D': '1.2', 'LVCMOS15D': '1.5', 'LVCMOS18D': '1.8', 'LVCMOS25D': '2.5',
+                'MINILVDS': '2.5', 'PPLVDS': '2.5', 'RSDS': '2.5', 'RSDS25': '2.5', 'RSDS25E': '2.5',
+                'BLVDS25': '2.5', 'BLVDS25E': '2.5', 'MLVDS25': '2.5', 'MLVDS25E': '2.5',
+                'LVPECL33': '3.3', 'LVPECL33E': '3.3'}
 
     def __init__(self, x: int, y: int):
         self.x, self.y = x, y
@@ -1079,11 +1085,11 @@ class Device:
                 frozenset({"BLVDS25E"}): "BLVDS_E",
                 frozenset({"LVTTL33"}): "LVCMOS33",
                 frozenset({"LVCMOS12D", "LVCMOS15D", "LVCMOS18D", "LVCMOS25D", "LVCMOS33D", }): "LVCMOS_D",
-                frozenset({"HSTL15", "HSTL18_I", "HSTL18_II"}): "HSTL",
+                frozenset({"HSTL15", "HSTL15_I", "HSTL18_I", "HSTL18_II"}): "HSTL",
                 frozenset({"SSTL15", "SSTL18_I", "SSTL18_II", "SSTL25_I", "SSTL25_II", "SSTL33_I", "SSTL33_II"}): "SSTL",
                 frozenset({"MLVDS25E"}): "MLVDS_E",
                 frozenset({"SSTL15D", "SSTL18D_I", "SSTL18D_II", "SSTL25D_I", "SSTL25D_II", "SSTL33D_I", "SSTL33D_II"}): "SSTL_D",
-                frozenset({"HSTL15D", "HSTL18D_I", "HSTL18D_II"}): "HSTL_D",
+                frozenset({"HSTL15D", "HSTL15D_I", "HSTL18D_I", "HSTL18D_II"}): "HSTL_D",
                 frozenset({"RSDS"}): "RSDS25",
                 frozenset({"RSDS25E"}): "RSDS_E",
                 }
@@ -1656,6 +1662,9 @@ class Device:
         self.error_not_supported_cell_type(bel)
 
     def get_FLASH256K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        self.error_not_supported_cell_type(bel)
+
+    def get_FLASH96K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         self.error_not_supported_cell_type(bel)
 
     def get_FLASH608K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
@@ -3219,12 +3228,15 @@ class Device:
                     if sync_padd_reset:
                         attr_vals.append(AttrVal(f'RSTGENLMUX_REG{r}{pair_idx}', 'SYNC'))
             else:
+                # attrids number these 4*pair + 0/1 for A (L/H) and 4*pair + 2/3 for B,
+                # e.g. IRNS_PRAD0AL_0, IRNS_PRAD0AH_1, IRNS_PRAD0BL_2, IRNS_PRAD0BH_3
+                b = 2 if r == 'B' else 0
                 if is_even:
-                    attr_vals.append(AttrVal(f'IRNS_PRAD{pair_idx}{r}H_{pair_idx * 4 + 1}', "ENABLE"))
-                    attr_vals.append(AttrVal(f'IRBY_PRAD{pair_idx}{r}H_{pair_idx * 4 + 1}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRNS_PRAD{pair_idx}{r}H_{pair_idx * 4 + b + 1}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRBY_PRAD{pair_idx}{r}H_{pair_idx * 4 + b + 1}', "ENABLE"))
                 else:
-                    attr_vals.append(AttrVal(f'IRNS_PRAD{pair_idx}{r}L_{pair_idx * 4}', "ENABLE"))
-                    attr_vals.append(AttrVal(f'IRBY_PRAD{pair_idx}{r}L_{pair_idx * 4}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRNS_PRAD{pair_idx}{r}L_{pair_idx * 4 + b}', "ENABLE"))
+                    attr_vals.append(AttrVal(f'IRBY_PRAD{pair_idx}{r}L_{pair_idx * 4 + b}', "ENABLE"))
 
         val = int(cell_parms.get('SOREG', '0'), 2)
         if val:
@@ -4688,10 +4700,13 @@ class GW1N_1(GW1N):
             fuses.append(CellFuseBits(bel.x, bel.y, bits))
         return fuses
 
-
     #==============================
     #========== Misc
     #==============================
+    def get_FLASH96K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        # the vendor sets no fuses outside routing for it (checked on GW1N-LV1)
+        return []
+
     def get_BUFG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         """ Logic -> clock gate """
         return []
@@ -5909,6 +5924,15 @@ class GW5A(Device):
 ################################################################
 class GW5A_25A(GW5A):
     """ GW5A-25A chip. Tangprimer25k board """
+    def get_bsram_attrvals(self, bel: BsramBelDesc) -> set[int]:
+        """ The IDE leaves the BSRAM GSR=DISABLE row clear on this device (all 32
+        cases of SP, SPX9, SDPB, SDPX9B, DPB, DPX9B, pROM and pROMX9 in
+        tools/tiled_fuzzer.py), while on GW1N-9C and GW2A-18C it is set. """
+        av = super().get_bsram_attrvals(bel)
+        gsr = set()
+        self.chipdb.get_bsram_attr_val(AttrVal('GSR', 'DISABLE'), gsr)
+        return av - gsr
+
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
         # The GW5A-25A has an interesting phenomenon on the bottom side of the

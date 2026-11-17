@@ -111,6 +111,18 @@ The `doc/` folder contains technical documentation about FPGA architecture, vend
 - Set `GOWINHOME` to the install root, the directory containing `IDE/`.
 - Use `.venv` for builds: `PATH=$PWD/.venv/bin:$PATH make -j4`. The chipdb build
   fails on a Python without `msgspec`.
+- No IDE installed? The Docker image `pepijndevos/apicula:1.9.10.03` (the one CI
+  uses) contains it at `/usr/src/gowin`, with `gw_sh` already patched. The Gowin
+  CDN link in the `Dockerfile` returns 404, so pull the image instead. In a
+  container without a running Docker daemon, start `dockerd` first. To use the IDE
+  on the host, copy it out:
+
+      cid=$(docker create pepijndevos/apicula:1.9.10.03)
+      docker cp $cid:/usr/src/gowin/. /opt/gowin && docker rm $cid
+      export GOWINHOME=/opt/gowin
+
+  `make` then builds a chipdb in seconds, and `codegen.Pnr` can run vendor place
+  and route.
 
 ## Verifying changes
 
@@ -176,6 +188,8 @@ new IDE version. Vendor enums are not committed; generate them when updating
 | `tools/gowin_extract.py check-attrids` | Compares `apycula/attrids.py` with vendor names |
 | `tools/gowin_attr_sites.py` | Lists attribute assignments with approximate guards; research aid, output not committed |
 | `tools/gowin_decompile.py` | Decompiles named functions with Ghidra, applying Gowin enums, parameter structs and signatures; no full analysis needed |
+| `tools/gowin_primitives.py` | Dumps primitive ports, parameters and allowed values from `primitive.xml`. See `doc/agent/primitive-params.md` |
+| `tools/tiled_fuzzer.py` | Places Hypothesis-generated primitive instances in one design, runs the vendor and Apicula, and reports fuse differences per instance; `tests/test_fuzz.py` runs it per device in CI. See `doc/agent/tiled-fuzzer.md` |
 | `tools/chipdb_compare.py` | Content comparison of chipdb directories |
 | `tools/timing/` | Timing research: list old `.tm` record fields from the getters, parse the GW5A `.tm` block, rebuild IDE routes from its bitstream, compare IDE, reimplemented vendor and nextpnr delays. See `doc/agent/timing.md` |
 

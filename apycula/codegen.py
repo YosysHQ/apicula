@@ -1,5 +1,6 @@
 from collections import namedtuple
 from itertools import chain
+import contextlib
 import os
 import re
 import subprocess
@@ -108,6 +109,9 @@ class Constraints:
 
     def write(self, f):
         for key, val in self.cells.items():
+            if isinstance(val, str):  # a location as written, e.g. BSRAM_R10[2]
+                f.write("INS_LOC \"{}\" {};\n".format(key, val))
+                continue
             row, col, side, lut = val
             f.write("INS_LOC \"{}\" R{}C{}[{}][{}];\n".format(key, row, col, side, lut))
         for key, val in self.ports.items():
@@ -234,18 +238,25 @@ run pnr
                 if res:
                     line_type, code, name = res.groups()
                     text = res.group(0)
-                    if line_type in ["Warning", "Error"]:
+                    if line_type in ["Warning", "Error", "WARN", "ERROR"]:  # 1.9.10.03 writes WARN/ERROR
                         errs.setdefault((name, code), []).append(text)
         return errs
 
-    def run_pnr(self, *, device=None, constr=None, partnumber=None, opt=None):
+    def run_pnr(self, *, device=None, constr=None, partnumber=None, opt=None, workdir=None, stdout=None):
+        """Run vendor place and route. With `workdir`, run there and keep the
+        output (impl/pnr/top.posp, top.log, ...) instead of a temporary directory.
+        `stdout` is passed to subprocess.run for the gw_sh console output."""
         device = device or self.device
         constr = constr or self.cst
         partnumber = partnumber or self.partnumber
         self.opt = opt or self.opt
 
-
-        with tempfile.TemporaryDirectory() as tmpdir:
+        if workdir:
+            os.makedirs(workdir, exist_ok=True)
+            context = contextlib.nullcontext(os.path.abspath(workdir))
+        else:
+            context = tempfile.TemporaryDirectory()
+        with context as tmpdir:
 
             netlist = tmpdir + "/top.v"
             cst = tmpdir + "/top.cst"
@@ -267,7 +278,7 @@ run pnr
             with open(tmpdir+"/run.tcl", "w") as f:
                 self.write(f, cst=cst, netlist=netlist)
 
-            subprocess.run(["/usr/bin/env", "LD_PRELOAD=" + self.gowinhome + "/Programmer/bin/libfontconfig.so.1", self.gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir)
+            subprocess.run(["/usr/bin/env", "LD_PRELOAD=" + self.gowinhome + "/Programmer/bin/libfontconfig.so.1", self.gowinhome + "/IDE/bin/gw_sh", tmpdir+"/run.tcl"], cwd = tmpdir, stdout = stdout)
             #print(tmpdir); input()
             try:
                 constrs = self.cst if isinstance(self.cst, Constraints) else Constraints()
