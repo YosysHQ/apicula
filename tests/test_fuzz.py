@@ -55,6 +55,8 @@ BROKEN = {
              'nextpnr has no cell or bel for it'),
     **broken('MIPI_IBUF MIPI_OBUF_A MIPI_CPHY_IBUF MIPI_CPHY_OBUF', 'nextpnr rejects the pins the vendor chose'),
     **broken('DCS', 'GW5A: nextpnr crashes routing DCS inputs from pins'),
+    **broken('CLKDIV CLKDIV2', 'GW5A: the clock from an HCLK-pair pin (GCLKT_*B) reaches HCLK via general routing '
+             'in nextpnr, via the IOB pair (INCK_II) at the vendor'),
     **broken('DQS DLLDLY', 'needs a DLL, which Yosys lacks (GW1N/GW2A) or nextpnr cannot place (GW5A)'),
     **broken('INV', 'nextpnr makes a LUT of it; the vendor removes it'),
     **broken('FLASH608K', 'nextpnr adds LUTs and flip-flops around user flash'),

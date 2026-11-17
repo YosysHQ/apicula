@@ -76,6 +76,10 @@ the fuse table rows that differ, are in the test output of
   flip-flops that the vendor does not.
 - BEL is ignored on `CLKDIV`/`CLKDIV2`; on GW5A-25A there is no `CLKDIV_1` bel
   where the vendor uses `HCLKDIV1`. No bel for `BUFS`.
+- GW5A-25A `CLKDIV`/`CLKDIV2` clocked from an HCLK-pair pin (the harness clock
+  F2, `GCLKT_9B`): nextpnr reaches HCLK over general wires, the vendor through
+  the pair IOB's `INCK_II` path (R37C33), so the `IOB_UNKNOWN67` row differs.
+  With the clock on H1 or H11 both pass.
 
 **Yosys cell library**
 - Latches use `CLK`/`CE` where the vendor has `G`/`GE`.
