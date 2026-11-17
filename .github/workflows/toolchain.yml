@@ -57,7 +57,7 @@ jobs:
         cd yosys
         cmake -B build . -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         cmake --build build --config Release --parallel $(nproc)
-        cmake --install build --prefix ${{ github.workspace }}/staging/usr/local --strip
+        cmake --install build --prefix $GITHUB_WORKSPACE/staging/usr/local --strip
     - name: Build nextpnr
       run: |
         git clone https://github.com/YosysHQ/nextpnr.git
@@ -72,7 +72,7 @@ jobs:
           -DHIMBAECHEL_UARCH=gowin -DHIMBAECHEL_GOWIN_DEVICES="all" \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         make -C build -j$(nproc)
-        make -C build install DESTDIR=${{ github.workspace }}/staging
+        make -C build install DESTDIR=$GITHUB_WORKSPACE/staging
     - name: Package tools
       run: tar czf tools.tar.gz -C staging/usr/local .
     - name: Upload tools
