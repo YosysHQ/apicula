@@ -484,6 +484,13 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
                     continue
                 if attrids.iologic_num2val[attrvals['OUTMODE']] in _iologic_mode.keys():
                     bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['OUTMODE']]]}")
+                # the LSR mux of the wide serializers lives in the DDRENABLE
+                # half; an unused partner reports both LSR muxes, so never read it
+                other = 'AB'[idx == 'A']
+                lsr_vals = parse_attrvals(tile, db.rev_logicinfo('IOLOGIC'), db.shortval[tiledata.ttyp].get(f'IOLOGIC{other}', {}), attrids.iologic_attrids, "IOLOGIC")
+                if lsr_vals.get('OUTMODE') != attrids.iologic_attrvals['DDRENABLE']:
+                    lsr_vals = attrvals
+                lsren = 'LSROMUX_0' not in lsr_vals
             elif 'INMODE' in attrvals.keys():
                 if attrvals['INMODE'] in {attrids.iologic_attrvals['MIDDRX1'], attrids.iologic_attrvals['IDDRX1']}:
                     if 'LSRIMUX_0' in attrvals.keys():
@@ -499,8 +506,13 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
                     if in_mode == 'OVIDEO':
                         in_mode = 'IVIDEO'
                     bels.setdefault(name, set()).add(f"MODE={in_mode}")
+                lsren = 'LSRIMUX_0' not in attrvals
             else:
                 continue
+            gsren = attrvals.get('GSR') != attrids.iologic_attrvals['DISGSR']
+            if name in bels:
+                bels[name].update({f'GSREN="{str(gsren).lower()}"',
+                                   f'LSREN="{str(lsren).lower()}"'})
             if 'CLKODDRMUX_ECLK' in attrvals.keys():
                 bels.setdefault(name, set()).add(f"CLKODDRMUX_ECLK={attrids.iologic_num2val[attrvals['CLKODDRMUX_ECLK']]}")
         if name.startswith("DFF"):
