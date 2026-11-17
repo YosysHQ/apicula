@@ -1406,8 +1406,8 @@ class Device:
         self.used_slices.add_slice_attrs(bel.x, bel.y, 2, False, False, [AttrVal('LSRONMUX', 'LSRMUX'), AttrVal('LSR_MUX_LSR', 'INV'), AttrVal('CLKMUX_1', 'UNKNOWN'), AttrVal('CLKMUX_CLK', 'SIG')])
         return fuses
 
-    def get_RAM16SDP2_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
-        return self.get_RAM16SDP4_fuses(bel)
+    # nextpnr places every SSRAM variant on the RAM16SDP4 bel; absent INIT_n pack as 0
+    get_RAM16SDP2_fuses = get_RAM16SDP4_fuses
 
     #==============================
     #========== DFFs
