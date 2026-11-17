@@ -103,6 +103,8 @@ the fuse table rows that differ, are in the test output of
   the harness output pin shares a bank with them. On QFN88 bank 1 holds the MIPI
   inputs, bank 2 the MIPI outputs and bank 3 is SiP-locked, so one of them pays;
   the harness takes bank 1. nextpnr rejects `MIPI_IBUF*` anyway.
+- SiP-locked banks (GW1N-9C, GW1NS-4) get no I/O cases: the vendor fixes their
+  VCCIO and moves outputs out of them (CT1136, #622).
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
 
@@ -183,12 +185,16 @@ design, to confirm a failure in isolation.
   wires is accepted, so bus ports are wired that way.
 - **The `.posp` file has no cell placements** in this IDE version, so vendor
   placement is checked through the `CT1094`/`CT1005` warnings instead.
-- **Harness pins avoid SiP-locked and MIPI-output banks** (`package_pins`,
-  `pick_pins`). The vendor fixes the VCCIO of banks wired to in-package memory and
-  moves other outputs out of them (CT1136), which showed up as unattributed
-  fuses. It also fails to place `MIPI_OBUF` (PR1082) when the harness output pin
-  shares its bank. The clock goes on a true clock pin (`GCLKT`): on GW1N-9C pin 51
-  (`GCLKC_3`) made `DHCEN` differ from the vendor, while pin 52 (`GCLKT_3`) matches.
+- **SiP-locked banks get neither harness pins nor I/O cases** (`package_pins`,
+  banks in `db.sip_cst`). The vendor fixes the VCCIO of banks wired to in-package
+  memory and moves other outputs out of them (CT1136, #622), which showed up as
+  unattributed fuses and as I/O rows spilling into cases.
+- **Harness pins avoid MIPI-output banks** (`pick_pins`): the vendor fails to place
+  `MIPI_OBUF` (PR1082) when the harness output pin shares its bank.
+- **The harness clock goes on a clock-only true clock pin**: one whose only
+  functions are `GCLK*`, so no PLL input or feedback and no config pin, and
+  `GCLKT` before `GCLKC`. On GW1N-9C pin 51 (`GCLKC_3`) made `DHCEN` differ from
+  the vendor, while pin 52 (`GCLKT_3`) matches.
 
 ## Unpacker findings
 

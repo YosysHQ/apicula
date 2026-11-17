@@ -283,9 +283,11 @@ def pick_pins(db, pins):
     mipi_banks = {db.pin_bank.get(name) for name, _ in pins.values() if mipi(name)}
     pins = {p: (name, funcs) for p, (name, funcs) in pins.items() if db.pin_bank.get(name) not in mipi_banks}
     plain = sorted((p for p, (_, funcs) in pins.items() if not funcs), key=lambda p: int(p) if p.isdigit() else p)
-    # true clock pins (GCLKT) first: with the clock on a GCLKC pin DHCEN mismatches the vendor
+    # clock-only pins (no PLL or config function) first, then true clock pins (GCLKT):
+    # with the clock on a GCLKC pin DHCEN mismatches the vendor
     clocks = sorted((p for p, (_, funcs) in pins.items() if any(f.startswith('GCLK') for f in funcs)),
-                    key=lambda p: not any(f.startswith('GCLKT') for f in pins[p][1]))
+                    key=lambda p: (not all(f.startswith('GCLK') for f in pins[p][1]),
+                                   not any(f.startswith('GCLKT') for f in pins[p][1])))
     return {'clk': clocks[0], 'out': plain[0], 'in': plain[1:6]}
 
 
