@@ -265,8 +265,15 @@ def allocate(cases, sites):
 
 # ---------------------------------------------------------------- netlist
 
-def pick_pins(db, vendor_device, device, package):
+def package_pins(db, vendor_device, device, package):
+    """The package's pins, without the banks wired to in-package memory: the
+    vendor fixes their VCCIO and moves other outputs out of them (CT1136)."""
     pins = db.pinout.get(vendor_device, db.pinout[device])[package]
+    locked = {io_bank(db, r, c, ab) for _, r, c, ab, _ in db.sip_cst.get(vendor_device, {}).get(package, [])}
+    return {p: (name, funcs) for p, (name, funcs) in pins.items() if db.pin_bank.get(name) not in locked}
+
+
+def pick_pins(pins):
     plain = sorted((p for p, (_, funcs) in pins.items() if not funcs), key=lambda p: int(p) if p.isdigit() else p)
     clocks = [p for p, (_, funcs) in pins.items() if any(f.startswith('GCLK') for f in funcs)]
     return {'clk': clocks[0], 'out': plain[0], 'in': plain[1:6]}
@@ -1479,9 +1486,10 @@ def fuzz(device, out, count=2, seed=0, jobs=1, prims=None, replay=None, log=prin
     vendor_device, part, package = DEVICES[device]
     db = chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{device}.msgpack.xz'))
     spec = ps.Primitives(device, vendor_device)
-    pins = pick_pins(db, vendor_device, device, package)
+    pinout = package_pins(db, vendor_device, device, package)
+    pins = pick_pins(pinout)
     rng = random.Random(seed)
-    sites = Sites(db, rng, pins, db.pinout.get(vendor_device, db.pinout[device])[package])
+    sites = Sites(db, rng, pins, pinout)
     if replay:
         batches = []
         for path in replay:
