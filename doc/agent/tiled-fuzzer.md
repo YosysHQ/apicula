@@ -29,8 +29,10 @@ the fuse table rows that differ, are in the test output of
     read port narrower than 16 bits: nextpnr's `pack_SDPB` does not call
     `bsram_fix_outreg`;
   - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`;
-  - an `SDPB` case (`BIT_WIDTH` 8/4) that unpacks to no cell from either
-    bitstream.
+  - `SDPB` cases with `BIT_WIDTH_0=8` that unpack to no cell from either
+    bitstream. `BIT_WIDTH_1` varies (4, 8 and 32 seen), but all had
+    `BLK_SEL_0=3'b111`. That `BLK_SEL_0` is the trigger is inferred, not
+    traced.
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
 - **SSRAM:**

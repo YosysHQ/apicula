@@ -37,7 +37,8 @@ BROKEN = {
              'GW5A DSP: MULT_RESET_MODE, CASO, CE muxes, PRELOAD_BIT, DYN_P_ADDSUB rows'),
     **broken('RAM16SDP1 RAM16SDP2 RAM16SDP4 ROM16',
              'SSRAM: LSR mux rows, no RAM16SDP2 handler, RAM16SDP1 does not route, ROM16 becomes a LUT'),
-    **broken('SDPB SDPX9B', 'nextpnr: no narrow-read OUTREG fix for SDP (GW1N-9C, GW2A-18C); GW5A DBLWB=X36; one undecoded case'),
+    **broken('SDPB SDPX9B', 'nextpnr: no narrow-read OUTREG fix for SDP (GW1N-9C, GW2A-18C); GW5A DBLWB=X36; '
+             "undecoded BIT_WIDTH_0=8 cases, all with BLK_SEL_0=3'b111 (link inferred)"),
     **broken('rPLL', 'rPLL: FBSEL on GW2A; the unpacker does not invert several parameters'),
     **broken('PLLA', 'GW5A PLLA: phase/duty, charge pump, loop filter, KVCO, ODIV rows'),
     **broken('OSCA', 'GW5A OSCA: FREQ_DIV=3 rejected; unpacked as OSC'),
