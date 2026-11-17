@@ -971,10 +971,9 @@ class BankDesc:
 class Device:
     """ Base chip. The fuses for a specific chip are set in a class that inherits from this one. """
     # I/O logic primitives whose GSREN defaults to false. ODDR/IDDR have no
-    # GSREN and the vendor enables GSR for them. OSER16/IDES16 default to false
-    # too, but reach gowin_pack as IOLOGIC cells, so listing them does nothing.
-    _gsren_default_false = frozenset({'OSER4', 'OSER8', 'OSER10', 'OVIDEO',
-                                      'IDES4', 'IDES8', 'IDES10', 'IVIDEO'})
+    # GSREN and the vendor enables GSR for them.
+    _gsren_default_false = frozenset({'OSER4', 'OSER8', 'OSER10', 'OSER16', 'OVIDEO',
+                                      'IDES4', 'IDES8', 'IDES10', 'IDES16', 'IVIDEO'})
 
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         self.cli_args = cli_args
@@ -2139,14 +2138,21 @@ class Device:
             return self.pnr.get_cell(cell.attrs['MAIN_CELL'])
         return cell
 
-    def iologic_sr_param(self, cell: CellDesc, name: str, default: str = 'TRUE') -> str:
+    def iologic_sr_param(self, cell: CellDesc, name: str) -> str:
         """ GSREN/LSREN: the cell's own (the OSER16/IDES16 pin cells), else the
-        main cell's, else the default. The OSER16/IDES16 helper in the next tile
-        has neither and stays at the default, as the vendor's does. Checked on
-        GW1N/GW2A only: GW5A reads the main cell's """
-        if name not in cell.parms or chipdb.is_GW5_family(self.device_name):
-            cell = self.iologic_main_cell(cell)
-        return cell.parms.get(name, default)
+        main cell's, else the primitive's default. Checked on GW1N/GW2A only:
+        GW5A reads the main cell's """
+        if name in cell.parms and not chipdb.is_GW5_family(self.device_name):
+            return cell.parms[name]
+        main = self.iologic_main_cell(cell)
+        prim = main.typ
+        # OSER16/IDES16 are two IOLOGIC_DUMMY cells at the pin whose main cell
+        # is an IOLOGIC helper in the next tile. The helper is not part of the
+        # primitive and keeps GSR enabled, as the vendor's does.
+        if cell.typ == 'IOLOGIC_DUMMY' and main.typ == 'IOLOGIC':
+            prim = 'OSER16' if 'OUTMODE' in main.parms else 'IDES16'
+        default = 'FALSE' if name == 'GSREN' and prim in self._gsren_default_false else 'TRUE'
+        return main.parms.get(name, default)
 
     def set_iologic_bel_fclk(self, bel: IologicBelDesc) -> IologicBelDesc:
         """ HCLK and clock spines have same numbers in the tables """
@@ -2190,8 +2196,7 @@ class Device:
         val = cell_parms.get('HWL', 'FALSE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('UPDATE', 'SAME'))
-        main = self.iologic_main_cell(bel.cell)
-        val = self.iologic_sr_param(bel.cell, 'GSREN', 'FALSE' if main.typ in self._gsren_default_false else 'TRUE')
+        val = self.iologic_sr_param(bel.cell, 'GSREN')
         if val == 'TRUE':
             attr_vals.append(AttrVal('GSR', 'ENGSR'))
         else:
