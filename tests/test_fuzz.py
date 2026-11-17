@@ -33,6 +33,9 @@ BROKEN = {
     **broken('ALU', 'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
     **broken('ALU54D MULT9X9 MULT18X18 MULTALU18X18 PADD9 PADD18',
              'DSP: input register muxes (AIRMUX/BIRMUX), RSTGEN muxes, pre-adder rows'),
+    # inferred from the DSP rows that differ, not traced
+    **broken('MULTALU36X18', 'fails in combination with MULT9X9 in one DSP block: MULT9X9\'s AIRMUX/BIRMUX '
+             'input-register rows (see MULT9X9); passes alone'),
     **broken('MULT12X12 MULT27X36 MULTADDALU12X12 MULTALU27X18',
              'GW5A DSP: MULT_RESET_MODE, CASO, CE muxes, PRELOAD_BIT, DYN_P_ADDSUB rows'),
     **broken('RAM16SDP1 RAM16SDP2 RAM16SDP4 ROM16',

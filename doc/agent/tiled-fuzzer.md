@@ -35,7 +35,8 @@ the fuse table rows that differ, are in the test output of
   - no `RAM16SDP2` handler.
 - **DSP:**
   - GW1N/GW2A input register muxes (`AIRMUX`/`BIRMUX`), `RSTGEN*MUX`, and the
-    pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows;
+    pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows; `MULTALU36X18` fails
+    sharing a DSP block with `MULT9X9` and passes alone (inferred: the same rows);
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`.
 - **Missing handler, fixed:** `FLASH96K` had no `get_…_fuses` method, so GW1N-1
@@ -98,6 +99,10 @@ the fuse table rows that differ, are in the test output of
   `IEM` needs a buffer (PR0018); `OSIDES32/64` need differential fast clocks
   (PR1113); `MUX2_MUX8`+ need `MUX4`… drivers (PA2068); `GW_JTAG` takes the JTAG
   pins (PR1079).
+- GW1N-9C `MIPI_IBUF*`: the vendor fails to place MIPI buffers (PR1082) when
+  the harness output pin shares a bank with them. On QFN88 bank 1 holds the MIPI
+  inputs, bank 2 the MIPI outputs and bank 3 is SiP-locked, so one of them pays;
+  the harness takes bank 1. nextpnr rejects `MIPI_IBUF*` anyway.
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
 
@@ -178,6 +183,12 @@ design, to confirm a failure in isolation.
   wires is accepted, so bus ports are wired that way.
 - **The `.posp` file has no cell placements** in this IDE version, so vendor
   placement is checked through the `CT1094`/`CT1005` warnings instead.
+- **Harness pins avoid SiP-locked and MIPI-output banks** (`package_pins`,
+  `pick_pins`). The vendor fixes the VCCIO of banks wired to in-package memory and
+  moves other outputs out of them (CT1136), which showed up as unattributed
+  fuses. It also fails to place `MIPI_OBUF` (PR1082) when the harness output pin
+  shares its bank. The clock goes on a true clock pin (`GCLKT`): on GW1N-9C pin 51
+  (`GCLKC_3`) made `DHCEN` differ from the vendor, while pin 52 (`GCLKT_3`) matches.
 
 ## Unpacker findings
 
