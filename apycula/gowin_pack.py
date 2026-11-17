@@ -2375,7 +2375,7 @@ class Device:
         # read: it keeps the vendor's initIolAttr defaults
         if bel.cell.attrs.get('IODELAY') == 'IN' and 'HAS_REG' not in bel.cell.attrs:
             attr_vals = [av for av in attr_vals if av.attr != 'CLKOMUX']
-            attr_vals += [AttrVal('LSRIMUX_0', '0'), AttrVal('LSROMUX_0', '0')]
+            attr_vals += [AttrVal('LSRIMUX_0', '0'), AttrVal('LSROMUX_0', '0'), AttrVal('CLKOMUX_1', '1')]
 
         av = self.set_iologic_attrvals(iol_bel, attr_vals)
         fuses = []
