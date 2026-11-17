@@ -2136,8 +2136,9 @@ class Device:
     def iologic_sr_param(self, cell: CellDesc, name: str) -> str:
         """ GSREN/LSREN: the cell's own (the OSER16/IDES16 pin cells), else the
         main cell's. The OSER16/IDES16 helper in the next tile has neither and
-        stays at the default, as the vendor's does """
-        if name not in cell.parms:
+        stays at the default, as the vendor's does. Checked on GW1N/GW2A only:
+        GW5A reads the main cell's """
+        if name not in cell.parms or chipdb.is_GW5_family(self.device_name):
             cell = self.iologic_main_cell(cell)
         return cell.parms.get(name, 'TRUE')
 
@@ -2202,7 +2203,10 @@ class Device:
         # fusegenMem::setIolODDR sets LSROMUX_0=1 only for LSREN=true on the
         # pin site and the DDRENABLE site; ODDRX4/5 keep 1 as measured
         lsr_off = self.iologic_sr_param(bel.cell, 'LSREN') == 'FALSE'
-        if lsr_off and cell_parms['OUTMODE'] in {'ODDRX2', 'DDRENABLE', 'DDRENABLE16'}:
+        # GW5A keeps the forced 0: the ODDRX8/DDRENABLE16 rule was checked on GW1N/GW2A only
+        if chipdb.is_GW5_family(self.device_name) and cell_parms['OUTMODE'] in {'ODDRX8', 'DDRENABLE16'}:
+            attr_vals.append(AttrVal('LSROMUX_0', '0'))
+        elif lsr_off and cell_parms['OUTMODE'] in {'ODDRX2', 'DDRENABLE', 'DDRENABLE16'}:
             attr_vals.append(AttrVal('LSROMUX_0', '0'))
         elif cell_parms['OUTMODE'] != 'ODDRX1' or bel.cell.typ == 'ODDRC':
             attr_vals.append(AttrVal('LSROMUX_0', '1'))
