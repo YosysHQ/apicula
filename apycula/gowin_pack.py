@@ -2133,14 +2133,14 @@ class Device:
             return self.pnr.get_cell(cell.attrs['MAIN_CELL'])
         return cell
 
-    def iologic_sr_param(self, cell: CellDesc, name: str) -> str:
+    def iologic_sr_param(self, cell: CellDesc, name: str, default: str = 'TRUE') -> str:
         """ GSREN/LSREN: the cell's own (the OSER16/IDES16 pin cells), else the
-        main cell's. The OSER16/IDES16 helper in the next tile has neither and
-        stays at the default, as the vendor's does. Checked on GW1N/GW2A only:
-        GW5A reads the main cell's """
+        main cell's, else the default. The OSER16/IDES16 helper in the next tile
+        has neither and stays at the default, as the vendor's does. Checked on
+        GW1N/GW2A only: GW5A reads the main cell's """
         if name not in cell.parms or chipdb.is_GW5_family(self.device_name):
             cell = self.iologic_main_cell(cell)
-        return cell.parms.get(name, 'TRUE')
+        return cell.parms.get(name, default)
 
     def set_iologic_bel_fclk(self, bel: IologicBelDesc) -> IologicBelDesc:
         """ HCLK and clock spines have same numbers in the tables """
@@ -2184,7 +2184,11 @@ class Device:
         val = cell_parms.get('HWL', 'FALSE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('UPDATE', 'SAME'))
-        val = self.iologic_sr_param(bel.cell, 'GSREN')
+        # The SERDES primitives default GSREN to false; ODDR/IDDR have no
+        # GSREN and the vendor enables GSR for them.
+        main = self.iologic_main_cell(bel.cell)
+        serdes = {'OSER4', 'OSER8', 'OSER10', 'OVIDEO', 'IDES4', 'IDES8', 'IDES10', 'IVIDEO'}
+        val = self.iologic_sr_param(bel.cell, 'GSREN', 'FALSE' if main.typ in serdes else 'TRUE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('GSR', 'ENGSR'))
         else:
