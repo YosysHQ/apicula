@@ -2948,9 +2948,8 @@ class Device:
                 else:
                     self.chipdb.get_bsram_attr_val(AttrVal('SDPA_BEHB', 'DISABLE'), av)
                     self.chipdb.get_bsram_attr_val(AttrVal('SDPA_BELB', 'DISABLE'), av)
-                # IDE runs (not vendor code) enable port B too when it reads 16
-                # bits or more; no 16/8 pair was tried, so the cutoff is a guess
-                if constant_byte_enable and val_b >= 16:
+                # port B's are enabled by its own width (fusegenMem::setBsramSDPAttr)
+                if constant_byte_enable and val_b in {16, 18, 32, 36}:
                     self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BEHB', 'ENABLE'), av)
                     self.chipdb.get_bsram_attr_val(AttrVal('SDPB_BELB', 'ENABLE'), av)
                 else:
