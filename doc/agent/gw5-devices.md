@@ -65,7 +65,7 @@ LSR and GSR rule whichever branch it uses.
   (`PA2066 Invalid parameter name`, checked on 25A).
 
 Checked against vendor bitstreams on GW5A-25A (4 cases per primitive, pin A and
-B) and GW5AST-138C (2 cases), with the reset from a pin, from `GND` (both parts)
+B) and GW5AST-138C (2 cases from a pin, 1 from `GND`), with the reset from a pin, from `GND` (both parts)
 and from `VCC` (25A). Both parts give the same rows:
 
 | Primitive | Sites with rows | LSRxMUX_0, reset from a pin or VCC | LSRxMUX_0, reset = GND | Clock row | GSR |

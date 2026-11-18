@@ -2143,7 +2143,7 @@ class Device:
     def iologic_lsr(self, cell: CellDesc) -> str:
         """ GW5 LSRIMUX_0/LSROMUX_0: on unless the primitive has no RESET/CLEAR
         or ties it to GND (fusegenMem::setIolLsrmux @0x308e660, IDE 1.9.10.03;
-        doc/agent/gw5-devices.md). nextpnr may drop a GND-tied port """
+        doc/agent/gw5-devices.md); a GND-tied port stays on $PACKER_GND """
         conns = self.iologic_main_cell(cell).connections
         bits = conns.get('RESET', []) + conns.get('CLEAR', [])
         return '0' if all(self.pnr.is_gnd_net(bit) for bit in bits) else '1'
