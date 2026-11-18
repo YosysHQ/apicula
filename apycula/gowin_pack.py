@@ -3211,7 +3211,7 @@ class Device:
                 attr_vals.append(AttrVal(f'PRAD_MUXA1_{pair_idx * 2 + 1}', "ENABLE"))
 
         # dsp registers
-        sync_padd_reset = cell_parms.get('PADD_RESET_MODE', 'ASYNC') == 'SYNC'
+        sync_padd_reset = cell_parms.get('PADD_RESET_MODE', 'SYNC') == 'SYNC'
         for r in 'AB':
             val = int(cell_parms.get(f'{r}REG', '0'), 2)
             if val:
@@ -3261,7 +3261,7 @@ class Device:
                 attr_vals.append(AttrVal('IRBY_IRMATCHL_8', "ENABLE"))
                 attr_vals.append(AttrVal('IRNS_IRMATCHL_8', "ENABLE"))
 
-        val = int(cell_parms.get('BSEL_MODE', '0'), 2)
+        val = int(cell_parms.get('BSEL_MODE', '1'), 2)
         if val:
             attr_vals.append(AttrVal(f'PRAD_MUXB_{pair_idx * 2 + 1}', "ENABLE"))
         else:
@@ -3348,7 +3348,7 @@ class Device:
                 attr_vals.append(AttrVal(f'BIRMUX1_{pair_idx * 2 + 1}', "ENABLE"))
 
         # dsp registers
-        sync_mult_reset = cell_parms.get('MULT_RESET_MODE', 'ASYNC') == 'SYNC'
+        sync_mult_reset = cell_parms.get('MULT_RESET_MODE', 'SYNC') == 'SYNC'
         for r in 'AB':
             val = int(cell_parms.get(f'{r}REG', '0'), 2)
             if val:
@@ -3530,7 +3530,7 @@ class Device:
                 attr_vals.append(AttrVal('OPCDDYN_INV_1', "ENABLE"))
 
         # dsp registers
-        sync_alu_reset = cell_parms.get('ALU_RESET_MODE', 'ASYNC') == 'SYNC'
+        sync_alu_reset = cell_parms.get('ALU_RESET_MODE', 'SYNC') == 'SYNC'
 
         val = int(cell_parms.get('AREG', '0'), 2)
         if val == 0:
@@ -3567,9 +3567,9 @@ class Device:
                 attr_vals.append(AttrVal(f'CLK{h}MUX_REGM{i}1', clk_val))
                 attr_vals.append(AttrVal(f'RST{h}MUX_REGM{i}1', reset_val))
                 if sync_alu_reset:
-                    attr_vals.append(AttrVal('RSTGENLMUX_REGC0', 'SYNC'))
+                    attr_vals.append(AttrVal('RSTGENHMUX_REGC0', 'SYNC'))
                     for i, h in [(i, h) for i in "AB" for h in "LH"]:
-                        attr_vals.append(AttrVal(f'RSTGEN{h}MUX_REGM{i}0', 'SYNC'))
+                        attr_vals.append(AttrVal(f'RSTGEN{h}MUX_REGM{i}1', 'SYNC'))
 
         val = int(cell_parms.get('ASIGN_REG', '0'), 2)
         if val == 0:
@@ -3694,7 +3694,7 @@ class Device:
             attr_vals.append(AttrVal('OPCD_3', "1"))
 
         # dsp registers
-        sync_mult_reset = cell_parms.get('MULT_RESET_MODE', 'ASYNC') == 'SYNC'
+        sync_mult_reset = cell_parms.get('MULT_RESET_MODE', 'SYNC') == 'SYNC'
 
         val = int(cell_parms.get('AREG', '0'), 2)
         if val == 0:
@@ -3934,7 +3934,7 @@ class Device:
                 attr_vals.append(AttrVal('OR2CASCADE_EN', "ENABLE"))
 
         # dsp registers
-        sync_mult_reset = cell_parms.get('MULT_RESET_MODE', 'ASYNC') == 'SYNC'
+        sync_mult_reset = cell_parms.get('MULT_RESET_MODE', 'SYNC') == 'SYNC'
 
         val = int(cell_parms.get('AREG', '0'), 2)
         if val == 0:
@@ -4205,7 +4205,7 @@ class Device:
         attr_vals.append(AttrVal('IRBSHFEN_0', "1"))
         attr_vals.append(AttrVal('IRBSHFEN_1', "1"))
 
-        sync_mult_reset = cell_parms.get('MULT_RESET_MODE', 'ASYNC') == 'SYNC'
+        sync_mult_reset = cell_parms.get('MULT_RESET_MODE', 'SYNC') == 'SYNC'
 
         for k in range(2):
             val = int(cell_parms.get(f'A{k}REG', '0'), 2)
