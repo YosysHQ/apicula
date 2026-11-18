@@ -267,7 +267,7 @@ def allocate(cases, sites):
 
 def package_pins(db, vendor_device, device, package):
     """The package's pins, without the banks wired to in-package memory: the
-    vendor fixes their VCCIO and moves other outputs out of them (CT1136)."""
+    vendor moved outputs constrained there to other pins (CT1136)."""
     pins = db.pinout.get(vendor_device, db.pinout[device])[package]
     locked = {io_bank(db, r, c, ab) for _, r, c, ab, _ in db.sip_cst.get(vendor_device, {}).get(package, [])}
     return {p: (name, funcs) for p, (name, funcs) in pins.items() if db.pin_bank.get(name) not in locked}
@@ -289,7 +289,8 @@ def pick_pins(db, pins):
                    key=lambda p: (in_mipi_bank(p), int(p) if p.isdigit() else p))
     # clock-only pins (no PLL or config function) first, then GCLKT before GCLKC:
     # on GW1N-9C DHCEN differs from the vendor with the clock on pin 51 (GCLKC_3)
-    # and matches on pin 52 (GCLKT_3)
+    # and matches on pin 52 (GCLKT_3). Keeping the clock out of MIPI-output banks
+    # is a precaution, not a measured failure.
     clocks = sorted((p for p, (_, funcs) in pins.items() if any(f.startswith('GCLK') for f in funcs)),
                     key=lambda p: (in_mipi_bank(p), not all(f.startswith('GCLK') for f in pins[p][1]),
                                    not any(f.startswith('GCLKT') for f in pins[p][1])))

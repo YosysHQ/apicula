@@ -107,8 +107,8 @@ the fuse table rows that differ, are in the test output of
   the harness output pin shares a bank with them. On QFN88 bank 1 holds the MIPI
   inputs, bank 2 the MIPI outputs and bank 3 is SiP-locked, so one of them pays;
   the harness takes bank 1. nextpnr rejects `MIPI_IBUF*` anyway.
-- SiP-locked banks (GW1N-9C, GW1NS-4) get no I/O cases: the vendor fixes their
-  VCCIO and moves outputs out of them (CT1136, #622).
+- SiP-locked banks (GW1N-9C, GW1NS-4) get no I/O cases: the vendor moved
+  outputs constrained there to other pins (CT1136, #622).
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
 
@@ -190,9 +190,10 @@ design, to confirm a failure in isolation.
 - **The `.posp` file has no cell placements** in this IDE version, so vendor
   placement is checked through the `CT1094`/`CT1005` warnings instead.
 - **SiP-locked banks get neither harness pins nor I/O cases** (`package_pins`,
-  banks in `db.sip_cst`). The vendor fixes the VCCIO of banks wired to in-package
-  memory and moves other outputs out of them (CT1136, #622), which showed up as
-  unattributed fuses and as I/O rows spilling into cases.
+  banks in `db.sip_cst`). The vendor moved outputs constrained to banks wired to
+  in-package memory to other pins (CT1136, #622), which showed up as
+  unattributed fuses and as I/O rows spilling into cases. Which VCCIO the
+  in-package memory sets on those banks is not traced.
 - **Harness pins in MIPI-output banks come last** (`pick_pins`): the vendor fails
   to place `MIPI_OBUF` (PR1082) when the harness output pin shares its bank;
   harness inputs there did not stop it (GW1N-9C). Sorting rather than filtering
