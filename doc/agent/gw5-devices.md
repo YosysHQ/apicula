@@ -34,7 +34,7 @@ areas.
 
 ## IO
 
-Read from symbol names; bodies not traced. The 138 has its own
+Read from symbol names; apart from the I/O logic rows below, bodies not traced. The 138 has its own
 `setGW5AT138IolAttrInIologic`, `setGW5AT138IolIDDR`, `setGW5AT138IolODDR`,
 `setGW5AT138IDelay`, `setGW5AT138ODelay` and `setGw5at138PioPadAttr`. Checked
 against data: `IOB` logicinfo has 199 rows on 60B and 285 on 138C, `IOLOGIC` 659
@@ -42,6 +42,53 @@ and 648.
 
 The name `isDeviceBeforeGW5AT138` is misleading: 25A, 60B, 75 and 15A return false
 along with the 138 parts, so it separates GW5 from earlier families.
+
+### I/O logic LSR, GSR and clock rows
+
+This holds for the whole GW5 family, 25A included.
+
+Read from code (IDE 1.9.10.03). `setIolAttrInIologic` @0x3083e12 sends GW5 parts
+to `setGW5AIolAttrInIologic` @0x3084010 or `setGW5AT138IolAttrInIologic`
+@0x3084522. Both run `initIolAttr` @0x308d1fe, `setIolLsrmux` @0x308e660,
+`setGW5AT138IolIDDR` @0x30894d2 and `setGW5AT138IolODDR` @0x308a15a. They differ
+only in the delay handler: `setGW5AIodelay` @0x308c44a against
+`setGW5AT138IDelay` @0x308c80e, which writes `IDEL_*` rows. So 60B takes the same
+LSR and GSR rule whichever branch it uses.
+
+- `setIolLsrmux` takes the reset pin of the I/O register (or of the delay cell)
+  and asks `getPinSrcType` @0x3098cec where it comes from. A `GND` instance
+  leaves `LSRIMUX_0`/`LSROMUX_0` off. `VCC`, a signal or an inverted signal
+  turn it on. A primitive without a reset port gets no assignment and keeps the
+  `initIolAttr` default, which is off.
+- Unlike `setIolIDDR` @0x308898e on GW1N/GW2A, the GW5 handlers never read
+  `GSREN` or `LSREN`. The vendor rejects both parameters on GW5A
+  (`PA2066 Invalid parameter name`, checked on 25A).
+
+Checked against vendor bitstreams on GW5A-25A (4 cases per primitive, pin A and
+B) and GW5AST-138C (2 cases), with the reset from a pin, from `GND` (both parts)
+and from `VCC` (25A). Both parts give the same rows:
+
+| Primitive | Sites with rows | LSRxMUX_0, reset from a pin or VCC | LSRxMUX_0, reset = GND | Clock row | GSR |
+|---|---|---|---|---|---|
+| IDES4/8/10, IVIDEO, IDDRC | the pin site | LSRIMUX_0 on | off | CLKIMUX=ENABLE | ENGSR |
+| IDES16 | main only; the other site has no LSR or clock rows | LSRIMUX_0 on | off | CLKIMUX=ENABLE | ENGSR |
+| IDDR (no reset port) | the pin site | off | n/a | CLKIMUX=ENABLE | ENGSR |
+| OSER4, ODDRC | the pin site | LSROMUX_0 on | off | CLKOMUX=ENABLE | ENGSR |
+| OSER8 | main only; **no helper cell** | LSROMUX_0 on | off | CLKOMUX=ENABLE | ENGSR |
+| OSER10, OSER16 | both sites | LSROMUX_0 on, both | off, both | CLKOMUX=ENABLE, both | ENGSR |
+| ODDR (no reset port) | the pin site | off | n/a | CLKOMUX=ENABLE | ENGSR |
+| IODELAY (standalone) | the pin site | both off | n/a | none | ENGSR; INDEL=ENABLE |
+
+- `GSR=DISGSR` never appears: GSR is always enabled.
+- `CLKOMUX_1` has only the value `0` in the chipdb of all three GW5 parts, so it
+  has no fuse.
+- OVIDEO is not measured: the vendor wants an LVDS output buffer (`PR1016`) and
+  the fuzzer harness gives it a plain one.
+
+So on GW5 the LSR mux follows the reset net, where on GW1N/GW2A `LSREN` decides.
+`Device.iologic_lsr(cell)` in `gowin_pack` writes `'0'` when the main cell has no
+RESET/CLEAR connection or it is on the GND net, and `'1'` otherwise. GW5's
+logicinfo only knows `LSRxMUX_0='0'`, so `'1'` leaves the `!LSRxMUX_0=0` row set.
 
 ## PLL input select follows the clock pin
 
@@ -71,6 +118,15 @@ pins 3, 11 and 13, as `gowin_pack` writes, but `CLKIN0` on `LPLL_T_IN` and
 
 ## Open
 
+- GW5A-25A B-site I/O logic: `gowin_pack` writes the `IOLOGICB` cell into the
+  main tile, whose `IOLOGICB` table has 2 rows. The real table, with 677 rows, is
+  in the IOBB `fuse_cell_offset` tile. Checked against data: every B-site case in
+  the fuzzer writes nothing there.
+- 60B and 138C can't be fuzzed yet. nextpnr fails to route the clock to any I/O
+  logic (`Failed to find a route for arc 0 of net clk`, or the router1.cc:347
+  assert for ODDR). The harness picks 60B pins without an IOB bel and finds no
+  `GCLK*` pin on 138C, whose clock pins are `MGCLKT`/`SGCLKT`. And `bslib` reads
+  917 rows from 60B bitstreams where the chipdb has 918.
 - The vendor bitstream omits `ODIV1_SEL` and `ODIV6_SEL` when the channel is
   disabled, although the handler sets them unconditionally. The cause is unknown.
   `gowin_pack` still writes them.
