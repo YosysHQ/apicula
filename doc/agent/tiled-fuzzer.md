@@ -57,8 +57,7 @@ the fuse table rows that differ, are in the test output of
 - `IODELAY` on GW5A-25A fails an internal check (`DLLSTEP` port).
 - A BEL attribute on `RAM16SDP2/4` crashes nextpnr, and on `RAM16SDP1` or a DSP
   leaves helper cells unplaced. ALU clusters ignore BEL.
-- `RAM16SDP1` routes only with nextpnr's "gowin: correctly generate scalar
-  ports for width 1". There is no bel for `RAM16S1/2/4`.
+- No bel for `RAM16S1/2/4`.
 - No bel for the GW1N/GW2A `PLL` primitive, only `rPLL`.
 - `DCS_MODE` is read from attributes only (`globals.cc`), so a `defparam`, as in
   `examples/dcs.v`, is ignored and every DCS is packed as `RISING`.
