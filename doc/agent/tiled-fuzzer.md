@@ -21,10 +21,11 @@ the fuse table rows that differ, are in the test output of
     `BLVDS…` rows;
   - `DRIVE,OPENDRAIN`, `ODMUX`, `PULLMODE`;
   - GW5A output `ODMUX`/`DRIVE` rows (check `fuse_cell_offset` first).
-- **I/O logic:** `ODDR` `OUTMODE`; GW5A-25A `FCLKSEL*`, B-site cells written to
-  the A tile instead of the IOBB `fuse_cell_offset` tile, and a standalone
+- **I/O logic:** `ODDR` `OUTMODE`; GW5A-25A `FCLKSEL*` and a standalone
   `IODELAY` without its `INDEL`/`IDEL_*` rows and with LSR mux rows the vendor
-  leaves off. Fixed: on GW5 the LSR mux
+  leaves off. Fixed: on GW5 the B-site
+  cells are in the IOBB `fuse_cell_offset` tile (see `gw5-devices.md`). Fixed:
+  on GW5 the LSR mux
   (`LSRIMUX_0`/`LSROMUX_0`) follows the reset net, off for GND or no reset port
   (`setIolLsrmux @0x308e660`, see `gw5-devices.md`), and OSER8 has no aux
   cell. Fixed: the second half of a two-site primitive (an

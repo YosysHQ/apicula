@@ -118,12 +118,25 @@ changed:
 pins 3, 11 and 13, as `gowin_pack` writes, but `CLKIN0` on `LPLL_T_IN` and
 `RPLL_T_IN`, and `CLKIN4` on `GCLKT_4`.
 
+## B-site I/O logic fuses
+
+The B I/O logic cell has its fuses in the same cell as the B I/O buffer. On
+every GW5 part (25A, 60B, 138C, checked in the chipdb), the real `IOLOGICB`
+table (661–678 rows) is in the IOBB `fuse_cell_offset` tile, (0,1) or (1,0). The
+main tile's `IOLOGICB` table has only 2–3 stub rows, on the `IOLOGICA` fuses.
+`gowin_pack` and `gowin_unpack` read and write the B cell through the offset.
+
+In the vendor (IDE 1.9.10.03), `fusegenMem::setGridFusemap @0x301aa52` takes
+the head grid from `fusegenMem::getHeadGrid @0x3090918` and passes it to
+`fusegenMem::setFseTableFuse @0x3016fac`. For table type 22 (`IOLOGICB`) and 24
+(`IOBB`), that function reads the head grid instead of the grid itself when
+`!isDeviceBeforeGW5AT138`. `fusegenMem::getIolBTableFuse @0x3013d08` then
+writes the head I/O buffer's block B I/O logic into the fuse grid. Not checked:
+`getHeadGrid`'s offsets against `_gw5_fuse_cell_offset`, and the meaning of
+`globalMem::getVlgFlag`, which guards the head grid lookup.
+
 ## Open
 
-- GW5A-25A B-site I/O logic: `gowin_pack` writes the `IOLOGICB` cell into the
-  main tile, whose `IOLOGICB` table has 2 rows. The real table, with 677 rows, is
-  in the IOBB `fuse_cell_offset` tile. Checked against data: every B-site case in
-  the fuzzer writes nothing there.
 - 60B and 138C can't be fuzzed yet. nextpnr fails to route the clock to any I/O
   logic (`Failed to find a route for arc 0 of net clk`, or the router1.cc:347
   assert for ODDR). The harness picks 60B pins without an IOB bel and finds no

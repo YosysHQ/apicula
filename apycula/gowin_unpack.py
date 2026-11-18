@@ -465,7 +465,19 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             continue
         if name.startswith("IOLOGIC"):
             idx = name[-1]
-            attrvals = parse_attrvals(tile, db.rev_logicinfo('IOLOGIC'), db.shortval[tiledata.ttyp][f'IOLOGIC{idx}'], attrids.iologic_attrids, "IOLOGIC")
+            # GW5: a cell without ports only holds the fuses of a neighbour's B cell
+            if not bel.portmap:
+                continue
+            def iologic_attrvals(idx):
+                # the B cell's fuses are in the IOBB fuse_cell_offset cell, as for the I/O buffer
+                iob = tiledata.bels.get(f'IOB{idx}')
+                if iob and iob.fuse_cell_offset:
+                    r, c = row + iob.fuse_cell_offset[0], col + iob.fuse_cell_offset[1]
+                    iol_tile, iol_ttyp = bm[r, c], db[r, c].ttyp
+                else:
+                    iol_tile, iol_ttyp = tile, tiledata.ttyp
+                return parse_attrvals(iol_tile, db.rev_logicinfo('IOLOGIC'), db.shortval[iol_ttyp].get(f'IOLOGIC{idx}', {}), attrids.iologic_attrids, "IOLOGIC")
+            attrvals = iologic_attrvals(idx)
             if not attrvals:
                 continue
             #print_sorted_dict(f'{row}, {col}, {name}, {idx}, {tiledata.ttyp} - ', attrvals)
@@ -488,7 +500,7 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
                 # the LSR mux of the wide serializers lives in the DDRENABLE
                 # half; an unused partner reports both LSR muxes, so never read it
                 other = 'AB'[idx == 'A']
-                lsr_vals = parse_attrvals(tile, db.rev_logicinfo('IOLOGIC'), db.shortval[tiledata.ttyp].get(f'IOLOGIC{other}', {}), attrids.iologic_attrids, "IOLOGIC")
+                lsr_vals = iologic_attrvals(other)
                 if lsr_vals.get('OUTMODE') != attrids.iologic_attrvals['DDRENABLE']:
                     lsr_vals = attrvals
                 lsren = 'LSROMUX_0' not in lsr_vals
