@@ -970,8 +970,10 @@ class BankDesc:
 ################################################################
 class Device:
     """ Base chip. The fuses for a specific chip are set in a class that inherits from this one. """
-    # I/O logic primitives whose GSREN defaults to false. ODDR/IDDR have no
-    # GSREN and the vendor enables GSR for them.
+    # I/O logic primitives whose GSREN defaults to false: the IDE's
+    # NETLIST::Iologic::initParameter sets GSREN="false" for them on every GW1N
+    # and GW2A device, and the I/O logic fuse code writes GSR=DISGSR for that.
+    # ODDR/IDDR get no GSREN, so GSR stays enabled.
     _gsren_default_false = frozenset({'OSER4', 'OSER8', 'OSER10', 'OSER16', 'OVIDEO',
                                       'IDES4', 'IDES8', 'IDES10', 'IDES16', 'IVIDEO'})
 
@@ -5421,7 +5423,7 @@ class GW2A_18C(GW2A):
 ################################################################
 class GW5A(Device):
     """ GW5A series """
-    # GW5A primitive.xml has no GSREN, so keep GSR enabled (unchecked against the IDE).
+    # GW5A primitive.xml has no GSREN, and initParameter sets no default on GW5A.
     _gsren_default_false = frozenset()
 
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
