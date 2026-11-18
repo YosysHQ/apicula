@@ -2240,7 +2240,7 @@ class Device:
                 if cell_parms['INMODE'] == 'IDDRX8' or cell_parms['INMODE'] == 'DDRENABLE16':
                     attr_vals.append(AttrVal('LSRIMUX_0', '0'))
             else:
-                # With LSREN=false the I register reset pin is a constant
+                # fusegenMem::setIolIDDR sets LSRIMUX_0=1 only for LSREN=true
                 lsr_en = self.iologic_main_cell(bel.cell).parms.get('LSREN', 'TRUE') == 'TRUE'
                 attr_vals.append(AttrVal('LSRIMUX_0', '1' if lsr_en else '0'))
             if cell_parms['INMODE'] == 'DDRENABLE16':
@@ -2379,8 +2379,8 @@ class Device:
     def get_IOLOGICI_EMPTY_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         iol_bel = self.make_IologicBelDesc(bel)
         attr_vals = self.common_iologic_handler(iol_bel)
-        # A standalone input IODELAY has no register and so no reset pin to
-        # read: it keeps the vendor's initIolAttr defaults. Checked on GW1N/GW2A only.
+        # A standalone input IODELAY gets fusegenMem::initIolAttr's defaults, as
+        # measured on GW1N-9C and GW2A-18C vendor bitstreams. GW5A keeps its old rows.
         if (not chipdb.is_GW5_family(self.device_name)
                 and bel.cell.attrs.get('IODELAY') == 'IN' and 'HAS_REG' not in bel.cell.attrs):
             attr_vals = [av for av in attr_vals if av.attr != 'CLKOMUX']
