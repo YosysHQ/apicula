@@ -35,8 +35,7 @@ the fuse table rows that differ, are in the test output of
   - no `RAM16SDP2` handler.
 - **DSP:**
   - GW1N/GW2A input register muxes (`AIRMUX`/`BIRMUX`), `RSTGEN*MUX`, and the
-    pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows; `MULTALU36X18` fails
-    sharing a DSP block with `MULT9X9` and passes alone (inferred: the same rows);
+    pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows;
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`.
 - **Missing handler, fixed:** `FLASH96K` had no `get_…_fuses` method, so GW1N-1

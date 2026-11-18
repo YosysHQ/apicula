@@ -274,19 +274,24 @@ def package_pins(db, vendor_device, device, package):
 
 
 def pick_pins(db, pins):
-    """Harness pins, outside the banks with MIPI output buffers: with the harness
-    in such a bank the vendor fails to place MIPI_OBUF (PR1082)."""
+    """Harness pins: an output, five inputs and a clock. Pins in banks with MIPI
+    output buffers come last: with the harness output in such a bank the vendor
+    fails to place MIPI_OBUF (PR1082). Inputs there are fine (GW1N-9C)."""
     def mipi(name):
         r, c, _ = gowin_unpack.tbrl2rc(db, name)
         return 'mipi_obuf' in db.extra_func.get((r, c), {})
 
     mipi_banks = {db.pin_bank.get(name) for name, _ in pins.values() if mipi(name)}
-    pins = {p: (name, funcs) for p, (name, funcs) in pins.items() if db.pin_bank.get(name) not in mipi_banks}
-    plain = sorted((p for p, (_, funcs) in pins.items() if not funcs), key=lambda p: int(p) if p.isdigit() else p)
-    # clock-only pins (no PLL or config function) first, then true clock pins (GCLKT):
-    # with the clock on a GCLKC pin DHCEN mismatches the vendor
+    def in_mipi_bank(p):
+        return db.pin_bank.get(pins[p][0]) in mipi_banks
+
+    plain = sorted((p for p, (_, funcs) in pins.items() if not funcs),
+                   key=lambda p: (in_mipi_bank(p), int(p) if p.isdigit() else p))
+    # clock-only pins (no PLL or config function) first, then GCLKT before GCLKC:
+    # on GW1N-9C DHCEN differs from the vendor with the clock on pin 51 (GCLKC_3)
+    # and matches on pin 52 (GCLKT_3)
     clocks = sorted((p for p, (_, funcs) in pins.items() if any(f.startswith('GCLK') for f in funcs)),
-                    key=lambda p: (not all(f.startswith('GCLK') for f in pins[p][1]),
+                    key=lambda p: (in_mipi_bank(p), not all(f.startswith('GCLK') for f in pins[p][1]),
                                    not any(f.startswith('GCLKT') for f in pins[p][1])))
     return {'clk': clocks[0], 'out': plain[0], 'in': plain[1:6]}
 
