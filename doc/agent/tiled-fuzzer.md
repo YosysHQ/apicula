@@ -38,6 +38,7 @@ the fuse table rows that differ, are in the test output of
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`.
 - **Missing handler, fixed:** `FLASH96K` had no `get_…_fuses` method, so GW1N-1
   stopped with `AttributeError`. The vendor sets no fuses outside routing for it.
+- **Missing handler:** `RAM16SDP1` has no `get_…_fuses` method.
 - **GW5A `ADC`:** Apicula sets a `5A_PCLK_ENABLE` fuse the vendor does not.
   `TLVDS_IBUF_ADC` on the vendor's pins raises "IO(0, 0) has ADC bus 0, but used
   in bus 2".
@@ -57,7 +58,7 @@ the fuse table rows that differ, are in the test output of
 - `IODELAY` on GW5A-25A fails an internal check (`DLLSTEP` port).
 - A BEL attribute on `RAM16SDP2/4` crashes nextpnr, and on `RAM16SDP1` or a DSP
   leaves helper cells unplaced. ALU clusters ignore BEL.
-- `RAM16SDP1` fails to route; there is no bel for `RAM16S1/2/4`.
+- No bel for `RAM16S1/2/4`.
 - No bel for the GW1N/GW2A `PLL` primitive, only `rPLL`.
 - `DCS_MODE` is read from attributes only (`globals.cc`), so a `defparam`, as in
   `examples/dcs.v`, is ignored and every DCS is packed as `RISING`.
