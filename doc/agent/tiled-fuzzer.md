@@ -205,9 +205,13 @@ design, to confirm a failure in isolation.
   (`GCLKC_3`) made `DHCEN` differ from the vendor, while pin 52 (`GCLKT_3`)
   matches. The PLL/config exclusion is a precaution, not a measured failure.
 - **The ECLK select is routing.** nextpnr takes an I/O logic `FCLK` over HCLK
-  lane 1 (`HCLK_OUT2/3`) and the vendor over lane 0; both are legal. The
-  `CLKODDRMUX_ECLK`/`CLKIDDRMUX_ECLK=ECLK1` rows only follow that choice, so
-  their fuses are masked like the HCLK pips, except those another row also uses.
+  lane 1 (`HCLK_OUT2/3`) and the vendor over lane 0. The vendor sets
+  `CLKODDRMUX_ECLK`/`CLKIDDRMUX_ECLK` from the block's HCLK source
+  (`fusegenMem::getIoblkHclkSrc`, called from `setIolODDR`, `setIolIDDR` and
+  `setIolLargeODDRAttr`), so the `ECLK1` rows only follow that choice. Their
+  fuses are masked like the HCLK pips, except those another row also uses. The
+  mask also hides a wrong ECLK select, and nextpnr's lane-1 route has not been
+  tested on hardware with an `OSER`.
 
 ## Unpacker findings
 

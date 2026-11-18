@@ -2189,7 +2189,8 @@ class Device:
         if val:
             attr_vals.append(AttrVal('UPDATE', val))
 
-        # With LSREN=false the O register reset pin is a constant
+        # fusegenMem::setIolODDR sets LSROMUX_0=1 only for LSREN=true on the
+        # pin site and the DDRENABLE site; ODDRX4/5 keep 1 as measured
         lsr_off = self.iologic_main_cell(bel.cell).parms.get('LSREN', 'TRUE') == 'FALSE'
         if cell_parms['OUTMODE'] == 'ODDRX8' or cell_parms['OUTMODE'] == 'DDRENABLE16':
             attr_vals.append(AttrVal('LSROMUX_0', '0'))
