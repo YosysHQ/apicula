@@ -12,6 +12,8 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
   questions.
 - [pll.md](pll.md): how the vendor configures PLLs, compared with `gowin_pack`.
 - [gw5-devices.md](gw5-devices.md): where GW5AT-60B and GW5AST-138C differ.
+- [gw5a-hclk-pins.md](gw5a-hclk-pins.md): GW5A-25A clock pins that reach HCLK
+  through a pair IOB, and the vendor tables behind them.
 - [bsram.md](bsram.md): BSRAM handlers compared with `gowin_pack`.
 - [timing.md](timing.md): how the IDE computes delays, the `.tm` formats, and how
   Apicula's and nextpnr's timing compare with it.
