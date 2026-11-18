@@ -428,8 +428,9 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
         if name.startswith("BSRAM"):
             # The block spans the main tile and two aux tiles to its right. A
             # configuration can set fuses on the aux tiles only, so the main tile
-            # looks at all three. Tiles without fuses are absent from bm, and
-            # disabled BSRAM cells have no fuse tables.
+            # looks at all three. bm holds only tiles with bits set, so this
+            # relies on the main tile having bits of its own (its routing).
+            # Disabled BSRAM cells have no fuse tables.
             if name != "BSRAM" or bm is None:
                 continue
             for c in range(col, col + 3):

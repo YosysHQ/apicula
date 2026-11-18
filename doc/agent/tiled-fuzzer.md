@@ -24,7 +24,11 @@ the fuse table rows that differ, are in the test output of
   - GW5A output `ODMUX`/`DRIVE` rows (check `fuse_cell_offset` first).
 - **I/O logic:** `CLKIDDRMUX_ECLK`/`CLKODDRMUX_ECLK=ECLK1`, `GSR=DISGSR`,
   `LSRIMUX`/`LSROMUX`, `ODDR` `OUTMODE`; GW5A `FCLKSEL*`.
-- **BSRAM:** GW5A `SDPB`/`SDPX9B` `DBLWB=X36`.
+- **BSRAM:**
+  - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`;
+  - GW5A-25A: nextpnr rejects `BIT_WIDTH_0` of 32/36 with a different
+    `BIT_WIDTH_1` ("The fix for SDP when ports A and B have different bit
+    widths has not yet been implemented").
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
 - **SSRAM:**
