@@ -341,7 +341,8 @@ _iologic_mode = {
         'MODDRX21': 'OSER4',  'ODDRX2': 'OSER4',
         'MODDRX4':  'OSER8',  'ODDRX4': 'OSER8',
         'MODDRX5':  'OSER10', 'ODDRX5': 'OSER10',
-        'VIDEORX':  'OVIDEO', 'ODDRX8': 'OSER16',
+        # VIDEORX and VIDEOTX share one value; iologic_num2val names it VIDEOTX
+        'VIDEOTX':  'OVIDEO', 'ODDRX8': 'OSER16',
         'MIDDRX2':  'IDES4',  'IDDRX2': 'IDES4',
         'MIDDRX4':  'IDES8',  'IDDRX4': 'IDES8',
         'MIDDRX5':  'IDES10', 'IDDRX5': 'IDES10',
@@ -510,8 +511,8 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             else:
                 continue
             gsren = attrvals.get('GSR') != attrids.iologic_attrvals['DISGSR']
-            # checked on GW1N/GW2A only: GW5A-25A packs ENGSR and LSROMUX_0 as
-            # constants, so there the rows don't carry the parameters
+            # not on GW5A: its primitives have no GSREN/LSREN, and Apicula's
+            # GW5A-25A packer writes GSR and LSROMUX_0 as constants
             if name in bels and not chipdb.is_GW5_family(_device):
                 bels[name].update({f'GSREN="{str(gsren).lower()}"',
                                    f'LSREN="{str(lsren).lower()}"'})
