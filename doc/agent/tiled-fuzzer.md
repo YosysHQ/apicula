@@ -193,12 +193,16 @@ design, to confirm a failure in isolation.
   banks in `db.sip_cst`). The vendor fixes the VCCIO of banks wired to in-package
   memory and moves other outputs out of them (CT1136, #622), which showed up as
   unattributed fuses and as I/O rows spilling into cases.
-- **Harness pins avoid MIPI-output banks** (`pick_pins`): the vendor fails to place
-  `MIPI_OBUF` (PR1082) when the harness output pin shares its bank.
+- **Harness pins in MIPI-output banks come last** (`pick_pins`): the vendor fails
+  to place `MIPI_OBUF` (PR1082) when the harness output pin shares its bank;
+  harness inputs there did not stop it (GW1N-9C). Sorting rather than filtering
+  keeps five harness inputs on GW1NS-4 QFN48P, which then has no plain pin left
+  for I/O cases (banks 0 and 3 are SiP-locked, bank 2 holds MIPI outputs).
 - **The harness clock goes on a clock-only true clock pin**: one whose only
   functions are `GCLK*`, so no PLL input or feedback and no config pin, and
-  `GCLKT` before `GCLKC`. On GW1N-9C pin 51 (`GCLKC_3`) made `DHCEN` differ from
-  the vendor, while pin 52 (`GCLKT_3`) matches.
+  `GCLKT` before `GCLKC`. Measured on one pair only: on GW1N-9C pin 51
+  (`GCLKC_3`) made `DHCEN` differ from the vendor, while pin 52 (`GCLKT_3`)
+  matches. The PLL/config exclusion is a precaution, not a measured failure.
 
 ## Unpacker findings
 

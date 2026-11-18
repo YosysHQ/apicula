@@ -65,7 +65,8 @@ BROKEN = {
 
 # fuse differences in tiles no case owns, and designs that fail although each
 # of their cases passes alone
-BROKEN_UNATTRIBUTED = 'mostly I/O bank and GW5A I/O row fuses of unused pins'
+BROKEN_UNATTRIBUTED = ('I/O bank and GW5A I/O row fuses of unused pins; HCLK BRGMUX*_BRGOUT rows from the '
+                       'harness clock (GW1N-9C, GW2A-18C)')
 BROKEN_COMBINATIONS = ('nextpnr: two DSP cases in one block (more than 4 RESET networks, or two nets on one '
                        'source wire); an I/O logic pin already taken by another case\'s buffer')
 
