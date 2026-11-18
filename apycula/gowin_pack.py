@@ -3567,9 +3567,9 @@ class Device:
                 attr_vals.append(AttrVal(f'CLK{h}MUX_REGM{i}1', clk_val))
                 attr_vals.append(AttrVal(f'RST{h}MUX_REGM{i}1', reset_val))
                 if sync_alu_reset:
-                    attr_vals.append(AttrVal('RSTGENLMUX_REGC0', 'SYNC'))
+                    attr_vals.append(AttrVal('RSTGENHMUX_REGC0', 'SYNC'))
                     for i, h in [(i, h) for i in "AB" for h in "LH"]:
-                        attr_vals.append(AttrVal(f'RSTGEN{h}MUX_REGM{i}0', 'SYNC'))
+                        attr_vals.append(AttrVal(f'RSTGEN{h}MUX_REGM{i}1', 'SYNC'))
 
         val = int(cell_parms.get('ASIGN_REG', '0'), 2)
         if val == 0:
