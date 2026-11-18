@@ -511,8 +511,9 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
             else:
                 continue
             gsren = attrvals.get('GSR') != attrids.iologic_attrvals['DISGSR']
-            # not on GW5A: its primitives have no GSREN/LSREN, and Apicula's
-            # GW5A-25A packer writes GSR and LSROMUX_0 as constants
+            # not on GW5: the vendor rejects GSREN/LSREN there (PA2066), keeps
+            # GSR on and sets the LSR mux from the reset net
+            # (doc/agent/gw5-devices.md)
             if name in bels and not chipdb.is_GW5_family(_device):
                 bels[name].update({f'GSREN="{str(gsren).lower()}"',
                                    f'LSREN="{str(lsren).lower()}"'})

@@ -89,6 +89,8 @@ So on GW5 the LSR mux follows the reset net, where on GW1N/GW2A `LSREN` decides.
 `Device.iologic_lsr(cell)` in `gowin_pack` writes `'0'` when the main cell has no
 RESET/CLEAR connection or it is on the GND net, and `'1'` otherwise. GW5's
 logicinfo only knows `LSRxMUX_0='0'`, so `'1'` leaves the `!LSRxMUX_0=0` row set.
+Input `DDRENABLE` sites keep `'0'`, as the table has rows only at the pin site,
+and the OSER8 aux cell is not written at all.
 
 ## PLL input select follows the clock pin
 

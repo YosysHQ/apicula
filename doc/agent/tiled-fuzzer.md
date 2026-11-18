@@ -21,8 +21,12 @@ the fuse table rows that differ, are in the test output of
     `BLVDS…` rows;
   - `DRIVE,OPENDRAIN`, `ODMUX`, `PULLMODE`;
   - GW5A output `ODMUX`/`DRIVE` rows (check `fuse_cell_offset` first).
-- **I/O logic:** `ODDR` `OUTMODE`; GW5A-25A `FCLKSEL*` and
-  `LSRIMUX_0`/`LSROMUX_0`. Fixed: the second half of a two-site primitive (an
+- **I/O logic:** `ODDR` `OUTMODE`; GW5A-25A `FCLKSEL*`, B-site cells written to
+  the A tile instead of the IOBB `fuse_cell_offset` tile, and a standalone
+  `IODELAY` without its `INDEL`/`IDEL_*` and LSR rows. Fixed: on GW5 the LSR mux
+  (`LSRIMUX_0`/`LSROMUX_0`) follows the reset net, off for GND or no reset port
+  (`setIolLsrmux @0x308e660`, see `gw5-devices.md`), and OSER8 has no aux
+  cell. Fixed: the second half of a two-site primitive (an
   `IOLOGIC_DUMMY`, as in `OSER8`/`OSER10`) took `GSR` from its own, empty
   parameters instead of the main cell's `GSREN`, and `LSREN=false` left
   `LSROMUX_0=1` on `OSER4` and on the `DDRENABLE` half of `OSER8`/`OSER10`
@@ -62,7 +66,8 @@ the fuse table rows that differ, are in the test output of
 - `INS_LOC` is parsed but never applied.
 - `SDP`, `DP` and `ROM` give "Unsupported BSRAM type".
 - A constrained `rPLL` on GW2A-18C is bound twice.
-- `IODELAY` on GW5A-25A fails an internal check (`DLLSTEP` port).
+- `IODELAY` on GW5A-25A failed an internal check (`DLYSTEP` port); fixed in
+  YosysHQ/nextpnr#1923, which rejects dynamic and adaptive delay.
 - A BEL attribute on `RAM16SDP2/4` crashes nextpnr, and on `RAM16SDP1` or a DSP
   leaves helper cells unplaced. ALU clusters ignore BEL.
 - No bel for `RAM16S1/2/4`.
