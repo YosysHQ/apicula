@@ -27,7 +27,7 @@ the fuse table rows that differ, are in the test output of
   `IOLOGIC_DUMMY`, as in `OSER8`/`OSER10`) took `GSR` from its own, empty
   parameters instead of the main cell's `GSREN`, and `LSREN=false` left
   `LSROMUX_0=1` on `OSER4` and on the `DDRENABLE` half of `OSER8`/`OSER10`
-  (`fusegenMem::setIolLsrmux`). On GW1N-9C the harness puts an `OSER`'s output
+  (`fusegenMem::setIolODDR @0x308ac42`). On GW1N-9C the harness puts an `OSER`'s output
   pad in bank 3, which is locked to 1.8 V (CT1136); the vendor moves
   it and sets IOB `ODMUX`/`TRI_MUX`/`SLEWRATE` rows Apicula does not.
 - **BSRAM:**
