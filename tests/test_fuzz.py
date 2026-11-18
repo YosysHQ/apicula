@@ -44,7 +44,7 @@ BROKEN = {
              'GW5A DSP: MULT_RESET_MODE, CASO, CE muxes, PRELOAD_BIT, DYN_P_ADDSUB rows; omitted ACC_SEL and '
              'C_SEL pack no row'),
     **broken('SDPB SDPX9B', 'GW5A DBLWB=X36; GW5A-25A: nextpnr rejects BIT_WIDTH_0 of 32/36 with a different '
-             'BIT_WIDTH_1; nextpnr crashes when READ_MODE is omitted (GW1N/GW2A)'),
+             'BIT_WIDTH_1'),
     **broken('DPB DPX9B', 'BSRAM: with mixed port widths Apicula enables the byte enables (BELB/BEHB) of the '
              '16/18-bit port, the vendor does not'),
     **broken('rPLL', 'rPLL: FBSEL on GW2A; the unpacker does not invert several parameters'),

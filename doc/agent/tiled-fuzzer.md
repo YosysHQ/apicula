@@ -76,8 +76,6 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
 
 **nextpnr**
 - `INS_LOC` is parsed but never applied.
-- `SDPB`/`SDPX9B` without `READ_MODE` crash (`params.at` in `bsram_fix_outreg`)
-  on GW1N/GW2A.
 - `SDP`, `DP` and `ROM` give "Unsupported BSRAM type".
 - A constrained `rPLL` on GW2A-18C is bound twice.
 - `IODELAY` on GW5A-25A failed an internal check (`DLYSTEP` port); fixed in
