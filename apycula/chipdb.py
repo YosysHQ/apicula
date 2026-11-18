@@ -1421,12 +1421,18 @@ def gw5_make_hclk_pips(dev, device, fse, dat: Datfile):
     mk_hclk_pip('_IHCLK', row, col, 'HCLK_TO_IHCLK03', 'HCLK_IHCLK_IN33')
 
 
-# So far, there is only one match (as the clock is soldered in TangPrimer25k),
-# since it is unclear whether there is a table or whether it will be necessary
-# to experimentally connect the oscillator to the pins and see which route the
-# IDE chooses.
+# GW5A-25A clock pins that feed an HCLK through their pair IOB, measured
+# against the vendor. The vendor table is code, not data:
+# NETLIST::Hclk_5AT::buildGclkIO_5A25 @0x1a82dba (IDE 1.9.10.03).
+# See doc/agent/gw5a-hclk-pins.md.
 def gw5_make_pin_to_hclk(dev):
-    pin_hclk_wire = [ {'row': 36, 'col': 11, 'wire': 'F5', 'hclk_idx': 1, 'hclk_wire_idx': 311} ]
+    pin_hclk_wire = [ {'row': 36, 'col': 11, 'wire': 'F5', 'hclk_idx': 1, 'hclk_wire_idx': 311},
+                      {'row': 36, 'col': 25, 'wire': 'F5', 'hclk_idx': 1, 'hclk_wire_idx': 314},
+                      {'row': 36, 'col': 53, 'wire': 'F5', 'hclk_idx': 1, 'hclk_wire_idx': 315},
+                      {'row': 36, 'col': 74, 'wire': 'F5', 'hclk_idx': 3, 'hclk_wire_idx': 689} ]
+    # HCLK_GCLK14 reaches EPSILON14 and EPSILON17 without a fuse
+    make_hclk_pip(dev, 1, 36, 27, wnames.hclknames[314], 'HCLK_MUX_EPSILON14')
+    make_hclk_pip(dev, 1, 36, 27, wnames.hclknames[314], 'HCLK_MUX_EPSILON17')
     for node_desc in pin_hclk_wire:
         row = node_desc['row']
         col = node_desc['col']
@@ -1434,22 +1440,6 @@ def gw5_make_pin_to_hclk(dev):
         hclk_wire = wnames.hclknames[node_desc['hclk_wire_idx']]
         node_name = add_node(dev, f"HCLK{node_desc['hclk_idx']}_{hclk_wire}", "HCLK", row, col, wire)
         add_node(dev, node_name, "HCLK", row, col, hclk_wire)
-    # XXX !!!
-    # This is a terrible patch — we are introducing PIPs, some of which do not
-    # have fuses, but we cannot simply make the Himbaechel 311<->215 node
-    # because the HCLK(48) tables contain PIPs for both 215 and 211 and for
-    # 318, but they don't have the ones we need, so we assume that these are
-    # default connections (without fuses).
-    # And at the moment, only pin E2 is described, which is soldered to the
-    # external quartz on the TangPrime25k board.
-    """
-    row, col = 36, 11
-    add_node(dev, f"HCLK1_{wnames.hclknames[211]}", "GLOBAL_CLK", row, col, 'DUMMY_HCLK211')
-    add_node(dev, f"HCLK1_{wnames.hclknames[215]}", "GLOBAL_CLK", row, col, 'DUMMY_HCLK215')
-    dev.hclk_pips.setdefault((row, col), {}).setdefault('DUMMY_HCLK215', {}).update({'DUMMY_HCLK211': set()})
-    row, col = 36, 27
-    dev.hclk_pips.setdefault((row, col), {}).setdefault(wnames.hclknames[211], {}).update({wnames.hclknames[318]: set()})
-    """
 
 
 # HCLK to global clock network gates
