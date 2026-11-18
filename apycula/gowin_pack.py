@@ -1406,9 +1406,6 @@ class Device:
         self.used_slices.add_slice_attrs(bel.x, bel.y, 2, False, False, [AttrVal('LSRONMUX', 'LSRMUX'), AttrVal('LSR_MUX_LSR', 'INV'), AttrVal('CLKMUX_1', 'UNKNOWN'), AttrVal('CLKMUX_CLK', 'SIG')])
         return fuses
 
-    # nextpnr places every SSRAM variant on the RAM16SDP4 bel; absent INIT_n pack as 0
-    get_RAM16SDP2_fuses = get_RAM16SDP4_fuses
-
     #==============================
     #========== DFFs
     #==============================
@@ -4593,6 +4590,14 @@ class GW1N(Device):
         raise Exception("The GW1N series does not support TLVDS IOBUF")
 
     #==============================
+    #========== SSRAM
+    #==============================
+    # nextpnr places every SSRAM variant on the RAM16SDP4 bel. Here and on
+    # GW2A-18C the vendor fills all four LUTs, an absent INIT_n with zeros; it
+    # ignores INIT on GW2A-18 and uses other LUTs on GW5AT/GW5AST.
+    get_RAM16SDP2_fuses = Device.get_RAM16SDP4_fuses
+
+    #==============================
     #========== Oscillators
     #==============================
 
@@ -5342,6 +5347,9 @@ class GW2A_18C(GW2A):
     """ GW2A-18C chip. Tangnano20k board """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
+
+    # as on GW1N
+    get_RAM16SDP2_fuses = Device.get_RAM16SDP4_fuses
 
     #==============================
     #========== Misc
