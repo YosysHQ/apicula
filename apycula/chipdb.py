@@ -4166,7 +4166,7 @@ def fse_create_jtag(dev, device, dat):
     # pause_dr_o have no wire there (-1).
     if device == 'GW2A-18C':
         row, col = 27, 50
-    elif device == 'GW1NS-4':
+    elif device in {'GW1NS-4', 'GW1N-9C'}:
         row, col = 0, 0
     else:
         return

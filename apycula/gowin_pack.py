@@ -5078,6 +5078,17 @@ class GW1N_9C(GW1N):
     def get_FLASH608K_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         return []
 
+    def get_GW_JTAG_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        av = set()
+        self.chipdb.get_cfg_attr_val(AttrVal('JTAG_ER1', 'USED'), av)
+        self.chipdb.get_cfg_attr_val(AttrVal('JTAG_ER2', 'USED'), av)
+
+        fuses = []
+        bits = self.chipdb.get_cfg_fuses(bel.x, bel.y, av)
+        if bits:
+            fuses.append(CellFuseBits(bel.x, bel.y, bits))
+        return fuses
+
     #==============================
     #========== Clocks
     #==============================
