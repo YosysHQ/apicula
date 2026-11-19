@@ -970,6 +970,13 @@ class BankDesc:
 ################################################################
 class Device:
     """ Base chip. The fuses for a specific chip are set in a class that inherits from this one. """
+    # I/O logic primitives whose GSREN defaults to false: the IDE's
+    # NETLIST::Iologic::initParameter sets GSREN="false" for them on every GW1N
+    # and GW2A device, and the I/O logic fuse code writes GSR=DISGSR for that.
+    # ODDR/IDDR get no GSREN, so GSR stays enabled.
+    _gsren_default_false = frozenset({'OSER4', 'OSER8', 'OSER10', 'OSER16', 'OVIDEO',
+                                      'IDES4', 'IDES8', 'IDES10', 'IDES16', 'IVIDEO'})
+
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         self.cli_args = cli_args
         self.device_name = cli_args.get_device()
@@ -2135,12 +2142,19 @@ class Device:
 
     def iologic_sr_param(self, cell: CellDesc, name: str) -> str:
         """ GSREN/LSREN: the cell's own (the OSER16/IDES16 pin cells), else the
-        main cell's. The OSER16/IDES16 helper in the next tile has neither and
-        stays at the default, as the vendor's does. Checked on GW1N/GW2A only:
+        main cell's, else the primitive's default. Checked on GW1N/GW2A only:
         GW5A reads the main cell's """
-        if name not in cell.parms or chipdb.is_GW5_family(self.device_name):
-            cell = self.iologic_main_cell(cell)
-        return cell.parms.get(name, 'TRUE')
+        if name in cell.parms and not chipdb.is_GW5_family(self.device_name):
+            return cell.parms[name]
+        main = self.iologic_main_cell(cell)
+        prim = main.typ
+        # OSER16/IDES16 are two IOLOGIC_DUMMY cells at the pin whose main cell
+        # is an IOLOGIC helper in the next tile. The helper is not part of the
+        # primitive and keeps GSR enabled, as the vendor's does.
+        if cell.typ == 'IOLOGIC_DUMMY' and main.typ == 'IOLOGIC':
+            prim = 'OSER16' if 'OUTMODE' in main.parms else 'IDES16'
+        default = 'FALSE' if name == 'GSREN' and prim in self._gsren_default_false else 'TRUE'
+        return main.parms.get(name, default)
 
     def set_iologic_bel_fclk(self, bel: IologicBelDesc) -> IologicBelDesc:
         """ HCLK and clock spines have same numbers in the tables """
@@ -5409,6 +5423,9 @@ class GW2A_18C(GW2A):
 ################################################################
 class GW5A(Device):
     """ GW5A series """
+    # GW5A primitive.xml has no GSREN, and initParameter sets no default on GW5A.
+    _gsren_default_false = frozenset()
+
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
         # PLLA, ADC etc
