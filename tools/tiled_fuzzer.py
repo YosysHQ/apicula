@@ -1129,6 +1129,13 @@ class Iol(Kind):
     def owner(self, case, site):
         return f'IOLOGIC{site[2][-1]}'
 
+    def tiles(self, db, case, site):
+        # the pair's B cell, which wide primitives use too, has its fuses in
+        # the IOBB fuse_cell_offset tile on GW5
+        iobb = db[site[0], site[1]].bels.get('IOBB')
+        off = iobb.fuse_cell_offset if iobb else None
+        return [site[:2]] + ([(site[0] + off[0], site[1] + off[1])] if off and any(off) else [])
+
     def source(self, case, port, conns):
         if port in ('CLK', 'PCLK', 'FCLK'):
             return 'clk'

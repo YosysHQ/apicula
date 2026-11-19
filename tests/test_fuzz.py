@@ -29,13 +29,13 @@ BROKEN = {
     **broken('TLVDS_IBUF TLVDS_OBUF TLVDS_TBUF TLVDS_IOBUF ELVDS_IBUF ELVDS_OBUF ELVDS_TBUF ELVDS_IOBUF',
              'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
     **broken('IDDR IDDRC ODDR ODDRC IDES4 IDES8 IDES10 IDES16 OSER16 IVIDEO OVIDEO IODELAY',
-             'I/O logic: on GW5A-25A, FCLKSEL, IOB and HCLK TO_IHCLK rows, B-site I/O logic cells written to the A '
-             'tile (IOBB fuse_cell_offset), IODELAY (placed since nextpnr#1923) lacks the INDEL/IDEL rows and sets LSR mux rows the vendor leaves off, '
-             'and IDES8, IDES10 and IVIDEO unpack to no cell; ODDR OUTMODE; on GW1N-9C the vendor moves the output '
+             'I/O logic: on GW5A-25A, FCLKSEL, IOB and HCLK TO_IHCLK rows, IODELAY (placed since nextpnr#1923) '
+             'lacks the INDEL/IDEL rows and sets LSR mux rows the vendor leaves off, and IDES8 (INMODE reads as '
+             'UNK76), IDES10 and IVIDEO unpack to no cell; ODDR OUTMODE; on GW1N-9C the vendor moves the output '
              'pad off a VCCIO-locked bank (IDES4, IDES8, IDES10, IDES16, OSER16, IODELAY); IODELAY unpacks to no '
              'cell, IDDR/IDDRC and ODDR/ODDRC unpack as each other'),
-    **broken('OSER4 OSER8 OSER10', 'OSER: on GW5A-25A, FCLKSEL, IOB PULLMODE/SLEWRATE and HCLK TO_IHCLK rows, '
-             'and B-site I/O logic cells written to the A tile (IOBB fuse_cell_offset); on GW1N-9C the vendor '
+    **broken('OSER4 OSER8 OSER10', 'OSER: on GW5A-25A, FCLKSEL, IOB PULLMODE/SLEWRATE and HCLK TO_IHCLK rows; '
+             'on GW1N-9C the vendor '
              'moves the output pad off a VCCIO-locked bank, adding IOB ODMUX/TRI_MUX/SLEWRATE rows'),
     **broken('ALU', 'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
     **broken('ALU54D MULT9X9 MULT18X18 MULTALU18X18 PADD9 PADD18',
