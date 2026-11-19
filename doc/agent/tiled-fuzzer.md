@@ -22,8 +22,14 @@ the fuse table rows that differ, are in the test output of
   - input `CLAMP`;
   - `DRIVE,OPENDRAIN`, `ODMUX`, `PULLMODE`;
   - GW5A output `ODMUX`/`DRIVE` rows (check `fuse_cell_offset` first).
-- **I/O logic:** `CLKIDDRMUX_ECLK`/`CLKODDRMUX_ECLK=ECLK1`, `GSR=DISGSR`,
-  `LSRIMUX`/`LSROMUX`, `ODDR` `OUTMODE`; GW5A `FCLKSEL*`.
+- **I/O logic:** `LSRIMUX`/`LSROMUX` (`IDES`, `OSER16`), `ODDR` `OUTMODE`;
+  GW5A `FCLKSEL*`. Fixed: the second half of a two-site primitive (an
+  `IOLOGIC_DUMMY`, as in `OSER8`/`OSER10`) took `GSR` from its own, empty
+  parameters instead of the main cell's `GSREN`, and `LSREN=false` left
+  `LSROMUX_0=1` on `OSER4` and on the `DDRENABLE` half of `OSER8`/`OSER10`
+  (`fusegenMem::setIolODDR @0x308ac42`). On GW1N-9C the harness puts an `OSER`'s output
+  pad in bank 3, which is locked to 1.8 V (CT1136); the vendor moves
+  it and sets IOB `ODMUX`/`TRI_MUX`/`SLEWRATE` rows Apicula does not.
 - **BSRAM:**
   - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`;
   - GW5A-25A: nextpnr rejects `BIT_WIDTH_0` of 32/36 with a different
@@ -198,6 +204,14 @@ design, to confirm a failure in isolation.
   `GCLKT` before `GCLKC`. Measured on one pair only: on GW1N-9C pin 51
   (`GCLKC_3`) made `DHCEN` differ from the vendor, while pin 52 (`GCLKT_3`)
   matches. The PLL/config exclusion is a precaution, not a measured failure.
+- **The ECLK select is routing.** nextpnr takes an I/O logic `FCLK` over HCLK
+  lane 1 (`HCLK_OUT2/3`) and the vendor over lane 0. The vendor sets
+  `CLKODDRMUX_ECLK`/`CLKIDDRMUX_ECLK` from the block's HCLK source
+  (`fusegenMem::getIoblkHclkSrc`, called from `setIolODDR`, `setIolIDDR` and
+  `setIolLargeODDRAttr`), so the `ECLK1` rows only follow that choice. Their
+  fuses are masked like the HCLK pips, except those another row also uses. The
+  mask also hides a wrong ECLK select, and nextpnr's lane-1 route has not been
+  tested on hardware with an `OSER`.
 
 ## Unpacker findings
 

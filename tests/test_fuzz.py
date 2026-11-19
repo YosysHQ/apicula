@@ -28,8 +28,13 @@ BROKEN = {
              'fuses differ; SSTL/HSTL inputs decode as outputs'),
     **broken('TLVDS_IBUF TLVDS_OBUF TLVDS_TBUF TLVDS_IOBUF ELVDS_IBUF ELVDS_OBUF ELVDS_TBUF ELVDS_IOBUF',
              'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
-    **broken('IDDR IDDRC ODDR ODDRC IDES4 IDES8 IDES10 IDES16 OSER4 OSER8 OSER10 OSER16 IVIDEO OVIDEO IODELAY',
-             'I/O logic: ECLK/FCLK select, GSR and LSR rows, ODDR OUTMODE; no or wrong cell when unpacked'),
+    **broken('IDDR IDDRC ODDR ODDRC IDES4 IDES8 IDES10 IDES16 OSER16 IVIDEO OVIDEO IODELAY',
+             'I/O logic: GW5A FCLKSEL, LSRIMUX/LSROMUX rows (IDES, OSER16), ODDR OUTMODE; '
+             'no or wrong cell when unpacked'),
+    **broken('OSER4 OSER8 OSER10', 'OSER: on GW5A-25A, FCLKSEL, LSROMUX_0, IOB PULLMODE/SLEWRATE and HCLK '
+             'TO_IHCLK rows, and with OSER8 on an IOBB pad Apicula sets OUTMODE/CLKOMUX/WRFCLKSEL rows the vendor '
+             'does not; on GW1N-9C the vendor moves the output pad off a VCCIO-locked bank, adding IOB '
+             'ODMUX/TRI_MUX/SLEWRATE rows'),
     **broken('ALU', 'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
     **broken('ALU54D MULT9X9 MULT18X18 MULTALU18X18 PADD9 PADD18',
              'DSP: input register muxes (AIRMUX/BIRMUX), RSTGEN muxes, pre-adder rows'),

@@ -477,6 +477,7 @@ def route_mask(db, r, c):
                 for _, fuses in srcs:
                     bits |= fuses
         bits |= dsp_line_select_bits(db, ttyp)
+        bits |= eclk_select_bits(db, ttyp)
         _masks[ttyp] = bits
     # HCLK routing is per location, not per tile type
     hclk = db.hclk_pips.get((r, c))
@@ -500,6 +501,22 @@ def dsp_line_select_bits(db, ttyp):
             if vals and all(re.fullmatch(r'(CLK|CE|RST)IN\d', v) for v in vals):
                 out |= bits
     return out
+
+
+def eclk_select_bits(db, ttyp):
+    """Fuses of the IOLOGIC rows that pick ECLK1 as the fast clock
+    (CLKODDRMUX_ECLK, CLKIDDRMUX_ECLK), less any fuse another row uses. That
+    follows from routing: nextpnr reaches FCLK over HCLK lane 1 (HCLK_OUT2/3),
+    the vendor over lane 0."""
+    li = db.rev_logicinfo('IOLOGIC') if 'IOLOGIC' in db.logicinfo else {}
+    eclk = {attrids.iologic_attrids['CLKODDRMUX_ECLK'], attrids.iologic_attrids['CLKIDDRMUX_ECLK']}
+    out, other = set(), set()
+    for tables in (db.shortval, db.longval):
+        for table, rows in tables.get(ttyp, {}).items():
+            for key, bits in rows.items():
+                ours = table.startswith('IOLOGIC') and any(k > 0 and li[k][0] in eclk for k in key)
+                (out if ours else other).update(bits)
+    return out - other
 
 
 def diff_bits(db, vt, at):

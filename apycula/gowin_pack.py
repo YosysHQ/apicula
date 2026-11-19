@@ -2124,12 +2124,16 @@ class Device:
     #==============================
     #========== Iologic
     #==============================
+    def iologic_main_cell(self, cell: CellDesc) -> CellDesc:
+        """ The second half of a two-site iologic primitive is a dummy cell;
+        the primitive's parameters live on the main cell """
+        if cell.typ == 'IOLOGIC_DUMMY':
+            return self.pnr.get_cell(cell.attrs['MAIN_CELL'])
+        return cell
+
     def set_iologic_bel_fclk(self, bel: IologicBelDesc) -> IologicBelDesc:
         """ HCLK and clock spines have same numbers in the tables """
-        if bel.cell.typ == 'IOLOGIC_DUMMY':
-            cell = self.pnr.get_cell(bel.cell.attrs['MAIN_CELL'])
-        else:
-            cell = bel.cell
+        cell = self.iologic_main_cell(bel.cell)
         fclk = {'HCLK_OUT0': 'SPINE10', 'HCLK_OUT1': 'SPINE11', 'HCLK_OUT2': 'SPINE12',
                 'HCLK_OUT3': 'SPINE13'}.get(cell.attrs['IOLOGIC_FCLK'], 'UNKNOWN')
         main_cell_outmode = cell.parms.get('OUTMODE')
@@ -2169,7 +2173,7 @@ class Device:
         val = cell_parms.get('HWL', 'FALSE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('UPDATE', 'SAME'))
-        val = cell_parms.get('GSREN', 'TRUE')
+        val = self.iologic_main_cell(bel.cell).parms.get('GSREN', 'TRUE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('GSR', 'ENGSR'))
         else:
@@ -2185,7 +2189,12 @@ class Device:
         if val:
             attr_vals.append(AttrVal('UPDATE', val))
 
+        # fusegenMem::setIolODDR sets LSROMUX_0=1 only for LSREN=true on the
+        # pin site and the DDRENABLE site; ODDRX4/5 keep 1 as measured
+        lsr_off = self.iologic_main_cell(bel.cell).parms.get('LSREN', 'TRUE') == 'FALSE'
         if cell_parms['OUTMODE'] == 'ODDRX8' or cell_parms['OUTMODE'] == 'DDRENABLE16':
+            attr_vals.append(AttrVal('LSROMUX_0', '0'))
+        elif lsr_off and cell_parms['OUTMODE'] in {'ODDRX2', 'DDRENABLE'}:
             attr_vals.append(AttrVal('LSROMUX_0', '0'))
         elif cell_parms['OUTMODE'] != 'ODDRX1' or bel.cell.typ == 'ODDRC':
             attr_vals.append(AttrVal('LSROMUX_0', '1'))
