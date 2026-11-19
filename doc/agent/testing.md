@@ -7,8 +7,8 @@ How to meet the rules in [`AGENTS.md`](../../AGENTS.md#testing).
 Run it once without the fix to see it fail.
 
 - Python logic: a test in `tests/`, like `tests/test_bslib.py`, run with
-  `python -m unittest discover tests`. It may load the committed chipdbs but not
-  the IDE.
+  `python -m pytest tests`. CI runs it in `.github/workflows/chipdb.yml`, after
+  building the chipdbs. It may load the chipdbs but not the IDE.
 - Vendor mismatches: the fuzzer case, rerun with `--replay`.
 - Hardware-only bugs: a HIL test.
 
