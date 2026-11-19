@@ -225,6 +225,9 @@ design, to confirm a failure in isolation.
   [primitive-to-fuse.md](primitive-to-fuse.md). Checked on fuzzer bitstreams and
   on a vendor design with all 12 latch types; text comparison of unpacked
   Verilog is useless for this, as unpacking twice differs by set ordering.
+- I/O logic `GSREN` comes from the row `GSR=DISGSR`, `LSREN` from the presence
+  of `LSRIMUX_0`/`LSROMUX_0`. For OSER8 and wider, `LSROMUX_0` sits in the
+  `DDRENABLE` partner cell; an unused partner reports both LSR muxes.
 - Clock routing and long wires are not followed in the unpacked netlist; the
   fuzzer does not trace nets. Constant LUTs are an assign of `F` to VCC or VSS.
 

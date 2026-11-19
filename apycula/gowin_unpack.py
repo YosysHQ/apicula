@@ -341,7 +341,8 @@ _iologic_mode = {
         'MODDRX21': 'OSER4',  'ODDRX2': 'OSER4',
         'MODDRX4':  'OSER8',  'ODDRX4': 'OSER8',
         'MODDRX5':  'OSER10', 'ODDRX5': 'OSER10',
-        'VIDEORX':  'OVIDEO', 'ODDRX8': 'OSER16',
+        # VIDEORX and VIDEOTX share one value; iologic_num2val names it VIDEOTX
+        'VIDEOTX':  'OVIDEO', 'ODDRX8': 'OSER16',
         'MIDDRX2':  'IDES4',  'IDDRX2': 'IDES4',
         'MIDDRX4':  'IDES8',  'IDDRX4': 'IDES8',
         'MIDDRX5':  'IDES10', 'IDDRX5': 'IDES10',
@@ -484,6 +485,13 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
                     continue
                 if attrids.iologic_num2val[attrvals['OUTMODE']] in _iologic_mode.keys():
                     bels.setdefault(name, set()).add(f"MODE={_iologic_mode[attrids.iologic_num2val[attrvals['OUTMODE']]]}")
+                # the LSR mux of the wide serializers lives in the DDRENABLE
+                # half; an unused partner reports both LSR muxes, so never read it
+                other = 'AB'[idx == 'A']
+                lsr_vals = parse_attrvals(tile, db.rev_logicinfo('IOLOGIC'), db.shortval[tiledata.ttyp].get(f'IOLOGIC{other}', {}), attrids.iologic_attrids, "IOLOGIC")
+                if lsr_vals.get('OUTMODE') != attrids.iologic_attrvals['DDRENABLE']:
+                    lsr_vals = attrvals
+                lsren = 'LSROMUX_0' not in lsr_vals
             elif 'INMODE' in attrvals.keys():
                 if attrvals['INMODE'] in {attrids.iologic_attrvals['MIDDRX1'], attrids.iologic_attrvals['IDDRX1']}:
                     if 'LSRIMUX_0' in attrvals.keys():
@@ -499,8 +507,15 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
                     if in_mode == 'OVIDEO':
                         in_mode = 'IVIDEO'
                     bels.setdefault(name, set()).add(f"MODE={in_mode}")
+                lsren = 'LSRIMUX_0' not in attrvals
             else:
                 continue
+            gsren = attrvals.get('GSR') != attrids.iologic_attrvals['DISGSR']
+            # not on GW5A: its primitives have no GSREN/LSREN, and Apicula's
+            # GW5A-25A packer writes GSR and LSROMUX_0 as constants
+            if name in bels and not chipdb.is_GW5_family(_device):
+                bels[name].update({f'GSREN="{str(gsren).lower()}"',
+                                   f'LSREN="{str(lsren).lower()}"'})
             if 'CLKODDRMUX_ECLK' in attrvals.keys():
                 bels.setdefault(name, set()).add(f"CLKODDRMUX_ECLK={attrids.iologic_num2val[attrvals['CLKODDRMUX_ECLK']]}")
         if name.startswith("DFF"):
