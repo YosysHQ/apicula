@@ -5948,6 +5948,7 @@ class GW5A_25A(GW5A):
         # purpose of this mechanism is unclear; we have only found a few such
         # pins and are repeating this process.
         self.hclk_io_pairs = {(11, 36): (30, 36), (25, 36): (32, 36), (53, 36): (28, 36), (74, 36): (90, 36), }
+        self.hclk_pair_ios = set()
         self.used_clock_spines = set()
         # default attrs for DSP
         self.multaddalu12x12_defaults = [
@@ -6290,8 +6291,6 @@ class GW5A_25A(GW5A):
 
         if 'HCLK' in bel.flags:
             self.chipdb.get_iob_attr_val(AttrVal("IOB_UNKNOWN67", "DISELMUX"), av)
-        if 'HCLK_PAIR' in bel.flags:
-            self.chipdb.get_iob_attr_val(AttrVal("IOB_UNKNOWN67", "INCK_II"), av)
 
         fuses += self.get_iob_fuses(bel.x, bel.y, bel.idx_str, av)
         return fuses
@@ -6359,12 +6358,20 @@ class GW5A_25A(GW5A):
                        is_HCLK_GCLK_net = True
             if is_HCLK_GCLK_net:
                 self.common_io_handler(self.set_io_bel_flags(self.make_IoBelDesc(bel), {'HCLK': 1}))
-                pair_bel = IoBelDesc(pair_xy[0], pair_xy[1], 'A', bel.cell, {'HCLK_PAIR': 1})
-                self.common_io_handler(pair_bel)
+                self.hclk_pair_ios.add(pair_xy)
             else:
                 self.common_io_handler(self.make_IoBelDesc(bel))
 
         return []
+
+    def get_unused_io_attrvals(self, io_cfg: IoCfg, bank_desc: BankDesc) -> list[AttrVal]:
+        # The pair stays an unused IOB with its clock input enabled (INCKSELMUX):
+        # PLACEROUTE::Route::configIoAttrFor25 @0x2531c1c and
+        # setGclkAAtrrOfSameNumberGclkForGW5A @0x319049d (IDE 1.9.10.03).
+        attrvals = super().get_unused_io_attrvals(io_cfg, bank_desc)
+        if io_cfg.idx_str == 'A' and (io_cfg.x, io_cfg.y) in self.hclk_pair_ios:
+            attrvals.append(AttrVal('IOB_UNKNOWN67', 'INCK_II'))
+        return attrvals
 
     #==============================
     #========== Iologic

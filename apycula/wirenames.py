@@ -441,7 +441,7 @@ for i in range(4):
     hclknames_5a25a[131 + i]  = f'HCLK_MUX_EPSILON0{i}'
     hclknames_5a25a[135 + i]  = f'HCLK_MUX_EPSILON0{i + 4}'
     hclknames_5a25a[318 + i]  = f'HCLK_MUX_EPSILON1{i}'
-    hclknames_5a25a[412 + i]  = f'HCLK_MUX_EPSILON1{i + 4}'
+    hclknames_5a25a[322 + i]  = f'HCLK_MUX_EPSILON1{i + 4}'
     hclknames_5a25a[505 + i]  = f'HCLK_MUX_EPSILON2{i}'
     hclknames_5a25a[509 + i]  = f'HCLK_MUX_EPSILON2{i + 4}'
     hclknames_5a25a[692 + i]  = f'HCLK_MUX_EPSILON3{i}'
