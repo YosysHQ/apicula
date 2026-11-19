@@ -25,9 +25,13 @@ the fuse table rows that differ, are in the test output of
 - **I/O logic:** `CLKIDDRMUX_ECLK`/`CLKODDRMUX_ECLK=ECLK1`, `GSR=DISGSR`,
   `LSRIMUX`/`LSROMUX`, `ODDR` `OUTMODE`; GW5A `FCLKSEL*`.
 - **BSRAM:**
-  - pipelined (`READ_MODE=1`) output registers;
-  - byte enables (`BELB`/`BEHB`);
-  - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`.
+  - blocks whose `BSRAM_SP` fuses all sit on the two tiles right of the
+    main tile unpack to no cell from either bitstream. Seen with
+    `BLK_SEL_0=3'b111`, which sets no `CSA_*` fuse, and `BIT_WIDTH_0=8`;
+  - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`;
+  - GW5A-25A: nextpnr rejects `BIT_WIDTH_0` of 32/36 with a different
+    `BIT_WIDTH_1` ("The fix for SDP when ports A and B have different bit
+    widths has not yet been implemented").
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
 - **SSRAM:**
