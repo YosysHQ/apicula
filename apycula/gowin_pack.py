@@ -1010,8 +1010,9 @@ class Device:
             x, y = x_y
             self.io_banks[bank_idx] = BankDesc(x, y)
 
+        # the vendor's input clamp default is the first entry of the .ini clamp list: ON
         self.default_ibuf_attrs = [('PADDI', 'PADDI'), ('HYSTERESIS', 'NONE'), ('PULLMODE', 'UP'), ('SLEWRATE', 'SLOW'),
-                 ('DRIVE', '0'), ('CLAMP', 'OFF'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
+                 ('DRIVE', '0'), ('CLAMP', 'ON'), ('OPENDRAIN', 'OFF'), ('DIFFRESISTOR', 'OFF'),
                  ('VREF', 'OFF'), ('LVDS_OUT', 'OFF')]
         self.default_obuf_attrs = [('ODMUX_1', '1'), ('PULLMODE', 'UP'), ('SLEWRATE', 'FAST'),
                  ('DRIVE', '8'), ('HYSTERESIS', 'NONE'), ('CLAMP', 'OFF'),
@@ -1123,7 +1124,8 @@ class Device:
 
     def normalize_io_cell_attr(self, cell: CellDesc) -> CellDesc:
         """ Modify IO attrs """
-        refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE', 'OPEN_DRAIN': 'OPENDRAIN'}
+        refine_attrs = {'SLEW_RATE': 'SLEWRATE', 'PULL_MODE': 'PULLMODE', 'OPEN_DRAIN': 'OPENDRAIN',
+                        'PCI_CLAMP': 'CLAMP'}
         new_attrs = {}
         for attr, val in cell.attrs.items():
             new_attr, new_val = _convert_legacy_io_cell_attr(attr, val)
@@ -2228,12 +2230,19 @@ class Device:
         """ IN iologic attrs """
         attr_vals = []
         cell_parms = bel.cell.parms
+        # The LSRIMUX_0 and CLKOMUX_1 rules were checked against the vendor on GW1N/GW2A only
+        gw5 = chipdb.is_GW5_family(self.device_name)
 
         if bel.cell.typ not in {'IDDR', 'IDDRC'}:
             attr_vals.append(AttrVal('CLKIMUX_1', '1'))
-            attr_vals.append(AttrVal('LSRIMUX_0', '1'))
-            if cell_parms['INMODE'] == 'IDDRX8' or cell_parms['INMODE'] == 'DDRENABLE16':
-                attr_vals.append(AttrVal('LSRIMUX_0', '0'))
+            if gw5:
+                attr_vals.append(AttrVal('LSRIMUX_0', '1'))
+                if cell_parms['INMODE'] == 'IDDRX8' or cell_parms['INMODE'] == 'DDRENABLE16':
+                    attr_vals.append(AttrVal('LSRIMUX_0', '0'))
+            else:
+                # fusegenMem::setIolIDDR sets LSRIMUX_0=1 only for LSREN=true
+                lsr_en = self.iologic_main_cell(bel.cell).parms.get('LSREN', 'TRUE') == 'TRUE'
+                attr_vals.append(AttrVal('LSRIMUX_0', '1' if lsr_en else '0'))
             if cell_parms['INMODE'] == 'DDRENABLE16':
                 attr_vals.append(AttrVal('INMODE', 'DDRENABLE'))
                 attr_vals.append(AttrVal('ISI', 'ENABLE'))
@@ -2251,6 +2260,8 @@ class Device:
 
         attr_vals.append(AttrVal('LSROMUX_0', '0'))
         attr_vals.append(AttrVal('CLKIMUX', 'ENABLE'))
+        if not gw5:
+            attr_vals.append(AttrVal('CLKOMUX_1', '1'))
 
         # in fclk
         if bel.fclk in {'SPINE12', 'SPINE13'}:
@@ -2368,6 +2379,12 @@ class Device:
     def get_IOLOGICI_EMPTY_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
         iol_bel = self.make_IologicBelDesc(bel)
         attr_vals = self.common_iologic_handler(iol_bel)
+        # A standalone input IODELAY gets fusegenMem::initIolAttr's defaults, as
+        # measured on GW1N-9C and GW2A-18C vendor bitstreams. GW5A keeps its old rows.
+        if (not chipdb.is_GW5_family(self.device_name)
+                and bel.cell.attrs.get('IODELAY') == 'IN' and 'HAS_REG' not in bel.cell.attrs):
+            attr_vals = [av for av in attr_vals if av.attr != 'CLKOMUX']
+            attr_vals += [AttrVal('LSRIMUX_0', '0'), AttrVal('LSROMUX_0', '0'), AttrVal('CLKOMUX_1', '1')]
 
         av = self.set_iologic_attrvals(iol_bel, attr_vals)
         fuses = []

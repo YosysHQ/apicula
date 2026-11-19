@@ -24,13 +24,15 @@ def broken(prims, why):
 
 BROKEN = {
     # Apicula
-    **broken('IBUF OBUF TBUF IOBUF', 'I/O: CLAMP, DRIVE/OPENDRAIN, ODMUX and PULLMODE rows and unused-I/O bank '
+    **broken('IBUF OBUF TBUF IOBUF', 'I/O: DRIVE/OPENDRAIN, ODMUX and PULLMODE rows and unused-I/O bank '
              'fuses differ; SSTL/HSTL inputs decode as outputs'),
     **broken('TLVDS_IBUF TLVDS_OBUF TLVDS_TBUF TLVDS_IOBUF ELVDS_IBUF ELVDS_OBUF ELVDS_TBUF ELVDS_IOBUF',
              'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
     **broken('IDDR IDDRC ODDR ODDRC IDES4 IDES8 IDES10 IDES16 OSER16 IVIDEO OVIDEO IODELAY',
-             'I/O logic: GW5A FCLKSEL, LSRIMUX/LSROMUX rows (IDES, OSER16), ODDR OUTMODE; '
-             'no or wrong cell when unpacked'),
+             'I/O logic: on GW5A-25A, FCLKSEL and LSRIMUX_0/LSROMUX_0 rows, and IDES8, IDES10 and IVIDEO '
+             'unpack to no cell; ODDR OUTMODE; IDES16/OSER16 take GSR and the LSR mux from the auxiliary cell, '
+             'which has no GSREN/LSREN; on GW1N-9C the vendor moves the output pad off a VCCIO-locked bank '
+             '(IDES4, IDES8, IDES10, IODELAY); IODELAY unpacks to no cell, IDDR and IDDRC to each other'),
     **broken('OSER4 OSER8 OSER10', 'OSER: on GW5A-25A, FCLKSEL, LSROMUX_0, IOB PULLMODE/SLEWRATE and HCLK '
              'TO_IHCLK rows, and with OSER8 on an IOBB pad Apicula sets OUTMODE/CLKOMUX/WRFCLKSEL rows the vendor '
              'does not; on GW1N-9C the vendor moves the output pad off a VCCIO-locked bank, adding IOB '

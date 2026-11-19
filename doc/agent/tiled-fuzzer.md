@@ -19,11 +19,12 @@ the fuse table rows that differ, are in the test output of
     voltage (SSTL18 with HSTL18, SSTL33 with LVCMOS33);
   - unused-I/O `BANK_VCCIO` fuses, and bank-tile `IO_TYPE=…,IO_BANK` /
     `BLVDS…` rows;
-  - input `CLAMP`;
   - `DRIVE,OPENDRAIN`, `ODMUX`, `PULLMODE`;
   - GW5A output `ODMUX`/`DRIVE` rows (check `fuse_cell_offset` first).
-- **I/O logic:** `LSRIMUX`/`LSROMUX` (`IDES`, `OSER16`), `ODDR` `OUTMODE`;
-  GW5A `FCLKSEL*`. Fixed: the second half of a two-site primitive (an
+- **I/O logic:** `LSRIMUX`/`LSROMUX` and `GSR` on the pin sites of
+  `IDES16`/`OSER16` (read from nextpnr's auxiliary cell, which has no
+  `GSREN`/`LSREN`), `ODDR` `OUTMODE`; GW5A-25A `FCLKSEL*` and
+  `LSRIMUX_0`/`LSROMUX_0`. Fixed: the second half of a two-site primitive (an
   `IOLOGIC_DUMMY`, as in `OSER8`/`OSER10`) took `GSR` from its own, empty
   parameters instead of the main cell's `GSREN`, and `LSREN=false` left
   `LSROMUX_0=1` on `OSER4` and on the `DDRENABLE` half of `OSER8`/`OSER10`
