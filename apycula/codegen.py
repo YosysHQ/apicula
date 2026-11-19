@@ -31,9 +31,11 @@ class Module:
         return m
 
     def write(self, f):
+        # sorted: the order of a set of strings changes with PYTHONHASHSEED
+        inputs, outputs, inouts = sorted(self.inputs), sorted(self.outputs), sorted(self.inouts)
         f.write("module top(")
         first = True
-        for port in chain(self.inputs, self.outputs, self.inouts):
+        for port in chain(inputs, outputs, inouts):
             if not first:
                 f.write(", ")
             first = False
@@ -41,14 +43,14 @@ class Module:
             f.write(bare)
         f.write(");\n")
 
-        for port in self.inputs:
+        for port in inputs:
             f.write("input {};\n".format(port))
-        for port in self.outputs:
+        for port in outputs:
             f.write("output {};\n".format(port))
-        for port in self.inouts:
+        for port in inouts:
             f.write("inout {};\n".format(port))
 
-        for wire in self.wires:
+        for wire in sorted(self.wires):
             if wire in self.wire_aliases:
                 f.write("`define {} {}\n".format(wire, self.wire_aliases[wire]))
             else:
