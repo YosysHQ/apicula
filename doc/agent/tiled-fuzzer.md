@@ -76,6 +76,11 @@ the fuse table rows that differ, are in the test output of
   flip-flops that the vendor does not.
 - BEL is ignored on `CLKDIV`/`CLKDIV2`; on GW5A-25A there is no `CLKDIV_1` bel
   where the vendor uses `HCLKDIV1`. No bel for `BUFS`.
+- GW5A-25A `CLKDIV`/`CLKDIV2` clocked from an HCLK-pair pin (the harness clock
+  F2, `GCLKT_9B`): the chipdb describes the pin-to-HCLK path for E2 only
+  (`gw5_make_pin_to_hclk`), so nextpnr reaches HCLK over general wires and the
+  vendor through the pair IOB's `INCK_II` path (R37C33); the `IOB_UNKNOWN67`
+  row differs. With the clock on H1 or H11 both pass.
 
 **Yosys cell library**
 - Latches use `CLK`/`CE` where the vendor has `G`/`GE`.
@@ -99,6 +104,12 @@ the fuse table rows that differ, are in the test output of
   `IEM` needs a buffer (PR0018); `OSIDES32/64` need differential fast clocks
   (PR1113); `MUX2_MUX8`+ need `MUX4`… drivers (PA2068); `GW_JTAG` takes the JTAG
   pins (PR1079).
+- GW1N-9C `MIPI_IBUF*`: the vendor fails to place MIPI buffers (PR1082) when
+  the harness output pin shares a bank with them. On QFN88 bank 1 holds the MIPI
+  inputs, bank 2 the MIPI outputs and bank 3 is SiP-locked, so one of them pays;
+  the harness takes bank 1. nextpnr rejects `MIPI_IBUF*` anyway.
+- SiP-locked banks (GW1N-9C, GW1NS-4) get no I/O cases: the vendor moved
+  outputs constrained there to other pins (CT1136, #622).
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
 
@@ -179,6 +190,21 @@ design, to confirm a failure in isolation.
   wires is accepted, so bus ports are wired that way.
 - **The `.posp` file has no cell placements** in this IDE version, so vendor
   placement is checked through the `CT1094`/`CT1005` warnings instead.
+- **SiP-locked banks get neither harness pins nor I/O cases** (`package_pins`,
+  banks in `db.sip_cst`). The vendor moved outputs constrained to banks wired to
+  in-package memory to other pins (CT1136, #622), which showed up as
+  unattributed fuses and as I/O rows spilling into cases. Which VCCIO the
+  in-package memory sets on those banks is not traced.
+- **Harness pins in MIPI-output banks come last** (`pick_pins`): the vendor fails
+  to place `MIPI_OBUF` (PR1082) when the harness output pin shares its bank;
+  harness inputs there did not stop it (GW1N-9C). Sorting rather than filtering
+  keeps five harness inputs on GW1NS-4 QFN48P, which then has no plain pin left
+  for I/O cases (banks 0 and 3 are SiP-locked, bank 2 holds MIPI outputs).
+- **The harness clock goes on a clock-only true clock pin**: one whose only
+  functions are `GCLK*`, so no PLL input or feedback and no config pin, and
+  `GCLKT` before `GCLKC`. Measured on one pair only: on GW1N-9C pin 51
+  (`GCLKC_3`) made `DHCEN` differ from the vendor, while pin 52 (`GCLKT_3`)
+  matches. The PLL/config exclusion is a precaution, not a measured failure.
 
 ## Unpacker findings
 

@@ -265,10 +265,35 @@ def allocate(cases, sites):
 
 # ---------------------------------------------------------------- netlist
 
-def pick_pins(db, vendor_device, device, package):
+def package_pins(db, vendor_device, device, package):
+    """The package's pins, without the banks wired to in-package memory: the
+    vendor moved outputs constrained there to other pins (CT1136)."""
     pins = db.pinout.get(vendor_device, db.pinout[device])[package]
-    plain = sorted((p for p, (_, funcs) in pins.items() if not funcs), key=lambda p: int(p) if p.isdigit() else p)
-    clocks = [p for p, (_, funcs) in pins.items() if any(f.startswith('GCLK') for f in funcs)]
+    locked = {io_bank(db, r, c, ab) for _, r, c, ab, _ in db.sip_cst.get(vendor_device, {}).get(package, [])}
+    return {p: (name, funcs) for p, (name, funcs) in pins.items() if db.pin_bank.get(name) not in locked}
+
+
+def pick_pins(db, pins):
+    """Harness pins: an output, five inputs and a clock. Pins in banks with MIPI
+    output buffers come last: with the harness output in such a bank the vendor
+    fails to place MIPI_OBUF (PR1082). Inputs there are fine (GW1N-9C)."""
+    def mipi(name):
+        r, c, _ = gowin_unpack.tbrl2rc(db, name)
+        return 'mipi_obuf' in db.extra_func.get((r, c), {})
+
+    mipi_banks = {db.pin_bank.get(name) for name, _ in pins.values() if mipi(name)}
+    def in_mipi_bank(p):
+        return db.pin_bank.get(pins[p][0]) in mipi_banks
+
+    plain = sorted((p for p, (_, funcs) in pins.items() if not funcs),
+                   key=lambda p: (in_mipi_bank(p), int(p) if p.isdigit() else p))
+    # clock-only pins (no PLL or config function) first, then GCLKT before GCLKC:
+    # on GW1N-9C DHCEN differs from the vendor with the clock on pin 51 (GCLKC_3)
+    # and matches on pin 52 (GCLKT_3). Keeping the clock out of MIPI-output banks
+    # is a precaution, not a measured failure.
+    clocks = sorted((p for p, (_, funcs) in pins.items() if any(f.startswith('GCLK') for f in funcs)),
+                    key=lambda p: (in_mipi_bank(p), not all(f.startswith('GCLK') for f in pins[p][1]),
+                                   not any(f.startswith('GCLKT') for f in pins[p][1])))
     return {'clk': clocks[0], 'out': plain[0], 'in': plain[1:6]}
 
 
@@ -1479,9 +1504,10 @@ def fuzz(device, out, count=2, seed=0, jobs=1, prims=None, replay=None, log=prin
     vendor_device, part, package = DEVICES[device]
     db = chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{device}.msgpack.xz'))
     spec = ps.Primitives(device, vendor_device)
-    pins = pick_pins(db, vendor_device, device, package)
+    pinout = package_pins(db, vendor_device, device, package)
+    pins = pick_pins(db, pinout)
     rng = random.Random(seed)
-    sites = Sites(db, rng, pins, db.pinout.get(vendor_device, db.pinout[device])[package])
+    sites = Sites(db, rng, pins, pinout)
     if replay:
         batches = []
         for path in replay:
