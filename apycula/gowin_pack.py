@@ -2140,11 +2140,21 @@ class Device:
             return self.pnr.get_cell(cell.attrs['MAIN_CELL'])
         return cell
 
+    def iologic_lsr(self, cell: CellDesc) -> str:
+        """ GW5 LSRIMUX_0/LSROMUX_0: on unless the primitive has no RESET/CLEAR
+        or ties it to GND (fusegenMem::setIolLsrmux @0x308e660, IDE 1.9.10.03;
+        doc/agent/gw5-devices.md); a GND-tied port stays on $PACKER_GND """
+        conns = self.iologic_main_cell(cell).connections
+        bits = conns.get('RESET', []) + conns.get('CLEAR', [])
+        return '0' if all(self.pnr.is_gnd_net(bit) for bit in bits) else '1'
+
     def iologic_sr_param(self, cell: CellDesc, name: str) -> str:
         """ GSREN/LSREN: the cell's own (the OSER16/IDES16 pin cells), else the
-        main cell's, else the primitive's default. Checked on GW1N/GW2A only:
-        GW5A reads the main cell's """
-        if name in cell.parms and not chipdb.is_GW5_family(self.device_name):
+        main cell's, else the primitive's default. GW5 never reads them and
+        keeps GSR on (setGW5AIolAttrInIologic @0x3084010) """
+        if chipdb.is_GW5_family(self.device_name):
+            return 'TRUE'
+        if name in cell.parms:
             return cell.parms[name]
         main = self.iologic_main_cell(cell)
         prim = main.typ
@@ -2217,9 +2227,8 @@ class Device:
         # fusegenMem::setIolODDR sets LSROMUX_0=1 only for LSREN=true on the
         # pin site and the DDRENABLE site; ODDRX4/5 keep 1 as measured
         lsr_off = self.iologic_sr_param(bel.cell, 'LSREN') == 'FALSE'
-        # GW5A keeps the forced 0: the ODDRX8/DDRENABLE16 rule was checked on GW1N/GW2A only
-        if chipdb.is_GW5_family(self.device_name) and cell_parms['OUTMODE'] in {'ODDRX8', 'DDRENABLE16'}:
-            attr_vals.append(AttrVal('LSROMUX_0', '0'))
+        if chipdb.is_GW5_family(self.device_name):
+            attr_vals.append(AttrVal('LSROMUX_0', self.iologic_lsr(bel.cell)))
         elif lsr_off and cell_parms['OUTMODE'] in {'ODDRX2', 'DDRENABLE', 'DDRENABLE16'}:
             attr_vals.append(AttrVal('LSROMUX_0', '0'))
         elif cell_parms['OUTMODE'] != 'ODDRX1' or bel.cell.typ == 'ODDRC':
@@ -2254,15 +2263,14 @@ class Device:
         """ IN iologic attrs """
         attr_vals = []
         cell_parms = bel.cell.parms
-        # The LSRIMUX_0 and CLKOMUX_1 rules were checked against the vendor on GW1N/GW2A only
         gw5 = chipdb.is_GW5_family(self.device_name)
 
         if bel.cell.typ not in {'IDDR', 'IDDRC'}:
             attr_vals.append(AttrVal('CLKIMUX_1', '1'))
             if gw5:
-                attr_vals.append(AttrVal('LSRIMUX_0', '1'))
-                if cell_parms['INMODE'] == 'IDDRX8' or cell_parms['INMODE'] == 'DDRENABLE16':
-                    attr_vals.append(AttrVal('LSRIMUX_0', '0'))
+                # only the pin site follows the reset net, the DDRENABLE sites stay off
+                lsr = '0' if cell_parms['INMODE'] in {'DDRENABLE', 'DDRENABLE16'} else self.iologic_lsr(bel.cell)
+                attr_vals.append(AttrVal('LSRIMUX_0', lsr))
             else:
                 # fusegenMem::setIolIDDR sets LSRIMUX_0=1 only for LSREN=true
                 lsr_en = self.iologic_sr_param(bel.cell, 'LSREN') == 'TRUE'
@@ -2278,14 +2286,13 @@ class Device:
             attr_vals.append(AttrVal('LSRIMUX_0', '0'))
             attr_vals.append(AttrVal('INMODE', cell_parms['INMODE']))
         else:
-            attr_vals.append(AttrVal('LSRIMUX_0', 'UNKNOWN'))
+            attr_vals.append(AttrVal('LSRIMUX_0', self.iologic_lsr(bel.cell) if gw5 else 'UNKNOWN'))
             attr_vals.append(AttrVal('LSRMUX_LSR', 'SIG'))
             attr_vals.append(AttrVal('INMODE', cell_parms['INMODE']))
 
         attr_vals.append(AttrVal('LSROMUX_0', '0'))
         attr_vals.append(AttrVal('CLKIMUX', 'ENABLE'))
-        if not gw5:
-            attr_vals.append(AttrVal('CLKOMUX_1', '1'))
+        attr_vals.append(AttrVal('CLKOMUX_1', '1'))
 
         # in fclk
         if bel.fclk in {'SPINE12', 'SPINE13'}:
@@ -5423,8 +5430,6 @@ class GW2A_18C(GW2A):
 ################################################################
 class GW5A(Device):
     """ GW5A series """
-    # GW5A primitive.xml has no GSREN, and initParameter sets no default on GW5A.
-    _gsren_default_false = frozenset()
 
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
@@ -5499,6 +5504,16 @@ class GW5A(Device):
             bitmap = self.create_adc_slot(idx)
             self.set_slot_bits(bitmap, bits)
         return
+
+    #==============================
+    #========== Iologic
+    #==============================
+    def get_IOLOGIC_DUMMY_fuses(self, bel: BelDesc) -> list[CellFuseBits]:
+        # OSER8 has no aux cell in the vendor's GW5A-25A and GW5AST-138C
+        # bitstreams (doc/agent/gw5-devices.md)
+        if self.iologic_main_cell(bel.cell).parms.get('OUTMODE') == 'ODDRX4':
+            return []
+        return super().get_IOLOGIC_DUMMY_fuses(bel)
 
     #==============================
     #========== PIPs
@@ -6471,17 +6486,18 @@ class GW5A_25A(GW5A):
             attr_vals.append(AttrVal('FCLKSEL4', 'HCLK3'))
 
         cell_outmode = cell_parms['OUTMODE']
+        lsr = self.iologic_lsr(bel.cell)
         attr_vals.append(AttrVal('LSRIMUX_0', '0'))
         if cell_outmode in {'ODDRX1', 'ODDRX2', 'ODDRX4'}:
             attr_vals.append(AttrVal('CLKOMUX', 'ENABLE'))
             attr_vals.append(AttrVal('OCLKCE', 'CE'))
-            attr_vals.append(AttrVal('LSROMUX_0', '0'))
+            attr_vals.append(AttrVal('LSROMUX_0', lsr))
             attr_vals.append(AttrVal('OUTMODE', cell_outmode))
         elif cell_outmode in {'ODDRX5'}: # main cell
             attr_vals.append(AttrVal('HWL', 'TRUE'))
             attr_vals.append(AttrVal('CLKOMUX', 'ENABLE'))
             attr_vals.append(AttrVal('CLKOMUX_CLK', 'SIG'))
-            attr_vals.append(AttrVal('LSROMUX_0', 'UNKNOWN'))
+            attr_vals.append(AttrVal('LSROMUX_0', lsr))
             attr_vals.append(AttrVal('OCLKCE', 'CE'))
             attr_vals.append(AttrVal('OUTMODE', cell_outmode))
         elif cell_outmode in {'DDRENABLE'}: # aux cell
@@ -6494,7 +6510,7 @@ class GW5A_25A(GW5A):
                 attr_vals.append(AttrVal('OUTMODE', 'UNKNOWN'))
                 attr_vals.append(AttrVal('CLKOMUX', 'ENABLE'))
                 attr_vals.append(AttrVal('CLKOMUX_CLK', 'SIG'))
-                attr_vals.append(AttrVal('LSROMUX_0', 'UNKNOWN'))
+                attr_vals.append(AttrVal('LSROMUX_0', lsr))
                 attr_vals.append(AttrVal('OUTCLK', 'ENABLE'))
                 attr_vals.append(AttrVal('OCLKCE', 'CE'))
         elif cell_outmode == 'VIDEOTX':
@@ -6536,7 +6552,9 @@ class GW5A_25A(GW5A):
             attr_vals.append(AttrVal('FCLKSEL4', 'HCLK3'))
 
         attr_vals.append(AttrVal('LSRMUX_LSR', 'SIG'))
-        attr_vals.append(AttrVal('LSRIMUX_0', '0'))
+        # only the pin site follows the reset net, the DDRENABLE site stays off
+        lsr = '0' if cell_parms['INMODE'] == 'DDRENABLE' else self.iologic_lsr(bel.cell)
+        attr_vals.append(AttrVal('LSRIMUX_0', lsr))
         attr_vals.append(AttrVal('LSROMUX_0', '0'))
         cell_inmode = cell_parms['INMODE']
         if cell_inmode in {'IDDRX1', 'IDDRX2', 'IDDRX4', 'IDDRX5'}:

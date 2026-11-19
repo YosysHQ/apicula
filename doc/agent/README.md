@@ -13,7 +13,7 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
 - [fse-format.md](fse-format.md): `.fse` table types, per-device layouts and open
   questions.
 - [pll.md](pll.md): how the vendor configures PLLs, compared with `gowin_pack`.
-- [gw5-devices.md](gw5-devices.md): where GW5AT-60B and GW5AST-138C differ.
+- [gw5-devices.md](gw5-devices.md): where GW5AT-60B and GW5AST-138C differ, and the GW5 I/O logic LSR/GSR rule.
 - [gw5a-hclk-pins.md](gw5a-hclk-pins.md): GW5A-25A clock pins that reach HCLK
   through a pair IOB, and the vendor tables behind them.
 - [bsram.md](bsram.md): BSRAM handlers compared with `gowin_pack`.
