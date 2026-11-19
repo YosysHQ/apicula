@@ -40,6 +40,9 @@ BROKEN = {
     **broken('ALU', 'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
     **broken('ALU54D MULT9X9 MULT18X18 MULTALU18X18 PADD9 PADD18',
              'DSP: input register muxes (AIRMUX/BIRMUX), RSTGEN muxes, pre-adder rows'),
+    **broken('MULTADDALU18X18', 'DSP: the vendor and Apicula configure different pairs of the macro (vendor '
+             'PRAD0 rows, Apicula PRAD1, AIRMUX/BIRMUX), seen on GW2A-18C with all parameters omitted; the harness '
+             'pins only the macro (DSP_R<row>[n][A])'),
     **broken('MULT12X12 MULT27X36 MULTADDALU12X12 MULTALU27X18',
              'GW5A DSP: MULT_RESET_MODE, CASO, CE muxes, PRELOAD_BIT, DYN_P_ADDSUB rows; omitted ACC_SEL and '
              'C_SEL pack no row'),
