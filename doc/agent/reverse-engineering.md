@@ -35,5 +35,7 @@ them when updating `apycula/attrids.py`.
 | `gowin_extract.py check-attrids` | Compares `apycula/attrids.py` with vendor names |
 | `gowin_attr_sites.py` | Lists attribute assignments with approximate guards; research aid, output not committed |
 | `gowin_decompile.py` | Decompiles named functions with Ghidra, applying Gowin enums, parameter structs and signatures; no full analysis needed |
+| `gowin_primitives.py` | Dumps primitive ports, parameters and allowed values from `primitive.xml`. See [primitive-params.md](primitive-params.md) |
+| `tiled_fuzzer.py` | Places Hypothesis-generated primitive instances in one design, runs the vendor and Apicula, and reports fuse differences per instance; `tests/test_fuzz.py` runs it per device in CI. See [tiled-fuzzer.md](tiled-fuzzer.md) |
 | `chipdb_compare.py` | Content comparison of chipdb directories |
 | `timing/` | Timing research: list old `.tm` record fields from the getters, parse the GW5A `.tm` block, rebuild IDE routes from its bitstream, compare IDE, reimplemented vendor and nextpnr delays. See [timing.md](timing.md) |

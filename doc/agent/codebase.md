@@ -18,6 +18,19 @@ Build the chip databases (needs the IDE version in `GWVERSION`):
     export GOWINHOME=/path/to/gowin
     PATH=$PWD/.venv/bin:$PATH make -j4
 
+No IDE installed? The Docker image `pepijndevos/apicula:1.9.10.03` (the one CI
+uses) contains it at `/usr/src/gowin`, with `gw_sh` already patched. The Gowin CDN
+link in the `Dockerfile` returns 404, so pull the image instead. In a container
+without a running Docker daemon, start `dockerd` first. To use the IDE on the
+host, copy it out:
+
+    cid=$(docker create pepijndevos/apicula:1.9.10.03)
+    docker cp $cid:/usr/src/gowin/. /opt/gowin && docker rm $cid
+    export GOWINHOME=/opt/gowin
+
+`make` then builds a chipdb in seconds, and `codegen.Pnr` can run vendor place
+and route.
+
 Build the examples, or one of them:
 
     cd examples

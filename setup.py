@@ -24,6 +24,7 @@ setuptools.setup(
     ],
     extras_require={
         'pure': ['msgpack', 'cattrs'],
+        'fuzz': ['hypothesis', 'pytest'],
     },
     python_requires='>=3.9',
     package_data={

@@ -185,7 +185,9 @@ def get_latch_type(dff_idx, in_attrs):
     if 'CLKMUX_CLK' in in_attrs.keys():
         attrs['CLKMUX_CLK'] = get_attrval_name(in_attrs['CLKMUX_CLK'])
     else:
-        attrs['CLKMUX_CLK'] = 'SIG'
+        # The CLS fuse of (REGMODE=LATCH, CLKMUX_CLK=SIG) is the one of
+        # (REGMODE=FF, CLKMUX_CLK=INV), so a latch without it has an inverted gate
+        attrs['CLKMUX_CLK'] = 'INV'
     if 'SRMODE' in in_attrs.keys():
         attrs['SRMODE'] = get_attrval_name(in_attrs['SRMODE'])
     else:
@@ -256,7 +258,18 @@ def parse_attrvals(tile, logicinfo_table, fuse_table, attrname_table, tableName)
     # find candidates from fuse table
     # the set bits are more unique
     attrvals = set()
-    cnd = {av: bits for av, bits in fuse_table.items() if is_pos_key(av) and bits.issubset(set_bits)}
+    # Rows keyed on a single attribute value. The vendor sets the fuses of every
+    # row whose keys all hold, so an attribute value whose own row's fuses are
+    # not set is not present. This separates rows with identical fuses, such as
+    # (REGMODE=FF, CLKMUX_CLK=INV) and (REGMODE=LATCH, CLKMUX_CLK=SIG) in CLS
+    # tables, where only REGMODE=LATCH alone has a fuse of its own.
+    single = {}
+    for av, bits in fuse_table.items():
+        keys = [k for k in av if k]
+        if len(keys) == 1 and keys[0] > 0:
+            single[keys[0]] = bits
+    cnd = {av: bits for av, bits in fuse_table.items() if is_pos_key(av) and bits.issubset(set_bits)
+           and all(single.get(k, set()).issubset(set_bits) for k in av if k > 0)}
     for av, bits in cnd.items():
         keep = True
         for bt in cnd.values():
@@ -338,12 +351,6 @@ _iologic_mode = {
 # BSRAM has 3 cells: BSRAM, BSRAM0 and BSRAM1
 # { (row, col) : idx }
 _bsram_cells = {}
-def get_bsram_main_cell(db, row, col, typ):
-    if typ[-4:] == '_AUX':
-        col -= 1
-        if 'BSRAM_AUX' in db[row, col].bels:
-            col -= 1
-    return row, col
 
 # The DSP has 9 cells: the main one and a group of auxiliary ones.
 def get_dsp_main_cell(db, row, col, typ):
@@ -419,16 +426,19 @@ def parse_tile_(db, row, col, tile, bm=None, default=True, noiostd = True):
                 bels[name] = modes
             continue
         if name.startswith("BSRAM"):
-            # disabled BSRAM cells have no fuse tables
-            if 'BSRAM_SP' not in db.shortval[tiledata.ttyp]:
+            # The block spans the main tile and two aux tiles to its right. A
+            # configuration can set fuses on the aux tiles only, so the main tile
+            # looks at all three. bm holds only tiles with bits set, so this
+            # relies on the main tile having bits of its own (its routing).
+            # Disabled BSRAM cells have no fuse tables.
+            if name != "BSRAM" or bm is None:
                 continue
-            idx = _bsram_cells.setdefault(get_bsram_main_cell(db, row, col, name), len(_bsram_cells))
-            #print(row, col, name, idx, tiledata.ttyp)
-            attrvals = parse_attrvals(tile, db.rev_logicinfo('BSRAM'), db.shortval[tiledata.ttyp]['BSRAM_SP'], attrids.bsram_attrids, "BSRAM")
-            if not attrvals:
-                continue
-            #print(row, col, name, idx, tiledata.ttyp, attrvals)
-            bels[f'{name}{idx}'] = {}
+            for c in range(col, col + 3):
+                ttyp = db[row, c].ttyp
+                if (row, c) in bm and 'BSRAM_SP' in db.shortval[ttyp] and parse_attrvals(bm[row, c], db.rev_logicinfo('BSRAM'), db.shortval[ttyp]['BSRAM_SP'], attrids.bsram_attrids, "BSRAM"):
+                    idx = _bsram_cells.setdefault((row, col), len(_bsram_cells))
+                    bels[f'{name}{idx}'] = {}
+                    break
             continue
         if name.startswith("ALU54D"):
             continue
@@ -995,10 +1005,10 @@ def tile2verilog(dbrow, dbcol, bels, pips, clock_pips, mod, cst, db):
                         disable_oddr = False
                     continue
                 if param == 'CLKODDRMUX_ECLK':
-                    eclk == val
+                    eclk = val
                     continue
                 if param == 'CLKIDDRMUX_ECLK':
-                    eclk == val
+                    eclk = val
                     continue
                 iol_params[param] = val
             name = f"R{row}C{col}_{iol_mode}_{idx}"
