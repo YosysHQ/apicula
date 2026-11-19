@@ -359,13 +359,19 @@ class Primitives:
             n = 1 << (int(prim[-1]) - 4)
             return st.lists(st.integers(1, 0xfffe), min_size=n, max_size=n, unique=True).map(
                 lambda inits: Case(prim, tuple((f'INIT{j}', f"16'h{v:04x}") for j, v in enumerate(inits))))
-        fields = {}
+        # Each parameter is set or omitted, as designs do, so gowin_pack's
+        # defaults are tested too. Kept: the fixed parameters, and a LUT's
+        # INIT, without which the tools fold the LUT away.
+        required, optional, defaults = {}, {}, {}
         for name, param in self.spec[prim]['params'].items():
+            defaults[name] = default_literal(param)
             fixed = self.fixed(name, param)
             if fixed is not None:
-                fields[name] = st.just(fixed)
+                required[name] = st.just(fixed)
+            elif kind == 'lut' and name == 'INIT':
+                required[name] = param_strategy(param).map(lambda v, p=param: literal(p, v))
             else:
-                fields[name] = param_strategy(param).map(lambda v, p=param: literal(p, v))
+                optional[name] = param_strategy(param).map(lambda v, p=param: literal(p, v))
         # parameters drawn together to satisfy frequency rules, and fixups for
         # rules between parameters
         extra, fixup = st.just({}), (lambda d: d)
@@ -376,9 +382,16 @@ class Primitives:
         elif prim == 'PLLA':
             extra, fixup = plla_dividers(), plla_fixup
         rules = [ok for pat, ok, _ in RULES if re.match(pat, prim)]
-        return (st.tuples(st.fixed_dictionaries(fields), extra).map(lambda t: fixup({**t[0], **t[1]}))
-                .filter(lambda d: all(ok(d) for ok in rules))
-                .map(lambda d: Case(prim, tuple(sorted(d.items())))))
+
+        # the fixup and rules see omitted parameters at their default; a
+        # parameter the fixup moves off its default is set
+        def case(drawn):
+            full = fixup({**defaults, **drawn})
+            return full, Case(prim, tuple(sorted((k, v) for k, v in full.items() if k in drawn or v != defaults[k])))
+        return (st.tuples(st.fixed_dictionaries(required, optional=optional), extra)
+                .map(lambda t: case({**t[0], **t[1]}))
+                .filter(lambda t: all(ok(t[0]) for ok in rules))
+                .map(lambda t: t[1]))
 
 
 def draw(strategy, n, seed=0):

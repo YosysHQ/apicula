@@ -13,6 +13,11 @@ Trivial ones were fixed on the way; these were not. The failing cases, with
 the fuse table rows that differ, are in the test output of
 `tests/test_fuzz.py`, where these are the known broken primitives.
 
+A failing case with omitted parameters may be a default bug. Replay it as a
+pair, once with the parameters omitted and once with them set to their
+`primitive.xml` defaults (`--replay`). If only the omitted one fails, the default
+in `gowin_pack` is wrong; if both fail, the default is not the cause.
+
 **`gowin_pack`**
 - **I/O:**
   - one `IO_TYPE` per bank, where the vendor allows any standards of one
@@ -42,14 +47,19 @@ the fuse table rows that differ, are in the test output of
   - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`;
   - GW5A-25A: nextpnr rejects `BIT_WIDTH_0` of 32/36 with a different
     `BIT_WIDTH_1` ("The fix for SDP when ports A and B have different bit
-    widths has not yet been implemented").
+    widths has not yet been implemented");
+  - byte enables (`BELB`/`BEHB`) of the 16/18-bit port of a `DPB`/`DPX9B`
+    with mixed port widths.
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
 - **DSP:**
   - GW1N/GW2A input register muxes (`AIRMUX`/`BIRMUX`), `RSTGEN*MUX`, and the
     pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows;
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
-  - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`.
+  - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`;
+  - GW5A `MULTADDALU12X12`/`MULTALU27X18` with `ACC_SEL` or `C_SEL` omitted: the
+    vendor sets the `ACC_SEL=0`/`C_SEL=1` rows, Apicula's integer defaults set
+    none.
 - **Missing handler, fixed:** `FLASH96K` had no `get_…_fuses` method, so GW1N-1
   stopped with `AttributeError`. The vendor sets no fuses outside routing for it.
 - **GW5A `ADC`:** Apicula sets a `5A_PCLK_ENABLE` fuse the vendor does not.
@@ -127,6 +137,11 @@ the fuse table rows that differ, are in the test output of
    one primitive instance (a "case"). Cases are drawn per primitive, so each gets
    equal coverage. Hypothesis is used only to generate values; nothing is
    shrunk, because a case is already a single primitive.
+   - **Parameters are set or omitted** at random, as in real designs, so the
+     defaults `gowin_pack` falls back on are tested too. Always set: the fixed
+     parameters (`DEVICE`, `INIT_RAM_*`) and a LUT's `INIT`, without which the
+     LUT is folded away. Fixups and `RULES` see an omitted parameter at its
+     `primitive.xml` default.
 2. **Batch.** Each case gets a site of its kind (a `Kind` class in
    `tiled_fuzzer.py`; see "Site kinds"). A slice holds two LUT cases or one DFF
    case. Cases that must be alone get a design each.

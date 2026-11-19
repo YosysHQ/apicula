@@ -908,7 +908,8 @@ class Alu(Kind):
         return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(cell['params'].get('ALU_MODE'))}}
 
     def generated(self, case, conns, spec):
-        return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params)['ALU_MODE'])}}
+        # omitted: primitive.xml's default
+        return {'cell': 'ALU', 'params': {'ALU_MODE': literal_value(dict(case.params).get('ALU_MODE', '0'))}}
 
 
 class Ssram(Kind):
