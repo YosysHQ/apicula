@@ -35,8 +35,6 @@ BROKEN = {
              'DSP: input register muxes (AIRMUX/BIRMUX), RSTGEN muxes, pre-adder rows'),
     **broken('MULT12X12 MULT27X36 MULTADDALU12X12 MULTALU27X18',
              'GW5A DSP: MULT_RESET_MODE, CASO, CE muxes, PRELOAD_BIT, DYN_P_ADDSUB rows'),
-    **broken('RAM16SDP1 RAM16SDP2 RAM16SDP4 ROM16',
-             'SSRAM: LSR mux rows, no RAM16SDP2 handler, RAM16SDP1 does not route, ROM16 becomes a LUT'),
     **broken('SDPB SDPX9B', 'GW5A DBLWB=X36; GW5A-25A: nextpnr rejects BIT_WIDTH_0 of 32/36 with a different '
              'BIT_WIDTH_1'),
     **broken('rPLL', 'rPLL: FBSEL on GW2A; the unpacker does not invert several parameters'),
@@ -46,7 +44,9 @@ BROKEN = {
     **broken('TLVDS_IBUF_ADC', 'gowin_pack rejects the ADC bus of the pins the vendor chose'),
     **broken('I3C_IOBUF', 'I3C: DRIVE/OPENDRAIN rows; nextpnr: pin not I3C capable on GW5A'),
     **broken('MIPI_OBUF', 'MIPI: Apicula sets an IOB row where the vendor sets a bank row'),
+    **broken('RAM16SDP1', 'gowin_pack has no RAM16SDP1 handler'),
     # nextpnr
+    **broken('ROM16', 'nextpnr: ROM16 becomes a LUT'),
     **broken('SDP DP ROM pROM DPX9 SDPX9 ROMX9', 'nextpnr: unsupported BSRAM type, or bel type mismatch'),
     **broken('PLL BUFS RAM16S1 RAM16S2 RAM16S4 LUT5 LUT6 LUT7 LUT8 MUX2 IDES14 IDES32 OSER14 DDRDLL DHCE DCE '
              'OTP SAMB CMSERA IBUF_R IOBUF_R ELVDS_IBUF_R ELVDS_IOBUF_R ELVDS_IBUF_MIPI MIPI_IBUF_HS MIPI_IBUF_LP',

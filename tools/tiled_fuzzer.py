@@ -912,6 +912,10 @@ class Ssram(Kind):
             return 'RAM16'
         return f'CLS{site[2]}'
 
+    # an undriven WRE is a constant, which the vendor folds into the LSR mux
+    def source(self, case, port, conns):
+        return 'data' if port == 'WRE' else super().source(case, port, conns)
+
     def from_placed(self, db, case, bel):
         m = re.fullmatch(r'X(\d+)Y(\d+)/(RAM16SDP4|LUT)(\d?)', bel or '')
         if not m:
@@ -923,9 +927,10 @@ class Ssram(Kind):
 
     def describe(self, dec, case, site):
         if site[2] == 'RAM16':
-            # gowin_unpack writes every SSRAM as RAM16SDP4; compare INIT
+            # gowin_unpack writes every SSRAM as RAM16SDP4; compare the case's INITs
             cell = dec.named(site, 'RAM16')
-            params = literals(cell['params'].items()) if cell else {}
+            params = {k: v for k, v in literals(cell['params'].items()).items()
+                      if k in dict(case.params)} if cell else {}
         else:
             # nextpnr implements ROM16 as a LUT; its INIT is the ROM contents
             cell = dec.named(site, f'LUT4_{slice_index(site)}')

@@ -1386,7 +1386,7 @@ class Device:
 
         fuses = []
         for i in range(4):
-            init = str(bel.cell.parms[f'INIT_{i}'])
+            init = str(bel.cell.parms.get(f'INIT_{i}', '0' * 16))
             if len(init) > 16:
                 init = init[-16:]
             else:
@@ -4590,6 +4590,14 @@ class GW1N(Device):
         raise Exception("The GW1N series does not support TLVDS IOBUF")
 
     #==============================
+    #========== SSRAM
+    #==============================
+    # nextpnr places every SSRAM variant on the RAM16SDP4 bel. Here and on
+    # GW2A-18C the vendor fills all four LUTs, an absent INIT_n with zeros; it
+    # ignores INIT on GW2A-18 and uses other LUTs on GW5AT/GW5AST.
+    get_RAM16SDP2_fuses = Device.get_RAM16SDP4_fuses
+
+    #==============================
     #========== Oscillators
     #==============================
 
@@ -5339,6 +5347,9 @@ class GW2A_18C(GW2A):
     """ GW2A-18C chip. Tangnano20k board """
     def __init__(self, cli_args: CliArgs, pnr: Netlist):
         super().__init__(cli_args, pnr)
+
+    # as on GW1N
+    get_RAM16SDP2_fuses = Device.get_RAM16SDP4_fuses
 
     #==============================
     #========== Misc
