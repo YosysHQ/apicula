@@ -2133,6 +2133,15 @@ class Device:
             return self.pnr.get_cell(cell.attrs['MAIN_CELL'])
         return cell
 
+    def iologic_sr_param(self, cell: CellDesc, name: str) -> str:
+        """ GSREN/LSREN: the cell's own (the OSER16/IDES16 pin cells), else the
+        main cell's. The OSER16/IDES16 helper in the next tile has neither and
+        stays at the default, as the vendor's does. Checked on GW1N/GW2A only:
+        GW5A reads the main cell's """
+        if name not in cell.parms or chipdb.is_GW5_family(self.device_name):
+            cell = self.iologic_main_cell(cell)
+        return cell.parms.get(name, 'TRUE')
+
     def set_iologic_bel_fclk(self, bel: IologicBelDesc) -> IologicBelDesc:
         """ HCLK and clock spines have same numbers in the tables """
         cell = self.iologic_main_cell(bel.cell)
@@ -2175,7 +2184,7 @@ class Device:
         val = cell_parms.get('HWL', 'FALSE')
         if val == 'TRUE':
             attr_vals.append(AttrVal('UPDATE', 'SAME'))
-        val = self.iologic_main_cell(bel.cell).parms.get('GSREN', 'TRUE')
+        val = self.iologic_sr_param(bel.cell, 'GSREN')
         if val == 'TRUE':
             attr_vals.append(AttrVal('GSR', 'ENGSR'))
         else:
@@ -2193,10 +2202,11 @@ class Device:
 
         # fusegenMem::setIolODDR sets LSROMUX_0=1 only for LSREN=true on the
         # pin site and the DDRENABLE site; ODDRX4/5 keep 1 as measured
-        lsr_off = self.iologic_main_cell(bel.cell).parms.get('LSREN', 'TRUE') == 'FALSE'
-        if cell_parms['OUTMODE'] == 'ODDRX8' or cell_parms['OUTMODE'] == 'DDRENABLE16':
+        lsr_off = self.iologic_sr_param(bel.cell, 'LSREN') == 'FALSE'
+        # GW5A keeps the forced 0: the ODDRX8/DDRENABLE16 rule was checked on GW1N/GW2A only
+        if chipdb.is_GW5_family(self.device_name) and cell_parms['OUTMODE'] in {'ODDRX8', 'DDRENABLE16'}:
             attr_vals.append(AttrVal('LSROMUX_0', '0'))
-        elif lsr_off and cell_parms['OUTMODE'] in {'ODDRX2', 'DDRENABLE'}:
+        elif lsr_off and cell_parms['OUTMODE'] in {'ODDRX2', 'DDRENABLE', 'DDRENABLE16'}:
             attr_vals.append(AttrVal('LSROMUX_0', '0'))
         elif cell_parms['OUTMODE'] != 'ODDRX1' or bel.cell.typ == 'ODDRC':
             attr_vals.append(AttrVal('LSROMUX_0', '1'))
@@ -2241,7 +2251,7 @@ class Device:
                     attr_vals.append(AttrVal('LSRIMUX_0', '0'))
             else:
                 # fusegenMem::setIolIDDR sets LSRIMUX_0=1 only for LSREN=true
-                lsr_en = self.iologic_main_cell(bel.cell).parms.get('LSREN', 'TRUE') == 'TRUE'
+                lsr_en = self.iologic_sr_param(bel.cell, 'LSREN') == 'TRUE'
                 attr_vals.append(AttrVal('LSRIMUX_0', '1' if lsr_en else '0'))
             if cell_parms['INMODE'] == 'DDRENABLE16':
                 attr_vals.append(AttrVal('INMODE', 'DDRENABLE'))
