@@ -16,6 +16,8 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
 - [gw5-devices.md](gw5-devices.md): where GW5AT-60B and GW5AST-138C differ, and the GW5 I/O logic LSR/GSR rule.
 - [gw5a-hclk-pins.md](gw5a-hclk-pins.md): GW5A-25A clock pins that reach HCLK
   through a pair IOB, and the vendor tables behind them.
+- [logic-tile.md](logic-tile.md): how LUTs, DFFs, the wide-LUT muxes and SEL connect
+  inside a logic tile.
 - [bsram.md](bsram.md): BSRAM handlers compared with `gowin_pack`.
 - [timing.md](timing.md): how the IDE computes delays, the `.tm` formats, and how
   Apicula's and nextpnr's timing compare with it.
