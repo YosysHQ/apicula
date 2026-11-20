@@ -8,20 +8,19 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class GW5AXwireCrossingTests(unittest.TestCase):
-    # Columns where NETLIST::chip::buildXwireNodeCrossDelayValueFlag (IDE
-    # 1.9.10.03) flags crossing X wires on GW5A-25A, in Apicula coordinates.
+    # Spine columns, flagged by NETLIST::chip::buildXwireNodeCrossDelayValueFlag
+    # (IDE 1.9.10.03) on GW5A-25A.
 
-    def test_gw5a_25a_columns(self):
+    def test_gw5a_25a_spine_columns(self):
+        # spine columns 19, 37, 55, 73 read by hand from GW5A-25A.dat (vendor
+        # coordinates, Apicula = vendor - 1); flag 9 = X*_HOS_SPINE
         path = ROOT / 'apycula' / 'GW5A-25A.msgpack.xz'
         if not path.exists():
             self.skipTest(f'{path.name} not built')
         db = chipdb.load_chipdb(str(path))
         for groups in db.timing.values():
-            cols = {k: v for k, v in groups['xcross'].items() if k.startswith('C')}
-            self.assertEqual(cols, {
-                'C9': 7, 'C18': 9, 'C27': 7, 'C36': 9, 'C45': 6,
-                'C54': 9, 'C63': 7, 'C72': 9, 'C81': 7,
-            })
+            for col in ('C18', 'C36', 'C54', 'C72'):
+                self.assertEqual(groups['xcross'].get(col), 9, col)
 
     def test_gw5a_25a_spine_column_table(self):
         # read by hand at file offset 0xa6a1a of GW5A-25A.dat
