@@ -154,8 +154,8 @@ def gw5a_xwire_crossings(db, dat):
 
     NETLIST::chip::buildXwireNodeCrossDelayValueFlag (IDE 1.9.10.03) flags every
     wire segment that crosses one of these, with an XWIRE_DELAY_VALUE_FLAG: 2 for
-    BSRAM rows (VBUF_EBR), 4 for DSP rows (VBUF_DSP), 7 for the DSR repeater
-    columns (HOS_RPT), 9 for the spine columns (HOS_SPINE) and 6 for the VIQ
+    BSRAM rows (VBUF_EBR), 4 for DSP rows (VBUF_DSP), 9 for the spine columns
+    (HOS_SPINE), 7 for the DSR repeater columns (HOS_RPT) and 6 for the VIQ
     column (HBUF_VIQ), in that order, later ones overwriting earlier ones. A
     segment crosses row or column p when it lies on the other side of the boundary
     between p and p + 1 from its root. Returned as {'R<row>': flag, 'C<col>': flag}
@@ -170,11 +170,12 @@ def gw5a_xwire_crossings(db, dat):
             res[f'R{y}'] = 2
     for y in rows_with('DSP'):
         res[f'R{y}'] = 4
-    # chip::getSpineColumnLoc is not decoded; dat_parser reads zeros there, which
-    # is either unused (-1 in the vendor's check) or a wrong offset.
+    spine = [c for c in dat.gw5aStuff['SpineColumn'] if c != -1]  # chip::getSpineColumnLoc
+    for c in spine:
+        res[f'C{c - 1}'] = 9
     viq = dat.grid.center_x
     for c in range(10, dat.grid.num_cols - 10, 9):  # chip::getDSRRepeaterColumnLoc
-        if c != viq:
+        if c != viq and c not in spine:
             res[f'C{c - 1}'] = 7
     res[f'C{viq - 1}'] = 6
     return res
