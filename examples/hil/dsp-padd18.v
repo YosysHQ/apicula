@@ -1,10 +1,10 @@
 `default_nettype none
 // A (0xf12) travels from the first to the last PADD18.
 // Registers at A and B are turned on, and addition occurs only in the first
-// primitive, all others are subtracted.  module idsp(input wire clk, input
+// primitive, all others are subtracted.  module dsp_padd18(input wire clk, input
 // wire reset, 
 
-module idsp(input wire clk, input wire reset, 
+module dsp_padd18(input wire clk, input wire reset, 
 	output wire [63:0] product, 
 	output wire [63:0] product1, 
 	output wire [63:0] product2, 
@@ -118,7 +118,3 @@ module idsp(input wire clk, input wire reset,
 	defparam padd18_4.SOREG=1'b0;
 	defparam padd18_4.PADD_RESET_MODE="SYNC";
 endmodule
-
-`define FIRMWARE "riscv-firmware/padd18.hex"
-`include "dsp-riscv.v"
-

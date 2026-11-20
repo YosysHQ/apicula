@@ -7,7 +7,7 @@
 // what happens when A=0xf12 reaches the N2 primitive and 0x8f12 is subtracted
 // from it.
 
-module idsp(input wire clk, input wire reset, 
+module dsp_padd9(input wire clk, input wire reset, 
 	output wire [63:0] product, 
 	output wire [63:0] product1, 
 	output wire [63:0] product2, 
@@ -120,7 +120,3 @@ module idsp(input wire clk, input wire reset,
 	defparam padd_4.SOREG=1'b0;
 	defparam padd_4.PADD_RESET_MODE="SYNC";
 	endmodule
-
-`define FIRMWARE "riscv-firmware/padd9.hex"
-`include "dsp-riscv.v"
-

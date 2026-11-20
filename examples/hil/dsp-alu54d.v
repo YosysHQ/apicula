@@ -2,7 +2,7 @@
 // alu0 mode 0 - simple substraction with accumulator in C
 // alu1 mode 1 - addition with CASI and accumulator in A
 // alu2 mode 2 - addition with CASI
-module idsp(input wire clk, input wire reset,
+module dsp_alu54d(input wire clk, input wire reset,
 	output wire [63:0] product, 
 	output wire [63:0] product1, 
 	output wire [63:0] product2, 
@@ -95,7 +95,3 @@ ALU54D alu2(
 	defparam alu2.ALUD_MODE=2;
 	defparam alu2.ALU_RESET_MODE="SYNC";
 endmodule
-
-`define FIRMWARE "riscv-firmware/alu54d.hex"
-`include "dsp-riscv.v"
-
