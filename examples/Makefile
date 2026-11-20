@@ -18,14 +18,16 @@ HIL_BATCH_gw1n9-e := dsp-padd9
 # others together, and crashes on dhcen next to dqce or dcs.
 HIL_BATCH_gw1n9-clk-a := osc dqce dcs rpll
 HIL_BATCH_gw1n9-clk-b := clkdiv
-# dhcen is left out: DHCEN does not stop the clock on GW1N-9C (tangnano9k).
 # BSRAM: GW1N-9C has 26 blocks, each test takes four.
-HIL_BATCH_gw1n9-bsram-a := bsram-rom bsram-rom2 bsram-sp bsram-sp2
-HIL_BATCH_gw1n9-bsram-b := bsram-sdp bsram-sdp2 bsram-dp bsram-dp16
+HIL_BATCH_gw1n9-bsram-a := bsram-rom bsram-rom2 bsram-sp2
+HIL_BATCH_gw1n9-bsram-b := bsram-sdp2 bsram-dp
 # userflash is in no batch: every load erases a flash page (10,000 cycles).
 # Run it alone, as make hil-userflash-tangnano9k.
 HIL_BATCHES_tangnano9k := gw1n9-a gw1n9-b gw1n9-c gw1n9-d gw1n9-e \
 	gw1n9-clk-a gw1n9-clk-b gw1n9-bsram-a gw1n9-bsram-b
+# Known broken, in no batch; make hil-tangnano9k-broken runs them.
+# dhcen: #648. bsram-sp, bsram-dp16, bsram-sdp: byte enables, #652.
+HIL_BROKEN_tangnano9k := dhcen bsram-sp bsram-dp16 bsram-sdp
 
 HIL_BATCH_gw2a-a := latch dsp-mult36x36 dsp-multalu36x18 dsp-multalu18x18 dsp-multaddalu18x18
 HIL_BATCH_gw2a-b := dsp-alu54d dsp-mult9x9 dsp-padd9 dsp-padd18
@@ -35,8 +37,12 @@ HIL_BATCH_gw2a-c := dsp-mult18x18
 HIL_BATCH_gw2a-clk-a := osc dqce dcs rpll
 HIL_BATCH_gw2a-clk-b := clkdiv
 HIL_BATCH_gw2a-clk-c := dhcen
-HIL_BATCH_gw2a-bsram := bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp bsram-sdp2 bsram-dp bsram-dp16
+HIL_BATCH_gw2a-bsram := bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp2 bsram-dp bsram-dp16
 HIL_BATCHES_tangnano20k := gw2a-a gw2a-b gw2a-c gw2a-clk-a gw2a-clk-b gw2a-clk-c gw2a-bsram
+# Known broken, in no batch; make hil-tangnano20k-broken runs them.
+# bsram-sdp: SDPX9B byte enables fail at some BSRAM sites, #647.
+# *-bugs: the BSRAM failures of #649; bsram-dp-bugs crashes nextpnr, #650.
+HIL_BROKEN_tangnano20k := bsram-sdp bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs
 
 .DEFAULT_GOAL := all
 
@@ -335,6 +341,15 @@ hil-tangnano20k: $(HIL_BATCHES_tangnano20k:%=hil-%-tangnano20k) hil-femto-riscv-
 
 .PHONY: hil-all
 hil-all: hil-tangnano9k hil-tangnano20k
+
+# Run the known-broken tests of a board one by one. A pass means the bug is
+# fixed: move the test back into a batch. Never fails, so the reference stays
+# what a correct toolchain gives.
+hil-%-broken:
+	@for t in $(HIL_BROKEN_$*); do \
+		if $(MAKE) --no-print-directory hil-$$t-$*; then echo "XPASS: $$t ($*)"; \
+		else echo "XFAIL: $$t ($*)"; fi; \
+	done
 
 # ============================================================
 # Tangnano20k

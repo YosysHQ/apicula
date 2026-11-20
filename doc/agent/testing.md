@@ -37,6 +37,11 @@ fails as a whole. Prefer self-checks to raw values, like `latch`'s pass mask: a
 reference captured from Apicula's own bitstream only proves the output did not
 change.
 
+A test that fails on a board because of a known bug leaves that board's
+batches for `HIL_BROKEN_<board>`, with the issue in a comment; its reference
+keeps the correct value. `make hil-<board>-broken` runs them one by one and
+reports XFAIL or XPASS without failing. On XPASS, move the test back.
+
 Drive a primitive under test from plain logic in `hil.v`, not from a CPU.
 Designs that test a whole system, like `femto-riscv-18-test`, keep their own
 bitstream and rule.
