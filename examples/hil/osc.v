@@ -1,14 +1,14 @@
 `default_nettype none
 
-// The on-chip oscillator, at FREQ_DIV=16, measured against clk.
+// The on-chip oscillator, at FREQ_DIV=8, measured against clk.
 //
 // The boards use OSC, OSCZ or OSCH (OSC_TYPE_* from the board's yosys rule).
 // Its nominal frequency is OSC_MHZ / FREQ_DIV, with OSC_MHZ from Gowin's UG286:
 // 250 MHz for OSC and OSCZ, 240 MHz for OSCH, and 210 MHz for GW1N-4, whose
 // board rule overrides it. The datasheets give a tolerance of 5%, but the
 // bench boards measured +5% (tangnano9k) and -6% (tangnano20k); the check
-// allows TOL percent, which still tells FREQ_DIV from its neighbours (14 and
-// 18 are 14% and 11% away).
+// allows TOL percent, which still tells FREQ_DIV from its neighbours (6 and
+// 10 are 33% and 20% away).
 //
 // pass[0]: every window in range.
 
@@ -27,7 +27,7 @@ module osc_test (
 	output wire [15:0] raw
 );
 
-localparam FREQ_DIV = 16;
+localparam FREQ_DIV = 8;
 localparam TOL = 10;
 
 wire oscout;

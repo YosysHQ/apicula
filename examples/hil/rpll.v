@@ -70,6 +70,18 @@ reg [1:0] lock_sync;
 always @(posedge clk)
 	lock_sync <= {lock_sync[0], lock};
 
+// Checked every cycle: the meter only samples start once per window.
+reg locked, lost;
+always @(posedge clk)
+	if (rst) begin
+		locked <= 1'b0;
+		lost <= 1'b0;
+	end else begin
+		locked <= locked | lock_sync[1];
+		lost <= lost | (locked & !lock_sync[1]);
+	end
+wire lock_held = lock_sync[1] & !lost;
+
 wire done;
 hil_clock_meter #(.N(4), .PRE(5), .WIN(16)) meter(
 	.clk(clk), .rst(rst), .mclk(clks), .count(raw), .done(done)
@@ -81,23 +93,23 @@ localparam integer EXPD = 2048 * FBDIV / (IDIV * SDIV);
 localparam integer EXPD3 = 2048 * FBDIV / (IDIV * 3);
 
 hil_clock_check check_lock(
-	.clk(clk), .rst(rst), .done(done), .start(lock_sync[1]), .en(1'b1),
+	.clk(clk), .rst(rst), .done(done), .start(lock_held), .en(1'b1),
 	.count(16'd0), .lo(16'd0), .hi(16'd0), .pass(pass[0])
 );
 hil_clock_check check_out(
-	.clk(clk), .rst(rst), .done(done), .start(lock_sync[1]), .en(1'b1),
+	.clk(clk), .rst(rst), .done(done), .start(lock_held), .en(1'b1),
 	.count(raw[0 +: 16]), .lo(EXP - 2), .hi(EXP + 2), .pass(pass[1])
 );
 hil_clock_check check_outp(
-	.clk(clk), .rst(rst), .done(done), .start(lock_sync[1]), .en(1'b1),
+	.clk(clk), .rst(rst), .done(done), .start(lock_held), .en(1'b1),
 	.count(raw[16 +: 16]), .lo(EXP - 2), .hi(EXP + 2), .pass(pass[2])
 );
 hil_clock_check check_outd(
-	.clk(clk), .rst(rst), .done(done), .start(lock_sync[1]), .en(1'b1),
+	.clk(clk), .rst(rst), .done(done), .start(lock_held), .en(1'b1),
 	.count(raw[32 +: 16]), .lo(EXPD - 2), .hi(EXPD + 2), .pass(pass[3])
 );
 hil_clock_check check_outd3(
-	.clk(clk), .rst(rst), .done(done), .start(lock_sync[1]), .en(1'b1),
+	.clk(clk), .rst(rst), .done(done), .start(lock_held), .en(1'b1),
 	.count(raw[48 +: 16]), .lo(EXPD3 - 2), .hi(EXPD3 + 2), .pass(pass[4])
 );
 

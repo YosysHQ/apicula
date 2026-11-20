@@ -1,3 +1,5 @@
+`default_nettype none
+
 // BSRAM self-test: every primitive of a family (pROM/pROMX9, SP/SPX9,
 // SDPB/SDPX9B, DPB/DPX9B) in up to four configurations, all driven in
 // lockstep by one sequencer on the system clock.
@@ -215,7 +217,8 @@ module bsram_seq #(
 
 	// Script for the read ports, after the sweeps. Entry c: controls of
 	// cycle c and the expected output during cycle c (after edge c-1) for
-	// READ_MODE 0 and 1. X, Y, Z, W differ in their low 9 bits.
+	// READ_MODE 0 and 1. X, Y, Z, W differ in their low 9 bits; at width 1 the
+	// data of X and Y (and of Z and W) is equal, so the hold checks prove nothing.
 	localparam [13:0] X = 14'h0005, Y = 14'h00a3, Z = 14'h015a, W = 14'h01f0;
 	wire [2:0] ssel = FAM == `BSRAM_FAM_ROM ? 3'd0 : 3'd3;
 	reg [13:0] s_a;

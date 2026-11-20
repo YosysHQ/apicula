@@ -440,7 +440,6 @@ emcu-%-tangnano4k.fs: emcu-%-tangnano4k.json
 %-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh %-pll-vr.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -nolutram -json $@ ${YOSYS_FLAGS}"
 
-
 # ============================================================
 # Tangnano9k (GW1N-9C)
 %-tangnano9k.fs: %-tangnano9k.json
@@ -472,7 +471,6 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/dvi_sync.v DVI/dvi_top.
 %-miniszfpga-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
 
-
 # ============================================================
 # szfpga (GW1N-9)
 %-szfpga.fs: %-szfpga.json
@@ -483,7 +481,6 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/dvi_sync.v DVI/dvi_top.
 
 %-szfpga-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=4 -D OSC_TYPE_OSC -D INV_BTN=0 -D CPU_FREQ=50 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
-
 
 # ============================================================
 # tec0117 (GW1N-9)
@@ -538,7 +535,8 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/dvi_sync.v DVI/dvi_top.
 
 # hil-<test>-<board>-unpacked.v also matches the hil-%.v wrapper rule, and make
 # takes that one because its prerequisites exist. Explicit rules win.
-HIL_NAMES := $(basename $(notdir $(wildcard hil/*.v))) $(HIL_BATCHES_tangnano9k) $(HIL_BATCHES_tangnano20k)
+HIL_NAMES := $(shell sed -n 's/^.ifdef HIL_\([a-z][a-z0-9_]*\)$$/\1/p' hil.v | tr _ -) \
+	$(HIL_BATCHES_tangnano9k) $(HIL_BATCHES_tangnano20k)
 # $(call hil_unpack,BOARD,DEVICE)
 define hil_unpack
 $(HIL_NAMES:%=hil-%-$(1)-unpacked.v): hil-%-$(1)-unpacked.v: hil-%-$(1).fs

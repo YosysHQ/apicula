@@ -221,7 +221,8 @@ bsram_test #(.FAM(`BSRAM_FAM_DP),
 `endif
 `ifdef HIL_bsram_rom_bugs
 // Known failures, in no batch: narrow pROM output does not hold with CE=0;
-// 32/36-bit pROM reads part of word 0 wrong after some designs (bsram-sp-bugs)
+// 32/36-bit pROM reads part of word 0 wrong after some designs (e.g. after loading
+// bsram-sp-bugs)
 wire [63:0] bsram_rom_bugs_pass;
 wire [255:0] bsram_rom_bugs_dbg;
 bsram_test #(.FAM(`BSRAM_FAM_ROM),

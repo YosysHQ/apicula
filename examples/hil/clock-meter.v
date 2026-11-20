@@ -60,7 +60,7 @@ endmodule
 // Checks the counts of one clock against [lo, hi]. The first window after
 // start goes high is skipped (power-up, PLL lock), and so are windows with en
 // low. pass goes high after the first checked window and drops for good on
-// the first count out of range, or when start drops.
+// the first count out of range, or when start is low at the end of a window.
 module hil_clock_check (
 	input wire clk,
 	input wire rst,
