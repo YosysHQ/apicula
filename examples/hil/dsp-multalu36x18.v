@@ -1,5 +1,11 @@
 `default_nettype none
-module idsp(input wire clk, input wire reset, 
+// Row n is node n; ACC terms accumulate once per tick.
+//   0  mode 0: 2 * 0x5f76fe56f - 0x10000
+//   1  mode 2: -1 * 0xbee000000 + CASI (OUT register disabled)
+//   2  mode 1: ACC + 0x1000 * 2
+//   3  mode 2: -2 * -3 + CASI (B sign register enabled)
+//   4  mode 0: 0x1600 * 0x10 - 0x6532
+module dsp_multalu36x18(input wire clk, input wire reset, 
 	output wire [63:0] product, 
 	output wire [63:0] product1, 
 	output wire [63:0] product2, 
@@ -151,7 +157,3 @@ module idsp(input wire clk, input wire reset,
 	defparam multalu_4.MULT_RESET_MODE="SYNC";
 	defparam multalu_4.MULTALU36X18_MODE=0;
 endmodule
-
-`define FIRMWARE "riscv-firmware/multalu36x18.hex"
-`include "dsp-riscv.v"
-

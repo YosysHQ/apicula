@@ -1,13 +1,9 @@
 `default_nettype none
 // In all primitives except the last one, B is set as SBI, the registers on
 // B are turned on so that at the initial moment everywhere A is added to 0,
-// and then 0xd propagates from the last PADD to the first. 
-// I did not redo the byte output procedure so that 0x038000 has 18
-// significant bits and if we consider it as a signed number it is -0x8000 ---
-// what happens when A=0xf12 reaches the N2 primitive and 0x8f12 is subtracted
-// from it.
+// and then 0xd propagates from the last PADD to the first.
 
-module idsp(input wire clk, input wire reset, 
+module dsp_padd9(input wire clk, input wire reset, 
 	output wire [63:0] product, 
 	output wire [63:0] product1, 
 	output wire [63:0] product2, 
@@ -120,7 +116,3 @@ module idsp(input wire clk, input wire reset,
 	defparam padd_4.SOREG=1'b0;
 	defparam padd_4.PADD_RESET_MODE="SYNC";
 	endmodule
-
-`define FIRMWARE "riscv-firmware/padd9.hex"
-`include "dsp-riscv.v"
-

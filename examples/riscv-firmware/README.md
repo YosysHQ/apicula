@@ -8,11 +8,11 @@ Those interested can read [lesson 20](https://github.com/BrunoLevy/learn-fpga/tr
 This is an example Makefile that was used to create these .hex files
 
 ``` Makefile
-mult36x36.hex: mult36x36.bram.elf
-    ./firmware_words mult36x36.bram.elf -ram 6144 -max_addr 6144 -out mult36x36.hex
+mult12x12.hex: mult12x12.bram.elf
+    ./firmware_words mult12x12.bram.elf -ram 6144 -max_addr 6144 -out mult12x12.hex
 
-mult36x36.bram.elf: mult36x36.o wait.o start.o
-    riscv64-none-elf-ld mult36x36.o wait.o start.o -o mult36x36.bram.elf -T bram.ld -m elf32lriscv -nostdlib
+mult12x12.bram.elf: mult12x12.o wait.o start.o
+    riscv64-none-elf-ld mult12x12.o wait.o start.o -o mult12x12.bram.elf -T bram.ld -m elf32lriscv -nostdlib
 
 %.o: %.S
     riscv64-none-elf-as -march=rv32i -mabi=ilp32 -mno-relax $< -o $@

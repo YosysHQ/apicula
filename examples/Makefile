@@ -6,6 +6,23 @@ YOSYS_FLAGS = -setundef
 # registers in IO blocks
 ioregs-%.json: NEXTPNR_FLAGS += --vopt ireg_in_iob --vopt oreg_in_iob
 
+# Hardware-in-the-loop batches, see the HIL section below. The DSP tests do
+# not fit in one batch, and nextpnr places far fewer of them together than the
+# DSP macros would hold (GW1N-9 has 5, GW2A-18 12). These were found by trying.
+HIL_BATCH_gw1n9-a := latch dsp-multalu36x18 dsp-multalu18x18
+HIL_BATCH_gw1n9-b := dsp-mult36x36 dsp-multaddalu18x18
+HIL_BATCH_gw1n9-c := dsp-alu54d dsp-mult18x18
+HIL_BATCH_gw1n9-d := dsp-padd18 dsp-mult9x9
+HIL_BATCH_gw1n9-e := dsp-padd9
+HIL_BATCHES_tangnano9k := gw1n9-a gw1n9-b gw1n9-c gw1n9-d gw1n9-e
+
+HIL_BATCH_gw2a-a := latch dsp-mult36x36 dsp-multalu36x18 dsp-multalu18x18 dsp-multaddalu18x18
+HIL_BATCH_gw2a-b := dsp-alu54d dsp-mult9x9 dsp-padd9 dsp-padd18
+# Alone, so its SOA chain starts inside a DSP macro: on GW2A the cascade from
+# the first multiplier breaks when nextpnr puts it across a macro boundary.
+HIL_BATCH_gw2a-c := dsp-mult18x18
+HIL_BATCHES_tangnano20k := gw2a-a gw2a-b gw2a-c
+
 .DEFAULT_GOAL := all
 
 .PHONY: all tangnano20k primer20k tangnano tangnano1k tangnano4k tangnano9k szfpga tec0117 runber
@@ -26,13 +43,10 @@ tangnano20k: \
 	bsram-DPB-tangnano20k.fs bsram-pROMX9-tangnano20k.fs bsram-SDPX9B-tangnano20k.fs \
 	bsram-SPX9-tangnano20k.fs bsram-DPX9B-tangnano20k.fs femto-riscv-memtest-tangnano20k.fs \
 	femto-riscv-15-tangnano20k.fs femto-riscv-16-tangnano20k.fs femto-riscv-18-tangnano20k.fs \
-	dsp-mult18x18-tangnano20k.fs dsp-mult36x36-tangnano20k.fs dsp-padd9-tangnano20k.fs dsp-padd18-tangnano20k.fs \
-	dsp-mult9x9-tangnano20k.fs dsp-alu54d-tangnano20k.fs dsp-multalu18x18-tangnano20k.fs \
-	dsp-multalu36x18-tangnano20k.fs dsp-multaddalu18x18-tangnano20k.fs \
 	dqce-tangnano20k.fs dcs-tangnano20k.fs \
 	femto-riscv-18-test-tangnano20k.fs \
-	latch-tangnano20k.fs \
-	ioregs-tangnano20k.fs
+	ioregs-tangnano20k.fs \
+	$(HIL_BATCHES_tangnano20k:%=hil-%-tangnano20k.fs)
 
 primer20k: \
 	blinky-latch-primer20k.fs \
@@ -47,9 +61,9 @@ primer20k: \
 	bsram-DPB-primer20k.fs bsram-pROMX9-primer20k.fs bsram-SDPX9B-primer20k.fs \
 	bsram-SPX9-primer20k.fs bsram-DPX9B-primer20k.fs \
 	femto-riscv-15-primer20k.fs femto-riscv-16-primer20k.fs femto-riscv-18-primer20k.fs \
-	dsp-mult18x18-primer20k.fs dsp-mult36x36-primer20k.fs dsp-padd9-primer20k.fs dsp-padd18-primer20k.fs \
-	dsp-mult9x9-primer20k.fs dsp-alu54d-primer20k.fs dsp-multalu18x18-primer20k.fs \
-	dsp-multalu36x18-primer20k.fs dsp-multaddalu18x18-primer20k.fs \
+	hil-dsp-mult18x18-primer20k.fs hil-dsp-mult36x36-primer20k.fs hil-dsp-padd9-primer20k.fs hil-dsp-padd18-primer20k.fs \
+	hil-dsp-mult9x9-primer20k.fs hil-dsp-alu54d-primer20k.fs hil-dsp-multalu18x18-primer20k.fs \
+	hil-dsp-multalu36x18-primer20k.fs hil-dsp-multaddalu18x18-primer20k.fs \
 	dqce-primer20k.fs dcs-primer20k.fs \
 	ioregs-primer20k.fs
 
@@ -91,9 +105,9 @@ tangnano4k: \
 	ides4-tangnano4k.fs ivideo-tangnano4k.fs ides8-tangnano4k.fs ides10-tangnano4k.fs \
 	oser10-tlvds-tangnano4k.fs iodelay-tangnano4k.fs mipi-out-tangnano4k.fs femto-riscv-memtest-tangnano4k.fs \
 	femto-riscv-15-tangnano4k.fs femto-riscv-16-tangnano4k.fs femto-riscv-18-tangnano4k.fs \
-	dsp-mult18x18-tangnano4k.fs dsp-mult36x36-tangnano4k.fs dsp-padd9-tangnano4k.fs dsp-padd18-tangnano4k.fs \
-	dsp-mult9x9-tangnano4k.fs dsp-alu54d-tangnano4k.fs dsp-multalu18x18-tangnano4k.fs \
-	dsp-multalu36x18-tangnano4k.fs dsp-multaddalu18x18-tangnano4k.fs \
+	hil-dsp-mult18x18-tangnano4k.fs hil-dsp-mult36x36-tangnano4k.fs hil-dsp-padd9-tangnano4k.fs hil-dsp-padd18-tangnano4k.fs \
+	hil-dsp-mult9x9-tangnano4k.fs hil-dsp-alu54d-tangnano4k.fs hil-dsp-multalu18x18-tangnano4k.fs \
+	hil-dsp-multalu36x18-tangnano4k.fs hil-dsp-multaddalu18x18-tangnano4k.fs \
 	dqce-tangnano4k.fs dcs-tangnano4k.fs emcu-blinky-tangnano4k.fs emcu-with-apb-blinky-tangnano4k.fs \
 	emcu-with-apb-spi-tangnano4k.fs i3c-tangnano4k.fs mipi-out-tangnano4k.fs \
 	ioregs-tangnano4k.fs
@@ -112,14 +126,11 @@ tangnano9k: \
 	bsram-SPX9-tangnano9k.fs bsram-DPX9B-tangnano9k.fs bsram-DPX9B18-tangnano9k.fs \
 	oser10-elvds-tangnano9k.fs femto-riscv-memtest-tangnano9k.fs \
 	femto-riscv-15-tangnano9k.fs femto-riscv-16-tangnano9k.fs femto-riscv-18-tangnano9k.fs \
-	dsp-mult18x18-tangnano9k.fs dsp-mult36x36-tangnano9k.fs dsp-padd9-tangnano9k.fs dsp-padd18-tangnano9k.fs \
-	dsp-mult9x9-tangnano9k.fs dsp-alu54d-tangnano9k.fs dsp-multalu18x18-tangnano9k.fs \
-	dsp-multalu36x18-tangnano9k.fs dsp-multaddalu18x18-tangnano9k.fs \
 	dqce-tangnano9k.fs dcs-tangnano9k.fs femto-riscv-userflash-tangnano9k.fs \
 	i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs \
 	femto-riscv-18-test-tangnano9k.fs \
-	latch-tangnano9k.fs \
-	ioregs-tangnano9k.fs
+	ioregs-tangnano9k.fs \
+	$(HIL_BATCHES_tangnano9k:%=hil-%-tangnano9k.fs)
 
 szfpga: \
 	blinky-latch-szfpga.fs \
@@ -134,9 +145,9 @@ szfpga: \
 	bsram-pROMX9-szfpga.fs bsram-SDPX9B-szfpga.fs \
 	bsram-SPX9-szfpga.fs \
 	femto-riscv-15-szfpga.fs femto-riscv-16-szfpga.fs femto-riscv-18-szfpga.fs \
-	dsp-mult18x18-szfpga.fs dsp-mult36x36-szfpga.fs dsp-padd9-szfpga.fs dsp-padd18-szfpga.fs \
-	dsp-mult9x9-szfpga.fs dsp-alu54d-szfpga.fs dsp-multalu18x18-szfpga.fs \
-	dsp-multalu36x18-szfpga.fs dsp-multaddalu18x18-szfpga.fs
+	hil-dsp-mult18x18-szfpga.fs hil-dsp-mult36x36-szfpga.fs hil-dsp-padd9-szfpga.fs hil-dsp-padd18-szfpga.fs \
+	hil-dsp-mult9x9-szfpga.fs hil-dsp-alu54d-szfpga.fs hil-dsp-multalu18x18-szfpga.fs \
+	hil-dsp-multalu36x18-szfpga.fs hil-dsp-multaddalu18x18-szfpga.fs
 
 tec0117: \
 	blinky-latch-tec0117.fs \
@@ -147,11 +158,11 @@ tec0117: \
 	oser4-tec0117.fs ovideo-tec0117.fs oser8-tec0117.fs oser10-tec0117.fs \
 	iddr-tec0117.fs iddrc-tec0117.fs ides16-tec0117.fs iodelay-tec0117.fs \
 	ides4-tec0117.fs ivideo-tec0117.fs ides8-tec0117.fs ides10-tec0117.fs \
-	dsp-mult18x18-tec0117.fs dsp-mult36x36-tec0117.fs dsp-padd9-tec0117.fs dsp-padd18-tec0117.fs \
-	dsp-mult9x9-tec0117.fs dsp-alu54d-tec0117.fs dsp-multalu18x18-tec0117.fs \
-	dsp-multalu36x18-tec0117.fs dsp-multaddalu18x18-tec0117.fs \
+	hil-dsp-mult18x18-tec0117.fs hil-dsp-mult36x36-tec0117.fs hil-dsp-padd9-tec0117.fs hil-dsp-padd18-tec0117.fs \
+	hil-dsp-mult9x9-tec0117.fs hil-dsp-alu54d-tec0117.fs hil-dsp-multalu18x18-tec0117.fs \
+	hil-dsp-multalu36x18-tec0117.fs hil-dsp-multaddalu18x18-tec0117.fs \
 	femto-riscv-18-test-tec0117.fs \
-	latch-tec0117.fs \
+	hil-latch-tec0117.fs \
 	ioregs-tec0117.fs
 
 runber: \
@@ -163,9 +174,9 @@ runber: \
 	oser4-runber.fs ovideo-runber.fs oser8-runber.fs oser10-runber.fs \
 	iddr-runber.fs iddrc-runber.fs iodelay-runber.fs \
 	ides4-runber.fs ivideo-runber.fs ides8-runber.fs ides10-runber.fs \
-	dsp-mult36x36-runber.fs dsp-padd9-runber.fs dsp-padd18-runber.fs \
-	dsp-mult9x9-runber.fs dsp-alu54d-runber.fs dsp-multalu18x18-runber.fs \
-	dsp-multalu36x18-runber.fs dsp-multaddalu18x18-runber.fs \
+	hil-dsp-mult36x36-runber.fs hil-dsp-padd9-runber.fs hil-dsp-padd18-runber.fs \
+	hil-dsp-mult9x9-runber.fs hil-dsp-alu54d-runber.fs hil-dsp-multalu18x18-runber.fs \
+	hil-dsp-multalu36x18-runber.fs hil-dsp-multaddalu18x18-runber.fs \
 	ioregs-runber.fs
 
 all: tangnano20k primer20k tangnano tangnano1k tangnano4k tangnano9k szfpga tec0117 runber
@@ -281,11 +292,28 @@ unpacked: tangnano20k-unpacked primer20k-unpacked tangnano-unpacked tangnano1k-u
 	tangnano4k-unpacked tangnano9k-unpacked szfpga-unpacked tec0117-unpacked runber-unpacked
 
 clean:
-	rm -f *.json *.fs *-unpacked.v
+	rm -f *.json *.fs *-unpacked.v hil-*.v hil-*.out
 
 # ============================================================
 # Hardware-in-the-loop tests
-HIL_SETTLE ?= 5
+#
+# The tests live in hil.v. A batch is one bitstream with a set of them enabled
+# (HIL_BATCH_* at the top), so it costs one place-and-route and one upload.
+# Every test is also a batch of its own: when a batch fails as a whole, run its
+# tests one by one, e.g.
+#   make hil-dsp-padd9-tangnano9k
+# Each test has a reference in hil-references/; a batch expects the lines of
+# its tests' references. Every line names its test, so the order is ignored.
+hil_tests = $(or $(HIL_BATCH_$(1)),$(1))
+
+hil-%.v: hil.v $(wildcard hil/*.v) emitter_uart.v
+	printf '`define HIL_%s\n' $(subst -,_,$(call hil_tests,$*)) > $@
+	echo '`include "hil.v"' >> $@
+
+# Keep the bitstreams of single tests, which no board target lists
+.PRECIOUS: %-tangnano9k.fs %-tangnano20k.fs
+
+HIL_SETTLE ?= 10
 HIL_TIMEOUT ?= 120
 # $(call hil_capture,UART_DEVICE_PATH)
 define hil_capture
@@ -295,54 +323,44 @@ timeout $(HIL_TIMEOUT) cat $(1) | \
 awk -v n=$(HIL_SETTLE) '/--- tick ---/{c++; next} c==n{print} c==(n+1){exit}'
 endef
 
-# SOA chain needs more ticks to fully propagate across all devices
-hil-dsp-mult18x18-%: HIL_SETTLE = 10
-hil-dsp-mult9x9-%: HIL_SETTLE = 10
+# $(call hil_check,BATCH,BOARD,USB_SERIAL)
+define hil_check
+openFPGALoader -c dirtyJtag --usb-serial-num $(3) -b $(2) hil-$(1)-$(2).fs
+$(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_$(3)-if01) | sort > hil-$(1)-$(2).out
+sort $(patsubst %,hil-references/%.txt,$(call hil_tests,$(1))) | diff - hil-$(1)-$(2).out
+@echo "PASS: $(1) ($(2))"
+endef
+
+# $(call hil_femto,BOARD,USB_SERIAL)
+define hil_femto
+openFPGALoader -c dirtyJtag --usb-serial-num $(2) -b $(1) femto-riscv-18-test-$(1).fs
+$(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_$(2)-if01) | diff hil-references/femto-riscv-18-test.txt -
+@echo "PASS: femto-riscv-18-test ($(1))"
+endef
+hil-femto-riscv-18-test-%: HIL_SETTLE = 1
 
 # --- tangnano9k (GW1N-9C) ---
-hil-%-tangnano9k: %-tangnano9k.fs hil-references/%.txt
-	openFPGALoader -c dirtyJtag --usb-serial-num 000054f5634c -b tangnano9k $<
-	$(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_000054f5634c-if01) | diff hil-references/$*.txt -
-	@echo "PASS: $* (tangnano9k)"
+hil-%-tangnano9k: hil-%-tangnano9k.fs
+	$(call hil_check,$*,tangnano9k,000054f5634c)
 
-hil-femto-riscv-18-test-tangnano9k: HIL_SETTLE = 1
+hil-femto-riscv-18-test-tangnano9k: femto-riscv-18-test-tangnano9k.fs
+	$(call hil_femto,tangnano9k,000054f5634c)
 
 .PHONY: hil-tangnano9k
-hil-tangnano9k: \
-	hil-latch-tangnano9k \
-	hil-dsp-mult18x18-tangnano9k \
-	hil-dsp-mult36x36-tangnano9k \
-	hil-dsp-mult9x9-tangnano9k \
-	hil-dsp-padd9-tangnano9k \
-	hil-dsp-padd18-tangnano9k \
-	hil-dsp-multalu18x18-tangnano9k \
-	hil-dsp-multalu36x18-tangnano9k \
-	hil-dsp-multaddalu18x18-tangnano9k \
-	hil-femto-riscv-18-test-tangnano9k
+hil-tangnano9k: $(HIL_BATCHES_tangnano9k:%=hil-%-tangnano9k) hil-femto-riscv-18-test-tangnano9k
 
 # --- tangnano20k (GW2A-18C) ---
-hil-%-tangnano20k: %-tangnano20k.fs hil-references/%.txt
-	openFPGALoader -c dirtyJtag --usb-serial-num 0200 -b tangnano20k $<
-	$(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_0200-if01) | diff hil-references/$*.txt -
-	@echo "PASS: $* (tangnano20k)"
+hil-%-tangnano20k: hil-%-tangnano20k.fs
+	$(call hil_check,$*,tangnano20k,0200)
 
-hil-femto-riscv-18-test-tangnano20k: HIL_SETTLE = 1
+hil-femto-riscv-18-test-tangnano20k: femto-riscv-18-test-tangnano20k.fs
+	$(call hil_femto,tangnano20k,0200)
 
 .PHONY: hil-tangnano20k
-hil-tangnano20k: \
-	hil-latch-tangnano20k \
-	hil-dsp-mult18x18-tangnano20k \
-	hil-dsp-mult36x36-tangnano20k \
-	hil-dsp-mult9x9-tangnano20k \
-	hil-dsp-padd9-tangnano20k \
-	hil-dsp-padd18-tangnano20k \
-	hil-dsp-multalu18x18-tangnano20k \
-	hil-dsp-multalu36x18-tangnano20k \
-	hil-dsp-multaddalu18x18-tangnano20k \
-	hil-femto-riscv-18-test-tangnano20k
+hil-tangnano20k: $(HIL_BATCHES_tangnano20k:%=hil-%-tangnano20k) hil-femto-riscv-18-test-tangnano20k
 
 .PHONY: hil-all
-hil-all: hil-tangnano20k hil-tec0117
+hil-all: hil-tangnano9k hil-tangnano20k
 
 # ============================================================
 # Tangnano20k
