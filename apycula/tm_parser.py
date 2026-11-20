@@ -776,7 +776,8 @@ def parse_chunk(chunk):
 
 # GW5A devices: the IDE reads delays from a self-describing block that follows
 # three old-format records (STA::TmModelNew::readTmData, IDE 1.9.10.03). The
-# old-format records in these files are placeholders copied from GW2A-18C. See
+# old-format records in these files are copied from GW2A-18C. Their DSP part is
+# what the IDE uses for GW5A DSPs; the rest are placeholders. See
 # doc/agent/timing.md.
 #
 #   char hdr[15]; i32 magic = 0x37

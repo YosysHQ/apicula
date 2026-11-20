@@ -55,7 +55,12 @@ expected = {
 }
 
 num = r'(-?[\d.]+):[-\d.]+:(-?[\d.]+)'
-total = bad = 0
+iopath_re = re.compile(rf'\(IOPATH (\w+)(?:\[\d+\])? (\w+)(?:\[\d+\])? \({num}\)')
+setuphold_re = re.compile(rf'\(SETUPHOLD \((?:pos|neg)edge (\w+)(?:\[\d+\])?\) \(posedge CLK(?:\[\d+\])?\) '
+                          rf'\({num}\) \({num}\)')
+# any other line that opens a construct is an arc or check the regexes missed
+other_re = re.compile(r'\s*\((?!CELLTYPE|INSTANCE|DELAY|ABSOLUTE|TIMINGCHECK)[A-Z]')
+total = bad = skipped = 0
 seen = set()
 for cell in re.split(r'\(CELL\b', open(sdf).read()):
     m = re.search(r'\(CELLTYPE "(\w+)"\)\s*\(INSTANCE ([^)]*)\)', cell)
@@ -63,12 +68,15 @@ for cell in re.split(r'\(CELL\b', open(sdf).read()):
         continue
     inst = m[2].strip().split('/')[-1]
     got = {}
-    for k in re.finditer(rf'\(IOPATH (\w+)(?:\[\d+\])? (\w+)(?:\[\d+\])? \({num}\)', cell):
-        got.setdefault(('IOPATH', k[1], k[2]), set()).add((float(k[3]), float(k[4])))
-    for k in re.finditer(rf'\(SETUPHOLD \((?:pos|neg)edge (\w+)(?:\[\d+\])?\) \(posedge CLK(?:\[\d+\])?\) '
-                         rf'\({num}\) \({num}\)', cell):
-        got.setdefault(('SETUP', k[1]), set()).add((float(k[2]), float(k[3])))
-        got.setdefault(('HOLD', k[1]), set()).add((float(k[4]), float(k[5])))
+    for line in cell.splitlines():
+        if k := iopath_re.search(line):
+            got.setdefault(('IOPATH', k[1], k[2]), set()).add((float(k[3]), float(k[4])))
+        elif k := setuphold_re.search(line):
+            got.setdefault(('SETUP', k[1]), set()).add((float(k[2]), float(k[3])))
+            got.setdefault(('HOLD', k[1]), set()).add((float(k[4]), float(k[5])))
+        elif other_re.match(line):
+            skipped += 1
+            print(f'SKIP {inst:9} {line.strip()}')
     for arc, vals in sorted(got.items()):
         want = expected.get(inst, {}).get(arc)
         seen.add((inst, arc))
@@ -85,4 +93,5 @@ for inst, exp in expected.items():
         if (inst, arc) not in seen:
             bad += 1
             print(f'MISSING {inst} {" ".join(arc)}')
-print(f'{dev} {speed}: {total} distinct arc values, {bad} off by more than 1 ps or missing')
+print(f'{dev} {speed}: {total} distinct arc values, {bad} off by more than 1 ps or missing, '
+      f'{skipped} SDF lines skipped')

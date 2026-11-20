@@ -31,12 +31,14 @@ Findings, most important first:
 
 1. **GW5A timing data was wrong.** `tm_parser` read GW5A files as if they used
    the old fixed layout. The old-format records at the start of
-   `GW5A-25A.tm` are placeholders. Their first 14,136 bytes are identical to
-   `GW2A-18C.tm`. The IDE reads GW5A delays from a different block, described
-   below. Compared with the real GW5A-25A values, Apicula's GW5A cell delays are
-   off in both directions. The IDE also scales the slow corner by 1.25 for
-   C1/I0. Cell delays now come from the real block. Routing still uses the
-   placeholder values; see "What Apicula uses for GW5A". (code, data)
+   `GW5A-25A.tm` are copied from GW2A: their first 14,136 bytes are identical
+   to `GW2A-18C.tm`. Their DSP part is what the IDE uses for GW5A DSPs (see
+   "GW5A DSP"); the rest are placeholders. The IDE reads the other GW5A delays
+   from a different block, described below. Compared with the real GW5A-25A
+   values, Apicula's GW5A cell delays are off in both directions. The IDE also
+   scales the slow corner by 1.25 for C1/I0. Cell delays now come from the real
+   block. Routing still uses the placeholder values; see "What Apicula uses for
+   GW5A". (code, data)
 2. **The `_LV` speed grades are the typical corner** (25 °C, nominal Vcc).
    They are not a low-voltage variant. Several other record labels are also
    wrong. See "Record index". (code; data partly consistent)
@@ -465,8 +467,15 @@ Apicula exports them in the GW1N groups: `mult`, `mult36x36`, `mac`, `multadd`,
 `(min(e0, e1), max(e2, e3))`, setup `(e0, e2)` and hold `(e0, e2)`, each hold
 element minus 0.344 (`addMuxDelayForDspHld`). An input that passes `k` stages
 to its register is charged `k ×` the `_0` field, hold included:
-`k × (h − 0.344)`. ✓ = checked against the SDF of GW5A-25A at C1/I0 and C2/I1,
-and GW5AT-60B and GW5AST-138C at C1/I0, within 1 ps.
+`k × (h − 0.344)`. The multiplier `k` (6 with the input register bypassed, 8
+with the input and pipeline registers bypassed) was fitted to the SDF, not
+traced in the code. (data/inferred) ✓ = checked against the SDF of GW5A-25A at
+C1/I0 and C2/I1, and GW5AT-60B and GW5AST-138C at C1/I0, within 1 ps. The A0 and
+ES DSP values (record 0, as C1/I0) are not checked against the SDF.
+
+The chipdb exports the raw hold fields. The DSP hold adjustment of
+`addMuxDelayForDspHld`, −0.344 on GW2A/GW5A and −0.089 on GW1N, is not
+exported, so nextpnr has to apply it. (code)
 
 | Primitive | Arc | Delay |
 |---|---|---|
@@ -475,8 +484,8 @@ and GW5AT-60B and GW5AST-138C at C1/I0, within 1 ps.
 | | CLK→DOUT, OREG bypassed, PREG used | 2 × `mult.clk_mout_1` ✓ |
 | | CLK→DOUT, both bypassed | `mult.clk_mout_0` (code) |
 | | A/B setup, hold, AREG/BREG used | `mult.clk_mdias_1`/`clk_mdiah_1` (B: `mdib`) ✓ |
-| | same, input register bypassed, PREG used | k = 6, `_0` fields ✓ |
-| | same, input and PREG bypassed, OREG used | k = 8, `_0` fields ✓ |
+| | same, input register bypassed, PREG used | k = 6, `_0` fields ✓ (k: data/inferred) |
+| | same, input and PREG bypassed, OREG used | k = 8, `_0` fields ✓ (k: data/inferred) |
 | | CE, RESET setup, hold | `mult.clk_ces/ceh/resets/reseth`; RESET→DOUT = CLK→DOUT + 0.15 (code) |
 | MULTALU27X18 | A→DOUT | `mult.mdia_mout + alu54.md0_dout` ✓; with the pre-adder `+ padd.pdia_pout` (code) |
 | | B→DOUT | `mult.mdib_mout + alu54.md0_cout` ✓ |
