@@ -1,1 +1,1 @@
-../SPX9-image-rom.v
+pROMX9-image-rom.v

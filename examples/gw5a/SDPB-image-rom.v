@@ -1,1 +1,1 @@
-../SDPB-image-rom.v
+pROM-image-rom.v

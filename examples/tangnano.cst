@@ -106,6 +106,7 @@ IO_PORT "elvds_p" IO_TYPE=LVCMOS33;
 IO_LOC  "elvds_n" 38;
 IO_PORT "elvds_n" IO_TYPE=LVCMOS33;
 
-// hil.v reporter: the board has no UART to the host, so TXD goes to the red LED
+
+// HIL tests (built only): no UART, TXD drives the red LED
 IO_LOC  "TXD" 16;
 IO_PORT "TXD" IO_TYPE=LVCMOS33;

@@ -1,0 +1,1 @@
+bsram-sp2 0 = 0x0080ff80cf80ff80ff
