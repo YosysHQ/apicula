@@ -20,7 +20,7 @@ flowchart LR
     selmux{{"9:1"}}
     subgraph slice["LUT i, DFF i"]
         lut["LUT4 i"]
-        dsel{{"2:1, fuse REGi_SD"}}
+        dsel{{"REGi_SD"}}
         dff["DFF i"]
         mux["wide-LUT mux i"]
     end
