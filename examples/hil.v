@@ -29,6 +29,8 @@
 `include "hil/dcs.v"
 `include "hil/rpll.v"
 `include "hil/bsram.v"
+`include "hil/uflash_controller.v"
+`include "hil/userflash.v"
 
 // The DSP tests have five 64-bit outputs; w is a 5*64-bit wire.
 `define DSP_PORTS(w) \
@@ -127,6 +129,11 @@ dcs_test dcs(.clk(clk), .rst(rst), .pass(dcs_pass), .raw(dcs_raw));
 wire [4:0] rpll_pass;
 wire [63:0] rpll_raw;
 rpll_test rpll(.clk(clk), .rst(rst), .pass(rpll_pass), .raw(rpll_raw));
+`endif
+`ifdef HIL_pllvr
+wire [4:0] pllvr_pass;
+wire [63:0] pllvr_raw;
+rpll_test #(.VR(1)) pllvr(.clk(clk), .rst(rst), .pass(pllvr_pass), .raw(pllvr_raw));
 `endif
 // BSRAM tests: pass masks, see hil/bsram.v. BSRAM_CFG: width, READ_MODE A/B,
 // WRITE_MODE A/B, byte enables from the fabric, OCE tied low, skip the CE/OCE
@@ -260,6 +267,13 @@ wire [255:0] bsram_dp_bugs_dbg;
 bsram_test #(.FAM(`BSRAM_FAM_DP),
 	.CFG0(`BSRAM_CFG(8, 1, 1, 1, 1, 0, 0, 0))
 ) bsram_dp_bugs(.clk(clk), .rst(rst), .pass(bsram_dp_bugs_pass), .dbg(bsram_dp_bugs_dbg));
+`endif
+`ifdef HIL_userflash
+// Erases and programs a page of the user flash on every load: in no batch.
+// raw: word 0 before the erase (what the previous run left), and at the end.
+wire [12:0] userflash_pass;
+wire [63:0] userflash_raw;
+userflash_test userflash(.clk(clk), .rst(rst), .pass(userflash_pass), .raw(userflash_raw));
 `endif
 
 // ---- Report rows ----
@@ -480,6 +494,18 @@ always @* begin
 	`ROW(27, "bsram-dp-bugs", 0, bsram_dp_bugs_pass)
 `ifdef BSRAM_DEBUG
 	`ROW(27, "bsram-dp-bugs", 1, bsram_dp_bugs_dbg[0+:64])
+`endif
+`endif
+`ifdef HIL_pllvr
+	`ROW(28, "pllvr", 0, pllvr_pass)
+`ifdef HIL_RAW
+	`ROW(28, "pllvr", 1, pllvr_raw)
+`endif
+`endif
+`ifdef HIL_userflash
+	`ROW(29, "userflash", 0, userflash_pass)
+`ifdef HIL_RAW
+	`ROW(29, "userflash", 1, userflash_raw)
 `endif
 `endif
 	default: ;

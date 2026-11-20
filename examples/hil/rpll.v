@@ -7,8 +7,15 @@
 //
 // pass[0]: LOCK went high and stayed high; pass[1]: CLKOUT, pass[2]:
 // CLKOUTP, pass[3]: CLKOUTD, pass[4]: CLKOUTD3 in range.
+//
+// VR=1 is the pllvr test: the same with PLLVR (GW1NS-4), whose input and
+// feedback dividers come from the dynamic IDSEL and FBDSEL inputs instead,
+// as the old blinky-pll-vr example did. Those inputs take the inverted
+// divider setting (from the dual-pll-vr example, not checked on hardware).
 
-module rpll_test (
+module rpll_test #(
+	parameter VR = 0
+) (
 	input wire clk,
 	input wire rst,
 	output wire [4:0] pass,
@@ -22,6 +29,9 @@ localparam integer IDIV = `CPU_FREQ == 27 ? 3 : `CPU_FREQ == 50 ? 5 :
                           `CPU_FREQ == 24 ? 4 : 2;
 localparam integer FBDIV = 90 * IDIV / `CPU_FREQ;
 localparam integer SDIV = 6;
+// PLLVR's dynamic divider inputs
+localparam [5:0] IDSEL = ~(IDIV - 1);
+localparam [5:0] FBDSEL = ~(FBDIV - 1);
 
 generate
 	if (`CPU_FREQ * FBDIV != 90 * IDIV)
@@ -30,41 +40,83 @@ endgenerate
 
 wire lock;
 wire [3:0] clks;
-rPLL #(
-	.FCLKIN(FCLKIN),
-	.IDIV_SEL(IDIV - 1),
-	.FBDIV_SEL(FBDIV - 1),
-	.ODIV_SEL(8),
-	.DYN_IDIV_SEL("false"),
-	.DYN_FBDIV_SEL("false"),
-	.DYN_ODIV_SEL("false"),
-	.DYN_SDIV_SEL(SDIV),
-	.CLKFB_SEL("internal"),
-	.CLKOUT_BYPASS("false"),
-	.CLKOUTP_BYPASS("false"),
-	.CLKOUTD_BYPASS("false"),
-	.CLKOUTD_SRC("CLKOUT"),
-	.CLKOUTD3_SRC("CLKOUT"),
-	.DYN_DA_EN("false"),
-	.PSDA_SEL("0100"),
-	.DUTYDA_SEL("1000")
-) pll(
-	.CLKIN(clk),
-	.CLKFB(1'b0),
-	.RESET(1'b0),
-	.RESET_P(1'b0),
-	.FBDSEL(6'b0),
-	.IDSEL(6'b0),
-	.ODSEL(6'b0),
-	.PSDA(4'b0),
-	.DUTYDA(4'b0),
-	.FDLY(4'b0),
-	.CLKOUT(clks[0]),
-	.CLKOUTP(clks[1]),
-	.CLKOUTD(clks[2]),
-	.CLKOUTD3(clks[3]),
-	.LOCK(lock)
-);
+generate
+if (VR) begin : vr
+	PLLVR #(
+		.FCLKIN(FCLKIN),
+		.DEVICE("GW1NSR-4C"),
+		.IDIV_SEL(0),
+		.FBDIV_SEL(0),
+		.ODIV_SEL(8),
+		.DYN_IDIV_SEL("true"),
+		.DYN_FBDIV_SEL("true"),
+		.DYN_ODIV_SEL("false"),
+		.DYN_SDIV_SEL(SDIV),
+		.CLKFB_SEL("internal"),
+		.CLKOUT_BYPASS("false"),
+		.CLKOUTP_BYPASS("false"),
+		.CLKOUTD_BYPASS("false"),
+		.CLKOUTD_SRC("CLKOUT"),
+		.CLKOUTD3_SRC("CLKOUT"),
+		.DYN_DA_EN("false"),
+		.PSDA_SEL("0100"),
+		.DUTYDA_SEL("1000")
+	) pll(
+		.CLKIN(clk),
+		.CLKFB(1'b0),
+		.RESET(1'b0),
+		.RESET_P(1'b0),
+		.FBDSEL(FBDSEL),
+		.IDSEL(IDSEL),
+		.ODSEL(6'b0),
+		.PSDA(4'b0),
+		.DUTYDA(4'b0),
+		.FDLY(4'b0),
+		.VREN(1'b1),
+		.CLKOUT(clks[0]),
+		.CLKOUTP(clks[1]),
+		.CLKOUTD(clks[2]),
+		.CLKOUTD3(clks[3]),
+		.LOCK(lock)
+	);
+end else begin : r
+	rPLL #(
+		.FCLKIN(FCLKIN),
+		.IDIV_SEL(IDIV - 1),
+		.FBDIV_SEL(FBDIV - 1),
+		.ODIV_SEL(8),
+		.DYN_IDIV_SEL("false"),
+		.DYN_FBDIV_SEL("false"),
+		.DYN_ODIV_SEL("false"),
+		.DYN_SDIV_SEL(SDIV),
+		.CLKFB_SEL("internal"),
+		.CLKOUT_BYPASS("false"),
+		.CLKOUTP_BYPASS("false"),
+		.CLKOUTD_BYPASS("false"),
+		.CLKOUTD_SRC("CLKOUT"),
+		.CLKOUTD3_SRC("CLKOUT"),
+		.DYN_DA_EN("false"),
+		.PSDA_SEL("0100"),
+		.DUTYDA_SEL("1000")
+	) pll(
+		.CLKIN(clk),
+		.CLKFB(1'b0),
+		.RESET(1'b0),
+		.RESET_P(1'b0),
+		.FBDSEL(6'b0),
+		.IDSEL(6'b0),
+		.ODSEL(6'b0),
+		.PSDA(4'b0),
+		.DUTYDA(4'b0),
+		.FDLY(4'b0),
+		.CLKOUT(clks[0]),
+		.CLKOUTP(clks[1]),
+		.CLKOUTD(clks[2]),
+		.CLKOUTD3(clks[3]),
+		.LOCK(lock)
+	);
+end
+endgenerate
 
 reg [1:0] lock_sync;
 always @(posedge clk)

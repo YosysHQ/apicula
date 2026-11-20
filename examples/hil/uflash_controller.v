@@ -8,6 +8,9 @@
 
    See document UG295 "Gowin User Flash".
 
+   Used by the HIL test hil/userflash.v, which also builds it for the
+   FLASH64KZ of the Tang Nano 1K (without HAS_FLASH608K).
+
    The Flash is 608 Kbits, 32-bits wide, organized into 304 rows of 64
    columns each.  The erase page size is 2048 bytes, so there are
    38 pages that may be separately erased.

@@ -22,6 +22,8 @@ HIL_BATCH_gw1n9-clk-b := clkdiv
 # BSRAM: GW1N-9C has 26 blocks, each test takes four.
 HIL_BATCH_gw1n9-bsram-a := bsram-rom bsram-rom2 bsram-sp bsram-sp2
 HIL_BATCH_gw1n9-bsram-b := bsram-sdp bsram-sdp2 bsram-dp bsram-dp16
+# userflash is in no batch: every load erases a flash page (10,000 cycles).
+# Run it alone, as make hil-userflash-tangnano9k.
 HIL_BATCHES_tangnano9k := gw1n9-a gw1n9-b gw1n9-c gw1n9-d gw1n9-e \
 	gw1n9-clk-a gw1n9-clk-b gw1n9-bsram-a gw1n9-bsram-b
 
@@ -44,7 +46,6 @@ HIL_BATCHES_tangnano20k := gw2a-a gw2a-b gw2a-c gw2a-clk-a gw2a-clk-b gw2a-clk-c
 .PHONY: clean
 
 tangnano20k: \
-	blinky-latch-tangnano20k.fs \
 	blinky-tangnano20k.fs shift-tangnano20k.fs blinky-tbuf-tangnano20k.fs blinky-oddr-tangnano20k.fs \
 	tlvds-tangnano20k.fs elvds-tangnano20k.fs oddr-tlvds-tangnano20k.fs dvi-example-tangnano20k.fs \
 	oddr-elvds-tangnano20k.fs pll-nanolcd-tangnano20k.fs attosoc-tangnano20k.fs \
@@ -58,7 +59,6 @@ tangnano20k: \
 	$(HIL_BATCHES_tangnano20k:%=hil-%-tangnano20k.fs)
 
 primer20k: \
-	blinky-latch-primer20k.fs \
 	blinky-primer20k.fs shift-primer20k.fs blinky-tbuf-primer20k.fs blinky-oddr-primer20k.fs \
 	hil-osc-primer20k.fs tlvds-primer20k.fs elvds-primer20k.fs oddr-tlvds-primer20k.fs \
 	hil-clkdiv-primer20k.fs dvi-example-primer20k.fs hil-dhcen-primer20k.fs \
@@ -75,7 +75,6 @@ primer20k: \
 	ioregs-primer20k.fs
 
 tangnano: \
-	blinky-latch-tangnano.fs \
 	blinky-tangnano.fs shift-tangnano.fs blinky-tbuf-tangnano.fs blinky-oddr-tangnano.fs \
 	hil-osc-tangnano.fs elvds-tangnano.fs oddr-elvds-tangnano.fs pll-nanolcd-tangnano.fs \
 	hil-clkdiv-tangnano.fs hil-dhcen-tangnano.fs \
@@ -86,7 +85,6 @@ tangnano: \
 	ioregs-tangnano.fs
 
 tangnano1k: \
-	blinky-latch-tangnano1k.fs \
 	blinky-tangnano1k.fs shift-tangnano1k.fs blinky-tbuf-tangnano1k.fs blinky-oddr-tangnano1k.fs \
 	hil-osc-tangnano1k.fs elvds-tangnano1k.fs oddr-elvds-tangnano1k.fs pll-nanolcd-tangnano1k.fs \
 	hil-clkdiv-tangnano1k.fs hil-dhcen-tangnano1k.fs \
@@ -94,15 +92,14 @@ tangnano1k: \
 	iddr-tangnano1k.fs iddrc-tangnano1k.fs iodelay-tangnano1k.fs \
 	ides4-tangnano1k.fs ivideo-tangnano1k.fs ides8-tangnano1k.fs ides10-tangnano1k.fs \
 	hil-bsram-rom-tangnano1k.fs hil-bsram-sp-tangnano1k.fs hil-bsram-sdp-tangnano1k.fs hil-bsram-dp16-tangnano1k.fs \
-	hil-dqce-tangnano1k.fs hil-dcs-tangnano1k.fs userflash-tangnano1k.fs bandgap-tangnano1k.fs \
+	hil-dqce-tangnano1k.fs hil-dcs-tangnano1k.fs hil-userflash-tangnano1k.fs bandgap-tangnano1k.fs \
 	ioregs-tangnano1k.fs
 
 tangnano4k: \
-	blinky-latch-tangnano4k.fs \
 	blinky-tangnano4k.fs shift-tangnano4k.fs blinky-tbuf-tangnano4k.fs blinky-oddr-tangnano4k.fs \
 	hil-osc-tangnano4k.fs tlvds-tangnano4k.fs elvds-tangnano4k.fs oddr-tlvds-tangnano4k.fs \
 	hil-clkdiv-tangnano4k.fs hil-dhcen-tangnano4k.fs \
-	oddr-elvds-tangnano4k.fs blinky-pll-tangnano4k.fs oser16-tangnano4k.fs \
+	oddr-elvds-tangnano4k.fs hil-pllvr-tangnano4k.fs oser16-tangnano4k.fs \
 	oser4-tangnano4k.fs ovideo-tangnano4k.fs oser8-tangnano4k.fs oser10-tangnano4k.fs \
 	iddr-tangnano4k.fs iddrc-tangnano4k.fs ides16-tangnano4k.fs \
 	ides4-tangnano4k.fs ivideo-tangnano4k.fs ides8-tangnano4k.fs ides10-tangnano4k.fs \
@@ -116,7 +113,6 @@ tangnano4k: \
 	ioregs-tangnano4k.fs
 
 tangnano9k: \
-	blinky-latch-tangnano9k.fs \
 	blinky-tangnano9k.fs shift-tangnano9k.fs blinky-tbuf-tangnano9k.fs blinky-oddr-tangnano9k.fs \
 	dvi-example-tangnano9k.fs tlvds-tangnano9k.fs elvds-tangnano9k.fs oddr-tlvds-tangnano9k.fs \
 	oddr-elvds-tangnano9k.fs pll-nanolcd-tangnano9k.fs oser16-tangnano9k.fs attosoc-tangnano9k.fs \
@@ -125,13 +121,12 @@ tangnano9k: \
 	ides4-tangnano9k.fs ivideo-tangnano9k.fs ides8-tangnano9k.fs ides10-tangnano9k.fs \
 	oser10-elvds-tangnano9k.fs femto-riscv-memtest-tangnano9k.fs \
 	femto-riscv-15-tangnano9k.fs femto-riscv-16-tangnano9k.fs femto-riscv-18-tangnano9k.fs \
-	femto-riscv-userflash-tangnano9k.fs i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs \
+	hil-userflash-tangnano9k.fs i3c-tangnano9k.fs mipi-tangnano9k.fs mipi-out-tangnano9k.fs \
 	femto-riscv-18-test-tangnano9k.fs \
 	ioregs-tangnano9k.fs \
 	$(HIL_BATCHES_tangnano9k:%=hil-%-tangnano9k.fs)
 
 szfpga: \
-	blinky-latch-szfpga.fs \
 	blinky-szfpga.fs shift-szfpga.fs blinky-tbuf-szfpga.fs blinky-oddr-szfpga.fs \
 	hil-osc-szfpga.fs tlvds-szfpga.fs elvds-szfpga.fs oddr-tlvds-szfpga.fs \
 	hil-clkdiv-szfpga.fs hil-dhcen-szfpga.fs \
@@ -146,7 +141,6 @@ szfpga: \
 	hil-dsp-multalu36x18-szfpga.fs hil-dsp-multaddalu18x18-szfpga.fs
 
 tec0117: \
-	blinky-latch-tec0117.fs \
 	blinky-tec0117.fs shift-tec0117.fs blinky-tbuf-tec0117.fs blinky-oddr-tec0117.fs \
 	hil-osc-tec0117.fs tlvds-tec0117.fs elvds-tec0117.fs oddr-tlvds-tec0117.fs \
 	hil-clkdiv-tec0117.fs hil-dhcen-tec0117.fs \
@@ -162,7 +156,6 @@ tec0117: \
 	ioregs-tec0117.fs
 
 runber: \
-	blinky-latch-runber.fs \
 	blinky-runber.fs shift-runber.fs blinky-tbuf-runber.fs blinky-oddr-runber.fs \
 	hil-osc-runber.fs tlvds-runber.fs elvds-runber.fs oddr-tlvds-runber.fs \
 	hil-clkdiv-runber.fs \
@@ -223,7 +216,7 @@ tangnano4k-unpacked: \
 	blinky-tangnano4k-unpacked.v shift-tangnano4k-unpacked.v blinky-tbuf-tangnano4k-unpacked.v \
 	blinky-oddr-tangnano4k-unpacked.v hil-osc-tangnano4k-unpacked.v tlvds-tangnano4k-unpacked.v \
 	elvds-tangnano4k-unpacked.v oddr-tlvds-tangnano4k-unpacked.v oddr-elvds-tangnano4k-unpacked.v \
-	blinky-pll-tangnano4k-unpacked.v oser16-tangnano4k-unpacked.v oser4-tangnano4k-unpacked.v \
+	hil-pllvr-tangnano4k-unpacked.v oser16-tangnano4k-unpacked.v oser4-tangnano4k-unpacked.v \
 	ovideo-tangnano4k-unpacked.v oser8-tangnano4k-unpacked.v oser10-tangnano4k-unpacked.v \
 	ides16-tangnano4k-unpacked.v ides4-tangnano4k-unpacked.v ivideo-tangnano4k-unpacked.v \
 	ides8-tangnano4k-unpacked.v ides10-tangnano4k-unpacked.v oser10-tlvds-tangnano4k-unpacked.v \
@@ -437,9 +430,6 @@ emcu-%-tangnano4k.fs: emcu-%-tangnano4k.json
 %-tangnano4k-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSCZ -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=2 -D RISCV_MEM_16K -p "read_verilog $^; synth_gowin -nolutram -nowidelut -json $@ ${YOSYS_FLAGS}"
 
-%-pll-tangnano4k-synth.json: pll/GW1NS-4-dyn.vh %-pll-vr.v
-	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=6 -p "read_verilog $^; synth_gowin -nolutram -json $@ ${YOSYS_FLAGS}"
-
 # ============================================================
 # Tangnano9k (GW1N-9C)
 %-tangnano9k.fs: %-tangnano9k.json
@@ -535,8 +525,8 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/dvi_sync.v DVI/dvi_top.
 
 # hil-<test>-<board>-unpacked.v also matches the hil-%.v wrapper rule, and make
 # takes that one because its prerequisites exist. Explicit rules win.
-HIL_NAMES := $(shell sed -n 's/^.ifdef HIL_\([a-z][a-z0-9_]*\)$$/\1/p' hil.v | tr _ -) \
-	$(HIL_BATCHES_tangnano9k) $(HIL_BATCHES_tangnano20k)
+HIL_NAMES := $(sort $(shell sed -n 's/^.ifdef HIL_\([a-z][a-z0-9_]*\)$$/\1/p' hil.v | tr _ -) \
+	$(HIL_BATCHES_tangnano9k) $(HIL_BATCHES_tangnano20k))
 # $(call hil_unpack,BOARD,DEVICE)
 define hil_unpack
 $(HIL_NAMES:%=hil-%-$(1)-unpacked.v): hil-%-$(1)-unpacked.v: hil-%-$(1).fs
