@@ -1,8 +1,8 @@
 `default_nettype none
 // A (0xf12) travels from the first to the last PADD18.
 // Registers at A and B are turned on, and addition occurs only in the first
-// primitive, all others are subtracted.  module dsp_padd18(input wire clk, input
-// wire reset, 
+// primitive, all others are subtracted. The outputs are 18-bit signed: row 2,
+// 0x38000, is -0x8000, where A=0xf12 reaches it and 0x8f12 is subtracted.
 
 module dsp_padd18(input wire clk, input wire reset, 
 	output wire [63:0] product, 

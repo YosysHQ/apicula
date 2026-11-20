@@ -306,9 +306,12 @@ clean:
 # its tests' references. Every line names its test, so the order is ignored.
 hil_tests = $(or $(HIL_BATCH_$(1)),$(1))
 
-hil-%.v: hil.v
+hil-%.v: hil.v $(wildcard hil/*.v) emitter_uart.v
 	printf '`define HIL_%s\n' $(subst -,_,$(call hil_tests,$*)) > $@
 	echo '`include "hil.v"' >> $@
+
+# Keep the bitstreams of single tests, which no board target lists
+.PRECIOUS: %-tangnano9k.fs %-tangnano20k.fs
 
 HIL_SETTLE ?= 10
 HIL_TIMEOUT ?= 120

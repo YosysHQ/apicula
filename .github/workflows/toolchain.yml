@@ -217,4 +217,4 @@ jobs:
         name: examples-${{ inputs.name }}-${{ matrix.board }}
         path: examples
     - name: Run HIL tests
-      run: make -C examples hil-${{ matrix.board }}
+      run: make -k -C examples hil-${{ matrix.board }}

@@ -25,9 +25,10 @@ mismatch. Report the command, seed and status totals per device:
 The boards are in the `hil` matrix of `.github/workflows/toolchain.yml`. Place
 and route and the upload are the slow part, so the tests share one design,
 `examples/hil.v`, and run in batches: one bitstream per batch, with the tests
-selected by `` `define HIL_<name> ``. A test is a module in `examples/hil/`, an
-`` `ifdef `` block in `hil.v` that instantiates it and one that lists its report
-rows, and a reference in `examples/hil-references/<name>.txt`. Add it to a batch
+selected by `` `define HIL_<name> ``. A test is a module in `examples/hil/`,
+`` `include ``d by `hil.v`, an `` `ifdef `` block in `hil.v` that instantiates it
+and one that lists its report rows, and a reference in
+`examples/hil-references/<name>.txt`. Add it to a batch
 in `examples/Makefile` (`HIL_BATCH_*`), and check that nextpnr still places the
 batch.
 
@@ -36,9 +37,9 @@ fails as a whole. Prefer self-checks to raw values, like `latch`'s pass mask: a
 reference captured from Apicula's own bitstream only proves the output did not
 change.
 
-A test that only needs a CPU to drive it, like the old DSP tests, belongs in
-`hil.v` as plain logic. Designs that are tests of a whole system, like
-`femto-riscv-18-test`, keep their own bitstream and rule.
+Drive a primitive under test from plain logic in `hil.v`, not from a CPU.
+Designs that test a whole system, like `femto-riscv-18-test`, keep their own
+bitstream and rule.
 
 ## Comparing by hand
 

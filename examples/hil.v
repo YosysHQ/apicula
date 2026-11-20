@@ -41,9 +41,8 @@ wire rst = !por_cnt[3];
 always @(posedge clk)
 	if (rst) por_cnt <= por_cnt + 1;
 
-// DSP clock: one pulse per tick, a few system clocks wide
-reg [2:0] dsp_pulse;
-wire dsp_clk = |dsp_pulse;
+// DSP clock: one registered pulse per tick
+reg dsp_clk;
 
 // ---- Tests ----
 
@@ -90,7 +89,7 @@ dsp_alu54d alu54d_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(alu54d));
 
 // ---- Report rows ----
 // Row (slot, i) of the report. A test owns a slot of 8 rows; the slot number
-// only sets the print order, give a new test the next free one.
+// only sets the print order, give a new test the next free one, up to 15.
 
 `define ROW(slot, name, i, val) \
 	(slot)*8 + (i): begin row_on = 1; row_name = name; row_num = i; row_val = val; end
@@ -207,14 +206,19 @@ reg [8*LINE-1:0] line;
 reg [5:0] left;
 wire [7:0] head = line[8*LINE-1 -: 8];
 
+// A quarter second before each tick line, so that a capture started just
+// after the upload cannot miss the first tick and miscount the accumulators.
+localparam PAUSE = `CPU_FREQ * 250000;
+reg [23:0] pause;
+
 always @(posedge clk) begin
 	uart_valid <= 1'b0;
-	if (dsp_pulse) dsp_pulse <= dsp_pulse - 1;
+	dsp_clk <= 1'b0;
 
 	if (rst) begin
 		row <= 0;
 		left <= 0;
-		dsp_pulse <= 0;
+		pause <= 0;
 	end else if (left) begin
 		if (head == 0 || (uart_ready && !uart_valid)) begin
 			uart_data <= head;
@@ -223,10 +227,15 @@ always @(posedge clk) begin
 			left <= left - 1;
 		end
 	end else if (row[7]) begin
-		line <= "--- tick ---\n";
-		left <= LINE;
-		row <= 0;
-		dsp_pulse <= 3'd7;
+		if (pause != PAUSE) begin
+			pause <= pause + 1;
+		end else begin
+			pause <= 0;
+			line <= "--- tick ---\n";
+			left <= LINE;
+			row <= 0;
+			dsp_clk <= 1'b1;
+		end
 	end else begin
 		if (row_on) begin
 			line <= {row_name, " ", "0" + row_num, " = 0x", row_hex, "\n"};
