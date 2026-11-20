@@ -21,6 +21,13 @@
 `include "hil/dsp-multalu36x18.v"
 `include "hil/dsp-multaddalu18x18.v"
 `include "hil/dsp-alu54d.v"
+`include "hil/clock-meter.v"
+`include "hil/osc.v"
+`include "hil/clkdiv.v"
+`include "hil/dhcen.v"
+`include "hil/dqce.v"
+`include "hil/dcs.v"
+`include "hil/rpll.v"
 
 // The DSP tests have five 64-bit outputs; w is a 5*64-bit wire.
 `define DSP_PORTS(w) \
@@ -85,6 +92,40 @@ dsp_multaddalu18x18 multaddalu18x18_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(mul
 `ifdef HIL_dsp_alu54d
 wire [5*64-1:0] alu54d;
 dsp_alu54d alu54d_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(alu54d));
+`endif
+// The clock tests also give their raw counts (16 bits each, four to a row),
+// which vary from run to run and so are not in the references. To print them,
+// add `define HIL_RAW to the generated hil-<test>.v and build it by hand.
+`ifdef HIL_osc
+wire [0:0] osc_pass;
+wire [15:0] osc_raw;
+osc_test osc(.clk(clk), .rst(rst), .pass(osc_pass), .raw(osc_raw));
+`endif
+`ifdef HIL_clkdiv
+wire [`NUM_HCLK-1:0] clkdiv_pass;
+wire [`NUM_HCLK*16-1:0] clkdiv_raw;
+wire [2*64-1:0] clkdiv_raw_rows = clkdiv_raw;
+clkdiv_test clkdiv(.clk(clk), .rst(rst), .pass(clkdiv_pass), .raw(clkdiv_raw));
+`endif
+`ifdef HIL_dhcen
+wire [1:0] dhcen_pass;
+wire [15:0] dhcen_raw;
+dhcen_test dhcen(.clk(clk), .rst(rst), .pass(dhcen_pass), .raw(dhcen_raw));
+`endif
+`ifdef HIL_dqce
+wire [3:0] dqce_pass;
+wire [31:0] dqce_raw;
+dqce_test dqce(.clk(clk), .rst(rst), .pass(dqce_pass), .raw(dqce_raw));
+`endif
+`ifdef HIL_dcs
+wire [3:0] dcs_pass;
+wire [15:0] dcs_raw;
+dcs_test dcs(.clk(clk), .rst(rst), .pass(dcs_pass), .raw(dcs_raw));
+`endif
+`ifdef HIL_rpll
+wire [4:0] rpll_pass;
+wire [63:0] rpll_raw;
+rpll_test rpll(.clk(clk), .rst(rst), .pass(rpll_pass), .raw(rpll_raw));
 `endif
 
 // ---- Report rows ----
@@ -166,6 +207,43 @@ always @* begin
 	`ROW(9, "dsp-alu54d", 0, `DSP_OUT(alu54d, 0))
 	`ROW(9, "dsp-alu54d", 1, `DSP_OUT(alu54d, 1))
 	`ROW(9, "dsp-alu54d", 2, `DSP_OUT(alu54d, 2))
+`endif
+`ifdef HIL_osc
+	`ROW(10, "osc", 0, osc_pass)
+`ifdef HIL_RAW
+	`ROW(10, "osc", 1, osc_raw)
+`endif
+`endif
+`ifdef HIL_clkdiv
+	`ROW(11, "clkdiv", 0, clkdiv_pass)
+`ifdef HIL_RAW
+	`ROW(11, "clkdiv", 1, clkdiv_raw_rows[0+:64])
+	`ROW(11, "clkdiv", 2, clkdiv_raw_rows[64+:64])
+`endif
+`endif
+`ifdef HIL_dhcen
+	`ROW(12, "dhcen", 0, dhcen_pass)
+`ifdef HIL_RAW
+	`ROW(12, "dhcen", 1, dhcen_raw)
+`endif
+`endif
+`ifdef HIL_dqce
+	`ROW(13, "dqce", 0, dqce_pass)
+`ifdef HIL_RAW
+	`ROW(13, "dqce", 1, dqce_raw)
+`endif
+`endif
+`ifdef HIL_dcs
+	`ROW(14, "dcs", 0, dcs_pass)
+`ifdef HIL_RAW
+	`ROW(14, "dcs", 1, dcs_raw)
+`endif
+`endif
+`ifdef HIL_rpll
+	`ROW(15, "rpll", 0, rpll_pass)
+`ifdef HIL_RAW
+	`ROW(15, "rpll", 1, rpll_raw)
+`endif
 `endif
 	default: ;
 	endcase
