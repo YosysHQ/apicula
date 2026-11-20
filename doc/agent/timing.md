@@ -388,9 +388,10 @@ with the same result on all three devices below. (code, data)
   entry. Vendor values: GW5A-25A 19, 37, 55, 73; GW5AT-60B 10, 28, …, 136;
   GW5AST-138C 28, 46, …, 154 (every 18th). (code, data)
 
-Per device, in Apicula coordinates. (data)
+Per device, rows and columns in Apicula coordinates; the `dat` grid size is the
+vendor's, with its border (Apicula's is two smaller in each direction). (data)
 
-| Device | `dat` grid | BSRAM rows | DSP rows | VIQ | Spine | Repeater |
+| Device | `dat` grid (vendor) | BSRAM rows | DSP rows | VIQ | Spine | Repeater |
 |---|---|---|---|---|---|---|
 | GW5A-25A | 39×94 | 9, 27 | 18 | 45 | 18, 36, 54, 72 | 9, 27, 63, 81 |
 | GW5AT-60B | 76×149 | 18, 37, 55 | 27, 46, 64 | 72 | 9, 27, …, 135 | 18, 36, 54, 90, 108, 126 |
@@ -405,11 +406,13 @@ Nothing in the X-wire model depends on the device (code, IDE 1.9.10.03):
 - `buildXwireNodeCrossDelayValueFlag`, `getWireFanout`, `subRowDistLoadRatio`,
   `addWireFanoutDelay` and `setX*NodeCross*Flag` have no device checks.
 
-Devices differ only in data. GW5AT-60B's `.tm` values equal GW5A-25A's (data).
-GW5AST-138C's group 1 has a larger second pair, for example X2
-`[0.1875, 0.175, 0.20625, 0.1925]` and LUT A→F max 0.579 against 0.526 at C1/I0
-(data). The 138C SDF has LUT A→F 0.579, so the IDE uses the larger pair, as
-nextpnr's max does. (data)
+Devices differ only in data. GW5AT-60B's X2 and LUT A→F values equal GW5A-25A's
+in every speed grade; other fields were not compared (data).
+GW5AST-138C's group 1 has a larger second pair, for example X2 at C1/I0 (the
+`.tm` value ×1.25) `[0.1875, 0.175, 0.20625, 0.1925]`, raw
+`[0.15, 0.14, 0.165, 0.154]`, and LUT A→F max 0.579 against 0.526 at C1/I0
+(data). The 138C SDF has LUT A→F 0.579, which suggests the IDE uses the larger
+pair, as nextpnr's max does; this rests on that one value. (data; inferred)
 
 How `getWiresDlyNew` charges an X wire (X8 read in full; X1 from its root and end
 branches; X2 assumed the same as X8). `mf` and `ef` are the middle and end
@@ -475,7 +478,9 @@ GW5AT-60B is the only device nextpnr builds with
 `create_nodes_with_empty_area` (`gowin_arch_gen.py`). That function adds nodes
 without a timing class, so 60B gets neither the fanout nor the crossing classes
 (code, nextpnr). Without the classes 60B came out at −22.2%, median 0.890,
-measured before the spine columns; the 60B row above has them added there. (data)
+measured before the spine columns. The 60B row above is with the classes added,
+using the nextpnr hunk that is not in nextpnr main yet (pepijndevos/nextpnr
+`gowin-gw5a-xcross`, dfe8a3e2). (data)
 
 ### What Apicula uses for GW5A
 
