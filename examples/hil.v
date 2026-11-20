@@ -89,12 +89,12 @@ dsp_alu54d alu54d_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(alu54d));
 
 // ---- Report rows ----
 // Row (slot, i) of the report. A test owns a slot of 8 rows; the slot number
-// only sets the print order, give a new test the next free one, up to 15.
+// only sets the print order, give a new test the next free one, up to 31.
 
 `define ROW(slot, name, i, val) \
 	(slot)*8 + (i): begin row_on = 1; row_name = name; row_num = i; row_val = val; end
 
-reg [7:0] row;  // row[7]: all rows done, print the tick line
+reg [8:0] row;  // row[8]: all rows done, print the tick line
 reg row_on;
 reg [8*20-1:0] row_name;
 reg [2:0] row_num;
@@ -226,7 +226,7 @@ always @(posedge clk) begin
 			line <= line << 8;
 			left <= left - 1;
 		end
-	end else if (row[7]) begin
+	end else if (row[8]) begin
 		if (pause != PAUSE) begin
 			pause <= pause + 1;
 		end else begin
