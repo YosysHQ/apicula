@@ -1,1 +1,1 @@
-../pROMX9-video-ram.v
+pROM-video-ram.v

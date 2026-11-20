@@ -1,0 +1,1 @@
+bsram-dp16 0 = 0x00ffffffffffffffff

@@ -1,0 +1,1 @@
+bsram-sdp 0 = 0x00fd80fd80cd80cd80

@@ -1,0 +1,1 @@
+bsram-rom-bugs 0 = 0x0080f180f180f180f1
