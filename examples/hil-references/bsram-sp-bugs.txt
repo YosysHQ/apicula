@@ -1,0 +1,1 @@
+bsram-sp-bugs 0 = 0x00000080ff80ff80ff
