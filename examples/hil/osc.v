@@ -7,7 +7,7 @@
 // UG286: 250 MHz for OSC and OSCZ, 240 MHz for OSCH, and 210 MHz for GW1N-4,
 // whose board rule overrides it; GW5A's OSCA runs at 210 MHz (DS1103, 2.13).
 // The datasheets give a tolerance of 5%, but the bench boards measured +5%
-// (tangnano9k) and -6% (tangnano20k); the check
+// (tangnano9k), -6% (tangnano20k) and +1.8% (primer25k); the check
 // allows TOL percent, which still tells FREQ_DIV from its neighbours (6 and
 // 10 are 33% and 20% away).
 //

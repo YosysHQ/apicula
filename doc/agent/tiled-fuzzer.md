@@ -84,8 +84,7 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
   leaves helper cells unplaced. ALU clusters ignore BEL.
 - No bel for `RAM16S1/2/4`.
 - No bel for the GW1N/GW2A `PLL` primitive, only `rPLL`.
-- `DCS_MODE` is read from attributes only (`globals.cc`), so a `defparam`, as in
-  `examples/gw5a/dcs.v`, is ignored and every DCS is packed as `RISING`. The
+- `DCS_MODE` is read from attributes only (`globals.cc`), so a `defparam` is ignored and every DCS is packed as `RISING`. The
   HIL test `examples/hil/dcs.v` sets it as an attribute.
 - `DCS` on GW5A-25A with inputs from I/O pins crashes in "Routing globals".
 - No cell for `LUT5`–`LUT8`, `MUX2`, `IDES14`, `IDES32`, `OSER14`, `DDRDLL`,

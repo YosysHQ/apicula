@@ -47,8 +47,8 @@ HIL_BROKEN_tangnano20k := bsram-sdp bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs 
 HIL_BATCH_gw5a-a := latch lut8 alu rom16 big-shift osc
 # The clock tests each alone: with too many PLL clocks on global wires (plla
 # and dcs together, or all seven PLLA outputs in one test) nextpnr routes the
-# system clock partly through the fabric in some placements, and the reporter
-# garbles its output; with osc and plla it sometimes fails to route the
+# system clock partly through the fabric in some placements, and those builds
+# garble the reporter's output (the link is inferred, not traced); with osc and plla it sometimes fails to route the
 # oscillator.
 HIL_BATCH_gw5a-clk-a := plla
 HIL_BATCH_gw5a-clk-b := dcs
@@ -60,8 +60,8 @@ HIL_BATCHES_primer25k := gw5a-a gw5a-clk-a gw5a-clk-b gw5a-clk-c gw5a-bsram gw5a
 # The other GW5A boards are not on a bench: build-only, from gw5a/Makefile.
 # GW5AT-60B: nextpnr asserts on dcs ("No clock inputs"), cannot place
 # dsp-mult27x36, and fails to route the BSRAM inputs of six bsram tests
-# together, so those build one by one, and of bsram-sp-bugs alone in most
-# placements. GW5AST-138C has neither OSCA nor PLLA,
+# together, so those build one by one; bsram-sp-bugs fails to route even
+# alone in most placements and is left out. GW5AST-138C has neither OSCA nor PLLA,
 # and gowin_pack has no MULTALU27X18 for it. None of these boards had a dcs or
 # DSP example before.
 HIL_BATCH_gw5ast-a := latch lut8 alu rom16 big-shift

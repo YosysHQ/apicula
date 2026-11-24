@@ -11,7 +11,8 @@
 //
 // Each test measures some of the outputs: with all seven and the system clock
 // on global wires, nextpnr routed the system clock partly through the fabric
-// in about one placement of six, garbling the reporter. plla measures CLKOUT0-3,
+// in about one placement of six, and those builds garbled the reporter
+// (inferred, not traced). plla measures CLKOUT0-3,
 // plla2 CLKOUT4-6, each with all seven outputs enabled.
 //
 // pass[0]: LOCK went high and stayed high; pass[n+1]: CLKOUT(FIRST + n) in range.
