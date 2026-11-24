@@ -372,9 +372,12 @@ overwrite earlier ones). (code)
   exist in the code but are not set by this function. (code)
 - Vendor coordinates are Apicula's plus one: the vendor grid has a border. For
   GW5A-25A, `dat` gives 39×94 with VIQ 46, Apicula has 37×92, and the crossings
-  are BSRAM rows 9 and 27, DSP row 18, VIQ column 45 and repeater columns 9, 18,
-  27, 36, 54, 63, 72 and 81 (Apicula coordinates). The spine-column table reads as
-  zeros in `dat_parser`, either unused or a wrong offset. (code, data)
+  are BSRAM rows 9 and 27, DSP row 18, VIQ column 45, spine columns 18, 36, 54
+  and 72, and repeater columns 9, 27, 63 and 81 (Apicula coordinates). (code, data)
+- `routeSwitchDataTable::getSpineColumn` (0x1af338c) reads 8 `int16`s at file
+  offset 0xa6a1a, `0x2b572` into the 5AT table at 0x7b4a8; -1 marks an unused
+  entry. Vendor values: GW5A-25A 19, 37, 55, 73; GW5AT-60B 10, 28, …, 136;
+  GW5AST-138C 28, 46, …, 154 (every 18th). (code, data)
 
 How `getWiresDlyNew` charges an X wire (X8 read in full; X1 from its root and end
 branches; X2 assumed the same as X8). `mf` and `ef` are the middle and end
@@ -421,6 +424,11 @@ the pip that drives the wire. With real GW5A values and the fanout change, the
 same IDE routes come out at +6.7% (median 1.045, p10–p90 1.02–1.10), against
 −1.9% (median 1.03, p10–p90 0.76–1.23) for the placeholders. The tighter spread
 is the point: the placeholder total was right only on average. (data)
+
+With the spine columns flagged 9 instead of 7, a two-core picorv32 on GW5A-25A
+C1/I0 (413 connections) goes from +6.5% (median 1.044) to +6.1% (median 1.040).
+141 connections get 12 ps faster per spine crossing, and their mean
+|nextpnr − SDF| drops from 121 to 108 ps. (data)
 
 ### What Apicula uses for GW5A
 

@@ -468,7 +468,8 @@ class Datfile:
         ret["LeftBMBGA121NName"]    =  self.read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x292b2, 0)
         ret["RightBMBGA121NName"]   = self.read_scaledGrid16(0x96, 9, 9, RSTable5ATOffset + 0x297f8, 0)
 
-        ret["SpineColumn"]          = self.read_arr16_at(8, RSTable5ATOffset + 0x14e98, 0xe)
+        # routeSwitchDataTable::getSpineColumn @0x1af338c (IDE 1.9.10.03); -1 is unused
+        ret["SpineColumn"]          = self.read_arr16_at(8, 0, RSTable5ATOffset + 0x2b572)
 
 
         return ret
