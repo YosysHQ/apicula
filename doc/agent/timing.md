@@ -362,8 +362,17 @@ overwrite earlier ones). (code)
 | BSRAM rows, except vendor row 1 and `rows − 2` | 2 | `X*_VBUF_EBR` |
 | DSP rows | 4 | `X*_VBUF_DSP` |
 | spine columns (`routeSwitchDataTable::getSpineColumn`) | 9 | `X*_HOS_SPINE` |
-| DSR repeater columns: every 9th from 10 to `cols − 10`, minus spine and VIQ | 7 | `X*_HOS_RPT` |
+| DSR repeater columns: every 9th from 10 to `cols − 10`, minus spine | 7 | `X*_HOS_RPT` |
 | the VIQ column (`routeSwitchDataTable::getViq`, `cc_x` in `dat_parser`) | 6 | `X*_HBUF_VIQ` |
+
+`chip::getDSRRepeaterColumnLoc` (0x191b4ae) keeps the VIQ column in its list;
+flag 6 is set last and overwrites it. (code)
+
+`chip::initBsramDspRowLoc` (0x191b010) finds the rows from
+`routeSwitchDataTable::getGridTypeArr`, the `.dat` grid: a row is a BSRAM row if
+any cell has GRID_TYPE 6 or 10, a DSP row if any has 7. So the vendor never sees
+Apicula's `patch_grid_bram_138`. Apicula finds the rows from bel names instead,
+with the same result on all three devices below. (code, data)
 
 - `chip::setX{1,2,8}NodeCross{Row,Column}Flag(p, flag)` looks at every X wire
   root within 8 rows or columns of `p`. A middle or end segment on the other side
@@ -378,6 +387,32 @@ overwrite earlier ones). (code)
   offset 0xa6a1a, `0x2b572` into the 5AT table at 0x7b4a8; -1 marks an unused
   entry. Vendor values: GW5A-25A 19, 37, 55, 73; GW5AT-60B 10, 28, …, 136;
   GW5AST-138C 28, 46, …, 154 (every 18th). (code, data)
+
+Per device, rows and columns in Apicula coordinates; the `dat` grid size is the
+vendor's, with its border (Apicula's is two smaller in each direction). (data)
+
+| Device | `dat` grid (vendor) | BSRAM rows | DSP rows | VIQ | Spine | Repeater |
+|---|---|---|---|---|---|---|
+| GW5A-25A | 39×94 | 9, 27 | 18 | 45 | 18, 36, 54, 72 | 9, 27, 63, 81 |
+| GW5AT-60B | 76×149 | 18, 37, 55 | 27, 46, 64 | 72 | 9, 27, …, 135 | 18, 36, 54, 90, 108, 126 |
+| GW5AST-138C | 111×184 | 9, 27, …, 99 | 18, 36, …, 90 | 90 | 27, 45, …, 153 | 9, 18, 36, 54, 72, 108, …, 162, 171 |
+
+Nothing in the X-wire model depends on the device (code, IDE 1.9.10.03):
+
+- `TmAnalyzer::getWiresDly` (0x2c2df46) checks only `isDeviceBeforeGW5AT138`,
+  which is false for every GW5A.
+- `TmModelNew::getWiresDlyNew` calls `chip::getType` once (0x2da1a87), in the
+  GLBSRC branch. It does not affect X wires.
+- `buildXwireNodeCrossDelayValueFlag`, `getWireFanout`, `subRowDistLoadRatio`,
+  `addWireFanoutDelay` and `setX*NodeCross*Flag` have no device checks.
+
+Devices differ only in data. GW5AT-60B's X2 and LUT A→F values equal GW5A-25A's
+in every speed grade; other fields were not compared (data).
+GW5AST-138C's group 1 has a larger second pair, for example X2 at C1/I0 (the
+`.tm` value ×1.25) `[0.1875, 0.175, 0.20625, 0.1925]`, raw
+`[0.15, 0.14, 0.165, 0.154]`, and LUT A→F max 0.579 against 0.526 at C1/I0
+(data). The 138C SDF has LUT A→F 0.579, which suggests the IDE uses the larger
+pair, as nextpnr's max does; this rests on that one value. (data; inferred)
 
 How `getWiresDlyNew` charges an X wire (X8 read in full; X1 from its root and end
 branches; X2 assumed the same as X8). `mf` and `ef` are the middle and end
@@ -429,6 +464,23 @@ With the spine columns flagged 9 instead of 7, a two-core picorv32 on GW5A-25A
 C1/I0 (413 connections) goes from +6.5% (median 1.044) to +6.1% (median 1.040).
 141 connections get 12 ps faster per spine crossing, and their mean
 |nextpnr − SDF| drops from 121 to 108 ps. (data)
+
+The same comparison on the other devices, two-core picorv32 through the IDE's
+own synthesis, place and route, C1/I0, all crossings. (data)
+
+| Device | Connections | Total vs SDF | Median ratio | p10–p90 |
+|---|---|---|---|---|
+| GW5A-25A | 413 | +6.1% | 1.040 | 1.02–1.19 |
+| GW5AT-60B | 405 | +5.1% | 1.039 | 1.02–1.08 |
+| GW5AST-138C | 987 | +4.1% | 1.037 | 1.02–1.07 |
+
+GW5AT-60B is the only device nextpnr builds with
+`create_nodes_with_empty_area` (`gowin_arch_gen.py`). That function adds nodes
+without a timing class, so 60B gets neither the fanout nor the crossing classes
+(code, nextpnr). Without the classes 60B came out at −22.2%, median 0.890,
+measured before the spine columns. The 60B row above is with the classes added,
+using the nextpnr hunk that is not in nextpnr main yet (pepijndevos/nextpnr
+`gowin-gw5a-xcross`, dfe8a3e2). (data)
 
 ### What Apicula uses for GW5A
 
