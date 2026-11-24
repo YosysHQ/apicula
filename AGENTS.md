@@ -22,6 +22,11 @@ change. Before preparing a pull request, check the user's access:
 Open pull requests as drafts (`gh pr create --draft`) unless the user asks
 otherwise.
 
+When a change builds on another open pull request, make it a GitHub stack
+(`gh stack link <lower-pr> <upper-pr>`, or `gh stack submit` for new branches)
+rather than a branch on `master` that repeats the lower change: each pull
+request then shows only its own diff.
+
 ## Project
 
 Verilog → Yosys → nextpnr → `gowin_pack` → openFPGALoader. See
