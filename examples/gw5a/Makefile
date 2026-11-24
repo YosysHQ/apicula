@@ -7,41 +7,42 @@ DEBUG = -v --debug
 
 .DEFAULT_GOAL := all
 
-.PHONY: all primer25k tangmega138k clean
+.PHONY: all primer25k tangmega138k tangconsole138k tangconsole60k clean
 
 primer25k: \
 	in-out-primer25k.fs in-inv-out-primer25k.fs in-or-inv-out-primer25k.fs \
-	lut8-primer25k.fs big-shift-primer25k.fs alu-simple-primer25k.fs lutram-primer25k.fs \
-	blinky-osc-primer25k.fs pll7-primer25k.fs dcs-primer25k.fs \
-	bsram-DPB-primer25k.fs bsram-DPB16-primer25k.fs bsram-DPX9B-primer25k.fs bsram-DPX9B18-primer25k.fs \
-	bsram-pROM-primer25k.fs bsram-pROMX9-primer25k.fs bsram-SP-primer25k.fs bsram-SPX9-primer25k.fs \
-	bsram-SDPB-primer25k.fs bsram-SDPX9B-primer25k.fs bsram-SDPB32-primer25k.fs \
 	femto-riscv-15-primer25k.fs femto-riscv-16-primer25k.fs femto-riscv-18-primer25k.fs \
-	dsp-mult12x12-primer25k.fs dsp-multaddalu12x12-primer25k.fs dsp-multalu27x18-primer25k.fs \
-	dsp-mult27x36-primer25k.fs \
 	adc-temp-primer25k.fs adc-loc-left-primer25k.fs adc-glo-right-primer25k.fs attosoc-primer25k.fs \
 	oddr-tlvds-primer25k.fs oser4-primer25k.fs oser8-primer25k.fs oser10-primer25k.fs ovideo-primer25k.fs \
 	iddr-primer25k.fs iddrc-primer25k.fs ides4-primer25k.fs ivideo-primer25k.fs \
 	ides8-primer25k.fs ides10-primer25k.fs \
-	oser10-clkdiv-tlvds-primer25k.fs
+	oser10-clkdiv-tlvds-primer25k.fs \
+	hil-tests-primer25k
 
 tangmega138k: \
-	big-shift-tangmega138k.fs attosoc-tangmega138k.fs uart-message-tangmega138k.fs
+	attosoc-tangmega138k.fs uart-message-tangmega138k.fs \
+	hil-tests-tangmega138k
 
 tangconsole138k: \
-	uart-message-tangmega138k.fs
+	uart-message-tangmega138k.fs \
+	hil-tests-tangconsole138k
 
 tangconsole60k: \
 	in-out-tangconsole60k.fs in-inv-out-tangconsole60k.fs in-or-inv-out-tangconsole60k.fs \
-	60k-shift-tangconsole60k.fs blinky-osc-tangconsole60k.fs pll7-tangconsole60k.fs \
-	bsram-DPB-tangconsole60k.fs bsram-DPB16-tangconsole60k.fs bsram-DPX9B-tangconsole60k.fs bsram-DPX9B18-tangconsole60k.fs \
-	bsram-pROM-tangconsole60k.fs bsram-pROMX9-tangconsole60k.fs bsram-SP-tangconsole60k.fs bsram-SPX9-tangconsole60k.fs \
-	bsram-SDPB-tangconsole60k.fs bsram-SDPX9B-tangconsole60k.fs bsram-SDPB32-tangconsole60k.fs
+	hil-tests-tangconsole60k
 
 all: primer25k tangmega138k tangconsole138k tangconsole60k
 
 clean:
 	rm -f *.json *.fs *-unpacked.v
+
+# The hardware-in-the-loop self-tests (../hil.v) replace the examples that
+# showed off one primitive: fabric, clocks, BSRAM and DSP. They are built in
+# the parent directory, see HIL_BATCHES_<board> in ../Makefile; only the
+# primer25k runs them on a bench (make -C .. hil-primer25k).
+.PHONY: hil-tests-primer25k hil-tests-tangmega138k hil-tests-tangconsole138k hil-tests-tangconsole60k
+hil-tests-primer25k hil-tests-tangmega138k hil-tests-tangconsole138k hil-tests-tangconsole60k:
+	$(MAKE) -C .. $(@:hil-tests-%=%)-hil
 
 # ============================================================
 # TangPrimer25k
@@ -51,20 +52,8 @@ clean:
 %-primer25k.json: %-primer25k-synth.json primer25k.cst
 	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=primer25k.cst --vopt sspi_as_gpio
 
-big-shift-primer25k.json: big-shift-primer25k-synth.json big-shift-primer25k.cst
-	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=big-shift-primer25k.cst --vopt sspi_as_gpio
-
-alu-%-primer25k.json: alu-%-primer25k-synth.json alu-%-primer25k.cst
-	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --top top --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=$(basename $@).cst --vopt sspi_as_gpio
-
 %-primer25k-synth.json: %.v
 	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA  -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
-
-big-shift-primer25k-synth.json: big-shift.v 
-	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=24 -D OSC_TYPE_OSCA -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
-
-bsram-%-primer25k-synth.json: pll/GW5A-25A.vh io444.vh display-640x480.v %-image-rom.v %-video-ram.v %.v clock-PLLA.v
-	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
 femto-%-primer25k-synth.json: femto-%.v
 	$(YOSYS) -D INV_BTN=1 -D LEDS_NR=8 -D OSC_TYPE_OSCA -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -nolutram -family gw5a ${YOSYS_FLAGS}"
@@ -82,9 +71,6 @@ attosoc-primer25k-synth.json: attosoc/attosoc.v attosoc/picorv32.v
 
 %-tangmega138k.json: %-tangmega138k-synth.json tangmega138k.cst
 	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AST-LV138PG484AC1/I0 --vopt cst=tangmega138k.cst
-
-big-shift-tangmega138k-synth.json: big-shift.v
-	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=16 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
 attosoc-tangmega138k.json: attosoc-tangmega138k-synth.json tangmega138k.cst
 	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --top attosoc --json $< --write $@ --device GW5AST-LV138PG484AC1/I0 --vopt cst=tangmega138k.cst
@@ -113,15 +99,6 @@ uart-message-tangconsole138k-synth.json: uart-message-tangconsole138k.v
 
 %-tangconsole60k.json: %-tangconsole60k-synth.json tangconsole60k.cst
 	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst
-
-bsram-%-tangconsole60k.fs: bsram-%-tangconsole60k.json
-	gowin_pack --sspi_as_gpio --i2c_as_gpio --cpu_as_gpio -d GW5AT-60B -o $@ $<
-
-bsram-%-tangconsole60k.json: bsram-%-tangconsole60k-synth.json tangconsole60k.cst
-	$(NEXTPNR) ${NEXTPNR_FLAGS} ${DEBUG} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=tangconsole60k.cst --vopt sspi_as_gpio --vopt i2c_as_gpio
-
-bsram-%-tangconsole60k-synth.json: pll/GW5AT-60B.vh io444.vh display-480x272.v %-image-rom.v %-video-ram.v %.v clock-PLLA.v
-	$(YOSYS) -D INV_BTN=0 -p "read_verilog $^; synth_gowin -json $@ -family gw5a ${YOSYS_FLAGS}"
 
 %-tangconsole60k-synth.json: %.v
 	$(YOSYS) -D INV_BTN=0 -D LEDS_NR=8 -D OSC_TYPE_OSCA  -D CPU_FREQ=50 -D BAUD_RATE=115200 -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"

@@ -42,3 +42,7 @@ IO_PORT "uart_tx" BANK_VCCIO=3.3 PULL_MODE=UP;
 
 IO_LOC  "uart_rx" V14;
 IO_PORT "uart_rx" BANK_VCCIO=3.3 PULL_MODE=UP;
+
+// HIL reporter (../hil.v), the same pin as uart_tx
+IO_LOC  "TXD" U15;
+IO_PORT "TXD" BANK_VCCIO=3.3 PULL_MODE=UP;

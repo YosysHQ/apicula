@@ -1,1 +1,0 @@
-SDPB-image-rom.v

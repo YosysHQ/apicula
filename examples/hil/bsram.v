@@ -469,16 +469,22 @@ module bsram_dut #(
 		wire [35:0] din = di;
 		// port A writes when CEA is high
 		wire cew = cea && wrea;
+		// GW5A's SDPB/SDPX9B have a single RESET, for the read port
+`ifdef FAMILY_GW5A
+`define BSRAM_SDP_RESET .RESET(rstb)
+`else
+`define BSRAM_SDP_RESET .RESETA(1'b0), .RESETB(rstb)
+`endif
 		if (X9) begin
 			SDPX9B #(.READ_MODE(RMB), .BIT_WIDTH_0(W), .BIT_WIDTH_1(W), .BLK_SEL_0(3'b000), .BLK_SEL_1(3'b000),
 			         .RESET_MODE("SYNC"), `BSRAM_INIT_ROWS)
-			mem(.CLKA(clk), .CEA(cew), .RESETA(1'b0), .ADA(ad), .DI(din), .BLKSELA(3'b000),
-			    .CLKB(clk), .CEB(ceb), .RESETB(rstb), .OCE(oceb), .ADB(ad_rd), .DO(dout), .BLKSELB(3'b000));
+			mem(.CLKA(clk), .CEA(cew), .ADA(ad), .DI(din), .BLKSELA(3'b000), `BSRAM_SDP_RESET,
+			    .CLKB(clk), .CEB(ceb), .OCE(oceb), .ADB(ad_rd), .DO(dout), .BLKSELB(3'b000));
 		end else begin
 			SDPB #(.READ_MODE(RMB), .BIT_WIDTH_0(W), .BIT_WIDTH_1(W), .BLK_SEL_0(3'b000), .BLK_SEL_1(3'b000),
 			       .RESET_MODE("SYNC"), `BSRAM_INIT_ROWS)
-			mem(.CLKA(clk), .CEA(cew), .RESETA(1'b0), .ADA(ad), .DI(din[31:0]), .BLKSELA(3'b000),
-			    .CLKB(clk), .CEB(ceb), .RESETB(rstb), .OCE(oceb), .ADB(ad_rd), .DO(dout[31:0]), .BLKSELB(3'b000));
+			mem(.CLKA(clk), .CEA(cew), .ADA(ad), .DI(din[31:0]), .BLKSELA(3'b000), `BSRAM_SDP_RESET,
+			    .CLKB(clk), .CEB(ceb), .OCE(oceb), .ADB(ad_rd), .DO(dout[31:0]), .BLKSELB(3'b000));
 		end
 		assign doa = 0;
 		assign dob = dout;
