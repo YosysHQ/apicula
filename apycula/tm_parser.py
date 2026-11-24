@@ -395,7 +395,7 @@ _dsp_fields = {
         'clk_bsign1h': (0x3a0, 3),
         'clk_addsubs': (0x3d0, 2),
         'clk_addsubh': (0x3f0, 2),
-        'clk_mout': (0x410, 2),  # 0x430-0x440 is not read by any getter
+        'clk_mout': (0x410, 3),
     }),
     # STA::PADDTmModel, at 0x14a0 in the DSP block
     'padd': (0x14a0, {

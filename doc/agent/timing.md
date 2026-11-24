@@ -152,8 +152,9 @@ MULT 0x0, MULT36X36 0x410, MAC 0x5b0, MULTADD 0x850, MULTADDSUM 0xc90, PADD
 0x14a0, ALU54 0x1700. The getters are `get<Name>(int i)`, reading float `i` of a
 quad at `this + 4 * K`, and `get<Name>(int j, int i)`, reading float `i` of quad
 `j` from `this + 4 * (K + 4 * j)`. The number of quads per two-index field is the
-distance to the next field. Every sub-model tiles to the next, except a 16-byte
-hole after MULTADD's last field and one after ALU54's `Alusel_Cout`. MULTADDSUM
+distance to the next field. The getters do not check `j`, so a call past the
+last quad reads the next field. Every sub-model tiles to the next, except a
+16-byte hole after ALU54's `Alusel_Cout`. MULTADDSUM
 has no getters. `tm_parser` stores two-index fields as `<name>_<j>`. (code)
 
 Checked against the IDE's SDF on GW1N-9C C6/I5 (data):
@@ -170,7 +171,15 @@ Checked against the IDE's SDF on GW1N-9C C6/I5 (data):
   `clk_mout_1` (0.278). `clk_mout_0` (2.318) is CLK→DOUT through the multiplier
   from an earlier register. Input setup is `clk_mdias_1` with AREG=1 and
   `clk_mdias_0` with AREG=0. Some MAC and MULTADD fields have three quads; their
-  third case is not identified.
+  third case is not identified, except for MULTADD `clk_mout` below.
+- MULTADD `clk_mout_2` is CLK→DOUT (and CLK→CASO, × 1.1) with PIPE_REG set and
+  OUT_REG clear: `MULTADDTmModel::getClk_Mout(2)` (0x2e42cfe), called from
+  `getMULTALUPinToPinDly` (0x2d3624e) and `getMULTADDALUPinToPinDly`
+  (0x2d381ba) (code). The SDF gives 0.067:0.082 on GW2A-18C C8/I7 and
+  0.084:0.102 on GW1N-9C C6/I5 (data).
+- `getClk_AddsubH(2)` (0x2e430f6), the C hold of a MULTALU with OUT_REG and no
+  CREG, reads past `clk_addsubh` into `clk_mout_0` (code). On GW2A-18C C8/I7 the
+  SDF gives −0.108/−0.089 = `clk_mout_0` 0.236/0.255 − 0.344 (data).
 - Setup times in the SDF are element 2 of the quad (`clk_mdias_1` is
   0.045/0.042/0.045/0.052 and the SDF gives 0.045; CE and RESET agree), not the
   maximum. IOPATH delays are the maximum of elements 2 and 3, as elsewhere.
