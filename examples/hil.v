@@ -281,6 +281,15 @@ bsram_test #(.FAM(`BSRAM_FAM_DP),
 	.CFG0(`BSRAM_CFG(8, 1, 1, 1, 1, 0, 0, 0))
 ) bsram_dp_bugs(.clk(clk), .rst(rst), .pass(bsram_dp_bugs_pass), .dbg(bsram_dp_bugs_dbg));
 `endif
+`ifdef HIL_BLOCK_X28Y9
+// An idle BSRAM that occupies site X28Y9, so that no test is placed there.
+// On the rig's Tang Nano 20K that site writes a byte lane whose byte enable
+// is off (YosysHQ/apicula#647); the Makefile sets this for the 20K BSRAM
+// batch until a second board tells a weak site from a weak die.
+(* keep, BEL = "X28Y9/BSRAM" *)
+SP block_x28y9(.DO(), .DI(32'b0), .BLKSEL(3'b0), .AD(14'b0), .WRE(1'b0),
+	.CLK(1'b0), .CE(1'b0), .OCE(1'b0), .RESET(1'b0));
+`endif
 `ifdef HIL_userflash
 // Erases and programs a page of the user flash on every load: in no batch.
 // raw: word 0 before the erase (what the previous run left), and at the end.

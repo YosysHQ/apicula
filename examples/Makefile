@@ -401,8 +401,13 @@ hil-%-broken:
 %-tangnano20k.json: %-tangnano20k-synth.json tangnano20k.cst
 	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW2AR-LV18QN88C8/I7 --vopt family=GW2A-18C --vopt cst=tangnano20k.cst
 
+# The rig's Tang Nano 20K writes a byte lane whose byte enable is off at BSRAM
+# site X28Y9 (YosysHQ/apicula#647): the BSRAM batch puts an idle BSRAM there
+# (hil.v) until a second board tells a weak site from a weak die.
+hil-gw2a-bsram-tangnano20k-synth.json: HIL_DEFINES = -D HIL_BLOCK_X28Y9
+
 %-tangnano20k-synth.json: %.v
-	$(YOSYS) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=1 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -D RISCV_MEM_88K -p "read_verilog $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
+	$(YOSYS) $(HIL_DEFINES) -D LEDS_NR=6 -D OSC_TYPE_OSC -D INV_BTN=1 -D CPU_FREQ=27 -D BAUD_RATE=115200 -D NUM_HCLK=5 -D RISCV_MEM_88K -p "read_verilog $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
 
 pll-nanolcd-tangnano20k-synth.json: pll/GW2A-18-dyn.vh pll-nanolcd/TOP.v pll-nanolcd/VGAMod.v
 	$(YOSYS) -D INV_BTN=1 -p "read_verilog $^; synth_gowin -json $@ -family gw2a ${YOSYS_FLAGS}"
