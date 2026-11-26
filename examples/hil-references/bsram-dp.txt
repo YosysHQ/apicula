@@ -1,0 +1,1 @@
+bsram-dp 0 = 0x00ffffffffffffffff

@@ -1,1 +1,1 @@
-../SDPX9B-image-rom.v
+pROMX9-image-rom.v
