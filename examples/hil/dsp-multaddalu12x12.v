@@ -8,8 +8,7 @@
 //   3  dynamic ACCSEL, low until the first clock: PRE_LOAD 2^32 - (-5*7) on
 //      the first clock, then + 35 per clock
 //   4  CASI from node 1 + 0x10*0x10 - 1*1. With DYN_CASI_SEL = "TRUE"
-//      (dsp-casisel-bugs) CASISEL selects CASI once go is set; that
-//      CASISEL acts inverted on the board, #664.
+//      (dsp-casisel) CASISEL selects CASI once go is set.
 module dsp_multaddalu12x12 #(parameter DYN_CASI_SEL = "FALSE") (input wire clk, input wire reset,
 	output wire [63:0] product,
 	output wire [63:0] product1,

@@ -281,6 +281,15 @@ bsram_test #(.FAM(`BSRAM_FAM_DP),
 	.CFG0(`BSRAM_CFG(8, 1, 1, 1, 1, 0, 0, 0))
 ) bsram_dp_bugs(.clk(clk), .rst(rst), .pass(bsram_dp_bugs_pass), .dbg(bsram_dp_bugs_dbg));
 `endif
+`ifdef HIL_BLOCK_X28Y9
+// An idle BSRAM that occupies site X28Y9, so that no test is placed there.
+// On the rig's Tang Nano 20K that site writes a byte lane whose byte enable
+// is off (YosysHQ/apicula#647); the Makefile sets this for the 20K BSRAM
+// batch until a second board tells a weak site from a weak die.
+(* keep, BEL = "X28Y9/BSRAM" *)
+SP block_x28y9(.DO(), .DI(32'b0), .BLKSEL(3'b0), .AD(14'b0), .WRE(1'b0),
+	.CLK(1'b0), .CE(1'b0), .OCE(1'b0), .RESET(1'b0));
+`endif
 `ifdef HIL_userflash
 // Erases and programs a page of the user flash on every load: in no batch.
 // raw: word 0 before the erase (what the previous run left), and at the end.
@@ -326,9 +335,9 @@ dsp_mult12x12 mult12x12_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(mult12x12));
 wire [5*64-1:0] multaddalu12x12;
 dsp_multaddalu12x12 multaddalu12x12_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(multaddalu12x12));
 `endif
-`ifdef HIL_dsp_casisel_bugs
-wire [5*64-1:0] casisel_bugs;
-dsp_multaddalu12x12 #(.DYN_CASI_SEL("TRUE")) casisel_bugs_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(casisel_bugs));
+`ifdef HIL_dsp_casisel
+wire [5*64-1:0] casisel;
+dsp_multaddalu12x12 #(.DYN_CASI_SEL("TRUE")) casisel_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(casisel));
 `endif
 `ifdef HIL_dsp_multalu27x18
 wire [5*64-1:0] multalu27x18;
@@ -609,12 +618,12 @@ always @* begin
 	`ROW(36, "dsp-multaddalu12x12", 3, `DSP_OUT(multaddalu12x12, 3))
 	`ROW(36, "dsp-multaddalu12x12", 4, `DSP_OUT(multaddalu12x12, 4))
 `endif
-`ifdef HIL_dsp_casisel_bugs
-	`ROW(40, "dsp-casisel-bugs", 0, `DSP_OUT(casisel_bugs, 0))
-	`ROW(40, "dsp-casisel-bugs", 1, `DSP_OUT(casisel_bugs, 1))
-	`ROW(40, "dsp-casisel-bugs", 2, `DSP_OUT(casisel_bugs, 2))
-	`ROW(40, "dsp-casisel-bugs", 3, `DSP_OUT(casisel_bugs, 3))
-	`ROW(40, "dsp-casisel-bugs", 4, `DSP_OUT(casisel_bugs, 4))
+`ifdef HIL_dsp_casisel
+	`ROW(40, "dsp-casisel", 0, `DSP_OUT(casisel, 0))
+	`ROW(40, "dsp-casisel", 1, `DSP_OUT(casisel, 1))
+	`ROW(40, "dsp-casisel", 2, `DSP_OUT(casisel, 2))
+	`ROW(40, "dsp-casisel", 3, `DSP_OUT(casisel, 3))
+	`ROW(40, "dsp-casisel", 4, `DSP_OUT(casisel, 4))
 `endif
 `ifdef HIL_dsp_multalu27x18
 	`ROW(37, "dsp-multalu27x18", 0, `DSP_OUT(multalu27x18, 0))
