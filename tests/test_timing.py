@@ -51,5 +51,13 @@ class Gw5aDspTimingTests(unittest.TestCase):
         check('mult.clk_mdiah_1', (0.217, 0.236))
 
 
+class MultaddTimingTests(unittest.TestCase):
+    # CLK->DOUT of a MULTALU18X18 or MULTADDALU18X18 with PIPE_REG set and
+    # OUT_REG clear reads the third clk_mout quad; values from the IDE's SDF
+    def test_clk_mout_pipe_reg_only(self):
+        iopath(self, timing('GW2A-18C')['C8/I7']['multadd']['clk_mout_2'], (0.067, 0.082))
+        iopath(self, timing('GW1N-9C')['C6/I5']['multadd']['clk_mout_2'], (0.084, 0.102))
+
+
 if __name__ == '__main__':
     unittest.main()
