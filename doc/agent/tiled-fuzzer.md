@@ -54,7 +54,7 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
   filter, `KVCO`, `ODIVn`, dynamic enables.
 - **DSP:**
   - GW1N/GW2A input register muxes (`AIRMUX`/`BIRMUX`), `RSTGEN*MUX`, and the
-    pre-adder `PRAD_MUXA1`/`PRAD_FBB1`/`MATCH` rows;
+    pre-adder `PRAD_MUXA1`/`PRAD_MUXB`/`PRAD_FBB1`/`IRMATCH` rows;
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`;
   - GW5A `MULTADDALU12X12`/`MULTALU27X18` with `ACC_SEL` or `C_SEL` omitted: the

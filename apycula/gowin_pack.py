@@ -3237,11 +3237,12 @@ class Device:
             attr_vals.append(AttrVal('CIR_BYPL_0', "1"))
             attr_vals.append(AttrVal('RCISEL_1', "1"))
 
-        if pair_idx == 0:
+        # MATCH belongs to slot B: setPaddMuxSD @0x1fad9e3 (IDE 1.9.10.03)
+        if pair_idx == 1:
             attr_vals.append(AttrVal('MATCH', "ENABLE"))
             attr_vals.append(AttrVal('MATCH_SHFEN', "ENABLE"))
-            if 'LAST_IN_CHAIN' in cell_attrs:
-                attr_vals.append(AttrVal('PRAD_FBB1', "ENABLE"))
+        if pair_idx == 0 and 'LAST_IN_CHAIN' in cell_attrs:
+            attr_vals.append(AttrVal('PRAD_FBB1', "ENABLE"))
 
         attr_vals.append(AttrVal(f'PRAD_MUXA0EN_{pair_idx}', "ENABLE"))
         attr_vals.append(AttrVal(f'OR2CIB_EN{pair_idx}L_{pair_idx * 2}', "ENABLE"))
@@ -6703,9 +6704,6 @@ class GW5A_25A(GW5A):
         attr = 'DYN_CASI_SEL'
         val = cell_parms.get(attr, 'FALSE')
         attr_vals.append(AttrVal(attr, val))
-        if val == 'TRUE':
-            # XXX It seems that this input requires inversion.
-            attr_vals.append(AttrVal('CASISEL_PAD', 'INV'))
 
         for parm in [('PREG0_CLK', 'BYPASS'), ('PREG0_CE', 'CE0'), ('PREG0_RESET', 'RESET0'),
                      ('PREG1_CLK', 'BYPASS'), ('PREG1_CE', 'CE0'), ('PREG1_RESET', 'RESET0')]:
@@ -6773,9 +6771,6 @@ class GW5A_25A(GW5A):
         attr = 'DYN_CASI_SEL'
         val = cell_parms.get(attr, 'FALSE')
         attr_vals.append(AttrVal(attr, val))
-        if val == 'TRUE':
-            # XXX It seems that this input requires inversion.
-            attr_vals.append(AttrVal('CASISEL_PAD', 'INV'))
 
         for parm in ['AREG_CLK', 'BREG_CLK']:
             val = cell_parms.get(parm, 'BYPASS')

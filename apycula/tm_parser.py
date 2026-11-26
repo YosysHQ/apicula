@@ -395,7 +395,7 @@ _dsp_fields = {
         'clk_bsign1h': (0x3a0, 3),
         'clk_addsubs': (0x3d0, 2),
         'clk_addsubh': (0x3f0, 2),
-        'clk_mout': (0x410, 2),  # 0x430-0x440 is not read by any getter
+        'clk_mout': (0x410, 3),
     }),
     # STA::PADDTmModel, at 0x14a0 in the DSP block
     'padd': (0x14a0, {
@@ -776,7 +776,8 @@ def parse_chunk(chunk):
 
 # GW5A devices: the IDE reads delays from a self-describing block that follows
 # three old-format records (STA::TmModelNew::readTmData, IDE 1.9.10.03). The
-# old-format records in these files are placeholders copied from GW2A-18C. See
+# old-format records in these files are copied from GW2A-18C. Their DSP part is
+# what the IDE uses for GW5A DSPs; the rest are placeholders. See
 # doc/agent/timing.md.
 #
 #   char hdr[15]; i32 magic = 0x37
@@ -910,11 +911,12 @@ _new_vars = {
 # low with the placeholder values. The new-block values and the crossing
 # geometry are exported separately as 'xwire', 'xfanout' and 'xcross'.
 
-# Speed grade -> (old-format placeholder record, slow-corner multiplier).
+# Speed grade -> (old-format record, slow-corner multiplier).
 # STA::TmAnalyzer::getTmModelDelayMultByDevice returns 1.25 for GW5A and it is
-# applied when the record index is 0 (C1/I0, A0); C2/I1 uses index 2 and 1.0.
-# ES is treated like C1/I0.
-_gw5a_speeds = {'C1/I0': (0, 1.25), 'A0': (0, 1.25), 'ES': (0, 1.25), 'C2/I1': (1, 1.0)}
+# applied when the record index is 0 (C1/I0, A0); C2/I1 uses index 2 and 1.0
+# (getTimingDataIndexByReportOpt). ES is treated like C1/I0. The multiplier only
+# applies to the new block: the DSP groups come from the old record as read.
+_gw5a_speeds = {'C1/I0': (0, 1.25), 'A0': (0, 1.25), 'ES': (0, 1.25), 'C2/I1': (2, 1.0)}
 # The IDE uses core type 1 by default (STA::TmModelNew::setCoreType)
 _gw5a_core_type = 1
 
@@ -966,15 +968,16 @@ _gw5a_fanout_vars = [
     'FAN_RATIO_OFX_range_1_5', 'FAN_RATIO_OFX_range_5_9', 'FAN_RATIO_OFX_range_9_13',
 ]
 
-_gw5a_no_placeholder = {'dl', 'iddroddr', 'pll', 'dll', 'clkdiv', 'iregoreg',
-                        'mult', 'mult36x36', 'mac', 'multadd', 'padd', 'alu54'}
+_gw5a_no_placeholder = {'dl', 'iddroddr', 'pll', 'dll', 'clkdiv', 'iregoreg'}
 
 def read_tm_gw5a(data):
     new, per_group = parse_new_block(data)
     tmdat = {}
     for speed, (rec, mult) in _gw5a_speeds.items():
         # groups without a new-model counterpart keep the placeholder values, except
-        # those parsed after the placeholder was introduced, which would be GW2A data
+        # those parsed after the placeholder was introduced, which would be GW2A data.
+        # The DSP groups are real: the IDE times GW5A DSPs with the old record
+        # (STA::TmModel::getNewDspPinToPinDly), see doc/agent/timing.md "GW5A DSP".
         groups = {name: tm for name, tm in parse_chunk(data[rec * chunklen:(rec + 1) * chunklen])
                   if tm and name not in _gw5a_no_placeholder}
         for group, keys in _new_vars.items():

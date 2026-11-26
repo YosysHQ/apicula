@@ -31,12 +31,14 @@ Findings, most important first:
 
 1. **GW5A timing data was wrong.** `tm_parser` read GW5A files as if they used
    the old fixed layout. The old-format records at the start of
-   `GW5A-25A.tm` are placeholders. Their first 14,136 bytes are identical to
-   `GW2A-18C.tm`. The IDE reads GW5A delays from a different block, described
-   below. Compared with the real GW5A-25A values, Apicula's GW5A cell delays are
-   off in both directions. The IDE also scales the slow corner by 1.25 for
-   C1/I0. Cell delays now come from the real block. Routing still uses the
-   placeholder values; see "What Apicula uses for GW5A". (code, data)
+   `GW5A-25A.tm` are copied from GW2A: their first 14,136 bytes are identical
+   to `GW2A-18C.tm`. Their DSP part is what the IDE uses for GW5A DSPs (see
+   "GW5A DSP"); the rest are placeholders. The IDE reads the other GW5A delays
+   from a different block, described below. Compared with the real GW5A-25A
+   values, Apicula's GW5A cell delays are off in both directions. The IDE also
+   scales the slow corner by 1.25 for C1/I0. Cell delays now come from the real
+   block. Routing still uses the placeholder values; see "What Apicula uses for
+   GW5A". (code, data)
 2. **The `_LV` speed grades are the typical corner** (25 °C, nominal Vcc).
    They are not a low-voltage variant. Several other record labels are also
    wrong. See "Record index". (code; data partly consistent)
@@ -150,8 +152,9 @@ MULT 0x0, MULT36X36 0x410, MAC 0x5b0, MULTADD 0x850, MULTADDSUM 0xc90, PADD
 0x14a0, ALU54 0x1700. The getters are `get<Name>(int i)`, reading float `i` of a
 quad at `this + 4 * K`, and `get<Name>(int j, int i)`, reading float `i` of quad
 `j` from `this + 4 * (K + 4 * j)`. The number of quads per two-index field is the
-distance to the next field. Every sub-model tiles to the next, except a 16-byte
-hole after MULTADD's last field and one after ALU54's `Alusel_Cout`. MULTADDSUM
+distance to the next field. The getters do not check `j`, so a call past the
+last quad reads the next field. Every sub-model tiles to the next, except a
+16-byte hole after ALU54's `Alusel_Cout`. MULTADDSUM
 has no getters. `tm_parser` stores two-index fields as `<name>_<j>`. (code)
 
 Checked against the IDE's SDF on GW1N-9C C6/I5 (data):
@@ -168,12 +171,21 @@ Checked against the IDE's SDF on GW1N-9C C6/I5 (data):
   `clk_mout_1` (0.278). `clk_mout_0` (2.318) is CLK→DOUT through the multiplier
   from an earlier register. Input setup is `clk_mdias_1` with AREG=1 and
   `clk_mdias_0` with AREG=0. Some MAC and MULTADD fields have three quads; their
-  third case is not identified.
+  third case is not identified, except for MULTADD `clk_mout` below.
+- MULTADD `clk_mout_2` is CLK→DOUT (and CLK→CASO, × 1.1) with PIPE_REG set and
+  OUT_REG clear: `MULTADDTmModel::getClk_Mout(2)` (0x2e42cfe), called from
+  `getMULTALUPinToPinDly` (0x2d3624e) and `getMULTADDALUPinToPinDly`
+  (0x2d381ba) (code). The SDF gives 0.067:0.082 on GW2A-18C C8/I7 and
+  0.084:0.102 on GW1N-9C C6/I5 (data).
+- `getClk_AddsubH(2)` (0x2e430f6), the C hold of a MULTALU with OUT_REG and no
+  CREG, reads past `clk_addsubh` into `clk_mout_0` (code). On GW2A-18C C8/I7 the
+  SDF gives −0.108/−0.089 = `clk_mout_0` 0.236/0.255 − 0.344 (data).
 - Setup times in the SDF are element 2 of the quad (`clk_mdias_1` is
   0.045/0.042/0.045/0.052 and the SDF gives 0.045; CE and RESET agree), not the
   maximum. IOPATH delays are the maximum of elements 2 and 3, as elsewhere.
-- SDF hold times for registered inputs are negative (A hold -0.069 with AREG=1)
-  and do not equal any `*h` field. Not resolved.
+- SDF hold times for registered inputs are negative (A hold -0.069 with AREG=1).
+  `STA::addMuxDelayForDspHld` (0x2d7cbb8) subtracts 0.089 from every DSP hold,
+  0.344 on GW2A and GW5A (code): `clk_mdiah_1` 0.020 − 0.089 = −0.069 (data).
 - The combinational multiplier delays are much smaller than CLK→DOUT through the
   multiplier (0.555 vs 2.318). That is what the IDE reports.
 
@@ -222,6 +234,10 @@ For GW1N-class devices, non-automotive:
 | 3 | 8 | 11 | 8 |
 | 2 | – | 10 | 10 |
 | "5H" or "6H" on GW1N-4/9/9C | 6 | 7 | A4 (wrong) |
+
+For GW5A, speed 1 gives index 0 (slow) or 1 (typical), 8 gives 0, and 2 or 9
+give 2. So C1/I0 reads record 0 and C2/I1 record 2. (code; data: the C2/I1 SDF
+DSP delays equal record 2)
 
 Automotive grades take other indices. In the data, the odd records have LUT and
 wire delays about 15% below the even ones. CLK→Q is slightly higher in the odd
@@ -334,7 +350,9 @@ multiplier is otherwise 1.0. (code; data: GW5A C1 report values are the table
 values × 1.25)
 
 The data after the block (from byte 62,057 in `GW5A-25A.tm`) is `PrimTmEdge`
-arcs, read only when the design contains BSRAM, DSP or similar. Not decoded.
+arcs (`readTmDataAndTmEdge`, 0x2d94d70), for hard IP only: GTR12, AE350, MIPI,
+JPEG, SCRAMBLE, SDP136K and MULTACC_DB (`getPrimName`, 0x2d96728). Not decoded.
+DSPs use the old record; see "GW5A DSP". (code)
 
 ### New model: routing (GW5A)
 
@@ -362,8 +380,17 @@ overwrite earlier ones). (code)
 | BSRAM rows, except vendor row 1 and `rows − 2` | 2 | `X*_VBUF_EBR` |
 | DSP rows | 4 | `X*_VBUF_DSP` |
 | spine columns (`routeSwitchDataTable::getSpineColumn`) | 9 | `X*_HOS_SPINE` |
-| DSR repeater columns: every 9th from 10 to `cols − 10`, minus spine and VIQ | 7 | `X*_HOS_RPT` |
+| DSR repeater columns: every 9th from 10 to `cols − 10`, minus spine | 7 | `X*_HOS_RPT` |
 | the VIQ column (`routeSwitchDataTable::getViq`, `cc_x` in `dat_parser`) | 6 | `X*_HBUF_VIQ` |
+
+`chip::getDSRRepeaterColumnLoc` (0x191b4ae) keeps the VIQ column in its list;
+flag 6 is set last and overwrites it. (code)
+
+`chip::initBsramDspRowLoc` (0x191b010) finds the rows from
+`routeSwitchDataTable::getGridTypeArr`, the `.dat` grid: a row is a BSRAM row if
+any cell has GRID_TYPE 6 or 10, a DSP row if any has 7. So the vendor never sees
+Apicula's `patch_grid_bram_138`. Apicula finds the rows from bel names instead,
+with the same result on all three devices below. (code, data)
 
 - `chip::setX{1,2,8}NodeCross{Row,Column}Flag(p, flag)` looks at every X wire
   root within 8 rows or columns of `p`. A middle or end segment on the other side
@@ -372,9 +399,38 @@ overwrite earlier ones). (code)
   exist in the code but are not set by this function. (code)
 - Vendor coordinates are Apicula's plus one: the vendor grid has a border. For
   GW5A-25A, `dat` gives 39×94 with VIQ 46, Apicula has 37×92, and the crossings
-  are BSRAM rows 9 and 27, DSP row 18, VIQ column 45 and repeater columns 9, 18,
-  27, 36, 54, 63, 72 and 81 (Apicula coordinates). The spine-column table reads as
-  zeros in `dat_parser`, either unused or a wrong offset. (code, data)
+  are BSRAM rows 9 and 27, DSP row 18, VIQ column 45, spine columns 18, 36, 54
+  and 72, and repeater columns 9, 27, 63 and 81 (Apicula coordinates). (code, data)
+- `routeSwitchDataTable::getSpineColumn` (0x1af338c) reads 8 `int16`s at file
+  offset 0xa6a1a, `0x2b572` into the 5AT table at 0x7b4a8; -1 marks an unused
+  entry. Vendor values: GW5A-25A 19, 37, 55, 73; GW5AT-60B 10, 28, …, 136;
+  GW5AST-138C 28, 46, …, 154 (every 18th). (code, data)
+
+Per device, rows and columns in Apicula coordinates; the `dat` grid size is the
+vendor's, with its border (Apicula's is two smaller in each direction). (data)
+
+| Device | `dat` grid (vendor) | BSRAM rows | DSP rows | VIQ | Spine | Repeater |
+|---|---|---|---|---|---|---|
+| GW5A-25A | 39×94 | 9, 27 | 18 | 45 | 18, 36, 54, 72 | 9, 27, 63, 81 |
+| GW5AT-60B | 76×149 | 18, 37, 55 | 27, 46, 64 | 72 | 9, 27, …, 135 | 18, 36, 54, 90, 108, 126 |
+| GW5AST-138C | 111×184 | 9, 27, …, 99 | 18, 36, …, 90 | 90 | 27, 45, …, 153 | 9, 18, 36, 54, 72, 108, …, 162, 171 |
+
+Nothing in the X-wire model depends on the device (code, IDE 1.9.10.03):
+
+- `TmAnalyzer::getWiresDly` (0x2c2df46) checks only `isDeviceBeforeGW5AT138`,
+  which is false for every GW5A.
+- `TmModelNew::getWiresDlyNew` calls `chip::getType` once (0x2da1a87), in the
+  GLBSRC branch. It does not affect X wires.
+- `buildXwireNodeCrossDelayValueFlag`, `getWireFanout`, `subRowDistLoadRatio`,
+  `addWireFanoutDelay` and `setX*NodeCross*Flag` have no device checks.
+
+Devices differ only in data. GW5AT-60B's X2 and LUT A→F values equal GW5A-25A's
+in every speed grade; other fields were not compared (data).
+GW5AST-138C's group 1 has a larger second pair, for example X2 at C1/I0 (the
+`.tm` value ×1.25) `[0.1875, 0.175, 0.20625, 0.1925]`, raw
+`[0.15, 0.14, 0.165, 0.154]`, and LUT A→F max 0.579 against 0.526 at C1/I0
+(data). The 138C SDF has LUT A→F 0.579, which suggests the IDE uses the larger
+pair, as nextpnr's max does; this rests on that one value. (data; inferred)
 
 How `getWiresDlyNew` charges an X wire (X8 read in full; X1 from its root and end
 branches; X2 assumed the same as X8). `mf` and `ef` are the middle and end
@@ -422,10 +478,34 @@ same IDE routes come out at +6.7% (median 1.045, p10–p90 1.02–1.10), against
 −1.9% (median 1.03, p10–p90 0.76–1.23) for the placeholders. The tighter spread
 is the point: the placeholder total was right only on average. (data)
 
+With the spine columns flagged 9 instead of 7, a two-core picorv32 on GW5A-25A
+C1/I0 (413 connections) goes from +6.5% (median 1.044) to +6.1% (median 1.040).
+141 connections get 12 ps faster per spine crossing, and their mean
+|nextpnr − SDF| drops from 121 to 108 ps. (data)
+
+The same comparison on the other devices, two-core picorv32 through the IDE's
+own synthesis, place and route, C1/I0, all crossings. (data)
+
+| Device | Connections | Total vs SDF | Median ratio | p10–p90 |
+|---|---|---|---|---|
+| GW5A-25A | 413 | +6.1% | 1.040 | 1.02–1.19 |
+| GW5AT-60B | 405 | +5.1% | 1.039 | 1.02–1.08 |
+| GW5AST-138C | 987 | +4.1% | 1.037 | 1.02–1.07 |
+
+GW5AT-60B is the only device nextpnr builds with
+`create_nodes_with_empty_area` (`gowin_arch_gen.py`). That function adds nodes
+without a timing class, so 60B gets neither the fanout nor the crossing classes
+(code, nextpnr). Without the classes 60B came out at −22.2%, median 0.890,
+measured before the spine columns. The 60B row above is with the classes added,
+using the nextpnr hunk that is not in nextpnr main yet (pepijndevos/nextpnr
+`gowin-gw5a-xcross`, dfe8a3e2). (data)
+
 ### What Apicula uses for GW5A
 
 `tm_parser.read_tm_gw5a` builds the speed grades C1/I0, A0 and ES with ×1.25,
-and C2/I1 with ×1.0. Each starts from a placeholder record. The `lut`, `alu`,
+and C2/I1 with ×1.0. Each starts from an old-format record: 0 for C1/I0, A0 and
+ES, 2 for C2/I1. Its DSP groups are real (see "GW5A DSP"); the rest are
+placeholders. The ×1.25 applies only to the new-block values. The `lut`, `alu`,
 `dff`, `sram` and `bram` keys are then replaced with group-1 values from the
 new block. DFF D setup and hold use the DI_FS arcs, because nextpnr always
 feeds D from the slot's own LUT. That is the case
@@ -436,6 +516,58 @@ Checked against the IDE's SDF for GW5A-25A C1/I0, which covers 366 ALUs,
 0.461, 0.262), CLK→Q (0.382) and D setup (0.064) match. For CE and LSR setup,
 the SDF's posedge value equals the rising entry; Apicula keeps the larger of
 the two edges.
+
+### GW5A DSP
+
+GW5A DSPs are timed with the old `DSPTmModel` (record offset 0xc8c, see "DSP
+(0xc8c)"), not the new block. `TmAnalyzer::setN2nDlyForOneInsTmEdge` (0x2c1f098)
+sends MULT12X12, MULTADDALU12X12, MULTALU27X18 and MULT27X36 on family 5 to
+`STA::TmModel::getNewDspPinToPinDly` (0x2d7d020), which dispatches to
+`getMULT12X12PinToPinDly` (0x2d7d192), `getMULTADDALU12X12PinToPinDly`
+(0x2d7e1c2), `getMULTALU27X18PinToPinDly` (0x2d836f4) and
+`getMULT27X36PinToPinDly` (0x2d8a3e8). The values are used as read, without the
+×1.25. (code)
+
+All 24 GW5A* `.tm` files have the same DSP bytes: records 0 and 1 equal GW2A-18C
+C8/I7 and record 2 equals GW2A-18C C9/I8. (data)
+
+Apicula exports them in the GW1N groups: `mult`, `mult36x36`, `mac`, `multadd`,
+`padd`, `alu54`. The arcs, as `group.key`. A quad gives IOPATH
+`(min(e0, e1), max(e2, e3))`, setup `(e0, e2)` and hold `(e0, e2)`, each hold
+element minus 0.344 (`addMuxDelayForDspHld`). An input that passes `k` stages
+to its register is charged `k ×` the `_0` field, hold included:
+`k × (h − 0.344)`. The multiplier `k` (6 with the input register bypassed, 8
+with the input and pipeline registers bypassed) was fitted to the SDF, not
+traced in the code. (data/inferred) ✓ = checked against the SDF of GW5A-25A at
+C1/I0 and C2/I1, and GW5AT-60B and GW5AST-138C at C1/I0, within 1 ps. The A0 and
+ES DSP values (record 0, as C1/I0) are not checked against the SDF.
+
+The chipdb exports the raw hold fields. The DSP hold adjustment of
+`addMuxDelayForDspHld`, −0.344 on GW2A/GW5A and −0.089 on GW1N, is not
+exported, so nextpnr has to apply it. (code)
+
+| Primitive | Arc | Delay |
+|---|---|---|
+| MULT12X12 | A, B→DOUT | `mult.mdia_mout`, `mdib_mout` ✓ |
+| | CLK→DOUT, OREG used | `mult.clk_mout_1` ✓ |
+| | CLK→DOUT, OREG bypassed, PREG used | 2 × `mult.clk_mout_1` ✓ |
+| | CLK→DOUT, both bypassed | `mult.clk_mout_0` (code) |
+| | A/B setup, hold, AREG/BREG used | `mult.clk_mdias_1`/`clk_mdiah_1` (B: `mdib`) ✓ |
+| | same, input register bypassed, PREG used | k = 6, `_0` fields ✓ (k: data/inferred) |
+| | same, input and PREG bypassed, OREG used | k = 8, `_0` fields ✓ (k: data/inferred) |
+| | CE, RESET setup, hold | `mult.clk_ces/ceh/resets/reseth`; RESET→DOUT = CLK→DOUT + 0.15 (code) |
+| MULTALU27X18 | A→DOUT | `mult.mdia_mout + alu54.md0_dout` ✓; with the pre-adder `+ padd.pdia_pout` (code) |
+| | B→DOUT | `mult.mdib_mout + alu54.md0_cout` ✓ |
+| MULTADDALU12X12 | A0, B0→DOUT | `mult.mdia_mout`, `mdib_mout` `+ alu54.md0_dout` ✓ |
+| | A1, B1→DOUT | `mult.mdia_mout`, `mdib_mout` `+ alu54.md1_dout` ✓ |
+| MULT27X36 | A, B→DOUT, P_SEL=0 | `mult36x36.mdia_mout`, `mdib_mout` ✓ |
+
+Register offsets in the DSP instance: AREG 0x158, BREG 0x170, PREG 0x1e8,
+OREG_CLK 0x128 (inferred from the code, consistent with the SDF). The registered
+modes of MULTALU27X18, MULTADDALU12X12 and MULT27X36 are not checked.
+
+`tools/timing/dsp_sdf.py` checks every DSP arc of the IDE's SDF for
+`dsp_sdf.v` against these rules.
 
 ### MUX2 arcs (all families)
 

@@ -22,6 +22,11 @@ change. Before preparing a pull request, check the user's access:
 Open pull requests as drafts (`gh pr create --draft`) unless the user asks
 otherwise.
 
+When a change builds on another open pull request, make it a GitHub stack
+(`gh stack link <lower-pr> <upper-pr>`, or `gh stack submit` for new branches)
+rather than a branch on `master` that repeats the lower change: each pull
+request then shows only its own diff.
+
 ## Project
 
 Verilog → Yosys → nextpnr → `gowin_pack` → openFPGALoader. See
@@ -41,7 +46,12 @@ Verilog → Yosys → nextpnr → `gowin_pack` → openFPGALoader. See
 A change is not done until it has these tests and the pull request says what was
 run. See [testing.md](doc/agent/testing.md).
 
-1. **Every fix has a regression test** that fails on `master`.
+1. **Every fix has a regression test** that fails on `master`. Its expected
+   values come from the vendor: bitstreams, the IDE's SDF, or values read by
+   hand from its files. Never pin Apicula's own current output. Such a
+   change-detector test passes on `master`, breaks on every correction and
+   catches nothing. If a change has no vendor reference to test against, it gets
+   no test, and the pull request says what was checked instead.
 2. **Every new primitive, parameter or feature is tested against the vendor**
    across a wide range of parameters with `tools/tiled_fuzzer.py`, on every
    device that has it. If the fuzzer cannot generate it yet (routing, clocking,
