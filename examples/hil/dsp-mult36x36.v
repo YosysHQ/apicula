@@ -1,5 +1,7 @@
 `default_nettype none
-module idsp(input wire clk, input wire reset, 
+// Row 0: 0x412345678 * 0x187654321 = 0x6396a300170b88d78
+// Row 1: -0x514233241 * -0x234567, settles to 0xb321487597bd27
+module dsp_mult36x36(input wire clk, input wire reset, 
 	output wire [63:0] product, 
 	output wire [63:0] product1, 
 	output wire [63:0] product2, 
@@ -48,7 +50,3 @@ module idsp(input wire clk, input wire reset,
 	defparam mu_1.BSIGN_REG=1'b1;
 	defparam mu_1.MULT_RESET_MODE="SYNC";
 endmodule
-
-`define FIRMWARE "riscv-firmware/mult36x36.hex"
-`include "dsp-riscv.v"
-
