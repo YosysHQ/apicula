@@ -6704,9 +6704,6 @@ class GW5A_25A(GW5A):
         attr = 'DYN_CASI_SEL'
         val = cell_parms.get(attr, 'FALSE')
         attr_vals.append(AttrVal(attr, val))
-        if val == 'TRUE':
-            # XXX It seems that this input requires inversion.
-            attr_vals.append(AttrVal('CASISEL_PAD', 'INV'))
 
         for parm in [('PREG0_CLK', 'BYPASS'), ('PREG0_CE', 'CE0'), ('PREG0_RESET', 'RESET0'),
                      ('PREG1_CLK', 'BYPASS'), ('PREG1_CE', 'CE0'), ('PREG1_RESET', 'RESET0')]:
@@ -6774,9 +6771,6 @@ class GW5A_25A(GW5A):
         attr = 'DYN_CASI_SEL'
         val = cell_parms.get(attr, 'FALSE')
         attr_vals.append(AttrVal(attr, val))
-        if val == 'TRUE':
-            # XXX It seems that this input requires inversion.
-            attr_vals.append(AttrVal('CASISEL_PAD', 'INV'))
 
         for parm in ['AREG_CLK', 'BREG_CLK']:
             val = cell_parms.get(parm, 'BYPASS')
