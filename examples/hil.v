@@ -130,7 +130,7 @@ wire [31:0] dqce_raw;
 dqce_test dqce(.clk(clk), .rst(rst), .pass(dqce_pass), .raw(dqce_raw));
 `endif
 `ifdef HIL_dcs
-wire [3:0] dcs_pass;
+wire [7:0] dcs_pass;
 wire [15:0] dcs_raw;
 dcs_test dcs(.clk(clk), .rst(rst), .pass(dcs_pass), .raw(dcs_raw));
 `endif
@@ -192,7 +192,8 @@ bsram_test #(.FAM(`BSRAM_FAM_SP),
 ) bsram_sp2(.clk(clk), .rst(rst), .pass(bsram_sp2_pass), .dbg(bsram_sp2_dbg));
 `endif
 `ifdef HIL_bsram_sdp
-// SDPB/SDPX9B as the old bsram-SDPB and -SDPX9B, then 16/18 bit
+// SDPB/SDPX9B 8/9 bit with READ_MODE 1 as the old bsram-SDPX9B (the old
+// bsram-SDPB's READ_MODE 0 is bsram-sdp2 CFG2), then 16/18 bit
 wire [63:0] bsram_sdp_pass;
 wire [255:0] bsram_sdp_dbg;
 bsram_test #(.FAM(`BSRAM_FAM_SDP),
@@ -324,6 +325,10 @@ dsp_mult12x12 mult12x12_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(mult12x12));
 `ifdef HIL_dsp_multaddalu12x12
 wire [5*64-1:0] multaddalu12x12;
 dsp_multaddalu12x12 multaddalu12x12_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(multaddalu12x12));
+`endif
+`ifdef HIL_dsp_casisel_bugs
+wire [5*64-1:0] casisel_bugs;
+dsp_multaddalu12x12 #(.DYN_CASI_SEL("TRUE")) casisel_bugs_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(casisel_bugs));
 `endif
 `ifdef HIL_dsp_multalu27x18
 wire [5*64-1:0] multalu27x18;
@@ -603,6 +608,13 @@ always @* begin
 	`ROW(36, "dsp-multaddalu12x12", 2, `DSP_OUT(multaddalu12x12, 2))
 	`ROW(36, "dsp-multaddalu12x12", 3, `DSP_OUT(multaddalu12x12, 3))
 	`ROW(36, "dsp-multaddalu12x12", 4, `DSP_OUT(multaddalu12x12, 4))
+`endif
+`ifdef HIL_dsp_casisel_bugs
+	`ROW(40, "dsp-casisel-bugs", 0, `DSP_OUT(casisel_bugs, 0))
+	`ROW(40, "dsp-casisel-bugs", 1, `DSP_OUT(casisel_bugs, 1))
+	`ROW(40, "dsp-casisel-bugs", 2, `DSP_OUT(casisel_bugs, 2))
+	`ROW(40, "dsp-casisel-bugs", 3, `DSP_OUT(casisel_bugs, 3))
+	`ROW(40, "dsp-casisel-bugs", 4, `DSP_OUT(casisel_bugs, 4))
 `endif
 `ifdef HIL_dsp_multalu27x18
 	`ROW(37, "dsp-multalu27x18", 0, `DSP_OUT(multalu27x18, 0))

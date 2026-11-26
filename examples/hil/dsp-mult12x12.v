@@ -2,7 +2,8 @@
 // GW5A MULT12X12 (DOUT = A * B, signed, UG305 4.1.1). Rows:
 //   0  0x345 * 0x0fd, A/B registered (CLK0)
 //   1  -3 * 0x7ff, A/B and output registered on CLK1/RESET1
-//   2  -0x800 * -0x800 = 0x400000, every register on (A, B, pipeline, output)
+//   2  -0x800 * -0x800 = 0x400000, every register on (A, B, pipeline, output),
+//      SYNC reset
 //   3  product 0 [11:0] * [23:12] through the fabric: 0xb31 (-1231) * 0x033
 //   4  0x7ff * 0x7ff, no register
 // DOUT is 24 bits, shown zero-extended.
@@ -30,7 +31,7 @@ module dsp_mult12x12(input wire clk, input wire reset,
 	m1(.A(12'hffd), .B(12'h7ff), .CLK({clk, 1'b0}), .CE(2'b11), .RESET({reset, 1'b0}), .DOUT(d1));
 
 	MULT12X12 #(.AREG_CLK("CLK0"), .BREG_CLK("CLK0"), .PREG_CLK("CLK0"), .OREG_CLK("CLK0"),
-		.MULT_RESET_MODE("ASYNC"))
+		.MULT_RESET_MODE("SYNC"))
 	m2(.A(12'h800), .B(12'h800), .CLK({1'b0, clk}), .CE(2'b11), .RESET({1'b0, reset}), .DOUT(d2));
 
 	MULT12X12 #(.AREG_CLK("CLK0"), .BREG_CLK("CLK0"), .PREG_CLK("BYPASS"), .OREG_CLK("BYPASS"),

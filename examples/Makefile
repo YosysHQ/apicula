@@ -57,6 +57,9 @@ HIL_BATCH_gw5a-bsram := bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp bsram-
 	bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs
 HIL_BATCH_gw5a-dsp := dsp-mult12x12 dsp-multaddalu12x12 dsp-multalu27x18 dsp-mult27x36
 HIL_BATCHES_primer25k := gw5a-a gw5a-clk-a gw5a-clk-b gw5a-clk-c gw5a-bsram gw5a-dsp
+# Known broken, in no batch; make hil-primer25k-broken runs them.
+# dsp-casisel-bugs: a fabric-driven CASISEL (DYN_CASI_SEL) acts inverted, #664.
+HIL_BROKEN_primer25k := dsp-casisel-bugs
 # The other GW5A boards are not on a bench: build-only, from gw5a/Makefile.
 # GW5AT-60B: nextpnr asserts on dcs ("No clock inputs"), cannot place
 # dsp-mult27x36, and fails to route the BSRAM inputs of six bsram tests
@@ -70,6 +73,11 @@ HIL_BATCHES_tangconsole60k := gw5a-a gw5a-clk-a gw5a-clk-c \
 	bsram-rom-bugs bsram-sdp-bugs bsram-dp-bugs
 HIL_BATCHES_tangmega138k := gw5ast-a gw5a-bsram
 HIL_BATCHES_tangconsole138k := gw5ast-a gw5a-bsram
+# Fixed seed for these build-only boards: with random seeds some of their
+# builds fail to route (bsram-sp2 and bsram-dp16 on the 60K); seed 1 routed
+# every target with the local and with CI's dev nextpnr.
+hil-%-tangconsole60k.json hil-%-tangmega138k.json hil-%-tangconsole138k.json: \
+	NEXTPNR_FLAGS = --timing-allow-fail --seed 1
 
 .DEFAULT_GOAL := all
 
@@ -577,7 +585,7 @@ tangconsole138k-hil: $(HIL_BATCHES_tangconsole138k:%=hil-%-tangconsole138k.fs)
 	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=gw5a/tangconsole60k.cst
 
 %-tangconsole60k-synth.json: %.v
-	$(YOSYS) $(GW5A_YOSYS_DEFS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
+	$(YOSYS) $(GW5A_YOSYS_DEFS) -D GW5AT_60B -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
 
 # Tang Mega 138K and Tang Console 138K (GW5AST-138C)
 %-tangmega138k.fs: %-tangmega138k.json
