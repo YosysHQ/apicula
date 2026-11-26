@@ -1,0 +1,5 @@
+dsp-casisel-bugs 0 = 0x000000000000000016
+dsp-casisel-bugs 1 = 0x000000ffffffc0c2ff
+dsp-casisel-bugs 2 = 0x0000000000000000dc
+dsp-casisel-bugs 3 = 0x00000000010000015e
+dsp-casisel-bugs 4 = 0x000000ffffffc0c3fe

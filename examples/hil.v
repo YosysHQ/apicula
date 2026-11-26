@@ -31,6 +31,15 @@
 `include "hil/bsram.v"
 `include "hil/uflash_controller.v"
 `include "hil/userflash.v"
+`include "hil/lut8.v"
+`include "hil/alu.v"
+`include "hil/rom16.v"
+`include "hil/big-shift.v"
+`include "hil/plla.v"
+`include "hil/dsp-mult12x12.v"
+`include "hil/dsp-multaddalu12x12.v"
+`include "hil/dsp-multalu27x18.v"
+`include "hil/dsp-mult27x36.v"
 
 // The DSP tests have five 64-bit outputs; w is a 5*64-bit wire.
 `define DSP_PORTS(w) \
@@ -121,7 +130,7 @@ wire [31:0] dqce_raw;
 dqce_test dqce(.clk(clk), .rst(rst), .pass(dqce_pass), .raw(dqce_raw));
 `endif
 `ifdef HIL_dcs
-wire [3:0] dcs_pass;
+wire [7:0] dcs_pass;
 wire [15:0] dcs_raw;
 dcs_test dcs(.clk(clk), .rst(rst), .pass(dcs_pass), .raw(dcs_raw));
 `endif
@@ -183,7 +192,8 @@ bsram_test #(.FAM(`BSRAM_FAM_SP),
 ) bsram_sp2(.clk(clk), .rst(rst), .pass(bsram_sp2_pass), .dbg(bsram_sp2_dbg));
 `endif
 `ifdef HIL_bsram_sdp
-// SDPB/SDPX9B as the old bsram-SDPB and -SDPX9B, then 16/18 bit
+// SDPB/SDPX9B 8/9 bit with READ_MODE 1 as the old bsram-SDPX9B (the old
+// bsram-SDPB's READ_MODE 0 is bsram-sdp2 CFG2), then 16/18 bit
 wire [63:0] bsram_sdp_pass;
 wire [255:0] bsram_sdp_dbg;
 bsram_test #(.FAM(`BSRAM_FAM_SDP),
@@ -227,9 +237,9 @@ bsram_test #(.FAM(`BSRAM_FAM_DP),
 ) bsram_dp16(.clk(clk), .rst(rst), .pass(bsram_dp16_pass), .dbg(bsram_dp16_dbg));
 `endif
 `ifdef HIL_bsram_rom_bugs
-// Known failures, in no batch: narrow pROM output does not hold with CE=0;
-// 32/36-bit pROM reads part of word 0 wrong after some designs (e.g. after loading
-// bsram-sp-bugs)
+// Known failures on GW1N/GW2A, in none of their batches (GW5A passes them):
+// narrow pROM output does not hold with CE=0; 32/36-bit pROM reads part of
+// word 0 wrong after some designs (e.g. after loading bsram-sp-bugs)
 wire [63:0] bsram_rom_bugs_pass;
 wire [255:0] bsram_rom_bugs_dbg;
 bsram_test #(.FAM(`BSRAM_FAM_ROM),
@@ -240,8 +250,9 @@ bsram_test #(.FAM(`BSRAM_FAM_ROM),
 ) bsram_rom_bugs(.clk(clk), .rst(rst), .pass(bsram_rom_bugs_pass), .dbg(bsram_rom_bugs_dbg));
 `endif
 `ifdef HIL_bsram_sp_bugs
-// Known failures, in no batch: narrow SP READ_MODE 0 output with CE=0,
-// 32-bit WRITE_MODE 2, 32-bit byte enables
+// Known failures on GW1N/GW2A, in none of their batches (GW5A passes them):
+// narrow SP READ_MODE 0 output with CE=0, 32-bit WRITE_MODE 2, 32-bit byte
+// enables
 wire [63:0] bsram_sp_bugs_pass;
 wire [255:0] bsram_sp_bugs_dbg;
 bsram_test #(.FAM(`BSRAM_FAM_SP),
@@ -251,7 +262,8 @@ bsram_test #(.FAM(`BSRAM_FAM_SP),
 ) bsram_sp_bugs(.clk(clk), .rst(rst), .pass(bsram_sp_bugs_pass), .dbg(bsram_sp_bugs_dbg));
 `endif
 `ifdef HIL_bsram_sdp_bugs
-// Known failures, in no batch: narrow SDP output with CE=0, 32-bit byte enables
+// Known failures on GW1N/GW2A, in none of their batches (GW5A passes them):
+// narrow SDP output with CE=0, 32-bit byte enables
 wire [63:0] bsram_sdp_bugs_pass;
 wire [255:0] bsram_sdp_bugs_dbg;
 bsram_test #(.FAM(`BSRAM_FAM_SDP),
@@ -261,7 +273,8 @@ bsram_test #(.FAM(`BSRAM_FAM_SDP),
 ) bsram_sdp_bugs(.clk(clk), .rst(rst), .pass(bsram_sdp_bugs_pass), .dbg(bsram_sdp_bugs_dbg));
 `endif
 `ifdef HIL_bsram_dp_bugs
-// Known failures, in no batch: nextpnr aborts on a narrow DP with READ_MODE 1 on both used ports
+// Known failures on GW1N/GW2A, in none of their batches (GW5A passes them):
+// nextpnr aborts on a narrow DP with READ_MODE 1 on both used ports
 wire [63:0] bsram_dp_bugs_pass;
 wire [255:0] bsram_dp_bugs_dbg;
 bsram_test #(.FAM(`BSRAM_FAM_DP),
@@ -276,14 +289,64 @@ wire [63:0] userflash_raw;
 userflash_test userflash(.clk(clk), .rst(rst), .pass(userflash_pass), .raw(userflash_raw));
 `endif
 
+`ifdef HIL_lut8
+wire [1:0] lut8_pass;
+lut8_test lut8(.clk(clk), .rst(rst), .pass(lut8_pass));
+`endif
+`ifdef HIL_alu
+wire [6:0] alu_pass;
+alu_test alu(.clk(clk), .rst(rst), .pass(alu_pass));
+`endif
+`ifdef HIL_rom16
+wire [7:0] rom16_pass;
+rom16_test rom16(.clk(clk), .rst(rst), .pass(rom16_pass));
+`endif
+`ifdef HIL_big_shift
+wire [0:0] big_shift_pass;
+big_shift_test big_shift(.clk(clk), .rst(rst), .pass(big_shift_pass));
+`endif
+`ifdef HIL_plla
+// GW5A PLLA: lock and CLKOUT0-3 (plla), CLKOUT4-6 (plla2), see hil/plla.v
+wire [4:0] plla_pass;
+wire [63:0] plla_raw;
+plla_test #(.FIRST(0), .N(4)) plla(.clk(clk), .rst(rst), .pass(plla_pass), .raw(plla_raw));
+`endif
+`ifdef HIL_plla2
+wire [3:0] plla2_pass;
+wire [47:0] plla2_raw;
+plla_test #(.FIRST(4), .N(3)) plla2(.clk(clk), .rst(rst), .pass(plla2_pass), .raw(plla2_raw));
+`endif
+
+`ifdef HIL_dsp_mult12x12
+// GW5A DSP tests
+wire [5*64-1:0] mult12x12;
+dsp_mult12x12 mult12x12_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(mult12x12));
+`endif
+`ifdef HIL_dsp_multaddalu12x12
+wire [5*64-1:0] multaddalu12x12;
+dsp_multaddalu12x12 multaddalu12x12_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(multaddalu12x12));
+`endif
+`ifdef HIL_dsp_casisel_bugs
+wire [5*64-1:0] casisel_bugs;
+dsp_multaddalu12x12 #(.DYN_CASI_SEL("TRUE")) casisel_bugs_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(casisel_bugs));
+`endif
+`ifdef HIL_dsp_multalu27x18
+wire [5*64-1:0] multalu27x18;
+dsp_multalu27x18 multalu27x18_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(multalu27x18));
+`endif
+`ifdef HIL_dsp_mult27x36
+wire [5*64-1:0] mult27x36;
+dsp_mult27x36 mult27x36_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(mult27x36));
+`endif
+
 // ---- Report rows ----
 // Row (slot, i) of the report. A test owns a slot of 8 rows; the slot number
-// only sets the print order, give a new test the next free one, up to 31.
+// only sets the print order, give a new test the next free one, up to 63.
 
 `define ROW(slot, name, i, val) \
 	(slot)*8 + (i): begin row_on = 1; row_name = name; row_num = i; row_val = val; end
 
-reg [8:0] row;  // row[8]: all rows done, print the tick line
+reg [9:0] row;  // row[9]: all rows done, print the tick line
 reg row_on;
 reg [8*20-1:0] row_name;
 reg [2:0] row_num;
@@ -508,6 +571,64 @@ always @* begin
 	`ROW(29, "userflash", 1, userflash_raw)
 `endif
 `endif
+`ifdef HIL_lut8
+	`ROW(30, "lut8", 0, lut8_pass)
+`endif
+`ifdef HIL_alu
+	`ROW(31, "alu", 0, alu_pass)
+`endif
+`ifdef HIL_rom16
+	`ROW(32, "rom16", 0, rom16_pass)
+`endif
+`ifdef HIL_big_shift
+	`ROW(33, "big-shift", 0, big_shift_pass)
+`endif
+`ifdef HIL_plla
+	`ROW(34, "plla", 0, plla_pass)
+`ifdef HIL_RAW
+	`ROW(34, "plla", 1, plla_raw)
+`endif
+`endif
+`ifdef HIL_plla2
+	`ROW(39, "plla2", 0, plla2_pass)
+`ifdef HIL_RAW
+	`ROW(39, "plla2", 1, plla2_raw)
+`endif
+`endif
+`ifdef HIL_dsp_mult12x12
+	`ROW(35, "dsp-mult12x12", 0, `DSP_OUT(mult12x12, 0))
+	`ROW(35, "dsp-mult12x12", 1, `DSP_OUT(mult12x12, 1))
+	`ROW(35, "dsp-mult12x12", 2, `DSP_OUT(mult12x12, 2))
+	`ROW(35, "dsp-mult12x12", 3, `DSP_OUT(mult12x12, 3))
+	`ROW(35, "dsp-mult12x12", 4, `DSP_OUT(mult12x12, 4))
+`endif
+`ifdef HIL_dsp_multaddalu12x12
+	`ROW(36, "dsp-multaddalu12x12", 0, `DSP_OUT(multaddalu12x12, 0))
+	`ROW(36, "dsp-multaddalu12x12", 1, `DSP_OUT(multaddalu12x12, 1))
+	`ROW(36, "dsp-multaddalu12x12", 2, `DSP_OUT(multaddalu12x12, 2))
+	`ROW(36, "dsp-multaddalu12x12", 3, `DSP_OUT(multaddalu12x12, 3))
+	`ROW(36, "dsp-multaddalu12x12", 4, `DSP_OUT(multaddalu12x12, 4))
+`endif
+`ifdef HIL_dsp_casisel_bugs
+	`ROW(40, "dsp-casisel-bugs", 0, `DSP_OUT(casisel_bugs, 0))
+	`ROW(40, "dsp-casisel-bugs", 1, `DSP_OUT(casisel_bugs, 1))
+	`ROW(40, "dsp-casisel-bugs", 2, `DSP_OUT(casisel_bugs, 2))
+	`ROW(40, "dsp-casisel-bugs", 3, `DSP_OUT(casisel_bugs, 3))
+	`ROW(40, "dsp-casisel-bugs", 4, `DSP_OUT(casisel_bugs, 4))
+`endif
+`ifdef HIL_dsp_multalu27x18
+	`ROW(37, "dsp-multalu27x18", 0, `DSP_OUT(multalu27x18, 0))
+	`ROW(37, "dsp-multalu27x18", 1, `DSP_OUT(multalu27x18, 1))
+	`ROW(37, "dsp-multalu27x18", 2, `DSP_OUT(multalu27x18, 2))
+	`ROW(37, "dsp-multalu27x18", 3, `DSP_OUT(multalu27x18, 3))
+	`ROW(37, "dsp-multalu27x18", 4, `DSP_OUT(multalu27x18, 4))
+`endif
+`ifdef HIL_dsp_mult27x36
+	`ROW(38, "dsp-mult27x36", 0, `DSP_OUT(mult27x36, 0))
+	`ROW(38, "dsp-mult27x36", 1, `DSP_OUT(mult27x36, 1))
+	`ROW(38, "dsp-mult27x36", 2, `DSP_OUT(mult27x36, 2))
+	`ROW(38, "dsp-mult27x36", 3, `DSP_OUT(mult27x36, 3))
+`endif
 	default: ;
 	endcase
 end
@@ -519,8 +640,8 @@ end
 // fold the rows into TXD so that nothing is optimised away.
 reg tx_fold;
 always @(posedge clk) begin
-	row <= rst ? 9'd0 : row + 1;
-	dsp_clk <= row[8];
+	row <= rst ? 10'd0 : row + 1;
+	dsp_clk <= row[9];
 	tx_fold <= ^{row_on, row_val};
 end
 assign TXD = tx_fold;
@@ -578,7 +699,7 @@ always @(posedge clk) begin
 			line <= line << 8;
 			left <= left - 1;
 		end
-	end else if (row[8]) begin
+	end else if (row[9]) begin
 		if (pause != PAUSE) begin
 			pause <= pause + 1;
 		end else begin

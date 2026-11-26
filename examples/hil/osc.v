@@ -2,11 +2,12 @@
 
 // The on-chip oscillator, at FREQ_DIV=8, measured against clk.
 //
-// The boards use OSC, OSCZ or OSCH (OSC_TYPE_* from the board's yosys rule).
-// Its nominal frequency is OSC_MHZ / FREQ_DIV, with OSC_MHZ from Gowin's UG286:
-// 250 MHz for OSC and OSCZ, 240 MHz for OSCH, and 210 MHz for GW1N-4, whose
-// board rule overrides it. The datasheets give a tolerance of 5%, but the
-// bench boards measured +5% (tangnano9k) and -6% (tangnano20k); the check
+// The boards use OSC, OSCZ, OSCH or OSCA (OSC_TYPE_* from the board's yosys
+// rule). Its nominal frequency is OSC_MHZ / FREQ_DIV, with OSC_MHZ from Gowin's
+// UG286: 250 MHz for OSC and OSCZ, 240 MHz for OSCH, and 210 MHz for GW1N-4,
+// whose board rule overrides it; GW5A's OSCA runs at 210 MHz (DS1103, 2.13).
+// The datasheets give a tolerance of 5%, but the bench boards measured +5%
+// (tangnano9k), -6% (tangnano20k) and +1.8% (primer25k); the check
 // allows TOL percent, which still tells FREQ_DIV from its neighbours (6 and
 // 10 are 33% and 20% away).
 //
@@ -15,6 +16,8 @@
 `ifndef OSC_MHZ
 `ifdef OSC_TYPE_OSCH
 `define OSC_MHZ 240
+`elsif OSC_TYPE_OSCA
+`define OSC_MHZ 210
 `else
 `define OSC_MHZ 250
 `endif
@@ -48,6 +51,11 @@ OSCF #(.FREQ_DIV(FREQ_DIV)) osc(
 );
 `elsif OSC_TYPE_OSCH
 OSCH #(.FREQ_DIV(FREQ_DIV)) osc(
+	.OSCOUT(oscout)
+);
+`elsif OSC_TYPE_OSCA
+OSCA #(.FREQ_DIV(FREQ_DIV)) osc(
+	.OSCEN(1'b1),
 	.OSCOUT(oscout)
 );
 `endif

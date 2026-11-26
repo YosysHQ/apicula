@@ -44,6 +44,41 @@ HIL_BATCHES_tangnano20k := gw2a-a gw2a-b gw2a-c gw2a-clk-a gw2a-clk-b gw2a-clk-c
 # *-bugs: the BSRAM failures of #649; bsram-dp-bugs crashes nextpnr, #650.
 HIL_BROKEN_tangnano20k := bsram-sdp bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs
 
+HIL_BATCH_gw5a-a := latch lut8 alu rom16 big-shift osc
+# The clock tests each alone: with too many PLL clocks on global wires (plla
+# and dcs together, or all seven PLLA outputs in one test) nextpnr routes the
+# system clock partly through the fabric in some placements, and those builds
+# garble the reporter's output (the link is inferred, not traced); with osc and plla it sometimes fails to route the
+# oscillator.
+HIL_BATCH_gw5a-clk-a := plla
+HIL_BATCH_gw5a-clk-b := dcs
+HIL_BATCH_gw5a-clk-c := plla2
+HIL_BATCH_gw5a-bsram := bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp bsram-sdp2 bsram-dp bsram-dp16 \
+	bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs
+HIL_BATCH_gw5a-dsp := dsp-mult12x12 dsp-multaddalu12x12 dsp-multalu27x18 dsp-mult27x36
+HIL_BATCHES_primer25k := gw5a-a gw5a-clk-a gw5a-clk-b gw5a-clk-c gw5a-bsram gw5a-dsp
+# Known broken, in no batch; make hil-primer25k-broken runs them.
+# dsp-casisel-bugs: a fabric-driven CASISEL (DYN_CASI_SEL) acts inverted, #664.
+HIL_BROKEN_primer25k := dsp-casisel-bugs
+# The other GW5A boards are not on a bench: build-only, from gw5a/Makefile.
+# GW5AT-60B: nextpnr asserts on dcs ("No clock inputs"), cannot place
+# dsp-mult27x36, and fails to route the BSRAM inputs of six bsram tests
+# together, so those build one by one; bsram-sp-bugs fails to route even
+# alone in most placements and is left out. GW5AST-138C has neither OSCA nor PLLA,
+# and gowin_pack has no MULTALU27X18 for it. None of these boards had a dcs or
+# DSP example before.
+HIL_BATCH_gw5ast-a := latch lut8 alu rom16 big-shift
+HIL_BATCHES_tangconsole60k := gw5a-a gw5a-clk-a gw5a-clk-c \
+	bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp bsram-sdp2 bsram-dp bsram-dp16 \
+	bsram-rom-bugs bsram-sdp-bugs bsram-dp-bugs
+HIL_BATCHES_tangmega138k := gw5ast-a gw5a-bsram
+HIL_BATCHES_tangconsole138k := gw5ast-a gw5a-bsram
+# Fixed seed for these build-only boards: with random seeds some of their
+# builds fail to route (bsram-sp2 and bsram-dp16 on the 60K); seed 1 routed
+# every target with the local and with CI's dev nextpnr.
+hil-%-tangconsole60k.json hil-%-tangmega138k.json hil-%-tangconsole138k.json: \
+	NEXTPNR_FLAGS = --timing-allow-fail --seed 1
+
 .DEFAULT_GOAL := all
 
 .PHONY: all tangnano20k primer20k tangnano tangnano1k tangnano4k tangnano9k szfpga tec0117 runber
@@ -286,12 +321,14 @@ clean:
 # its tests' references. Every line names its test, so the order is ignored.
 hil_tests = $(or $(HIL_BATCH_$(1)),$(1))
 
+# Written to a temporary file first: the GW5A boards' builds from gw5a/Makefile
+# run as separate make processes that can write the same wrapper at once.
 hil-%.v: hil.v $(wildcard hil/*.v) emitter_uart.v
-	printf '`define HIL_%s\n' $(subst -,_,$(call hil_tests,$*)) > $@
-	echo '`include "hil.v"' >> $@
+	{ printf '`define HIL_%s\n' $(subst -,_,$(call hil_tests,$*)); echo '`include "hil.v"'; } > $@.$$$$ && \
+	mv $@.$$$$ $@
 
 # Keep the bitstreams of single tests, which no board target lists
-.PRECIOUS: %-tangnano9k.fs %-tangnano20k.fs
+.PRECIOUS: %-tangnano9k.fs %-tangnano20k.fs %-primer25k.fs
 
 HIL_SETTLE ?= 10
 HIL_TIMEOUT ?= 120
@@ -303,9 +340,10 @@ timeout $(HIL_TIMEOUT) cat $(1) | \
 awk -v n=$(HIL_SETTLE) '/--- tick ---/{c++; next} c==n{print} c==(n+1){exit}'
 endef
 
-# $(call hil_check,BATCH,BOARD,USB_SERIAL)
+# $(call hil_check,BATCH,BOARD,USB_SERIAL[,LOADER_BOARD]); LOADER_BOARD is
+# openFPGALoader's name for the board when it differs from ours
 define hil_check
-openFPGALoader -c dirtyJtag --usb-serial-num $(3) -b $(2) hil-$(1)-$(2).fs
+openFPGALoader -c dirtyJtag --usb-serial-num $(3) -b $(or $(4),$(2)) hil-$(1)-$(2).fs
 $(call hil_capture,/dev/serial/by-id/usb-DirtyJTAG_DirtyJTAG_$(3)-if01) | sort > hil-$(1)-$(2).out
 sort $(patsubst %,hil-references/%.txt,$(call hil_tests,$(1))) | diff - hil-$(1)-$(2).out
 @echo "PASS: $(1) ($(2))"
@@ -339,8 +377,15 @@ hil-femto-riscv-18-test-tangnano20k: femto-riscv-18-test-tangnano20k.fs
 .PHONY: hil-tangnano20k
 hil-tangnano20k: $(HIL_BATCHES_tangnano20k:%=hil-%-tangnano20k) hil-femto-riscv-18-test-tangnano20k
 
+# --- primer25k (GW5A-25A) ---
+hil-%-primer25k: hil-%-primer25k.fs
+	$(call hil_check,$*,primer25k,7c3e8265f4b7,tangprimer25k)
+
+.PHONY: hil-primer25k
+hil-primer25k: $(HIL_BATCHES_primer25k:%=hil-%-primer25k)
+
 .PHONY: hil-all
-hil-all: hil-tangnano9k hil-tangnano20k
+hil-all: hil-tangnano9k hil-tangnano20k hil-primer25k
 
 # Run the known-broken tests of a board one by one. A pass means the bug is
 # fixed: move the test back into a batch. Never fails, so the reference stays
@@ -508,6 +553,58 @@ dvi-example-tangnano9k-synth.json: DVI/dvi-example.v DVI/dvi_sync.v DVI/dvi_top.
 
 %-runber-synth.json: %.v
 	$(YOSYS) -D LEDS_NR=8 -D OSC_TYPE_OSC -D OSC_MHZ=210 -D INV_BTN=0 -D FORCE_BRAM -D CPU_FREQ=12 -D BAUD_RATE=115200 -D NUM_HCLK=5 -p "read_verilog $^; synth_gowin -json $@ ${YOSYS_FLAGS}"
+
+# ============================================================
+# GW5A boards: only the HIL tests are built here, the other GW5A examples
+# are in gw5a/. The boards run at 50 MHz. NUM_HCLK only sizes hil/clkdiv.v,
+# which is not built for GW5A.
+GW5A_YOSYS_DEFS = -D OSC_TYPE_OSCA -D CPU_FREQ=50 -D BAUD_RATE=115200 -D FAMILY_GW5A -D NUM_HCLK=4
+
+# The HIL bitstreams of a GW5A board, for gw5a/Makefile
+.PHONY: primer25k-hil tangconsole60k-hil tangmega138k-hil tangconsole138k-hil
+primer25k-hil: $(HIL_BATCHES_primer25k:%=hil-%-primer25k.fs)
+tangconsole60k-hil: $(HIL_BATCHES_tangconsole60k:%=hil-%-tangconsole60k.fs)
+tangmega138k-hil: $(HIL_BATCHES_tangmega138k:%=hil-%-tangmega138k.fs)
+tangconsole138k-hil: $(HIL_BATCHES_tangconsole138k:%=hil-%-tangconsole138k.fs)
+
+# Tang Primer 25K (GW5A-25A)
+%-primer25k.fs: %-primer25k.json
+	gowin_pack --sspi_as_gpio --cpu_as_gpio -d GW5A-25A -o $@ $<
+
+%-primer25k.json: %-primer25k-synth.json gw5a/primer25k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW5A-LV25MG121NES --vopt cst=gw5a/primer25k.cst --vopt sspi_as_gpio
+
+%-primer25k-synth.json: %.v
+	$(YOSYS) $(GW5A_YOSYS_DEFS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
+
+# Tang Console 60K (GW5AT-60B)
+%-tangconsole60k.fs: %-tangconsole60k.json
+	gowin_pack --cpu_as_gpio -d GW5AT-60B -o $@ $<
+
+%-tangconsole60k.json: %-tangconsole60k-synth.json gw5a/tangconsole60k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW5AT-LV60PG484AC1/I0 --vopt cst=gw5a/tangconsole60k.cst
+
+%-tangconsole60k-synth.json: %.v
+	$(YOSYS) $(GW5A_YOSYS_DEFS) -D GW5AT_60B -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
+
+# Tang Mega 138K and Tang Console 138K (GW5AST-138C)
+%-tangmega138k.fs: %-tangmega138k.json
+	gowin_pack --cpu_as_gpio -d GW5AST-138C -o $@ $<
+
+%-tangmega138k.json: %-tangmega138k-synth.json gw5a/tangmega138k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW5AST-LV138PG484AC1/I0 --vopt cst=gw5a/tangmega138k.cst
+
+%-tangmega138k-synth.json: %.v
+	$(YOSYS) $(GW5A_YOSYS_DEFS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
+
+%-tangconsole138k.fs: %-tangconsole138k.json
+	gowin_pack --cpu_as_gpio -d GW5AST-138C -o $@ $<
+
+%-tangconsole138k.json: %-tangconsole138k-synth.json gw5a/tangconsole138k.cst
+	$(NEXTPNR) ${NEXTPNR_FLAGS} --json $< --write $@ --device GW5AST-LV138PG484AC1/I0 --vopt cst=gw5a/tangconsole138k.cst
+
+%-tangconsole138k-synth.json: %.v
+	$(YOSYS) $(GW5A_YOSYS_DEFS) -p "read_verilog $^; synth_gowin -json $@ -family gw5a -nolutram ${YOSYS_FLAGS}"
 
 # ============================================================
 #  Unpack
