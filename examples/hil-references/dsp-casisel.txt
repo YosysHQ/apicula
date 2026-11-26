@@ -1,0 +1,5 @@
+dsp-casisel 0 = 0x000000000000000016
+dsp-casisel 1 = 0x000000ffffffc0c2ff
+dsp-casisel 2 = 0x0000000000000000dc
+dsp-casisel 3 = 0x00000000010000015e
+dsp-casisel 4 = 0x000000ffffffc0c3fe

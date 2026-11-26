@@ -326,9 +326,9 @@ dsp_mult12x12 mult12x12_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(mult12x12));
 wire [5*64-1:0] multaddalu12x12;
 dsp_multaddalu12x12 multaddalu12x12_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(multaddalu12x12));
 `endif
-`ifdef HIL_dsp_casisel_bugs
-wire [5*64-1:0] casisel_bugs;
-dsp_multaddalu12x12 #(.DYN_CASI_SEL("TRUE")) casisel_bugs_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(casisel_bugs));
+`ifdef HIL_dsp_casisel
+wire [5*64-1:0] casisel;
+dsp_multaddalu12x12 #(.DYN_CASI_SEL("TRUE")) casisel_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(casisel));
 `endif
 `ifdef HIL_dsp_multalu27x18
 wire [5*64-1:0] multalu27x18;
@@ -609,12 +609,12 @@ always @* begin
 	`ROW(36, "dsp-multaddalu12x12", 3, `DSP_OUT(multaddalu12x12, 3))
 	`ROW(36, "dsp-multaddalu12x12", 4, `DSP_OUT(multaddalu12x12, 4))
 `endif
-`ifdef HIL_dsp_casisel_bugs
-	`ROW(40, "dsp-casisel-bugs", 0, `DSP_OUT(casisel_bugs, 0))
-	`ROW(40, "dsp-casisel-bugs", 1, `DSP_OUT(casisel_bugs, 1))
-	`ROW(40, "dsp-casisel-bugs", 2, `DSP_OUT(casisel_bugs, 2))
-	`ROW(40, "dsp-casisel-bugs", 3, `DSP_OUT(casisel_bugs, 3))
-	`ROW(40, "dsp-casisel-bugs", 4, `DSP_OUT(casisel_bugs, 4))
+`ifdef HIL_dsp_casisel
+	`ROW(40, "dsp-casisel", 0, `DSP_OUT(casisel, 0))
+	`ROW(40, "dsp-casisel", 1, `DSP_OUT(casisel, 1))
+	`ROW(40, "dsp-casisel", 2, `DSP_OUT(casisel, 2))
+	`ROW(40, "dsp-casisel", 3, `DSP_OUT(casisel, 3))
+	`ROW(40, "dsp-casisel", 4, `DSP_OUT(casisel, 4))
 `endif
 `ifdef HIL_dsp_multalu27x18
 	`ROW(37, "dsp-multalu27x18", 0, `DSP_OUT(multalu27x18, 0))

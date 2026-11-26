@@ -55,11 +55,8 @@ HIL_BATCH_gw5a-clk-b := dcs
 HIL_BATCH_gw5a-clk-c := plla2
 HIL_BATCH_gw5a-bsram := bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp bsram-sdp2 bsram-dp bsram-dp16 \
 	bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs
-HIL_BATCH_gw5a-dsp := dsp-mult12x12 dsp-multaddalu12x12 dsp-multalu27x18 dsp-mult27x36
+HIL_BATCH_gw5a-dsp := dsp-mult12x12 dsp-multaddalu12x12 dsp-multalu27x18 dsp-mult27x36 dsp-casisel
 HIL_BATCHES_primer25k := gw5a-a gw5a-clk-a gw5a-clk-b gw5a-clk-c gw5a-bsram gw5a-dsp
-# Known broken, in no batch; make hil-primer25k-broken runs them.
-# dsp-casisel-bugs: a fabric-driven CASISEL (DYN_CASI_SEL) acts inverted, #664.
-HIL_BROKEN_primer25k := dsp-casisel-bugs
 # The other GW5A boards are not on a bench: build-only, from gw5a/Makefile.
 # GW5AT-60B: nextpnr asserts on dcs ("No clock inputs"), cannot place
 # dsp-mult27x36, and fails to route the BSRAM inputs of six bsram tests
