@@ -377,7 +377,7 @@ hil-%-primer25k: hil-%-primer25k.fs
 hil-primer25k: $(HIL_BATCHES_primer25k:%=hil-%-primer25k)
 
 .PHONY: hil-all
-hil-all: hil-tangnano9k hil-tangnano20k
+hil-all: hil-tangnano9k hil-tangnano20k hil-primer25k
 
 # Run the known-broken tests of a board one by one. A pass means the bug is
 # fixed: move the test back into a batch. Never fails, so the reference stays
