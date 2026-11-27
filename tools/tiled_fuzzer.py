@@ -1426,7 +1426,9 @@ def run_batch(device, db, spec, pins, batch, workdir, baseline, harness_io_type=
         # judge each case alone: a rejection can name an innocent case (CT1136
         # names the pad that loses the bank voltage, not the one that set it)
         return {'error': 'the vendor rejected settings', 'why': [m for ms in rejected.values() for m in ms]}, None
-    if vres is None or ares is None:
+    # a case with settings the vendor rejects is judged by whether Apicula
+    # failed too, not by bitstreams: the vendor may have moved its pad
+    if vres is None or ares is None or rejected:
         if not alone:  # split the design to find the case
             if ares is None and (vres or follow):
                 return {'error': 'the Apicula flow failed', 'why': apicula_errors(os.path.join(workdir, 'apicula/tools.log'))}, None
@@ -1470,10 +1472,7 @@ def run_batch(device, db, spec, pins, batch, workdir, baseline, harness_io_type=
                     for msg in msgs if code in INVALID_CODES or msg.startswith('ERROR')]
         if site and kind.placement == 'bel' and placed.get(name) != kind.bel(case, site):
             problems.append(f'nextpnr placed it at {placed.get(name)}')
-        if name in rejected:
-            res['status'] = 'accepted'
-            res['why'] = rejected[name]
-        elif problems:
+        if problems:
             res['status'] = 'invalid'
             res['why'] = problems
         else:
