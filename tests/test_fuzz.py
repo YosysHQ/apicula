@@ -51,10 +51,8 @@ KNOWN = [
     # Apicula
     ('IBUF|OBUF|TBUF|IOBUF', ALL, any_params,
      IO_ATTRS + '; unused-I/O bank fuses differ; SSTL/HSTL inputs decode as outputs; one IO_TYPE per bank, where '
-     'the vendor allows any standard of one voltage'),
-    ('OBUF|TBUF|IOBUF', ALL, lambda p: 'IO_TYPE' not in p,
-     '#433: without IO_TYPE gowin_pack makes an output LVCMOS12, the vendor LVCMOS18 on GW1N/GW2A and LVCMOS33 '
-     'on GW5A'),
+     'the vendor allows any standard of one voltage; #433: without IO_TYPE gowin_pack makes an output LVCMOS12, '
+     'the vendor LVCMOS18 on GW1N/GW2A and LVCMOS33 on GW5A'),
     ('IO_BANK', ALL, lambda p: len({a['IO_TYPE'] for _, a in bank_buffers(p) if 'IO_TYPE' in a}) > 1,
      'one IO_TYPE per bank: gowin_pack stops with "IO_TYPE conflict" on standards the vendor accepts together'),
     ('IO_BANK', ALL, lambda p: any(prim != 'IBUF' and 'IO_TYPE' not in a for prim, a in bank_buffers(p)),
@@ -150,6 +148,8 @@ BROKEN_COMBINATIONS = ('nextpnr: two DSP cases in one block (more than 4 RESET n
 # status the issue explains, which xfails. Any other status fails; a known
 # failure that passes is reported as a warning, so stale entries show up.
 PLL_ODIV3 = {'FCLKIN': '"27"', 'IDIV_SEL': '0', 'FBDIV_SEL': '9', 'ODIV_SEL': '3'}
+BANK_LVCMOS33 = {'IO0': 'OBUF', 'IO0_IO_TYPE': 'LVCMOS33', 'IO1': 'IBUF', 'IO1_IO_TYPE': 'LVCMOS33',
+                 'IO2': 'IOBUF', 'IO2_IO_TYPE': 'LVCMOS33'}
 PINNED = [
     # ODIV_SEL is 2, 4, 8, ... 128 in primitive.xml; the vendor rejects 3 (PA1002)
     ('GW1N-9C', 'rPLL', PLL_ODIV3, None, '#409', 'accepted'),
@@ -165,6 +165,9 @@ PINNED = [
     # LVCMOS12 and it stops with "Default IO_TYPE (LVCMOS12) and BANK_VCCIO conflict"
     ('GW2A-18C', 'OBUF', {'BANK_VCCIO': '1.8', 'PULL_MODE': 'UP', 'DRIVE': '8'}, ['IOL47A'], '#433', 'unsupported'),
     ('GW1N-9C', 'OBUF', {'BANK_VCCIO': '1.8', 'PULL_MODE': 'UP', 'DRIVE': '8'}, ['26'], '#433', 'unsupported'),
+    # buffers that share one explicit IO_TYPE and set nothing else must pass; the draw seldom gives them
+    ('GW1N-9C', 'IO_BANK', BANK_LVCMOS33, None, 'shared-IO_TYPE', 'ok'),
+    ('GW2A-18C', 'IO_BANK', BANK_LVCMOS33, None, 'shared-IO_TYPE', 'ok'),
 ]
 
 
@@ -187,7 +190,8 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('device,prim', params, ids=[f'{d}-{p}' for d, p in params])
     elif 'pinned' in metafunc.fixturenames:
         params = [i for i, entry in enumerate(PINNED) if entry[0] in devices]
-        metafunc.parametrize('pinned', params, ids=[f'{PINNED[i][0]}-{PINNED[i][4]}-{PINNED[i][1]}' for i in params])
+        ids = [f'{PINNED[i][0]}-{PINNED[i][4]}-{PINNED[i][1]}-{i}' for i in params]
+        metafunc.parametrize('pinned', params, ids=ids)
     elif 'device' in metafunc.fixturenames:
         metafunc.parametrize('device', devices)
 

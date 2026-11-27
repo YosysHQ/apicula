@@ -413,7 +413,8 @@ is `accepted`, a failure.
   rejects any case: a rejection can name an innocent case. `CT1136` names the
   pad that loses the bank voltage, not the case that set it (seen with an
   `IBUF` `BANK_VCCIO=1.2` next to an `OBUF` without `IO_TYPE`, which the
-  vendor makes LVCMOS18, on GW1N-9C).
+  vendor makes LVCMOS18, on GW1N-9C). A message that names only a harness pad
+  names no case: it neither rejects a case nor splits the design.
 - Every other vendor error stays `invalid` and is skipped: those are rules of
   the harness or the netlist (PR2060, PR0018, PR1113, PA2085, ...).
 - A failing combination does not count if the vendor rejected one of its cases.
@@ -438,6 +439,7 @@ fails.
 | #433 | GW2A-18C | OBUF on IOL47A, `BANK_VCCIO=3.3` without `IO_TYPE` | CT1108 | rejected |
 | #433 | GW2A-18C | OBUF on IOL47A, LVCMOS33 with `BANK_VCCIO=1.8` | CT1108 | rejected |
 | #433 | GW2A-18C, GW1N-9C | OBUF on IOL47A or pin 26, `BANK_VCCIO=1.8` without `IO_TYPE` | accepts (LVCMOS18) | unsupported |
+| — | GW1N-9C, GW2A-18C | `IO_BANK`: OBUF, IBUF and IOBUF, all LVCMOS33, on the first free bank | accepts | ok |
 
 ## Adding a primitive
 
@@ -496,8 +498,8 @@ inferred.
   GW5A-25A). `gowin_pack` uses LVCMOS12 (#433): bank and IOB `DRIVE` rows
   differ, and with a `BANK_VCCIO` that fits the vendor's default (1.8 on
   GW1N-9C and GW2A-18C, 3.3 on GW5A-25A) it stops with "Default IO_TYPE
-  (LVCMOS12) and BANK_VCCIO conflict". KNOWN: `OBUF|TBUF|IOBUF` without
-  `IO_TYPE`, all devices; the 1.8 V cases are pinned.
+  (LVCMOS12) and BANK_VCCIO conflict". Covered by the generic I/O entry and
+  the `IO_BANK` entry; the 1.8 V cases are pinned.
 - The vendor accepts, and `gowin_pack` stops with `IO_TYPE conflict` on,
   LVCMOS33 + SSTL33_I + PCI33 in one bank, an LVCMOS33 output with an LVCMOS18
   input, and an LVDS25 output with LVCMOS33 and LVCMOS25 inputs.
@@ -512,7 +514,7 @@ inferred.
   rows, and without `IO_TYPE` the `LVDS_OUT` rows of the bank's unused pins.
   So `IO_BANK` keeps an `any_params` entry on GW5A.
 - `Sites.iobank` needs a bank with no harness pin and three free pins; on
-  GW1N-9C only bank 2 (pins 26, 28, 30) qualifies.
+  GW1N-9C only bank 2 qualifies.
 
 ### Bugs not given a new test
 

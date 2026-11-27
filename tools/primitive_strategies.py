@@ -136,7 +136,8 @@ def io_vccio(case, device):
 
 
 # IO_TYPE of a single-ended buffer without one, from the vendor's top.io.cst
-# (measured with an OBUF on GW1N-9C, GW2A-18C and GW5A-25A)
+# (measured with an OBUF on GW1N-9C, GW2A-18C and GW5A-25A, assumed for the rest
+# of each family)
 DEFAULT_IO_TYPE = {'gw1n': 'LVCMOS18', 'gw2a': 'LVCMOS18', 'gw5a': 'LVCMOS33'}
 BANK_VCCIOS = ['3.3', '2.5', '1.8', '1.5', '1.2']
 
