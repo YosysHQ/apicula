@@ -30,6 +30,16 @@ def any_params(p):
 
 ALL = '.*'
 
+IO_ATTRS = ('I/O attributes: DRIVE/OPENDRAIN, ODMUX and PULLMODE rows differ; attribute values the vendor calls '
+            'illegal for the IO_TYPE (CT1108) are packed')
+
+
+def bank_buffers(p):
+    """The buffers of an IO_BANK case: [(primitive, {attribute: value})]."""
+    return [(prim, {k[len(n) + 1:]: v for k, v in p.items() if k.startswith(n + '_')})
+            for n, prim in p.items() if re.fullmatch(r'IO\d', n)]
+
+
 # Known bugs, each the region of inputs that triggers it, in the shape of
 # primitive_strategies.RULES: (primitive regex, device regex, predicate, reason).
 # The primitive regex must match the whole name, the device regex its start.
@@ -39,15 +49,17 @@ ALL = '.*'
 # is reported as a warning, so stale entries show up.
 KNOWN = [
     # Apicula
-    ('IBUF|OBUF|TBUF|IOBUF|IO_BANK', ALL, any_params,
-     'I/O: DRIVE/OPENDRAIN, ODMUX and PULLMODE rows and unused-I/O bank fuses differ; SSTL/HSTL inputs decode '
-     'as outputs; one IO_TYPE per bank, where the vendor allows any standard of one voltage; attribute values '
-     'the vendor calls illegal for the IO_TYPE (CT1108) are packed'),
+    ('IBUF|OBUF|TBUF|IOBUF', ALL, any_params,
+     IO_ATTRS + '; unused-I/O bank fuses differ; SSTL/HSTL inputs decode as outputs; one IO_TYPE per bank, where '
+     'the vendor allows any standard of one voltage'),
     ('OBUF|TBUF|IOBUF', ALL, lambda p: 'IO_TYPE' not in p,
-     'default IO_TYPE (issue pending): without IO_TYPE gowin_pack makes an output LVCMOS12, the vendor LVCMOS18 '
-     'on GW1N/GW2A and LVCMOS33 on GW5A'),
-    ('IO_BANK', ALL, lambda p: len({v for k, v in p.items() if k.endswith('_IO_TYPE')}) > 1,
+     '#433: without IO_TYPE gowin_pack makes an output LVCMOS12, the vendor LVCMOS18 on GW1N/GW2A and LVCMOS33 '
+     'on GW5A'),
+    ('IO_BANK', ALL, lambda p: len({a['IO_TYPE'] for _, a in bank_buffers(p) if 'IO_TYPE' in a}) > 1,
      'one IO_TYPE per bank: gowin_pack stops with "IO_TYPE conflict" on standards the vendor accepts together'),
+    ('IO_BANK', ALL, lambda p: any(prim != 'IBUF' and 'IO_TYPE' not in a for prim, a in bank_buffers(p)),
+     '#433: an output without IO_TYPE is LVCMOS12 in gowin_pack, LVCMOS18 or LVCMOS33 in the vendor'),
+    ('IO_BANK', ALL, lambda p: any(set(a) - {'IO_TYPE'} for _, a in bank_buffers(p)), IO_ATTRS),
     ('(TLVDS|ELVDS)_(IBUF|OBUF|TBUF|IOBUF)', ALL, any_params,
      'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
     ('TLVDS_(OBUF|TBUF|IOBUF)', 'GW2A', any_params,
@@ -124,7 +136,8 @@ KNOWN = [
 BROKEN_UNATTRIBUTED = ('I/O bank and GW5A I/O row fuses of unused pins; HCLK BRGMUX*_BRGOUT rows '
                        '(GW1N-9C, GW2A-18C, GW2A-18; inferred: from the harness clock)')
 BROKEN_COMBINATIONS = ('nextpnr: two DSP cases in one block (more than 4 RESET networks, or two nets on one '
-                       'source wire); an I/O logic pin already taken by another case\'s buffer')
+                       'source wire); an I/O logic pin already taken by another case\'s buffer; gowin_pack: one '
+                       'IO_TYPE per bank (PCI33 next to the LVCMOS33 buffer of an I/O logic case)')
 
 # Cases the generator does not reach, from bug reports: (device, primitive,
 # params, pads, issue, status). pads are pin names or numbers, None for the
@@ -145,6 +158,10 @@ PINNED = [
     ('GW2A-18C', 'OBUF', {'BANK_VCCIO': '3.3', 'PULL_MODE': 'UP', 'DRIVE': '8'}, ['IOL47A'], '#433', 'rejected'),
     ('GW2A-18C', 'OBUF', {'IO_TYPE': 'LVCMOS33', 'BANK_VCCIO': '1.8', 'PULL_MODE': 'UP', 'DRIVE': '8'},
      ['IOL47A'], '#433', 'rejected'),
+    # the reporter's working variant: the vendor's default IO_TYPE is LVCMOS18, which fits; gowin_pack's is
+    # LVCMOS12 and it stops with "Default IO_TYPE (LVCMOS12) and BANK_VCCIO conflict"
+    ('GW2A-18C', 'OBUF', {'BANK_VCCIO': '1.8', 'PULL_MODE': 'UP', 'DRIVE': '8'}, ['IOL47A'], '#433', 'unsupported'),
+    ('GW1N-9C', 'OBUF', {'BANK_VCCIO': '1.8', 'PULL_MODE': 'UP', 'DRIVE': '8'}, ['26'], '#433', 'unsupported'),
 ]
 
 
