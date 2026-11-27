@@ -27,7 +27,9 @@ Verilog. Four groups, each one test id:
 - `logic`: LUT/MUX trees, wide functions, constants.
 - `alu`: `+`, `-`, compares, counters, constant operands. This exercises
   nextpnr's constant-ALU rewrite, where #514 and #541 lived.
-- `ff`: every DFF kind Yosys infers (edge, CE, sync/async set/reset), and INIT.
+- `ff`: every DFF kind Yosys infers (edge, CE, sync/async set/reset), and INIT
+  (Yosys carries it in the kind: `reg q = 1` becomes DFFS). Each register pair
+  is compared on its kind and INIT, CE aside, before the cut.
 - `ioreg`: registers next to IBUF, OBUF and IOBUF.
 
 Each design also draws the nextpnr seed, its pins (from `tiled_fuzzer`'s
@@ -57,6 +59,8 @@ Register correspondence plus one SAT miter per design:
 6. `miter -equiv` and `sat -prove`.
 
 A gold register with no counterpart in the bitstream fails on its own (#668).
+A gold output buffer driven only by `x` is a don't-care: nextpnr may drop it,
+as it does for a register that only feeds itself and has no INIT.
 
 Rejected: `equiv_make`/`equiv_simple` as the main check. It scales better but
 gives no input vector and is incomplete on deep carry chains: on #514's
@@ -69,25 +73,46 @@ states.
 
 A failure reports, for each differing point: the gold register or port with its
 RTL `src`, the gate's tile, the input vector, and the undriven gate wires in its
-cone. A point is classed `unpack-gap` only if its gate value depends on those
-wires: two copies of the gate netlist, each with its own free values for them,
-differ there (`dependent()`). An undriven wire in a cone that does not matter
-explains nothing. An undriven carry-in (`R<r>C<c>_CIN<n>`) never counts: no
-#585 gap leaves one undriven, and a chain head that reads it is a miscompute
-(#541's `0x505a` head was one). Without this rule, a sabotaged carry-out in
-unpack's RAW ALU decode was excused as a gap; with it, the `alu` group fails
-on both devices. Classified points are dropped and the miter rerun, so a known
-gap in one point cannot hide a miscompute in another. A miscompute in a point
-that also depends on a gap stays hidden until that gap is fixed.
+cone, each with its #585 class or `not #585`. `gaps()` sorts the undriven wires
+into #585's classes:
+
+- long wires and the clock network, by name (`LT`/`LBO`/`LB`; `SPINE`, `GT`,
+  `GB`, `GBO`): unpack decodes neither;
+- empty tiles and alone-node fuses, by the bitstream (`undecoded()`): the
+  tile the wire starts in selects exactly one source by `gowin_pack`'s rule
+  (the pip's fuses plus the alone-node fuses of the sources not taken), but
+  unpack's rule (pip fuses alone, tiles with a fuse set) selects none.
+
+A point is classed `unpack-gap` only if its gate value depends on wires of
+those classes: two copies of the gate netlist, each with its own free values
+for them, differ there (`dependent()`). Every other undriven wire is shared
+by both copies, so a point that depends on it is unexplained: a pip that
+`gowin_pack` drops, or a chain head that reads its carry-in (#541's `0x505a`
+head did). Two sabotage runs check this:
+
+- unpack's RAW ALU decode with a wrong carry-out: `alu` fails hard on both
+  devices. The first classifier excused it as a gap, through the chain head's
+  undriven carry-in.
+- `gowin_pack` dropping the first pip that carries a signal into a 2-hop
+  wire: every group fails hard on both devices. Of the 7 designs it broke in
+  GW1N-9C `logic`, the classifier of 96a2ed0, which excused any undriven
+  net, xfailed all 7; this one leaves 6 unexplained. The seventh dropped the
+  only pip of its tile, so the wire reads the tile's default source on the
+  chip, and unpack's empty-tile gap hides it.
+
+Classified points are dropped and the miter rerun, so a known gap in one point
+cannot hide a miscompute in another. A miscompute in a point that also depends
+on a gap stays hidden until that gap is fixed, and so does a `gowin_pack` bug
+on a long wire, a clock wire, or one that leaves a tile empty.
 
 `tests/test_roundtrip.py` xfails a group only if every failure has a kind in
 its `KNOWN` map:
 
 | kind | signature | issue |
 |---|---|---|
-| `unpack-gap` | the point's gate value depends on undriven wires | #585 |
+| `unpack-gap` | the point's gate value depends on undriven wires of #585's classes | #585 |
 | `alu-i2` | an unpacked `ALU` has an `I2` port, which Yosys' `ALU` lacks | #288 |
-| `lost-iob-reg` | a gold register nextpnr packed into I/O logic has no counterpart | #668 |
+| `lost-iob-reg` | the gold register nextpnr packed into a pad's IOLOGIC (`IREG_TYPE`/`OREG_TYPE`/`TREG_TYPE` of its kind, on its Q or D net) has no counterpart | #668 |
 
 For #288 the checker drops `I2` and records the problem, so the rest of the
 design is still checked rather than stopping at an elaboration error.
@@ -114,15 +139,17 @@ chipdb, like `fuzz`:
 
 `pytest tests/test_roundtrip.py --device <dev> --roundtrip-jobs $(nproc)`, 25
 designs per group per device (fewer after duplicates are dropped). Measured
-here with 4 jobs: 76 s on GW1N-9C, 123 s on GW2A-18C, for all four groups.
+here with 4 jobs: 79 s on GW1N-9C, 140 s on GW2A-18C, for all four groups.
 Per small design: synth 0.3 s, pnr 0.2 s (GW1N-9C) or 2.5 s (GW2A-18C), pack
 0.4–1 s, unpack 1.1–3.4 s, check 1–2 s.
 
-On master (e6dc4a6, nextpnr b4faf934, `--roundtrip-seed 0`) both devices give
-the same counts: `logic` proves 23 of 23 and passes; `alu` proves 9 of 24 and
-xfails with #288 and #585; `ff` proves 10 of 20 and xfails with #585; `ioreg`
-proves 0 of 20 and xfails with #668 and #585. The mutation control fails as
-it should in `logic`, `ff` and `alu`; `ioreg` has no design that proves to run
+On master (e6dc4a6, nextpnr b4faf934) both devices give the same counts with
+`--roundtrip-seed 0`: `logic` proves 23 of 23 and passes; `alu` proves 9 of
+24 and xfails with #288 and #585; `ff` proves 10 of 20 and xfails with #585;
+`ioreg` proves 0 of 20 and xfails with #668 and #585. With seed 1 every group
+xfails: `logic` fails 2 of 23 (GW1N-9C) or 7 of 23 (GW2A-18C) on #585, `alu`
+13 of 22, `ff` 15 of 24, `ioreg` 22 of 23. The mutation control fails as it
+should in `logic`, `ff` and `alu`; `ioreg` has no design that proves to run
 it on.
 
 It does not replace the sanity check yet: that step unpacks the examples (PLL,

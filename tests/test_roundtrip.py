@@ -45,7 +45,7 @@ def test_roundtrip(request, device, group):
     failed = [(w, r) for w, r in results if r['status'] != 'proved']
     details = '\n'.join(roundtrip.describe(w, r) for w, r in failed)
     if control:
-        assert None in roundtrip.kinds(control[1]), \
+        assert control[1]['status'] == 'failed' and None in roundtrip.kinds(control[1]), \
             f'{control[0]}: with {control[1]["mutated"]} inverted, the check gave ' \
             f'{control[1]["status"]}, not an unexplained failure:\n{roundtrip.describe(*control)}'
     else:
