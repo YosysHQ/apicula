@@ -32,8 +32,9 @@ rule the generator should learn); rejected (the vendor rejected the case's
 settings as illegal, REJECT_CODES, and the Apicula flow failed on it too);
 accepted (the vendor rejected the settings, but Apicula made a bitstream: a
 failure); unsupported (the Apicula flow failed on it: a failure to fix, like a
-mismatch). The exit status is 1 if any case failed. A design that fails in either flow is split in half and rerun
-until the failing case is alone. Failing cases are written out on
+mismatch). The exit status is 1 if any case failed. A design that fails in
+either flow, or with settings the vendor rejects, is split in half and rerun
+until the case is alone. Failing cases are written out on
 their own for `--replay`.
 
 Tools: YOSYS and NEXTPNR environment variables, else yosys/nextpnr-himbaechel,
@@ -1414,13 +1415,17 @@ def run_batch(device, db, spec, pins, batch, workdir, baseline, harness_io_type=
             vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
             for name, (case, site) in list(names.items()):
                 names[name] = (case, KINDS[case.site].vendor_site(db, vt, case) or site)
-        ares = apicula() if vres or alone and any(rejections(vendor_errors(workdir), n) for n in names) else None
+        ares = apicula() if vres or (alone and any(rejections(vendor_errors(workdir), n) for n in names)) else None
     else:
         with concurrent.futures.ThreadPoolExecutor(2) as pool:
             vfut, afut = pool.submit(vendor), pool.submit(apicula)
             vres, ares = vfut.result(), afut.result()
     errs = vres.errs if vres else vendor_errors(workdir)
     rejected = {name: why for name in names if (why := rejections(errs, name))}
+    if rejected and not alone:
+        # judge each case alone: a rejection can name an innocent case (CT1136
+        # names the pad that loses the bank voltage, not the one that set it)
+        return {'error': 'the vendor rejected settings', 'why': [m for ms in rejected.values() for m in ms]}, None
     if vres is None or ares is None:
         if not alone:  # split the design to find the case
             if ares is None and (vres or follow):

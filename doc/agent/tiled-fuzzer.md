@@ -381,7 +381,11 @@ is `accepted`, a failure.
 
 - Both flows run for a design of a single case even when one of them fails, so
   a rejection can be checked against the other flow. A design of several cases
-  that fails in a flow is split as before.
+  that fails in a flow is split as before, and so is one in which the vendor
+  rejects any case: a rejection can name an innocent case. `CT1136` names the
+  pad that loses the bank voltage, not the case that set it (seen with an
+  `IBUF` `BANK_VCCIO=1.2` next to an `OBUF` without `IO_TYPE`, which the
+  vendor makes LVCMOS18, on GW1N-9C).
 - Every other vendor error stays `invalid` and is skipped: those are rules of
   the harness or the netlist (PR2060, PR0018, PR1113, PA2085, ...).
 - A failing combination does not count if the vendor rejected one of its cases.
@@ -389,19 +393,22 @@ is `accepted`, a failure.
 ### Pinned cases
 
 `PINNED` in `tests/test_fuzz.py` holds cases the generator does not reach,
-taken from bug reports: (device, primitive, params, pads, issue). `test_pinned`
-runs each in a design of its own, at the given pins (in any bank, SiP-locked
-ones too) or on the first site of its kind, and xfails with the issue number
-unless the case passes or both flows reject it. The vendor decides the outcome
-at run time; nothing is pinned to Apicula's output.
+taken from bug reports: (device, primitive, params, pads, issue, status).
+`test_pinned` runs each in a design of its own, at the given pins (in any bank,
+SiP-locked ones too) or on the first site of its kind. The status is the one
+the case must get: `ok` or `rejected` for a case that must pass, else the
+failing status its issue explains, which xfails. Any other status fails, and a
+known failure that passes is a warning, as with `KNOWN`. The vendor decides at
+run time whether a case passes; the status of a known bug only says how it
+fails.
 
-| Issue | Device | Case | Vendor (IDE 1.9.10.03) |
-| --- | --- | --- | --- |
-| #409 | GW1N-9C, GW2A-18C | rPLL `ODIV_SEL=3` | PA1002 |
-| #622 | GW1N-9C | IBUF LVCMOS33 on pin 80 (bank 3) | sets bank 3 to 1.8 V |
-| #622 | GW1N-9C | OBUF LVCMOS33 on pin 80 | CT1136, moves the pad |
-| #433 | GW2A-18C | OBUF on IOL47A, `BANK_VCCIO=3.3` without `IO_TYPE` | CT1108 |
-| #433 | GW2A-18C | OBUF on IOL47A, LVCMOS33 with `BANK_VCCIO=1.8` | CT1108 |
+| Issue | Device | Case | Vendor (IDE 1.9.10.03) | Status |
+| --- | --- | --- | --- | --- |
+| #409 | GW1N-9C, GW2A-18C | rPLL `ODIV_SEL=3` | PA1002 | accepted |
+| #622 | GW1N-9C | IBUF LVCMOS33 on pin 80 (bank 3) | sets bank 3 to 1.8 V | mismatch |
+| #622 | GW1N-9C | OBUF LVCMOS33 on pin 80 | CT1136, moves the pad | accepted |
+| #433 | GW2A-18C | OBUF on IOL47A, `BANK_VCCIO=3.3` without `IO_TYPE` | CT1108 | rejected |
+| #433 | GW2A-18C | OBUF on IOL47A, LVCMOS33 with `BANK_VCCIO=1.8` | CT1108 | rejected |
 
 ## Adding a primitive
 
@@ -469,9 +476,9 @@ line is fixed with section 3, the first change that can write one.
   PA2068, PA2050, PA2067, PR1082, PR0003/4, PA2085, CT1094, all seen in CI).
   A combination doesn't fail if any of its cases was rejected.
 - Pinned cases: `PINNED` in `tests/test_fuzz.py`, entries
-  `(device, prim, params, pads, issue)`, run as one replay design per device
-  by `test_pinned`. The vendor decides the outcome at run time; the issue
-  number is only the xfail reason. The generator can't reach these by itself:
+  `(device, prim, params, pads, issue, status)`, run as one replay design per
+  device by `test_pinned`. The vendor decides the outcome at run time; the
+  status says how a known bug fails. The generator can't reach these by itself:
   `ODIV_SEL` is an enum in `primitive.xml`, and `package_pins` avoids locked
   banks.
   - #409: rPLL `ODIV_SEL=3` on GW1N-9C and GW2A-18C. Vendor PA1002; Apicula

@@ -6,8 +6,9 @@
 Without --device, nothing runs. One fuzzer run per device makes all its
 designs; the tests read its results. Failures are logged with the differing
 fuses; the full reports are in --fuzz-out. Known bugs are in KNOWN, with the
-evidence in doc/agent/tiled-fuzzer.md; cases the vendor rejects are a
-generator limit, not a failure.
+evidence in doc/agent/tiled-fuzzer.md. Cases the vendor rejects for the
+harness or the netlist (invalid) are a generator limit, not a failure;
+settings it rejects as illegal must make the Apicula flow fail too.
 """
 import functools
 import os
@@ -117,21 +118,24 @@ BROKEN_COMBINATIONS = ('nextpnr: two DSP cases in one block (more than 4 RESET n
                        'source wire); an I/O logic pin already taken by another case\'s buffer')
 
 # Cases the generator does not reach, from bug reports: (device, primitive,
-# params, pads, issue). pads are pin names or numbers, None for the first site
-# of the primitive's kind. Each runs in a design of its own; the vendor decides
-# what is right, the issue is the reason a failure is expected.
+# params, pads, issue, status). pads are pin names or numbers, None for the
+# first site of the primitive's kind. Each runs in a design of its own; the
+# vendor decides what is right. status is the one the case gets: ok or
+# rejected (both flows reject it) for a case that must pass, else the failing
+# status the issue explains, which xfails. Any other status fails; a known
+# failure that passes is reported as a warning, so stale entries show up.
 PLL_ODIV3 = {'FCLKIN': '"27"', 'IDIV_SEL': '0', 'FBDIV_SEL': '9', 'ODIV_SEL': '3'}
 PINNED = [
     # ODIV_SEL is 2, 4, 8, ... 128 in primitive.xml; the vendor rejects 3 (PA1002)
-    ('GW1N-9C', 'rPLL', PLL_ODIV3, None, '#409'),
-    ('GW2A-18C', 'rPLL', PLL_ODIV3, None, '#409'),
+    ('GW1N-9C', 'rPLL', PLL_ODIV3, None, '#409', 'accepted'),
+    ('GW2A-18C', 'rPLL', PLL_ODIV3, None, '#409', 'accepted'),
     # pin 80 is in bank 3, wired to the in-package PSRAM (SiP-locked)
-    ('GW1N-9C', 'IBUF', {'IO_TYPE': 'LVCMOS33'}, ['80'], '#622'),
-    ('GW1N-9C', 'OBUF', {'IO_TYPE': 'LVCMOS33'}, ['80'], '#622'),
-    # pin 15 of the report (Tang Nano 20K LED)
-    ('GW2A-18C', 'OBUF', {'BANK_VCCIO': '3.3', 'PULL_MODE': 'UP', 'DRIVE': '8'}, ['IOL47A'], '#433'),
+    ('GW1N-9C', 'IBUF', {'IO_TYPE': 'LVCMOS33'}, ['80'], '#622', 'mismatch'),
+    ('GW1N-9C', 'OBUF', {'IO_TYPE': 'LVCMOS33'}, ['80'], '#622', 'accepted'),
+    # pin 15 of the report (Tang Nano 20K LED); the vendor rejects both (CT1108)
+    ('GW2A-18C', 'OBUF', {'BANK_VCCIO': '3.3', 'PULL_MODE': 'UP', 'DRIVE': '8'}, ['IOL47A'], '#433', 'rejected'),
     ('GW2A-18C', 'OBUF', {'IO_TYPE': 'LVCMOS33', 'BANK_VCCIO': '1.8', 'PULL_MODE': 'UP', 'DRIVE': '8'},
-     ['IOL47A'], '#433'),
+     ['IOL47A'], '#433', 'rejected'),
 ]
 
 
@@ -210,8 +214,11 @@ def pinned_cases(device):
     return {i: tiled_fuzzer.pinned_case(*entry[:4]) for i, entry in enumerate(PINNED) if entry[0] == device}
 
 
+PASSING = ('ok', 'rejected')
+
+
 def test_pinned(request, pinned):
-    device, issue = PINNED[pinned][0], PINNED[pinned][4]
+    device, *_, issue, expected = PINNED[pinned]
     if device not in _pinned_runs:
         opt = request.config.getoption
         _pinned_runs[device] = tiled_fuzzer.fuzz(device, os.path.join(opt('fuzz_out'), f'{device}-pinned'),
@@ -219,6 +226,10 @@ def test_pinned(request, pinned):
                                                  log=lambda line: None)
     case = pinned_cases(device)[pinned][0].to_json()
     r = next(r for r in _pinned_runs[device].cases if r['case'] == case)
-    assert r['status'] != 'invalid', f'the vendor rejected the pinned case: {r.get("why")}'
-    if r['status'] not in ('ok', 'rejected'):
-        pytest.xfail(f'{issue}: {r["status"]}\n{tiled_fuzzer.describe_result(r)}')
+    status, details = r['status'], tiled_fuzzer.describe_result(r)
+    if status in PASSING and expected not in PASSING:
+        warnings.warn(f'{device} {issue} pinned {r["case"]["prim"]} is {status}, PINNED expects {expected}')
+        return
+    assert status == expected, f'{issue}: {status}, PINNED expects {expected}\n{details}'
+    if status not in PASSING:
+        pytest.xfail(f'{issue}: {status}\n{details}')
