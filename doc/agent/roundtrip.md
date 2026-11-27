@@ -2,9 +2,9 @@
 
 Design for a property test that needs no IDE and no board: random RTL goes
 through Yosys `synth_gowin` → nextpnr → `gowin_pack` → `gowin_unpack`, and the
-unpacked netlist is proven equivalent to the synthesised one. Status: designed,
-not yet implemented. Measurements below were made with a throwaway prototype on
-Yosys 0.71+130, nextpnr b4faf934 and Apicula e6dc4a6.
+unpacked netlist is proven equivalent to the synthesised one. Status:
+implemented in `tools/roundtrip.py` and `tests/test_roundtrip.py`. Measurements
+below were made on Yosys 0.71+130, nextpnr b4faf934 and Apicula e6dc4a6.
 
 The tiled fuzzer ([tiled-fuzzer.md](tiled-fuzzer.md)) compares against the
 vendor, but only for primitives it instantiates and pins by hand. It never sees
@@ -68,23 +68,37 @@ states.
 ### Report and xfail signatures
 
 A failure reports, for each differing point: the gold register or port with its
-RTL `src`, the gate's tile, the input vector, and whether its cone holds
-undriven gate wires (listed if so). Points with undriven wires in their cone are
-classed "unpack gap".
+RTL `src`, the gate's tile, the input vector, and the undriven gate wires in its
+cone. A point is classed `unpack-gap` only if its gate value depends on those
+wires: two copies of the gate netlist, each with its own free values for them,
+differ there (`dependent()`). An undriven wire in a cone that does not matter
+explains nothing. An undriven carry-in (`R<r>C<c>_CIN<n>`) never counts: no
+#585 gap leaves one undriven, and a chain head that reads it is a miscompute
+(#541's `0x505a` head was one). Without this rule, a sabotaged carry-out in
+unpack's RAW ALU decode was excused as a gap; with it, the `alu` group fails
+on both devices. Classified points are dropped and the miter rerun, so a known
+gap in one point cannot hide a miscompute in another. A miscompute in a point
+that also depends on a gap stays hidden until that gap is fixed.
 
-`tests/test_roundtrip.py` xfails a group only if every failing point matches a
-known signature in its `KNOWN` map:
+`tests/test_roundtrip.py` xfails a group only if every failure has a kind in
+its `KNOWN` map:
 
-| signature | issue |
-|---|---|
-| every differing point is an unpack gap | #585 |
-| the gate netlist doesn't elaborate: `ALU` has no port `I2` | #288 |
-| a gold register next to a pad has no counterpart | #668 |
+| kind | signature | issue |
+|---|---|---|
+| `unpack-gap` | the point's gate value depends on undriven wires | #585 |
+| `alu-i2` | an unpacked `ALU` has an `I2` port, which Yosys' `ALU` lacks | #288 |
+| `lost-iob-reg` | a gold register nextpnr packed into I/O logic has no counterpart | #668 |
+
+For #288 the checker drops `I2` and records the problem, so the rest of the
+design is still checked rather than stopping at an elaboration error.
 
 Anything else fails hard, even while those issues are open. Each group run also
-applies one mutation to an unpacked netlist (flip one used LUT INIT bit) and
-expects a failure, which keeps the check from going vacuous. The prototype
-caught 2 of 2 such mutations.
+inverts one LUT in the unpacked netlist of the first design that proves, and
+expects an unexplained failure, which keeps the check from going vacuous.
+
+A design that proves, and a control that fails as it should, keep only
+`design.json`, `top.v` and `result.json` (`--keep` keeps everything). The
+netlists are about 12 MB per design.
 
 ## CI
 
@@ -98,10 +112,18 @@ chipdb, like `fuzz`:
 | fuzz | yes | yes | fuzz reports |
 | roundtrip | no | yes | counterexample reports |
 
-`pytest tests/test_roundtrip.py --device <dev> --roundtrip-jobs $(nproc)`, about
-25 designs per group per device, under 10 minutes per device. Measured per small
-design: synth 0.3 s, pnr 0.2 s (GW1N-9C) or 2.5 s (GW2A-18C), pack 0.4–1 s,
-unpack 1.1–3.4 s, check 1–2 s.
+`pytest tests/test_roundtrip.py --device <dev> --roundtrip-jobs $(nproc)`, 25
+designs per group per device (fewer after duplicates are dropped). Measured
+here with 4 jobs: 76 s on GW1N-9C, 123 s on GW2A-18C, for all four groups.
+Per small design: synth 0.3 s, pnr 0.2 s (GW1N-9C) or 2.5 s (GW2A-18C), pack
+0.4–1 s, unpack 1.1–3.4 s, check 1–2 s.
+
+On master (e6dc4a6, nextpnr b4faf934, `--roundtrip-seed 0`) both devices give
+the same counts: `logic` proves 23 of 23 and passes; `alu` proves 9 of 24 and
+xfails with #288 and #585; `ff` proves 10 of 20 and xfails with #585; `ioreg`
+proves 0 of 20 and xfails with #668 and #585. The mutation control fails as
+it should in `logic`, `ff` and `alu`; `ioreg` has no design that proves to run
+it on.
 
 It does not replace the sanity check yet: that step unpacks the examples (PLL,
 OSER, BSRAM), which the generator doesn't produce.

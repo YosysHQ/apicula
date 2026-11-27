@@ -205,6 +205,64 @@ jobs:
           fuzz-out/**/tools.log
           fuzz-out/**/top.log
 
+  # Random designs through Yosys, nextpnr, gowin_pack and gowin_unpack, the
+  # unpacked netlist proven equal to the synthesised one: tests/test_roundtrip.py,
+  # one test per design group. Known causes of failure are logged as xfail. No IDE.
+  roundtrip:
+    if: inputs.name == 'dev'
+    runs-on: ubuntu-latest
+    container: pepijndevos/apicula:1.9.10.03
+    needs: [build-tools]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [GW1N-9C, GW2A-18C]
+    steps:
+    - uses: actions/checkout@v7
+    - name: Download tools
+      uses: actions/download-artifact@v8
+      with:
+        name: tools-${{ inputs.name }}
+    - name: Install runtime deps
+      run: |
+        apt-get update
+        apt-get install -y libboost-filesystem1.83.0 libboost-program-options1.83.0 \
+          libboost-iostreams1.83.0 libboost-thread1.83.0 libboost-system1.83.0
+    - name: Install tools
+      run: |
+        tar xzf tools.tar.gz -C /usr/local && ldconfig
+        yosys --version
+        nextpnr-himbaechel --version
+    - name: Download python package
+      uses: actions/download-artifact@v8
+      with:
+        name: python-dist
+        path: dist
+    - name: Install the chipdb
+      # The round trip imports this checkout's apycula, so put the wheel's chipdb there.
+      run: |
+        python3 -m zipfile -e dist/*.whl wheel
+        cp wheel/apycula/${{ matrix.device }}.msgpack.xz apycula/
+    - name: Run the round trip
+      env:
+        YOSYS: /usr/local/bin/yosys
+        NEXTPNR: /usr/local/bin/nextpnr-himbaechel
+      run: |
+        pip install pytest hypothesis==6.170.15
+        python3 -m pytest tests/test_roundtrip.py --device ${{ matrix.device }} --roundtrip-count 25 \
+          --roundtrip-jobs $(nproc) -rxX
+    - name: Upload the results
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: roundtrip-${{ matrix.device }}
+        path: |
+          roundtrip-out/**/top.v
+          roundtrip-out/**/design.json
+          roundtrip-out/**/result.json
+          roundtrip-out/**/flow.log
+
   hil:
     runs-on: [self-hosted, fpga]
     needs: [example]
