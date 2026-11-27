@@ -21,6 +21,12 @@ import gowin_primitives  # noqa: E402
 from apycula import gowin_pll  # noqa: E402
 from apycula.gowin_pack import BankDesc  # noqa: E402
 
+# Pseudo-primitives, not in primitive.xml: a flip-flop fed by an input pad
+# (IOB_IREG), driving an output pad (IOB_OREG), or one of each on an inout pad
+# (IOB_IOREG), which the tools pack into the pad's I/O logic when asked to
+# (vendor -ireg_in_iob/-oreg_in_iob/-ioreg_in_iob, nextpnr --vopt <same>).
+IOB_REGS = ['IOB_IREG', 'IOB_OREG', 'IOB_IOREG']
+
 # Which kind of site each supported primitive occupies. The tiled fuzzer knows
 # how to place each site kind.
 DFFS = ['DFF', 'DFFE', 'DFFS', 'DFFSE', 'DFFR', 'DFFRE', 'DFFP', 'DFFPE', 'DFFC', 'DFFCE',
@@ -59,6 +65,7 @@ SITES = {
     **{name: 'bsram' for name in ['SP', 'SPX9', 'pROM', 'pROMX9', 'ROM', 'SDP', 'SDPB', 'SDPX9B',
                                   'DP', 'DPB', 'DPX9B', 'DPX9', 'SDPX9', 'ROMX9',
                                   'rROM', 'rROMX9', 'rSDP', 'rSDPX9']},
+    **{name: 'iobreg' for name in IOB_REGS},
 }
 
 # Parameters held at their default. BSRAM contents are not in the vendor
@@ -118,7 +125,7 @@ IOL_IO_TYPE = 'LVCMOS33'  # standard of the buffer an I/O logic case is placed w
 
 def io_vccio(case):
     """Bank voltage an I/O case needs."""
-    io_type = IOL_IO_TYPE if case.site == 'iol' else dict(case.params)['IO_TYPE']
+    io_type = IOL_IO_TYPE if case.site in ('iol', 'iobreg') else dict(case.params)['IO_TYPE']
     return BankDesc._vcc_ios[io_type]
 
 
@@ -339,6 +346,11 @@ class Primitives:
         xml = os.path.join(gowinhome, gowin_primitives.XML_PATHS[family(device)])
         self.spec = gowin_primitives.load(xml)
         self.device, self.vendor_device = device, vendor_device
+        # IOB_* params: the flip-flop's TYPE (cell name) and INIT
+        types = [t for t in DFFS if t in self.spec and t not in UNAVAILABLE.get(device, ())]
+        params = {'TYPE': {'type': 'cell', 'kind': 'enum', 'values': types, 'default': types[0]},
+                  'INIT': self.spec[types[0]]['params']['INIT']}
+        self.spec.update({prim: {'ports': {}, 'params': params} for prim in IOB_REGS})
 
     def fixed(self, name, param):
         """Literal for a parameter whose value depends on the device, else None.

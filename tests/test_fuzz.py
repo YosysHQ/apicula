@@ -49,6 +49,10 @@ KNOWN = [
     ('IDDR|IDDRC|ODDR|ODDRC', ALL, any_params,
      'I/O logic: IDDR/IDDRC and ODDR/ODDRC unpack as each other; ODDR OUTMODE; on GW5A-25A, FCLKSEL, IOB and '
      'HCLK TO_IHCLK rows'),
+    ('IOB_IREG|IOB_OREG|IOB_IOREG', ALL, any_params,
+     '#668: a flip-flop packed into I/O logic lacks the CLKIMUX/CLKOMUX, SRMODE, CE mux, OUTMODE=OREG and '
+     'register mode rows, and sets LSR mux rows the vendor leaves off; on GW5A-25A also IREG_REGSET/OREG_REGSET '
+     'and IOB PULLMODE, SLEWRATE and IOB_UNKNOWN67 rows'),
     ('IODELAY', ALL, any_params,
      'IODELAY unpacks to no cell; on GW5A-25A (placed since nextpnr#1923) it lacks the INDEL/IDEL rows and sets '
      'LSR mux rows the vendor leaves off'),
@@ -61,8 +65,9 @@ KNOWN = [
      'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
     ('MULT9X9|MULT18X18|PADD9|PADD18', ALL, any_params,
      'DSP: input register muxes (AIRMUX/BIRMUX), RSTGEN muxes, pre-adder rows'),
-    ('ALU54D', 'GW1N', any_params,
-     'DSP: input register muxes (IRMATCH), pre-adder rows (PRAD_MUXA1, PRAD_FBB1)'),
+    ('ALU54D', 'GW1N|GW2A', any_params,
+     'DSP: input register muxes (AIRMUX/BIRMUX, IRMATCH), pre-adder rows (PRAD_MUXA1, PRAD_FBB1); not in the '
+     'parameters: on GW2A-18C it shares a DSP block, and the same differing bits, with a MULT18X18'),
     ('MULTALU18X18', ALL, any_params,
      'DSP: input register muxes (AIRMUX/BIRMUX, IRMATCH), RSTGEN*MUX_REGC0 rows; gowin_pack stops with '
      'KeyError CLK_BSIGN12'),
