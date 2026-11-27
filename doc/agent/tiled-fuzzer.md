@@ -224,7 +224,8 @@ design, to confirm a failure in isolation.
   Bit-vector parameters must be written in the radix of their default in
   `primitive.xml`: LUT3 INIT `8'b10010101` and DFF INIT `1'h1` are both rejected
   with PA1002 (invalid parameter value), while `8'h95` and `1'b1` are accepted.
-  `PA1002` and `CT1094` mark a case invalid rather than a mismatch.
+  `CT1094` marks a case invalid rather than a mismatch; `PA1002` is a
+  rejection (see "Reject agreement").
 - **`codegen.Pnr.read_err_log` recorded nothing** until this branch. It kept only
   lines starting with `Warning` or `Error`, while 1.9.10.03 writes `WARN` and
   `ERROR`.
@@ -322,10 +323,12 @@ What each kind relies on, checked by running both flows (IDE 1.9.10.03):
     GOWINHOME=... python3 tools/tiled_fuzzer.py -d GW1N-9C [-n 20] [--prims LUT4 DFFRE] [-j 4]
 
 One fuzzer run per device makes all designs; `tests/test_fuzz.py` has a test
-per primitive, plus one for unattributed tiles and one for failing
-combinations. Known bugs are in its `KNOWN` list (see below); their failures
-are logged as xfail. Cases the vendor rejects are
-skipped: a generator limit, not an Apicula failure. Reports are in
+per primitive, plus one for unattributed tiles, one for failing combinations
+and one per pinned case. Known bugs are in its `KNOWN` list (see below); their
+failures are logged as xfail. Cases the vendor rejects for the harness or the
+netlist (`invalid`) are skipped: a generator limit, not an Apicula failure.
+Cases it rejects as illegal must fail in Apicula too (see "Reject
+agreement"). Reports are in
 `--fuzz-out/<device>`, with `results.json` holding every case.
 
 CI (the `fuzz` job in `.github/workflows/toolchain.yml`) runs the tests for
@@ -362,6 +365,50 @@ where there is one.
 
 Unattributed tiles and failing combinations are not per case, and keep a
 single reason each.
+
+## Reject agreement
+
+When the vendor rejects a case's settings as illegal, Apicula must reject them
+too. A case is *rejected* when the vendor log has one of `REJECT_CODES` about
+it (the instance, or a net or pad named after it): `PA1002` (invalid
+parameter value), `CT1108` (illegal port attribute, e.g. a `BANK_VCCIO` that
+contradicts the `IO_TYPE`) or `CT1136` (a bank voltage that conflicts with a
+locked or constrained one; the vendor moves the pad). The vendor writes a
+bitstream after these warnings anyway; Pepijn decided that Apicula must not
+accept illegal values. If Yosys, nextpnr or `gowin_pack` then stops with an
+error, the case is `rejected`, which passes; if Apicula makes a bitstream, it
+is `accepted`, a failure.
+
+- Both flows run for a design of a single case even when one of them fails, so
+  a rejection can be checked against the other flow. A design of several cases
+  that fails in a flow is split as before, and so is one in which the vendor
+  rejects any case: a rejection can name an innocent case. `CT1136` names the
+  pad that loses the bank voltage, not the case that set it (seen with an
+  `IBUF` `BANK_VCCIO=1.2` next to an `OBUF` without `IO_TYPE`, which the
+  vendor makes LVCMOS18, on GW1N-9C).
+- Every other vendor error stays `invalid` and is skipped: those are rules of
+  the harness or the netlist (PR2060, PR0018, PR1113, PA2085, ...).
+- A failing combination does not count if the vendor rejected one of its cases.
+
+### Pinned cases
+
+`PINNED` in `tests/test_fuzz.py` holds cases the generator does not reach,
+taken from bug reports: (device, primitive, params, pads, issue, status).
+`test_pinned` runs each in a design of its own, at the given pins (in any bank,
+SiP-locked ones too) or on the first site of its kind. The status is the one
+the case must get: `ok` or `rejected` for a case that must pass, else the
+failing status its issue explains, which xfails. Any other status fails, and a
+known failure that passes is a warning, as with `KNOWN`. The vendor decides at
+run time whether a case passes; the status of a known bug only says how it
+fails.
+
+| Issue | Device | Case | Vendor (IDE 1.9.10.03) | Status |
+| --- | --- | --- | --- | --- |
+| #409 | GW1N-9C, GW2A-18C | rPLL `ODIV_SEL=3` | PA1002 | accepted |
+| #622 | GW1N-9C | IBUF LVCMOS33 on pin 80 (bank 3) | sets bank 3 to 1.8 V | mismatch |
+| #622 | GW1N-9C | OBUF LVCMOS33 on pin 80 | CT1136, moves the pad | accepted |
+| #433 | GW2A-18C | OBUF on IOL47A, `BANK_VCCIO=3.3` without `IO_TYPE` | CT1108 | rejected |
+| #433 | GW2A-18C | OBUF on IOL47A, LVCMOS33 with `BANK_VCCIO=1.8` | CT1108 | rejected |
 
 ## Adding a primitive
 
@@ -408,7 +455,10 @@ place; see "Site kinds".
   sets a stray `LSRxMUX_0`. No vendor DRC fired.
 - KNOWN: `IOB_(IREG|OREG|IOREG)`, all devices → `#668`.
 
-### 2. Reject agreement and pinned cases (#409, #433, #622)
+### 2. Reject agreement and pinned cases (#409, #433, #622) — built
+
+See "Reject agreement". The `allocate()` guard is in; the empty `IO_PORT`
+line is fixed with section 3, the first change that can write one.
 
 - The vendor *rejects* a case when it writes no bitstream, or when it warns
   with a validity code that names the case: `PA1002` (invalid parameter
@@ -426,9 +476,9 @@ place; see "Site kinds".
   PA2068, PA2050, PA2067, PR1082, PR0003/4, PA2085, CT1094, all seen in CI).
   A combination doesn't fail if any of its cases was rejected.
 - Pinned cases: `PINNED` in `tests/test_fuzz.py`, entries
-  `(device, prim, params, pads, issue)`, run as one replay design per device
-  by `test_pinned`. The vendor decides the outcome at run time; the issue
-  number is only the xfail reason. The generator can't reach these by itself:
+  `(device, prim, params, pads, issue, status)`, run as one replay design per
+  device by `test_pinned`. The vendor decides the outcome at run time; the
+  status says how a known bug fails. The generator can't reach these by itself:
   `ODIV_SEL` is an enum in `primitive.xml`, and `package_pins` avoids locked
   banks.
   - #409: rPLL `ODIV_SEL=3` on GW1N-9C and GW2A-18C. Vendor PA1002; Apicula

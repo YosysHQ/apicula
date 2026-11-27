@@ -124,9 +124,10 @@ IOL_IO_TYPE = 'LVCMOS33'  # standard of the buffer an I/O logic case is placed w
 
 
 def io_vccio(case):
-    """Bank voltage an I/O case needs."""
-    io_type = IOL_IO_TYPE if case.site in ('iol', 'iobreg') else dict(case.params)['IO_TYPE']
-    return BankDesc._vcc_ios[io_type]
+    """Bank voltage an I/O case needs: its IO_TYPE's, else its BANK_VCCIO."""
+    params = dict(case.params)
+    io_type = IOL_IO_TYPE if case.site in ('iol', 'iobreg') else params.get('IO_TYPE')
+    return BankDesc._vcc_ios[io_type] if io_type else params['BANK_VCCIO']
 
 
 IO_INPUT_ATTRS = {'PULL_MODE': ['UP', 'DOWN', 'NONE', 'KEEPER'], 'HYSTERESIS': ['NONE', 'H2L', 'L2H', 'HIGH']}
