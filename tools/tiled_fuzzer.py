@@ -27,8 +27,11 @@ Each case is then checked twice:
 
 Statuses: ok; mismatch (vendor and Apicula differ); decode (they agree with
 each other but not with the generated case: an unpacker bug, or a mistake both
-make); invalid (the vendor rejected the case: a rule the generator should
-learn); unsupported (the Apicula flow failed on it: a failure to fix, like a
+make); invalid (the vendor rejected the case for its harness or netlist: a
+rule the generator should learn); rejected (the vendor rejected the case's
+settings as illegal, REJECT_CODES, and the Apicula flow failed on it too);
+accepted (the vendor rejected the settings, but Apicula made a bitstream: a
+failure); unsupported (the Apicula flow failed on it: a failure to fix, like a
 mismatch). The exit status is 1 if any case failed. A design that fails in either flow is split in half and rerun
 until the failing case is alone. Failing cases are written out on
 their own for `--replay`.
@@ -92,7 +95,11 @@ def lone_pads(ports, prim):
     return [p for p, (d, w) in ports.items() if d == 'output' and w == 1 and re.fullmatch(r'OB?\d?', p)]
 
 # Vendor log codes that make a case invalid rather than a mismatch.
-INVALID_CODES = {'PA1002': 'invalid parameter value', 'CT1094': 'not placed at its constraint'}
+INVALID_CODES = {'CT1094': 'not placed at its constraint'}
+# Vendor warnings that reject a case's settings as illegal. The vendor still
+# writes a bitstream; Apicula must stop with an error instead.
+REJECT_CODES = {'PA1002': 'invalid parameter value', 'CT1108': 'illegal port attribute',
+                'CT1136': 'bank voltage conflicts with a locked or constrained one; the pad is moved'}
 
 
 # ---------------------------------------------------------------- sites
@@ -251,7 +258,11 @@ def allocate(cases, sites):
         for i in range(0, len(group), len(free)):
             batches.append(list(zip(group[i:i + len(free)], free)))
     # the rest share designs: two LUTs or one flip-flop per slice, one case per
-    # site of the other kinds, and one of each single kind
+    # site of the other kinds, and one of each single kind. A kind without
+    # sites on this device (DSP on GW1N-1) would never empty its queue.
+    for k in by_batch('shared'):
+        if k not in ('lut', 'dff') and queues.get(k) and not getattr(sites, k):
+            print(f'no {k} sites for {sorted({c.prim for c in queues[k]})}; {len(queues.pop(k))} cases not run')
     while any(queues.values()):
         batch = []
         luts, dffs = queues['lut'], queues['dff']
@@ -1334,6 +1345,12 @@ KINDS = {'clock': Clock(), 'lone': Lone(), 'widelut': WideLut(), 'alu': Alu(), '
          'bsram': Bsram(), 'pll': Pll(), 'plla': Plla(), 'dsp': Dsp(), 'osc': Osc()}
 
 
+def vendor_errors(workdir):
+    """{(name, code): [messages]} of the vendor log, for a run that wrote no bitstream."""
+    log = os.path.join(workdir, 'vendor/impl/pnr/top.log')
+    return codegen.Pnr.read_err_log(log) if os.path.exists(log) else {}
+
+
 def vendor_failed(workdir):
     log = os.path.join(workdir, 'vendor/impl/pnr/top.log')
     why = []
@@ -1341,6 +1358,13 @@ def vendor_failed(workdir):
         with open(log, errors='replace') as f:
             why = [line.strip() for line in f if line.startswith('ERROR')]
     return {'error': 'vendor produced no bitstream', 'why': why}, None
+
+
+def rejections(errs, name):
+    """The vendor's REJECT_CODES messages about case `name`: about the
+    instance, or a net or pad named after it (CT1108 names the pad)."""
+    return [msg for (n, code), msgs in errs.items() if code in REJECT_CODES
+            and (n == name or n.startswith(name + '_')) for msg in msgs]
 
 
 _apicula_error = re.compile(r'\w*(Error|Exception): ')
@@ -1369,38 +1393,49 @@ def run_batch(device, db, spec, pins, batch, workdir, baseline, harness_io_type=
     # With kinds nextpnr places, Apicula runs first and the vendor gets the
     # location nextpnr chose; with kinds the vendor places, the vendor runs
     # first and nextpnr gets its pins and sites. Otherwise the two flows are
-    # independent and run at the same time.
+    # independent and run at the same time. A flow that fails stops the other
+    # one, unless the design is a single case, which the vendor may reject:
+    # then both run, and Apicula must fail too.
     placements = {KINDS[case.site].placement for case, _ in names.values()}
     follow = 'nextpnr' in placements
-    if follow or 'vendor' in placements:
-        vres = None if follow else vendor()
-        if vres is None and not follow:
-            return vendor_failed(workdir)
-        if 'vendor' in placements:
+    alone = len(names) == 1
+    if follow:
+        ares = apicula()
+        for name, (case, site) in list(names.items()):
+            placement = ares and KINDS[case.site].from_placed(db, case, ares[2].get(name))
+            if placement:
+                names[name] = (case, placement[0])
+                cst.cells[name] = placement[1]
+        vres = vendor() if ares or alone else None
+    elif 'vendor' in placements:
+        vres = vendor()
+        if vres:
             cst.ports.update(vendor_pins(os.path.join(workdir, 'vendor')))
             vt = chipdb.tile_bitmap(db, vres.bitmap, empty=True)
             for name, (case, site) in list(names.items()):
                 names[name] = (case, KINDS[case.site].vendor_site(db, vt, case) or site)
-        ares = apicula()
+        ares = apicula() if vres or alone and any(rejections(vendor_errors(workdir), n) for n in names) else None
     else:
         with concurrent.futures.ThreadPoolExecutor(2) as pool:
             vfut, afut = pool.submit(vendor), pool.submit(apicula)
             vres, ares = vfut.result(), afut.result()
-    # a design the vendor rejects is invalid, whatever Apicula does with it
-    if not follow and vres is None:
-        return vendor_failed(workdir)
-    if ares is None:
-        return {'error': 'the Apicula flow failed', 'why': apicula_errors(os.path.join(workdir, 'apicula/tools.log'))}, None
-    abm, aslots, placed = ares
-    if follow:
-        for name, (case, site) in list(names.items()):
-            placement = KINDS[case.site].from_placed(db, case, placed.get(name))
-            if placement:
-                names[name] = (case, placement[0])
-                cst.cells[name] = placement[1]
-        vres = vendor()
-        if vres is None:
+    errs = vres.errs if vres else vendor_errors(workdir)
+    rejected = {name: why for name in names if (why := rejections(errs, name))}
+    if vres is None or ares is None:
+        if not alone:  # split the design to find the case
+            if ares is None and (vres or follow):
+                return {'error': 'the Apicula flow failed', 'why': apicula_errors(os.path.join(workdir, 'apicula/tools.log'))}, None
             return vendor_failed(workdir)
+        (name, (case, site)), = names.items()
+        if name in rejected:
+            status, why = 'accepted' if ares else 'rejected', rejected[name]
+        elif vres is None:  # a design the vendor rejects is invalid, whatever Apicula does with it
+            status, why = 'invalid', vendor_failed(workdir)[0]['why']
+        else:  # unsupported is a failure to fix in Apicula, not a case to drop
+            status, why = 'unsupported', apicula_errors(os.path.join(workdir, 'apicula/tools.log'))
+        return {'cases': {name: {'case': case.to_json(), 'site': site, 'status': status, 'why': why}},
+                'unattributed': {}}, None
+    abm, aslots, placed = ares
     b = types.SimpleNamespace(db=db, placed=placed, vslots=vres.extra_slots, aslots=aslots,
                               vt=chipdb.tile_bitmap(db, vres.bitmap, empty=True),
                               at=chipdb.tile_bitmap(db, abm, empty=True))
@@ -1430,7 +1465,10 @@ def run_batch(device, db, spec, pins, batch, workdir, baseline, harness_io_type=
                     for msg in msgs if code in INVALID_CODES or msg.startswith('ERROR')]
         if site and kind.placement == 'bel' and placed.get(name) != kind.bel(case, site):
             problems.append(f'nextpnr placed it at {placed.get(name)}')
-        if problems:
+        if name in rejected:
+            res['status'] = 'accepted'
+            res['why'] = rejected[name]
+        elif problems:
             res['status'] = 'invalid'
             res['why'] = problems
         else:
@@ -1568,8 +1606,9 @@ class Run:
         self.cases, self.unattributed, self.combinations = [], {}, []
 
     def failures(self, prim=None):
-        """Results that are neither ok nor invalid (a case the vendor rejected)."""
-        return [r for r in self.cases if r['status'] not in ('ok', 'invalid')
+        """Results that are neither ok, nor rejected by both flows, nor
+        invalid (a case the vendor rejected for its harness or netlist)."""
+        return [r for r in self.cases if r['status'] not in ('ok', 'rejected', 'invalid')
                 and (prim is None or r['case']['prim'] == prim)]
 
 
@@ -1580,23 +1619,51 @@ def primitives(device):
     return [p for p in sorted(prims.spec) if p not in ps.UNAVAILABLE.get(device, ()) and p not in ps.NOT_PRIMITIVES]
 
 
+def load_db(device):
+    return chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{device}.msgpack.xz'))
+
+
+def load_case(path):
+    """The (case, site) pair of a saved case, <status>_<name>.json."""
+    with open(path) as f:
+        d = json.load(f)
+    return ps.Case.from_json(d['case']), tuple(d['site']) if d['site'] else None
+
+
+def pinned_case(device, prim, params, pads=None):
+    """The (case, site) pair of a case at a chosen place: on `pads` (pin
+    numbers or names, in any bank, SiP-locked ones too), else on the first
+    site of its kind. The device's fixed parameters (DEVICE) are added."""
+    vendor_device, _, package = DEVICES[device]
+    db, spec = load_db(device), ps.Primitives(device, vendor_device)
+    fixed = {name: v for name, p in spec.spec[prim]['params'].items() if (v := spec.fixed(name, p)) is not None}
+    case = ps.Case(prim, tuple(sorted({**fixed, **params}.items())))
+    if pads is None:
+        pinout = package_pins(db, vendor_device, device, package)
+        return case, min(getattr(Sites(db, random.Random(0), pick_pins(db, pinout), pinout), case.site))
+    pinout = db.pinout.get(vendor_device, db.pinout[device])[package]
+    numbers = {name: num for num, (name, _) in pinout.items()}
+    places = []
+    for pad in pads:
+        num = pad if pad in pinout else numbers[pad]
+        row, col, ab = gowin_unpack.tbrl2rc(db, pinout[num][0])
+        places.append((row, col, f'IOB{ab}', num))
+    return case, places[0] if len(places) == 1 else (*places[0][:3], [p[3] for p in places])
+
+
 def fuzz(device, out, count=2, seed=0, jobs=1, prims=None, replay=None, log=print):
     """Run the fuzzer on `device`: `count` cases of each primitive (default
-    all, see primitives()), or the cases of `replay` files. Writes reports to
-    `out` and returns a Run."""
+    all, see primitives()), or the (case, site) pairs of `replay`, one per
+    design. Writes reports to `out` and returns a Run."""
     vendor_device, part, package = DEVICES[device]
-    db = chipdb.load_chipdb(os.path.join(os.path.dirname(chipdb.__file__), f'{device}.msgpack.xz'))
+    db = load_db(device)
     spec = ps.Primitives(device, vendor_device)
     pinout = package_pins(db, vendor_device, device, package)
     pins = pick_pins(db, pinout)
     rng = random.Random(seed)
     sites = Sites(db, rng, pins, pinout)
     if replay:
-        batches = []
-        for path in replay:
-            with open(path) as f:
-                d = json.load(f)
-            batches.append([(ps.Case.from_json(d['case']), tuple(d['site']) if d['site'] else None)])
+        batches = [[pair] for pair in replay]
     else:
         names = [p for p in prims or primitives(device) if p in spec.spec]
         # dict.fromkeys drops repeated draws and, unlike a set, keeps their order
@@ -1628,21 +1695,15 @@ def fuzz(device, out, count=2, seed=0, jobs=1, prims=None, replay=None, log=prin
         """Record a design's results; returns the halves to run when a design
         with several cases failed."""
         if 'error' in report:
-            if len(batch) > 1:
-                # an error stops the whole design: split it to find the case. If
-                # Apicula fails on a design the vendor accepts, that is a failure
-                # in itself, even when every case passes alone.
-                log(f'{i}: {report["error"]}; splitting')
-                if 'Apicula' in report['error']:
-                    result.combinations.append({'design': i, 'cases': [c.to_json() for c, _ in batch],
-                                                'why': report.get('why', [])})
-                half = len(batch) // 2
-                return [(f'{i}a', batch[:half]), (f'{i}b', batch[half:])]
-            case, site = batch[0]
-            # unsupported is a failure to fix in Apicula, not a case to drop
-            status = 'unsupported' if 'Apicula' in report['error'] else 'invalid'
-            report = {'cases': {f'inst0_{case.prim}': {'case': case.to_json(), 'site': site, 'status': status,
-                                                        'why': report.get('why', [])}}, 'unattributed': {}}
+            # an error stops the whole design: split it to find the case. If
+            # Apicula fails on a design the vendor accepts, that is a failure
+            # in itself, even when every case passes alone.
+            log(f'{i}: {report["error"]}; splitting')
+            if 'Apicula' in report['error']:
+                result.combinations.append({'design': i, 'cases': [c.to_json() for c, _ in batch],
+                                            'why': report.get('why', [])})
+            half = len(batch) // 2
+            return [(f'{i}a', batch[:half]), (f'{i}b', batch[half:])]
         for name, res in report['cases'].items():
             res['design'] = i
             result.cases.append(res)
@@ -1664,9 +1725,12 @@ def fuzz(device, out, count=2, seed=0, jobs=1, prims=None, replay=None, log=prin
                 for j, half in record(i, batch, fut.result()):
                     running[pool.submit(run, j, half)] = (j, half)
 
-    unsupported = {json.dumps(r['case'], sort_keys=True) for r in result.cases if r['status'] == 'unsupported'}
+    # a combination does not fail if one of its cases fails alone, or if the
+    # vendor rejected one of them
+    failed_alone = {json.dumps(r['case'], sort_keys=True) for r in result.cases
+                    if r['status'] in ('unsupported', 'rejected', 'accepted')}
     for combo in result.combinations:
-        combo['alone_ok'] = not any(json.dumps(c, sort_keys=True) in unsupported for c in combo['cases'])
+        combo['alone_ok'] = not any(json.dumps(c, sort_keys=True) in failed_alone for c in combo['cases'])
     with open(os.path.join(out, 'results.json'), 'w') as f:
         json.dump({'cases': result.cases, 'combinations': result.combinations,
                    'unattributed': {f'{d} {t}': bits for (d, t), bits in result.unattributed.items()}}, f, indent=1)
@@ -1693,7 +1757,8 @@ def main(argv):
     ap.add_argument('-o', '--out', default='fuzz-out')
     ap.add_argument('-j', '--jobs', type=int, default=1, help='designs run at the same time')
     args = ap.parse_args(argv)
-    result = fuzz(args.device, args.out, args.count, args.seed, args.jobs, args.prims, args.replay)
+    replay = args.replay and [load_case(path) for path in args.replay]
+    result = fuzz(args.device, args.out, args.count, args.seed, args.jobs, args.prims, replay)
     print('summary:', dict(collections.Counter(r['status'] for r in result.cases)),
           f'unattributed tiles: {len(result.unattributed)},',
           f'failing combinations whose cases pass alone: {sum(c["alone_ok"] for c in result.combinations)}')
