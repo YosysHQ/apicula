@@ -505,7 +505,12 @@ inferred.
   `IO_TYPE` per bank), an output without `IO_TYPE` (#433), and any attribute
   besides `IO_TYPE` (the attribute rows and the untraced CT1108 legality
   table). Buffers that share one explicit `IO_TYPE` and set nothing else must
-  pass.
+  pass on GW1N and GW2A: an `OBUF`, `IBUF` and `IOBUF`, all LVCMOS33, replay
+  `ok` on GW1N-9C and GW2A-18C. On GW5A-25A the same case, two LVCMOS33
+  `IBUF`s and two `IBUF`s without `IO_TYPE` all differ: a bank row of the
+  input-only bank, the outputs' IOB `PULLMODE`/`SLEWRATE`/`IOB_UNKNOWN67`
+  rows, and without `IO_TYPE` the `LVDS_OUT` rows of the bank's unused pins.
+  So `IO_BANK` keeps an `any_params` entry on GW5A.
 - `Sites.iobank` needs a bank with no harness pin and three free pins; on
   GW1N-9C only bank 2 (pins 26, 28, 30) qualifies.
 

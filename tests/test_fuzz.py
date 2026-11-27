@@ -60,6 +60,9 @@ KNOWN = [
     ('IO_BANK', ALL, lambda p: any(prim != 'IBUF' and 'IO_TYPE' not in a for prim, a in bank_buffers(p)),
      '#433: an output without IO_TYPE is LVCMOS12 in gowin_pack, LVCMOS18 or LVCMOS33 in the vendor'),
     ('IO_BANK', ALL, lambda p: any(set(a) - {'IO_TYPE'} for _, a in bank_buffers(p)), IO_ATTRS),
+    ('IO_BANK', 'GW5A', any_params,
+     'GW5A I/O: Apicula sets a bank row of a bank of LVCMOS33 inputs, and outputs differ in the IOB PULLMODE, '
+     'SLEWRATE and IOB_UNKNOWN67 rows (replayed on GW5A-25A with LVCMOS33 buffers)'),
     ('(TLVDS|ELVDS)_(IBUF|OBUF|TBUF|IOBUF)', ALL, any_params,
      'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
     ('TLVDS_(OBUF|TBUF|IOBUF)', 'GW2A', any_params,
@@ -137,7 +140,7 @@ BROKEN_UNATTRIBUTED = ('I/O bank and GW5A I/O row fuses of unused pins; HCLK BRG
                        '(GW1N-9C, GW2A-18C, GW2A-18; inferred: from the harness clock)')
 BROKEN_COMBINATIONS = ('nextpnr: two DSP cases in one block (more than 4 RESET networks, or two nets on one '
                        'source wire); an I/O logic pin already taken by another case\'s buffer; gowin_pack: one '
-                       'IO_TYPE per bank (PCI33 next to the LVCMOS33 buffer of an I/O logic case)')
+                       'IO_TYPE per bank (PCI33 next to LVCMOS33)')
 
 # Cases the generator does not reach, from bug reports: (device, primitive,
 # params, pads, issue, status). pads are pin names or numbers, None for the
