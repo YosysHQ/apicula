@@ -28,4 +28,7 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
 - [hand-written-tables.md](hand-written-tables.md): which Apicula tables have a
   vendor source, and what each `logicinfo` table is for.
 
+- [skills/](skills/README.md): a snapshot of the agent skills behind our
+  workflow; see [AI_POLICY.md](../../AI_POLICY.md).
+
 Process notes and tooling are in [`AGENTS.md`](../../AGENTS.md).
