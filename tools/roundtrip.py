@@ -21,9 +21,10 @@ on the unpacked side depends on an undriven net of one of #585's classes
 (gaps()), `lost-iob-reg` when the gold side reads a register that nextpnr
 packed into a pad's I/O logic and the bitstream has no register for. An
 unpacked ALU with an I2 port is recorded as `alu-i2` (#288) and checked
-without it. Classified points are dropped and the miter rerun, so a known
-gap in one point cannot hide a miscompute in another. The design is in
-doc/agent/roundtrip.md.
+without it, and a buffer unpacked as an ELVDS pair as `iobuf-elvds` (#672),
+checked on its own pad's wires. Classified points are dropped and the miter
+rerun, so a known gap in one point cannot hide a miscompute in another. The
+design is in doc/agent/roundtrip.md.
 
 Tools: YOSYS and NEXTPNR environment variables, as in tiled_fuzzer.py.
 """
@@ -48,7 +49,7 @@ sys.path[:0] = [REPO, TOOLS]
 import primitive_strategies as ps  # noqa: E402
 import tiled_fuzzer as tf  # noqa: E402
 from gowin_primitives import tool  # noqa: E402
-from apycula import bslib, chipdb  # noqa: E402
+from apycula import attrids, bslib, chipdb  # noqa: E402
 
 GROUPS = ('logic', 'alu', 'ff', 'ioreg')
 # nextpnr packs each only into its own buffer (pack_io.cc): IBUF, OBUF, IOBUF
@@ -57,11 +58,14 @@ IOB_VOPTS = ('ireg_in_iob', 'oreg_in_iob', 'ioreg_in_iob')
 ABSENT = {'CE': '1', 'SET': '0', 'RESET': '0', 'PRESET': '0', 'CLEAR': '0'}
 # a register nextpnr packs into a pad's I/O logic (pack_io.cc): the attribute
 # that records its kind on the IOLOGIC cell `<buffer>_iobff$<n>`, and which of
-# its pins meets which pin of the buffer
+# its pins meets which pin of the buffer. lost-iob-reg trusts the pnr JSON: it
+# does not read the IOLOGIC fuses from the bitstream.
 IOB_REGS = (('IREG_TYPE', 'D', 'O'), ('OREG_TYPE', 'Q', 'I'), ('TREG_TYPE', 'Q', 'OEN'))
 TILE_WIRE = re.compile(r'R(\d+)C(\d+)_(\w+)')
-# #585's wires gowin_unpack never connects, by name: long wires (no
-# LT/LBO/LB decoding) and the clock network (`define aliases, GT taps)
+PIP = re.compile(r'assign (\w+) = (\w+);')
+# #585's wires gowin_unpack never connects, by name: long wires (unpack
+# decodes the tap LT<-A6, not the run LT->LB) and the clock network
+# (`define aliases, GT taps)
 NAMED_GAPS = {'long wire': re.compile(r'LT\d\d|LBO\d|LB\d\d'),
               'clock': re.compile(r'SPINE\d+|GT[01]0|GBO?\d+')}
 
@@ -305,8 +309,9 @@ class Cut:
     of what could not be paired, and `lost` maps the Q ports of gold registers
     the bitstream has no register for to their kind."""
 
-    def __init__(self, gold, gate, pnr):
-        self.gold, self.gate = gold['cells'], gate['cells']
+    def __init__(self, device, gold, gate, pnr):
+        self.device, self.gold, self.gate = device, gold['cells'], gate['cells']
+        self.gate_nets = gate['netnames']
         self.points, self.problems, self.lost = {}, [], {}
         self.fresh = max(b for m in (gold, gate) for c in m['cells'].values()
                          for bits in c['connections'].values() for b in bits if isinstance(b, int))
@@ -323,6 +328,10 @@ class Cut:
 
     def port(self, side, name, direction, bit):
         self.ports[side][name] = {'direction': direction, 'bits': [bit]}
+
+    def wire(self, name):
+        """The gate bit of wire `name`, a fresh one if unpack has no such wire."""
+        return self.gate_nets[name]['bits'][0] if name in self.gate_nets else self.new()
 
     def cut(self, side, cell, key, pins, ins=()):
         """Remove `cell` from `side`. Its `pins` become ports `<key>_<pin>`:
@@ -350,10 +359,10 @@ class Cut:
                 continue
             key = f"ff{len(self.points)}"  # only registers so far
             gt, tt = gold[name]['type'], gate[twin]['type']
-            # the kind (edge, set or reset, sync or async) and INIT; CE is a cut pin
-            if dff_kind(gold[name]) != dff_kind(gate[twin]):
-                self.problem(None, f'{name}: {gt} {dff_kind(gold[name])} unpacked as {tt} {dff_kind(gate[twin])} '
-                                   f'at {twin}')
+            # the kind (edge, set or reset, sync or async) and INIT, unless x; CE is a cut pin
+            (gk, gi), (tk, ti) = dff_kind(gold[name]), dff_kind(gate[twin])
+            if gk != tk or gi not in (None, ti):
+                self.problem(None, f'{name}: {gt} {gk} INIT {gi} unpacked as {tt} {tk} INIT {ti} at {twin}')
             self.points[key] = f'register {name} ({gt}, {_src(gold[name])}) / {twin} ({tt})'
             pins = set(gold[name]['connections']) | set(gate[twin]['connections'])
             self.cut('gold', name, key, pins, {'Q'})
@@ -391,9 +400,19 @@ class Cut:
             pad = tf.IO_PAD[c['type']]
             x, y, ab = m.groups()
             twin = f'R{int(y) + 1}C{int(x) + 1}_{c["type"]}_{ab}'
+            elvds = f'R{int(y) + 1}C{int(x) + 1}_ELVDS_{c["type"]}_A'
             port, i, width = bit_of[c['connections'][pad][0]]
             key = f'pad_{port}' + (f'_{i}' if width > 1 else '')
             self.points[key] = f'pad {port}{f"[{i}]" if width > 1 else ""} / {twin}'
+            if twin not in gate and ab == 'B' and elvds in gate and mipi_lp_pad(self.device, int(x), int(y)):
+                # gowin_unpack reads this buffer as an ELVDS pair on pad A's
+                # wires (#672): check the pad on its own wires instead
+                self.problem('iobuf-elvds', f'{name} ({c["type"]}) at {m[0]}: unpacked as {elvds}')
+                gate.pop(elvds)
+                wires = _db(self.device)[int(y), int(x)].bels['IOBB'].portmap
+                gate[twin] = {'type': c['type'], 'connections': {
+                    p: [self.wire(f'R{int(y) + 1}C{int(x) + 1}_{wires[{"OEN": "OE"}.get(p, p)]}')]
+                    for p in c['connections'] if p != pad}}
             if name not in gold or twin not in gate:
                 self.problem(None, f'{name} ({c["type"]}) at {m[0]}: '
                                    + ('added by nextpnr' if name not in gold else f'no {twin} in the unpacked netlist'))
@@ -418,6 +437,17 @@ def _src(cell):
     return cell['attributes'].get('src', '?').split('|')[0]
 
 
+def mipi_lp_pad(device, x, y):
+    """Whether the IOBB fuse table of tile (x, y) has a key that is
+    IOBUF_MIPI_LP=ENABLE alone. A plain buffer sets its fuses too, and
+    gowin_unpack then reads it as an ELVDS pair (#672): every top-row I/O
+    tile of GW1N-9C."""
+    db = _db(device)
+    li, mipi = db.rev_logicinfo('IOB'), attrids.iob_attrids['IOBUF_MIPI_LP']
+    keys = db.longval.get(db[y, x].ttyp, {}).get('IOBB', {})
+    return any([li[k][0] if k > 0 else None for k in key if k] == [mipi] for key in keys)
+
+
 def nets(module):
     """bit -> the names of its net."""
     names = collections.defaultdict(set)
@@ -428,10 +458,12 @@ def nets(module):
 
 
 def dff_kind(dff):
-    """A flip-flop's kind without CE, and its INIT. gowin_unpack writes no
-    INIT: the kind carries it (REGSET), as cells_sim.v's defaults do."""
+    """A flip-flop's kind without CE, and its INIT, None if x. gowin_unpack
+    writes no INIT: the kind carries it (REGSET), as cells_sim.v's defaults
+    do."""
     k = dff['type'].removesuffix('E')
-    return k, int(dff['parameters'].get('INIT', '1' if k[-1] in 'SP' else '0'), 2)
+    init = dff['parameters'].get('INIT', '1' if k[-1] in 'SP' else '0')
+    return k, None if 'x' in init else int(init, 2)
 
 
 # ---------------------------------------------------------------- prove
@@ -514,15 +546,20 @@ def cone(module, port):
 
 def gaps(device, workdir, module):
     """The undriven bits of the unpacked `module`: bit -> (#585 class or
-    None, a name of it). Long wires and the clock network go by name
-    (NAMED_GAPS); the other two classes by the bitstream (undecoded())."""
+    None, a name of it). Only the net's roots count, its wires that no
+    decoded pip drives: a net whose source pip is lost but that feeds LT02
+    through a decoded pip is not a long-wire gap. Long wires and the clock
+    network go by name (NAMED_GAPS); the other two classes by the bitstream
+    (undecoded())."""
     driven = drivers(module).keys() | {b for p in module['ports'].values() if p['direction'] == 'input'
                                        for b in p['bits']}
     used = {b for c in module['cells'].values() for bits in c['connections'].values() for b in bits}
     used |= {b for p in module['ports'].values() for b in p['bits']}
+    with open(os.path.join(workdir, 'unpacked.v')) as f:
+        pip_dests = {m[1] for m in PIP.finditer(f.read())}
     names, db, tiles, res = nets(module), _db(device), None, {}
     for b in sorted(b for b in used - driven if isinstance(b, int)):
-        wires = sorted((m for m in map(TILE_WIRE.fullmatch, names[b]) if m), key=lambda m: m[0])
+        wires = sorted((m for m in map(TILE_WIRE.fullmatch, names[b] - pip_dests) if m), key=lambda m: m[0])
         found = [(cls, m[0]) for m in wires for cls, wire in NAMED_GAPS.items() if wire.fullmatch(m[3])]
         if not found and wires:
             if tiles is None:
@@ -595,13 +632,13 @@ def classify(cut, gold, gate, point, dependent, undriven):
     return ('unpack-gap' if point in dependent else None), evidence
 
 
-def check(device, workdir, mutate=False):
+def check(device, workdir, mutate=None):
     """Check a design whose flow ran in `workdir`. Returns {'status': 'proved'
     | 'failed' | 'error', 'points': [...], 'problems': [...], 'error', 'kind'}.
     Each point and problem has a 'kind'; None means unexplained."""
     load = lambda n: json.load(open(os.path.join(workdir, n)))['modules']['top']
     gold, gate = load('synth.json'), load('gate.json')
-    cut = Cut(gold, gate, load('pnr.json'))
+    cut = Cut(device, gold, gate, load('pnr.json'))
     luts = sorted(n for n, c in gate['cells'].items() if re.fullmatch(r'LUT[1-4]', c['type']))
     res = {'problems': [{'kind': k, 'text': t} for k, t in cut.problems], 'points': [], 'luts': len(luts)}
     # #288: gowin_unpack gives ALU an I2 port, which Yosys' ALU does not have.
@@ -609,11 +646,11 @@ def check(device, workdir, mutate=False):
     i2 = [n for n, c in gate['cells'].items() if c['type'] == 'ALU' and c['connections'].pop('I2', None)]
     if i2:
         res['problems'].append({'kind': 'alu-i2', 'text': f'{len(i2)} ALUs with an I2 port, as {i2[0]}'})
-    if mutate:
-        # a control: invert a LUT, and the check must fail
-        params = gate['cells'][luts[0]]['parameters']
+    if mutate is not None:
+        # a control: invert LUT number `mutate`, and the check must fail
+        params = gate['cells'][luts[mutate]]['parameters']
         params['INIT'] = ''.join('1' if b == '0' else '0' for b in params['INIT'])
-        res['mutated'] = luts[0]
+        res['mutated'] = luts[mutate]
     family = ps.family(device)
     try:
         gold = elaborate(workdir, 'gold', gold, family)
@@ -637,7 +674,7 @@ def check(device, workdir, mutate=False):
             res['points'].append({'point': point, 'what': cut.points.get(point.rsplit('_', 1)[0], point),
                                   'kind': kind, 'evidence': evidence, 'gold': g, 'gate': t, 'in': inputs})
             outputs['keep'].remove(point)
-        if mutate or any(p['kind'] is None for p in res['points']):
+        if mutate is not None or any(p['kind'] is None for p in res['points']):
             break
     res['status'] = 'failed' if res['points'] or res['problems'] else 'proved'
     return res
@@ -659,19 +696,36 @@ def run_design(device, d, workdir):
             tail = f.read()[-1500:]
         res = {'status': 'error', 'error': f'flow: {os.path.basename(e.cmd[0])} {e.cmd[1:3]} failed\n{tail}',
                'points': [], 'problems': []}
+    except Exception as e:  # a checker error loses one design, not the group's report
+        res = {'status': 'error', 'error': f'{type(e).__name__}: {e}', 'points': [], 'problems': []}
     with open(os.path.join(workdir, 'result.json'), 'w') as f:
         json.dump(res, f, indent=1)
     return res
 
 
+CONTROL_TRIES = 8
+
+
 def control(device, workdir):
     """The mutation control on a design that proved, in a copy of its
-    directory: a LUT inverted, so the check must fail."""
+    directory: invert one LUT, and the check must fail. A LUT can be dead
+    logic (an ALU's G half that feeds only an unused carry-out), so try the
+    LUTs in order until one gives an unexplained failure, at most
+    CONTROL_TRIES. If none does, the control is an error: the design gives
+    the control nothing observable to hit."""
     copy = workdir + '-control'
     os.makedirs(copy, exist_ok=True)
-    for name in ('synth.json', 'pnr.json', 'gate.json', 'top.fs'):
+    for name in ('synth.json', 'pnr.json', 'gate.json', 'top.fs', 'unpacked.v'):
         shutil.copy(os.path.join(workdir, name), copy)
-    res = check(device, copy, mutate=True)
+    tried = []
+    for i in range(CONTROL_TRIES):
+        res = check(device, copy, mutate=i)
+        tried.append(res['mutated'])
+        if None in kinds(res) or i + 1 == res['luts']:
+            break
+    res['mutated'] = tried
+    if None not in kinds(res):
+        res = {**res, 'status': 'error', 'error': f'none of the LUTs {tried} is observable'}
     with open(os.path.join(copy, 'result.json'), 'w') as f:
         json.dump(res, f, indent=1)
     return copy, res

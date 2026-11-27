@@ -77,11 +77,16 @@ cone, each with its #585 class or `not #585`. `gaps()` sorts the undriven wires
 into #585's classes:
 
 - long wires and the clock network, by name (`LT`/`LBO`/`LB`; `SPINE`, `GT`,
-  `GB`, `GBO`): unpack decodes neither;
+  `GB`, `GBO`): unpack decodes the tap onto a long wire (`LT<-A6`) but not its
+  run (`LT->LB`), and none of the clock network;
 - empty tiles and alone-node fuses, by the bitstream (`undecoded()`): the
   tile the wire starts in selects exactly one source by `gowin_pack`'s rule
   (the pip's fuses plus the alone-node fuses of the sources not taken), but
   unpack's rule (pip fuses alone, tiles with a fuse set) selects none.
+
+Only a net's roots are classed: its wires that no decoded pip drives. A net
+whose own source pip is missing, but that feeds `LT02` through a decoded pip,
+is not a long-wire gap.
 
 A point is classed `unpack-gap` only if its gate value depends on wires of
 those classes: two copies of the gate netlist, each with its own free values
@@ -113,13 +118,21 @@ its `KNOWN` map:
 | `unpack-gap` | the point's gate value depends on undriven wires of #585's classes | #585 |
 | `alu-i2` | an unpacked `ALU` has an `I2` port, which Yosys' `ALU` lacks | #288 |
 | `lost-iob-reg` | the gold register nextpnr packed into a pad's IOLOGIC (`IREG_TYPE`/`OREG_TYPE`/`TREG_TYPE` of its kind, on its Q or D net) has no counterpart | #668 |
+| `iobuf-elvds` | a buffer on a B pad whose IOBB fuse table has a key that is `IOBUF_MIPI_LP=ENABLE` alone (every top-row I/O tile of GW1N-9C) unpacks as `ELVDS_<type>` on pad A | #672 |
 
 For #288 the checker drops `I2` and records the problem, so the rest of the
-design is still checked rather than stopping at an elaboration error.
+design is still checked rather than stopping at an elaboration error. For
+#672 it checks the pad on pad B's own wires (the `IOBB` bel's port map)
+instead of the ELVDS cell, which is wired to pad A.
 
 Anything else fails hard, even while those issues are open. Each group run also
-inverts one LUT in the unpacked netlist of the first design that proves, and
-expects an unexplained failure, which keeps the check from going vacuous.
+runs a mutation control on the first design that proves: it inverts a LUT in
+the unpacked netlist and expects an unexplained failure, which keeps the check
+from going vacuous. A LUT can be dead logic: at seed 3 the first LUT of an
+`alu` design was an ALU's G half that fed only an unused carry-out, and
+inverting it proved. So the control tries the LUTs in order, at most 8, until
+one fails unexplained, and records every LUT it tried. If none does, the
+control is an error, and the group fails.
 
 A design that proves, and a control that fails as it should, keep only
 `design.json`, `top.v` and `result.json` (`--keep` keeps everything). The
@@ -204,6 +217,14 @@ see:
   trusts it.
 
 The vendor comparison (tiled fuzzer) and HIL tests cover those.
+
+Known issues also hide bugs behind them until they are fixed:
+
+- a `gowin_pack` bug on a long wire or a clock wire, or one that leaves a tile
+  empty, looks like a #585 gap;
+- a register lost to #668 frees its Q, so a miscompute anywhere in the cone
+  that reads it is excused with it; and `lost-iob-reg` takes nextpnr's IOLOGIC
+  cell from the pnr JSON, without reading the IOLOGIC fuses in the bitstream.
 
 ## Follow-ups
 
