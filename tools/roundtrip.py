@@ -32,6 +32,7 @@ import argparse
 import collections
 import concurrent.futures
 import dataclasses
+import functools
 import json
 import os
 import random
@@ -39,7 +40,6 @@ import re
 import shutil
 import subprocess
 import sys
-import threading
 
 from hypothesis import strategies as st
 
@@ -393,25 +393,29 @@ class Cut:
         """Pair the I/O buffers through their IOB bels; key them by port bit."""
         bit_of = {b: (p, i, len(port['bits'])) for p, port in pnr['ports'].items() for i, b in enumerate(port['bits'])}
         gold, gate = self.gold, self.gate
+        elvds_of = {}  # tile -> the ELVDS cell that #672 made of its buffers
         for name, c in pnr['cells'].items():
             m = re.fullmatch(r'X(\d+)Y(\d+)/IOB([AB])', c['attributes'].get('NEXTPNR_BEL', ''))
             if not m or c['type'] not in tf.IO_PAD:
                 continue
             pad = tf.IO_PAD[c['type']]
             x, y, ab = m.groups()
-            twin = f'R{int(y) + 1}C{int(x) + 1}_{c["type"]}_{ab}'
-            elvds = f'R{int(y) + 1}C{int(x) + 1}_ELVDS_{c["type"]}_A'
+            rc = f'R{int(y) + 1}C{int(x) + 1}'
+            twin = f'{rc}_{c["type"]}_{ab}'
+            elvds = elvds_of.get(rc) or next((n for n in gate if re.fullmatch(rf'{rc}_ELVDS_\w+_A', n)), None)
             port, i, width = bit_of[c['connections'][pad][0]]
             key = f'pad_{port}' + (f'_{i}' if width > 1 else '')
             self.points[key] = f'pad {port}{f"[{i}]" if width > 1 else ""} / {twin}'
-            if twin not in gate and ab == 'B' and elvds in gate and mipi_lp_pad(self.device, int(x), int(y)):
-                # gowin_unpack reads this buffer as an ELVDS pair on pad A's
-                # wires (#672): check the pad on its own wires instead
+            if twin not in gate and elvds and mipi_lp_pad(self.device, int(x), int(y)):
+                # gowin_unpack reads the buffers of this tile, on either pad,
+                # as one ELVDS pair on pad A's wires (#672): check each pad on
+                # its own wires instead
                 self.problem('iobuf-elvds', f'{name} ({c["type"]}) at {m[0]}: unpacked as {elvds}')
-                gate.pop(elvds)
-                wires = _db(self.device)[int(y), int(x)].bels['IOBB'].portmap
+                gate.pop(elvds, None)  # once per tile
+                elvds_of[rc] = elvds
+                wires = _db(self.device)[int(y), int(x)].bels[f'IOB{ab}'].portmap
                 gate[twin] = {'type': c['type'], 'connections': {
-                    p: [self.wire(f'R{int(y) + 1}C{int(x) + 1}_{wires[{"OEN": "OE"}.get(p, p)]}')]
+                    p: [self.wire(f'{rc}_{wires[{"OEN": "OE"}.get(p, p)]}')]
                     for p in c['connections'] if p != pad}}
             if name not in gold or twin not in gate:
                 self.problem(None, f'{name} ({c["type"]}) at {m[0]}: '
@@ -445,7 +449,8 @@ def mipi_lp_pad(device, x, y):
     db = _db(device)
     li, mipi = db.rev_logicinfo('IOB'), attrids.iob_attrids['IOBUF_MIPI_LP']
     keys = db.longval.get(db[y, x].ttyp, {}).get('IOBB', {})
-    return any([li[k][0] if k > 0 else None for k in key if k] == [mipi] for key in keys)
+    enable = attrids.iob_attrvals['ENABLE']
+    return any([tuple(li[k]) if k > 0 else None for k in key if k] == [(mipi, enable)] for key in keys)
 
 
 def nets(module):
@@ -714,18 +719,21 @@ def control(device, workdir):
     CONTROL_TRIES. If none does, the control is an error: the design gives
     the control nothing observable to hit."""
     copy = workdir + '-control'
-    os.makedirs(copy, exist_ok=True)
-    for name in ('synth.json', 'pnr.json', 'gate.json', 'top.fs', 'unpacked.v'):
-        shutil.copy(os.path.join(workdir, name), copy)
     tried = []
-    for i in range(CONTROL_TRIES):
-        res = check(device, copy, mutate=i)
-        tried.append(res['mutated'])
-        if None in kinds(res) or i + 1 == res['luts']:
-            break
+    try:
+        os.makedirs(copy, exist_ok=True)
+        for name in ('synth.json', 'pnr.json', 'gate.json', 'top.fs', 'unpacked.v'):
+            shutil.copy(os.path.join(workdir, name), copy)
+        for i in range(CONTROL_TRIES):
+            res = check(device, copy, mutate=i)
+            tried.append(res['mutated'])
+            if None in kinds(res) or i + 1 == res['luts']:
+                break
+        if None not in kinds(res):
+            res = {**res, 'status': 'error', 'error': f'none of the LUTs {tried} is observable'}
+    except Exception as e:  # as in run_design: keep the group's report
+        res = {'status': 'error', 'error': f'{type(e).__name__}: {e}', 'points': [], 'problems': []}
     res['mutated'] = tried
-    if None not in kinds(res):
-        res = {**res, 'status': 'error', 'error': f'none of the LUTs {tried} is observable'}
     with open(os.path.join(copy, 'result.json'), 'w') as f:
         json.dump(res, f, indent=1)
     return copy, res
@@ -740,33 +748,29 @@ def tidy(workdir):
 
 def roundtrip(device, group, out, count=10, seed=0, jobs=1, replay=None, keep=False):
     """Run `count` designs of `group`, or the `replay` design files. Returns
-    [(workdir, result)] and the mutation control (workdir, result) on the
-    first design to prove with a LUT, or None. Unless `keep`, a design that
-    proved, and a control that failed, keep only their small files."""
+    [(workdir, result)] and the mutation control (workdir, result), or None.
+    The control runs on the proved designs with a LUT in index order, until
+    one fails as it should. Unless `keep`, a design that proved, and a
+    control that failed, keep only their small files."""
     # dict.fromkeys drops repeated draws and keeps their order
     designs = ([Design(**json.load(open(p))) for p in replay] if replay
                else list(dict.fromkeys(ps.draw(design(group), count, seed))))
     dirs = [os.path.join(out, device, d.group, str(i)) for i, d in enumerate(designs)]
-    ctl, lock = [], threading.Lock()
-
-    def one(d, workdir):
-        res = run_design(device, d, workdir)
-        if res['status'] == 'proved':
-            with lock:
-                mine = bool(res['luts'] and not replay and not ctl)
-                if mine:
-                    ctl.append(None)  # claimed; filled in below
-            if mine:
-                ctl[0] = control(device, workdir)
-                if not keep and None in kinds(ctl[0][1]):
-                    tidy(ctl[0][0])
-            if not keep:
-                tidy(workdir)
-        return res
-
     with concurrent.futures.ThreadPoolExecutor(jobs) as pool:
-        results = list(pool.map(one, designs, dirs))
-    return list(zip(dirs, results)), (ctl[0] if ctl else None)
+        results = list(pool.map(functools.partial(run_design, device), designs, dirs))
+    ctl = None
+    for w, r in zip(dirs, results):
+        if not replay and r['status'] == 'proved' and r['luts']:
+            ctl = control(device, w)
+            if ctl[1]['status'] == 'failed':
+                break
+    if not keep:
+        if ctl and ctl[1]['status'] == 'failed':
+            tidy(ctl[0])
+        for w, r in zip(dirs, results):
+            if r['status'] == 'proved':
+                tidy(w)
+    return list(zip(dirs, results)), ctl
 
 
 def describe(workdir, res):

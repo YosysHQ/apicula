@@ -27,7 +27,8 @@ KNOWN = {
     'alu-i2': "#288: gowin_unpack gives ALU an I2 port, which Yosys' ALU does not have",
     'lost-iob-reg': '#668: a register nextpnr packs into I/O logic (ireg/oreg/ioreg_in_iob) is not in '
                     'the bitstream',
-    'iobuf-elvds': '#672: gowin_unpack reads a plain buffer on a GW1N-9C top-row B pad as an ELVDS pair',
+    'iobuf-elvds': '#672: gowin_unpack reads a plain buffer on either pad of a GW1N-9C top-row tile as an '
+                   'ELVDS pair',
 }
 
 
