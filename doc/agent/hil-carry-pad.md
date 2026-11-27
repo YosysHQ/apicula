@@ -123,7 +123,8 @@ Design for `io-readback`, `io-startup`, `io-ddr` and `io-ser4`: I/O primitives
 that read their own pad, with no loopback wire. Taken from the
 `spike-io-readback` spike's `pad-spike.v`, which showed on the 9K, 20K and 25K
 that IOBUF read-back works, a tristated pad reads its PULL_MODE (UP, DOWN,
-KEEPER, and the keeper holds), and ODDR+IDDR and OSER4+IDES4 on one IOBUF
+KEEPER; a KEEPER pad holds the driven value, but so does one with no pull, see
+below), and ODDR+IDDR and OSER4+IDES4 on one IOBUF
 round-trip a random stream. Toolchain as above (nextpnr b4faf934, Yosys 0.70+
 fbe6f4d66, Apicula e6dc4a6), seed 1, one load per result.
 
@@ -145,15 +146,28 @@ same pins:
   - Pull check: windows in the second half of 2^20-clock tristate phases. UP
     reads 1/1, DOWN 0/0, KEEPER 0 after a driven 0 and 1 after a driven 1,
     checked after one full sequence.
+  - The KEEPER pad's bit [11] does not prove the keeper, only that the pad is
+    not pulled UP or DOWN. Measured in the stage 3 review (seed 11, one load
+    each): with `hil_rb[2]` at PULL_MODE=NONE in all three CSTs (the
+    bitstreams differ by 13/21/22 bytes), `io-readback` still reads `0xfff` on
+    the 9K, 20K and 25K. The floating, unloaded pad holds the driven value
+    through the 2^19-clock window by itself. Telling KEEPER from NONE needs a
+    load on the pad or a longer window: a follow-up.
 - `io-startup`: the read-back check on one driven pad from the first clock
   after `rst`, no tristate. 3 bits {read 0, read 1, never misread}, reference
   `0x7`. It exists so #681 has a test without taking the 25K's working
-  read-back and pull coverage into `HIL_BROKEN` (coordinator's call).
+  read-back and pull coverage into `HIL_BROKEN`. The coordinator decided the
+  split on the design card's recommendation.
 - `io-ddr` (N=2) and `io-ser4` (N=4): the spike's `serdes_test` with its
   history doubled to 16·N, so the largest offset is 61 for SER4; the vendor's
   SER4 offset of 25 was close to the old limit of 29. Row bits: [0] checks
   ran, [1] some offset hypothesis survived, [2] a survivor has D0 sent first and
   Q0 oldest. Reference `0x7`; #680 shows as `0x1`.
+  - Bit [0] is only the end of the warm-up, so it is always set when the report
+    is read.
+  - Bit [2] cannot tell D0-first/Q0-oldest from both orders reversed when the
+    latency is a multiple of N: the two reversals cancel, and both hypotheses
+    survive at the same offset.
   - Bit [2]'s reference: vendor builds of the final test (GowinSynthesis and
     PnR from `hil.v`, IDE 1.9.10.03) give `0x7` on the 9K, 20K and 25K, one
     load each.
@@ -169,8 +183,11 @@ PCLK clocks only the I/O logic: the sender and the checker run on the board
 clock and work one clock after each PCLK rise (stage 2, below).
 
 **Pins.** None of #651's proposed loop pins, so later wiring cannot short two
-drivers. The pulls go on unconnected pins; the actively driven tests (DDR,
-SER4, startup) go on LEDs, harmless to drive (as `iob-ireg`).
+drivers. The pulls go on unconnected pins. The actively driven tests (DDR,
+SER4, startup) go on LEDs on the 9K and 20K, harmless to drive (as
+`iob-ireg`), and on Dock PMOD pins on the 25K. Of the 25K pads, G11 doubles as
+the alternative TXD and F5/G7 as ADC pins; nothing is attached to them on the
+rig.
 
 | | 9K | 20K | 25K |
 |---|---|---|---|
@@ -226,7 +243,7 @@ The first round of seeds found two races in the test itself, on the 20K:
   loads. Its IOB fuses matched a passing build; only the routing of the
   pad's I and OEN differed. `drv` changed together with `oen` at the start of
   the after-1 window, so the pad could see I = 0 before it was released, and
-  the keeper held 0 [inferred]. `drv` now keeps its value through the
+  held 0 [inferred]. `drv` now keeps its value through the
   tristate phase.
 - `io-ser4` read `0x1` at another seed, 1 of 3 loads. nextpnr reported up to 12
   hold violations from the fabric PCLK's skew (up to 2.4 ns) in the checker's

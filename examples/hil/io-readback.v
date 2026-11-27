@@ -14,6 +14,10 @@
 // One pad per pull mode (UP, DOWN, KEEPER), a nibble each, pad 0 lowest:
 // [0] the pad never read wrong while driven, [1] it read a 1, [2] it read a 0,
 // [3] its tristate windows read what the pull gives.
+// The KEEPER pad's [3] does not prove the keeper: with PULL_MODE=NONE on that
+// pad it still passes on all three boards, because the floating, unloaded pad
+// holds the driven value through the window as well. It shows only that the
+// pad is not pulled UP or DOWN.
 // The checks start 2^16 clocks after reset: the Primer 25K misreads for its
 // first ~10k clocks (YosysHQ/apicula#681, tested by io-startup).
 module io_readback_test (
@@ -32,8 +36,9 @@ endmodule
 //   1: drive 0    2: tristate, the "after 0" window
 //   3: drive 1    4: tristate, the "after 1" window
 // A window is the second half of its phase, 2^19 clocks (19 ms at 27 MHz)
-// after release, so a pull has settled and a keeper has held that long.
-// UP reads 1 in both windows, DOWN 0, KEEPER the value driven before. The pull
+// after release, so a pull has settled.
+// UP reads 1 in both windows, DOWN 0, KEEPER the value driven before (as does
+// a pad with no pull, see above). The pull
 // bit needs one whole sequence, so that every window was seen.
 // PULL must match the pad's PULL_MODE in the board CST.
 module io_pull_pad #(
@@ -60,7 +65,8 @@ module io_pull_pad #(
 	wire in;
 	IOBUF iob (.I(drv), .OEN(oen), .O(in), .IO(pad));
 
-	// q, drv1, oen1 and the windows line up: all one clock after drv, oen
+	// q, drv1 and oen1 line up, one clock after drv and oen. The windows are
+	// one clock earlier, which is harmless 2^19 clocks into a tristate phase.
 	reg q, drv1, drv2, oen1, oen2, win0, win1;
 	reg warm, bad, one, zero, w0_1, w0_0, w1_1, w1_0, seq;
 	always @(posedge clk) begin
@@ -138,15 +144,18 @@ endmodule
 // N = 2: ODDR -> IOBUF -> IDDR, all on clk.
 // N = 4: OSER4 -> IOBUF -> IDES4, FCLK = clk, PCLK = clk/2 from a fabric
 // flip-flop (no CLKDIV: the clock-divider test keeps that to itself).
-// Each PCLK the sender takes N fresh bits from an LFSR. The receiver does not
+// Each PCLK the sender takes the low N bits of an LFSR that shifts once per
+// word, so consecutive words share N-1 bits. The receiver does not
 // know the latency or the bit order, so it tries every hypothesis: send order
 // (D0 or D(N-1) first on the wire), receive order (Q0 or Q(N-1) holds the
 // oldest bit) and the offset into the last 16*N bits sent. A hypothesis
-// survives while the received word always matched. With a random stream only
-// the true one survives; none means the pad lost the data.
-// pass[0] the checks ran, [1] a hypothesis survived, [2] one with D0 sent
-// first and Q0 the oldest bit survived: the order that vendor bitstreams of
-// this test give on the Tang Nano 9K, 20K and Primer 25K.
+// survives while the received word always matched; none means the pad lost
+// the data.
+// pass[0] the warm-up ended (always set by the time the report is read),
+// [1] a hypothesis survived, [2] one with D0 sent first and Q0 the oldest bit
+// survived: the order that vendor bitstreams of this test give on the Tang
+// Nano 9K, 20K and Primer 25K. When the latency is a multiple of N, [2] cannot
+// tell that order from both reversed, since the two reversals cancel.
 // The checks start 2^16 clocks after reset.
 module io_serdes_test #(
 	parameter N = 2
