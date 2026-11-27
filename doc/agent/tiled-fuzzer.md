@@ -67,7 +67,12 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
     `IRMATCH`/`PRAD` rows on every run, but the same case and 9 others pass
     in a seed-2 run with ALU54D and DCS alone, so the trigger is not in the
     parameters (inferred: the site or the other cases of the design). On
-    GW2A-18C `ALU54D` matches: 4 distinct cases in CI and 10 at seed 2;
+    GW2A-18C `ALU54D` matches: 4 distinct cases in CI and 10 at seed 2. With
+    the IOB register cases added, CI's draw (seed 7) puts an `ALU54D` in the
+    same DSP block as a `MULT18X18`, and both get the same nine differing
+    `DSP1` `AIRMUX`/`BIRMUX`/`IRMATCH` bits, attributed to both by tile
+    (inferred: the `MULT18X18`'s); the same `ALU54D` case passes on GW1N-9C
+    in that run;
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`;
   - GW5A `MULTADDALU12X12`/`MULTALU27X18` with `ACC_SEL` or `C_SEL` omitted: the
