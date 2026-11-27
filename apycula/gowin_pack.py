@@ -3505,7 +3505,9 @@ class Device:
                     attr_vals.append(AttrVal('RSTGENHMUX_REGSD', 'SYNC'))
                 else:
                     attr_vals.append(AttrVal('RSTGENLMUX_REGSD', 'SYNC'))
-        else:
+        elif pair_idx:
+            # the macro's shift-out register belongs to units 2/3: the vendor
+            # sets its bypass only there (getMult9RegContAttr @0x1fb02c1, IDE 1.9.10.03)
             if is_even:
                 attr_vals.append(AttrVal('IRBY_IRMATCHH_9', "ENABLE"))
                 attr_vals.append(AttrVal('IRNS_IRMATCHH_9', "ENABLE"))

@@ -59,14 +59,14 @@ KNOWN = [
      'GW5A OSER: FCLKSEL, IOB PULLMODE/SLEWRATE and HCLK TO_IHCLK rows'),
     ('ALU', ALL, any_params,
      'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
-    ('MULT9X9|MULT18X18|PADD9|PADD18', ALL, any_params,
+    ('PADD9|PADD18', ALL, any_params,
      'DSP: input register muxes (AIRMUX/BIRMUX), RSTGEN muxes, pre-adder rows'),
     ('ALU54D', 'GW1N', any_params,
      'DSP: input register muxes (IRMATCH), pre-adder rows (PRAD_MUXA1, PRAD_FBB1)'),
     ('MULTALU18X18', ALL, any_params,
      'DSP: input register muxes (AIRMUX/BIRMUX, IRMATCH), RSTGEN*MUX_REGC0 rows; gowin_pack stops with '
      'KeyError CLK_BSIGN12'),
-    ('MULT9X9|PADD9|MULTALU18X18|MULTADDALU18X18', ALL, any_params,
+    ('PADD9|MULTALU18X18|MULTADDALU18X18', ALL, any_params,
      'DSP: the vendor and Apicula configure different pairs of the macro (vendor PRAD0 rows, Apicula PRAD1, '
      'AIRMUX/BIRMUX, IREG1B); the harness pins only the macro (DSP_R<row>[n][A])'),
     ('MULT12X12|MULT27X36|MULTADDALU12X12|MULTALU27X18', ALL, any_params,
