@@ -349,6 +349,10 @@ class Primitives:
             return default_literal(param)
         return None
 
+    def defaults(self, prim):
+        """Literals of a primitive's primitive.xml defaults, by parameter name."""
+        return {name: default_literal(param) for name, param in self.spec[prim]['params'].items()}
+
     def case(self, prim):
         kind = site_kind(prim)
         if kind in ('iob', 'diob'):
@@ -362,9 +366,8 @@ class Primitives:
         # Each parameter is set or omitted, as designs do, so gowin_pack's
         # defaults are tested too. Kept: the fixed parameters, and a LUT's
         # INIT, without which the tools fold the LUT away.
-        required, optional, defaults = {}, {}, {}
+        required, optional, defaults = {}, {}, self.defaults(prim)
         for name, param in self.spec[prim]['params'].items():
-            defaults[name] = default_literal(param)
             fixed = self.fixed(name, param)
             if fixed is not None:
                 required[name] = st.just(fixed)

@@ -5,73 +5,106 @@
 
 Without --device, nothing runs. One fuzzer run per device makes all its
 designs; the tests read its results. Failures are logged with the differing
-fuses; the full reports are in --fuzz-out. Primitives in BROKEN are known
-broken, with the evidence in doc/agent/tiled-fuzzer.md; cases the vendor
-rejects are a generator limit, not a failure.
+fuses; the full reports are in --fuzz-out. Known bugs are in KNOWN, with the
+evidence in doc/agent/tiled-fuzzer.md; cases the vendor rejects are a
+generator limit, not a failure.
 """
+import functools
 import os
+import re
 import sys
+import warnings
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tools'))
+import primitive_strategies as ps  # noqa: E402
 import tiled_fuzzer  # noqa: E402
 
 
-def broken(prims, why):
-    return dict.fromkeys(prims.split(), why)
+def any_params(p):
+    """The trigger is not narrowed down yet: every case of the primitive."""
+    return True
 
 
-BROKEN = {
+ALL = '.*'
+
+# Known bugs, each the region of inputs that triggers it, in the shape of
+# primitive_strategies.RULES: (primitive regex, device regex, predicate, reason).
+# The primitive regex must match the whole name, the device regex its start.
+# The predicate sees the case's parameters as Verilog literals, omitted ones at
+# their primitive.xml default. A failing case no entry matches fails the test,
+# even if its primitive has other known bugs; a passing case an entry matches
+# is reported as a warning, so stale entries show up.
+KNOWN = [
     # Apicula
-    **broken('IBUF OBUF TBUF IOBUF', 'I/O: DRIVE/OPENDRAIN, ODMUX and PULLMODE rows and unused-I/O bank '
-             'fuses differ; SSTL/HSTL inputs decode as outputs'),
-    **broken('TLVDS_IBUF TLVDS_OBUF TLVDS_TBUF TLVDS_IOBUF ELVDS_IBUF ELVDS_OBUF ELVDS_TBUF ELVDS_IOBUF',
-             'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
-    **broken('IDDR IDDRC ODDR ODDRC IDES4 IDES8 IDES10 IDES16 OSER16 IVIDEO OVIDEO IODELAY',
-             'I/O logic: on GW5A-25A, FCLKSEL, IOB and HCLK TO_IHCLK rows, IODELAY (placed since nextpnr#1923) '
-             'lacks the INDEL/IDEL rows and sets LSR mux rows the vendor leaves off, and IDES8 (INMODE reads as '
-             'UNK76), IDES10 and IVIDEO unpack to no cell; ODDR OUTMODE; on GW1N-9C the vendor moves the output '
-             'pad off a VCCIO-locked bank (IDES4, IDES8, IDES10, IDES16, OSER16, IODELAY); IODELAY unpacks to no '
-             'cell, IDDR/IDDRC and ODDR/ODDRC unpack as each other'),
-    **broken('OSER4 OSER8 OSER10', 'OSER: on GW5A-25A, FCLKSEL, IOB PULLMODE/SLEWRATE and HCLK TO_IHCLK rows; '
-             'on GW1N-9C the vendor '
-             'moves the output pad off a VCCIO-locked bank, adding IOB ODMUX/TRI_MUX/SLEWRATE rows'),
-    **broken('ALU', 'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
-    **broken('ALU54D MULT9X9 MULT18X18 MULTALU18X18 PADD9 PADD18',
-             'DSP: input register muxes (AIRMUX/BIRMUX), RSTGEN muxes, pre-adder rows'),
-    **broken('MULTADDALU18X18', 'DSP: the vendor and Apicula configure different pairs of the macro (vendor '
-             'PRAD0 rows, Apicula PRAD1, AIRMUX/BIRMUX), seen on GW2A-18C with all parameters omitted; the harness '
-             'pins only the macro (DSP_R<row>[n][A])'),
-    **broken('MULT12X12 MULT27X36 MULTADDALU12X12 MULTALU27X18',
-             'GW5A DSP: MULT_RESET_MODE, CASO, CE muxes, PRELOAD_BIT, DYN_P_ADDSUB rows; omitted ACC_SEL and '
-             'C_SEL pack no row'),
-    **broken('SDPB SDPX9B', 'GW5A DBLWB=X36; GW5A-25A: nextpnr rejects BIT_WIDTH_0 of 32/36 with a different '
-             'BIT_WIDTH_1'),
-    **broken('DPB DPX9B', 'BSRAM: with mixed port widths Apicula enables the byte enables (BELB/BEHB) of the '
-             '16/18-bit port, the vendor does not'),
-    **broken('rPLL', 'rPLL: FBSEL on GW2A; the unpacker does not invert several parameters'),
-    **broken('PLLA', 'GW5A PLLA: phase/duty, charge pump, loop filter, KVCO, ODIV rows'),
-    **broken('OSCA', 'GW5A OSCA: FREQ_DIV=3 rejected; unpacked as OSC'),
-    **broken('ADC', 'GW5A ADC: Apicula sets 5A_PCLK_ENABLE'),
-    **broken('TLVDS_IBUF_ADC', 'gowin_pack rejects the ADC bus of the pins the vendor chose'),
-    **broken('I3C_IOBUF', 'I3C: DRIVE/OPENDRAIN rows; nextpnr: pin not I3C capable on GW5A'),
-    **broken('MIPI_OBUF', 'MIPI: Apicula sets an IOB row where the vendor sets a bank row'),
+    ('IBUF|OBUF|TBUF|IOBUF', ALL, any_params,
+     'I/O: DRIVE/OPENDRAIN, ODMUX and PULLMODE rows and unused-I/O bank fuses differ; SSTL/HSTL inputs decode '
+     'as outputs; one IO_TYPE per bank, where the vendor allows any standard of one voltage'),
+    ('(TLVDS|ELVDS)_(IBUF|OBUF|TBUF|IOBUF)', ALL, any_params,
+     'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
+    ('TLVDS_(OBUF|TBUF|IOBUF)', 'GW2A', any_params,
+     '#534: a TLVDS output sets IOB BANK_VCCIO on its bank, and the bank tile\'s LVDS25 rows differ from the '
+     'vendor\'s'),
+    ('IDDR|IDDRC|ODDR|ODDRC', ALL, any_params,
+     'I/O logic: IDDR/IDDRC and ODDR/ODDRC unpack as each other; ODDR OUTMODE; on GW5A-25A, FCLKSEL, IOB and '
+     'HCLK TO_IHCLK rows'),
+    ('IODELAY', ALL, any_params,
+     'IODELAY unpacks to no cell; on GW5A-25A (placed since nextpnr#1923) it lacks the INDEL/IDEL rows and sets '
+     'LSR mux rows the vendor leaves off'),
+    ('IDES4|IDES8|IDES10|IDES16|OSER16|IVIDEO|OVIDEO', 'GW5A', any_params,
+     'GW5A I/O logic: FCLKSEL, IOB and HCLK TO_IHCLK rows; IDES8 (INMODE reads as UNK76), IDES10 and IVIDEO '
+     'unpack to no cell; nextpnr cannot place IDES16/OSER16 on the pins the harness chose'),
+    ('OSER4|OSER8|OSER10', 'GW5A', any_params,
+     'GW5A OSER: FCLKSEL, IOB PULLMODE/SLEWRATE and HCLK TO_IHCLK rows'),
+    ('IDES16|IVIDEO', 'GW1N-9C', any_params,
+     'harness: the pin pair of the case holds a harness input (nextpnr: "already taken by harness_ib_in4")'),
+    ('ALU', ALL, any_params,
+     'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
+    ('MULT9X9|MULT18X18|PADD9|PADD18', ALL, any_params,
+     'DSP: input register muxes (AIRMUX/BIRMUX), RSTGEN muxes, pre-adder rows'),
+    ('ALU54D', 'GW1N', any_params,
+     'DSP: input register muxes (IRMATCH), pre-adder rows (PRAD_MUXA1, PRAD_FBB1)'),
+    ('MULTALU18X18', ALL, any_params,
+     'DSP: input register muxes (AIRMUX/BIRMUX, IRMATCH), RSTGEN*MUX_REGC0 rows; gowin_pack stops with '
+     'KeyError CLK_BSIGN12'),
+    ('MULT9X9|PADD9|MULTALU18X18|MULTADDALU18X18', ALL, any_params,
+     'DSP: the vendor and Apicula configure different pairs of the macro (vendor PRAD0 rows, Apicula PRAD1, '
+     'AIRMUX/BIRMUX, IREG1B); the harness pins only the macro (DSP_R<row>[n][A])'),
+    ('MULT12X12|MULT27X36|MULTADDALU12X12|MULTALU27X18', ALL, any_params,
+     'GW5A DSP: MULT_RESET_MODE, CASO, CE muxes, PRELOAD_BIT, DYN_P_ADDSUB rows; omitted ACC_SEL and C_SEL '
+     'pack no row'),
+    ('SDPB|SDPX9B', 'GW5A', lambda p: p['BIT_WIDTH_1'] in ('32', '36') and p['BIT_WIDTH_0'] != p['BIT_WIDTH_1'],
+     'GW5A BSRAM: with a 32/36-bit read port and a narrower write port, Apicula sets DBLWB=X36, the vendor does '
+     'not'),
+    ('SDPB|SDPX9B', 'GW5A-25A', lambda p: p['BIT_WIDTH_0'] in ('32', '36') and p['BIT_WIDTH_1'] != p['BIT_WIDTH_0'],
+     'nextpnr rejects BIT_WIDTH_0 of 32/36 with a different BIT_WIDTH_1'),
+    ('DPB|DPX9B', ALL,
+     lambda p: p['BIT_WIDTH_0'] != p['BIT_WIDTH_1'] and {'16', '18'} & {p['BIT_WIDTH_0'], p['BIT_WIDTH_1']},
+     'BSRAM: with mixed port widths Apicula enables the byte enables (BELB/BEHB) of the 16/18-bit port, the '
+     'vendor does not'),
+    ('rPLL', ALL, any_params, 'rPLL: FBSEL on GW2A; the unpacker does not invert several parameters'),
+    ('PLLA', ALL, any_params, 'GW5A PLLA: phase/duty, charge pump, loop filter, KVCO, ODIV rows'),
+    ('OSCA', ALL, any_params, 'GW5A OSCA: FREQ_DIV=3 rejected; unpacked as OSC'),
+    ('TLVDS_IBUF_ADC', ALL, any_params, 'gowin_pack rejects the ADC bus of the pins the vendor chose'),
+    ('I3C_IOBUF', ALL, any_params, 'I3C: DRIVE/OPENDRAIN rows; nextpnr: pin not I3C capable on GW5A'),
+    ('MIPI_OBUF', ALL, any_params, 'MIPI: Apicula sets an IOB row where the vendor sets a bank row'),
     # nextpnr
-    **broken('ROM16', 'nextpnr: ROM16 becomes a LUT'),
-    **broken('SDP DP ROM pROM DPX9 SDPX9 ROMX9', 'nextpnr: unsupported BSRAM type, or bel type mismatch'),
-    **broken('PLL BUFS RAM16S1 RAM16S2 RAM16S4 LUT5 LUT6 LUT7 LUT8 MUX2 IDES14 IDES32 OSER14 DDRDLL DHCE DCE '
-             'OTP SAMB CMSERA IBUF_R IOBUF_R ELVDS_IBUF_R ELVDS_IOBUF_R ELVDS_IBUF_MIPI MIPI_IBUF_HS MIPI_IBUF_LP',
-             'nextpnr has no cell or bel for it'),
-    **broken('MIPI_IBUF MIPI_OBUF_A MIPI_CPHY_IBUF MIPI_CPHY_OBUF', 'nextpnr rejects the pins the vendor chose'),
-    **broken('DCS', 'GW5A: nextpnr crashes routing DCS inputs from pins'),
-    **broken('DQS DLLDLY', 'needs a DLL, which Yosys lacks (GW1N/GW2A) or nextpnr cannot place (GW5A)'),
-    **broken('INV', 'nextpnr makes a LUT of it; the vendor removes it'),
-    **broken('FLASH608K', 'nextpnr adds LUTs and flip-flops around user flash'),
+    ('ROM16', ALL, any_params, 'nextpnr: ROM16 becomes a LUT'),
+    ('SDP|DP|ROM|DPX9|SDPX9|ROMX9', ALL, any_params, 'nextpnr: unsupported BSRAM type, or bel type mismatch'),
+    ('PLL|BUFS|RAM16S1|RAM16S2|RAM16S4|LUT5|LUT6|LUT7|LUT8|MUX2|IDES14|IDES32|OSER14|DDRDLL|DHCE|DCE|OTP|SAMB|'
+     'CMSERA|IBUF_R|IOBUF_R|ELVDS_IBUF_R|ELVDS_IOBUF_R|ELVDS_IBUF_MIPI|MIPI_IBUF_HS|MIPI_IBUF_LP', ALL, any_params,
+     'nextpnr has no cell or bel for it'),
+    ('MIPI_IBUF|MIPI_OBUF_A|MIPI_CPHY_IBUF|MIPI_CPHY_OBUF', ALL, any_params,
+     'nextpnr rejects the pins the vendor chose'),
+    ('DCS', 'GW5A', any_params, 'GW5A: nextpnr crashes routing DCS inputs from pins'),
+    ('DQS|DLLDLY', ALL, any_params, 'needs a DLL, which Yosys lacks (GW1N/GW2A) or nextpnr cannot place (GW5A)'),
+    ('INV', ALL, any_params, 'nextpnr makes a LUT of it; the vendor removes it'),
+    ('FLASH608K', ALL, any_params, 'nextpnr adds LUTs and flip-flops around user flash'),
     # Yosys' cell library
-    **broken('rROM rROMX9 rSDP rSDPX9 IODELAYA IODELAYC DLL DCC ADC_DB MUX4 MUX8 MUX16 MUX32',
-             'no Yosys cell definition'),
-}
+    ('rROM|rROMX9|rSDP|rSDPX9|IODELAYA|IODELAYC|DLL|DCC|ADC_DB|MUX4|MUX8|MUX16|MUX32', ALL, any_params,
+     'no Yosys cell definition'),
+]
 
 # fuse differences in tiles no case owns, and designs that fail although each
 # of their cases passes alone
@@ -79,6 +112,18 @@ BROKEN_UNATTRIBUTED = ('I/O bank and GW5A I/O row fuses of unused pins; HCLK BRG
                        '(GW1N-9C, GW2A-18C, GW2A-18; inferred: from the harness clock)')
 BROKEN_COMBINATIONS = ('nextpnr: two DSP cases in one block (more than 4 RESET networks, or two nets on one '
                        'source wire); an I/O logic pin already taken by another case\'s buffer')
+
+
+@functools.cache
+def primitives(device):
+    return ps.Primitives(device, tiled_fuzzer.DEVICES[device][0])
+
+
+def known(device, case):
+    """Reasons of the KNOWN entries whose region holds `case`."""
+    params = {**primitives(device).defaults(case['prim']), **case['params']}
+    return [why for prim, dev, region, why in KNOWN
+            if re.fullmatch(prim, case['prim']) and re.match(dev, device) and region(params)]
 
 
 def pytest_generate_tests(metafunc):
@@ -107,11 +152,16 @@ def test_primitive(run, device, prim):
     results = [r for r in run.cases if r['case']['prim'] == prim]
     if results and all(r['status'] == 'invalid' for r in results):
         pytest.skip('the vendor rejected every case: ' + '; '.join(results[0].get('why', []))[:200])
+    for r in results:
+        if r['status'] == 'ok' and (reasons := known(device, r['case'])):
+            warnings.warn(f'{device} {prim} {r["case"]["params"]} passes; KNOWN: {reasons}')
     failures = run.failures(prim)
-    details = '\n'.join(tiled_fuzzer.describe_result(r) for r in failures)
-    if prim in BROKEN and failures:
-        pytest.xfail(f'{BROKEN[prim]}\n{details}')
-    assert not failures, f'{len(failures)} of {len(results)} cases failed:\n{details}'
+    unknown = [r for r in failures if not known(device, r['case'])]
+    details = '\n'.join(tiled_fuzzer.describe_result(r) for r in unknown or failures)
+    assert not unknown, f'{len(unknown)} of {len(results)} cases failed outside KNOWN:\n{details}'
+    if failures:
+        reasons = dict.fromkeys(why for r in failures for why in known(device, r['case']))
+        pytest.xfail('\n'.join(reasons) + f'\n{details}')
 
 
 def test_unattributed(run, device):
@@ -125,4 +175,3 @@ def test_combinations(run, device):
     details = '\n'.join(f'{c["design"]}: {[x["prim"] for x in c["cases"]]}: {c["why"][:2]}' for c in failing)
     if failing:
         pytest.xfail(f'{BROKEN_COMBINATIONS}\n{details}')
-
