@@ -39,9 +39,15 @@ ALL = '.*'
 # is reported as a warning, so stale entries show up.
 KNOWN = [
     # Apicula
-    ('IBUF|OBUF|TBUF|IOBUF', ALL, any_params,
+    ('IBUF|OBUF|TBUF|IOBUF|IO_BANK', ALL, any_params,
      'I/O: DRIVE/OPENDRAIN, ODMUX and PULLMODE rows and unused-I/O bank fuses differ; SSTL/HSTL inputs decode '
-     'as outputs; one IO_TYPE per bank, where the vendor allows any standard of one voltage'),
+     'as outputs; one IO_TYPE per bank, where the vendor allows any standard of one voltage; attribute values '
+     'the vendor calls illegal for the IO_TYPE (CT1108) are packed'),
+    ('OBUF|TBUF|IOBUF', ALL, lambda p: 'IO_TYPE' not in p,
+     'default IO_TYPE (issue pending): without IO_TYPE gowin_pack makes an output LVCMOS12, the vendor LVCMOS18 '
+     'on GW1N/GW2A and LVCMOS33 on GW5A'),
+    ('IO_BANK', ALL, lambda p: len({v for k, v in p.items() if k.endswith('_IO_TYPE')}) > 1,
+     'one IO_TYPE per bank: gowin_pack stops with "IO_TYPE conflict" on standards the vendor accepts together'),
     ('(TLVDS|ELVDS)_(IBUF|OBUF|TBUF|IOBUF)', ALL, any_params,
      'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
     ('TLVDS_(OBUF|TBUF|IOBUF)', 'GW2A', any_params,

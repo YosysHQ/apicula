@@ -22,7 +22,17 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
 **`gowin_pack`**
 - **I/O:**
   - one `IO_TYPE` per bank, where the vendor allows any standards of one
-    voltage (SSTL18 with HSTL18, SSTL33 with LVCMOS33);
+    voltage (SSTL18 with HSTL18, SSTL33 with LVCMOS33), and inputs of another
+    voltage (`IO_BANK` cases);
+  - an output without `IO_TYPE` gets LVCMOS12 in `gowin_pack`
+    (`Device.get_default_io_type`; only `GW5AST_138C` overrides it, with
+    LVCMOS33), LVCMOS18 in the vendor on GW1N/GW2A and LVCMOS33 on GW5A-25A
+    (its `top.io.cst`), so bank and `DRIVE` rows differ, and on GW5A-25A
+    gowin_pack stops with "Default IO_TYPE (LVCMOS12) and BANK_VCCIO
+    conflict" on a `BANK_VCCIO=3.3` the vendor accepts;
+  - attribute values the vendor calls illegal for the buffer's `IO_TYPE`
+    (CT1108: `DRIVE`, `OPEN_DRAIN`, `HYSTERESIS`, `PULL_MODE`, `BANK_VCCIO`)
+    are packed rather than rejected (status `accepted`);
   - unused-I/O `BANK_VCCIO` fuses, and bank-tile `IO_TYPE=…,IO_BANK` /
     `BLVDS…` rows;
   - `DRIVE,OPENDRAIN`, `ODMUX`, `PULLMODE`;
@@ -147,8 +157,8 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
   the harness takes bank 1. nextpnr rejects `MIPI_IBUF*` anyway.
 - SiP-locked banks (GW1N-9C, GW1NS-4) get no I/O cases: the vendor moved
   outputs constrained there to other pins (CT1136, #622).
-- I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
-  OPEN_DRAIN and DIFF_RESISTOR.
+- I/O attributes beyond IO_TYPE, BANK_VCCIO, PULL_MODE, HYSTERESIS, DRIVE,
+  SLEW_RATE, OPEN_DRAIN and DIFF_RESISTOR.
 
 ## Pipeline
 
@@ -316,6 +326,20 @@ What each kind relies on, checked by running both flows (IDE 1.9.10.03):
   the pad's I/O logic and no other case's (measured on GW1N-9C, GW2A-18C and
   GW5A-25A), so the fuses are compared at the `IOLOGIC` bel. The register's Q
   of `IOB_IREG` is left unconnected; both tools still pack it.
+- **I/O standards.** A single-ended buffer may omit `IO_TYPE`; the vendor then
+  uses LVCMOS18 on GW1N/GW2A and LVCMOS33 on GW5A (read from its
+  `top.io.cst` with an `OBUF` on GW1N-9C, GW2A-18C and GW5A-25A), and the
+  case is batched by that voltage. It may also set `BANK_VCCIO`, which
+  batches it by that voltage when it has no `IO_TYPE`. A case with no
+  attributes gets no `IO_PORT` line: the vendor rejects one without
+  attributes (CT2000).
+- **`IO_BANK`** is a pseudo-primitive: two or three single-ended buffers, each
+  with its own type and attributes, on pins of one bank that holds no harness
+  pin (`Sites.iobank`, at least three free pins). Buffer n is the param `IO<n>`
+  and its attributes `IO<n>_<attribute>`. It is alone in its design, so every
+  difference in its bank belongs to it. Outputs of different voltages in one
+  bank are rejected by the vendor (CT1136), as is a `BANK_VCCIO` that
+  contradicts an `IO_TYPE` (CT1108); see "Reject agreement".
 
 ## Running
 

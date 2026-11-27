@@ -24,7 +24,8 @@ from apycula.gowin_pack import BankDesc  # noqa: E402
 # Pseudo-primitives, not in primitive.xml: a flip-flop fed by an input pad
 # (IOB_IREG), driving an output pad (IOB_OREG), or one of each on an inout pad
 # (IOB_IOREG), which the tools pack into the pad's I/O logic when asked to
-# (vendor -ireg_in_iob/-oreg_in_iob/-ioreg_in_iob, nextpnr --vopt <same>).
+# (vendor -ireg_in_iob/-oreg_in_iob/-ioreg_in_iob, nextpnr --vopt <same>);
+# and IO_BANK, several buffers in one bank (io_bank_case).
 IOB_REGS = ['IOB_IREG', 'IOB_OREG', 'IOB_IOREG']
 
 # Which kind of site each supported primitive occupies. The tiled fuzzer knows
@@ -66,6 +67,7 @@ SITES = {
                                   'DP', 'DPB', 'DPX9B', 'DPX9', 'SDPX9', 'ROMX9',
                                   'rROM', 'rROMX9', 'rSDP', 'rSDPX9']},
     **{name: 'iobreg' for name in IOB_REGS},
+    'IO_BANK': 'iobank',
 }
 
 # Parameters held at their default. BSRAM contents are not in the vendor
@@ -123,11 +125,20 @@ DIFF_STANDARDS = {
 IOL_IO_TYPE = 'LVCMOS33'  # standard of the buffer an I/O logic case is placed with
 
 
-def io_vccio(case):
-    """Bank voltage an I/O case needs: its IO_TYPE's, else its BANK_VCCIO."""
+def io_vccio(case, device):
+    """Bank voltage an I/O case needs: its IO_TYPE's, else its BANK_VCCIO,
+    else that of the vendor's default IO_TYPE."""
     params = dict(case.params)
     io_type = IOL_IO_TYPE if case.site in ('iol', 'iobreg') else params.get('IO_TYPE')
-    return BankDesc._vcc_ios[io_type] if io_type else params['BANK_VCCIO']
+    if io_type is None and 'BANK_VCCIO' in params:
+        return params['BANK_VCCIO']
+    return BankDesc._vcc_ios[io_type or DEFAULT_IO_TYPE[family(device)]]
+
+
+# IO_TYPE of a single-ended buffer without one, from the vendor's top.io.cst
+# (measured with an OBUF on GW1N-9C, GW2A-18C and GW5A-25A)
+DEFAULT_IO_TYPE = {'gw1n': 'LVCMOS18', 'gw2a': 'LVCMOS18', 'gw5a': 'LVCMOS33'}
+BANK_VCCIOS = ['3.3', '2.5', '1.8', '1.5', '1.2']
 
 
 IO_INPUT_ATTRS = {'PULL_MODE': ['UP', 'DOWN', 'NONE', 'KEEPER'], 'HYSTERESIS': ['NONE', 'H2L', 'L2H', 'HIGH']}
@@ -136,25 +147,36 @@ IO_OUTPUT_ATTRS = {'PULL_MODE': ['UP', 'DOWN', 'NONE', 'KEEPER'], 'DRIVE': ['4',
 
 
 def io_case(prim):
-    """An I/O buffer with IO_TYPE and a random subset of its attributes. The
-    Case params are the IO_PORT attributes."""
-    attrs = {}
+    """An I/O buffer with a random subset of its attributes. A single-ended
+    buffer may also omit IO_TYPE (the vendor then uses DEFAULT_IO_TYPE) and
+    set BANK_VCCIO. The Case params are the IO_PORT attributes."""
+    attrs, fields = {}, {}
     kind, _, buf = prim.rpartition('_')
     if kind:  # differential
-        standards = DIFF_STANDARDS[kind]
+        fields['IO_TYPE'] = st.sampled_from(sorted(DIFF_STANDARDS[kind]))
         attrs['PULL_MODE'] = ['UP', 'DOWN', 'NONE']
         if buf in ('IBUF', 'IOBUF'):
             attrs['DIFF_RESISTOR'] = ['ON', 'OFF']
     else:
-        standards = IO_STANDARDS
+        attrs.update(IO_TYPE=sorted(IO_STANDARDS), BANK_VCCIO=BANK_VCCIOS)
         if buf in ('IBUF', 'IOBUF'):
             attrs.update(IO_INPUT_ATTRS)
         if buf in ('OBUF', 'TBUF', 'IOBUF'):
             attrs.update(IO_OUTPUT_ATTRS)
-    fields = {'IO_TYPE': st.sampled_from(sorted(standards))}
     fields.update({k: st.one_of(st.none(), st.sampled_from(v)) for k, v in attrs.items()})
     return st.fixed_dictionaries(fields).map(
         lambda d: Case(prim, tuple(sorted((k, v) for k, v in d.items() if v is not None))))
+
+
+def io_bank_case():
+    """IO_BANK: two or three single-ended buffers in one bank, each with its own
+    type and attributes, as params IO<n> (the buffer) and IO<n>_<attribute>."""
+    def flatten(bufs):
+        return Case('IO_BANK', tuple(sorted(
+            (k, v) for n, b in enumerate(bufs)
+            for k, v in [(f'IO{n}', b.prim), *((f'IO{n}_{a}', x) for a, x in b.params)])))
+    buf = st.sampled_from(['IBUF', 'OBUF', 'TBUF', 'IOBUF']).flatmap(io_case)
+    return st.lists(buf, min_size=2, max_size=3).map(flatten)
 
 
 # GW5A PLLA limits, from the vendor's PA2078 messages on GW5A-25A: PFD
@@ -352,6 +374,7 @@ class Primitives:
         params = {'TYPE': {'type': 'cell', 'kind': 'enum', 'values': types, 'default': types[0]},
                   'INIT': self.spec[types[0]]['params']['INIT']}
         self.spec.update({prim: {'ports': {}, 'params': params} for prim in IOB_REGS})
+        self.spec['IO_BANK'] = {'ports': {}, 'params': {}}
 
     def fixed(self, name, param):
         """Literal for a parameter whose value depends on the device, else None.
@@ -370,6 +393,8 @@ class Primitives:
         kind = site_kind(prim)
         if kind in ('iob', 'diob'):
             return io_case(prim)
+        if kind == 'iobank':
+            return io_bank_case()
         if kind == 'widelut':
             # leaf INITs, distinct and not constant, so each leaf can be found
             # in a bitstream; leaf j is reached with select bits j (I0 = 0)
