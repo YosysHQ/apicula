@@ -129,9 +129,6 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
   the harness takes bank 1. nextpnr rejects `MIPI_IBUF*` anyway.
 - SiP-locked banks (GW1N-9C, GW1NS-4) get no I/O cases: the vendor moved
   outputs constrained there to other pins (CT1136, #622).
-- GW1N-9C `IDES16`/`IVIDEO`: one case of two gets a pin pair whose second pad
-  is a harness input, and nextpnr stops with "already taken by
-  harness_ib_in4".
 - I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
   OPEN_DRAIN and DIFF_RESISTOR.
 
@@ -228,6 +225,14 @@ design, to confirm a failure in isolation.
   harness inputs there did not stop it (GW1N-9C). Sorting rather than filtering
   keeps five harness inputs on GW1NS-4 QFN48P, which then has no plain pin left
   for I/O cases (banks 0 and 3 are SiP-locked, bank 2 holds MIPI outputs).
+- **No I/O case shares a tile with a harness pin** (`Sites`): nextpnr places
+  most I/O logic only with the other pin of its tile free
+  (`check_iologic_placement`), and `IDES16`/`OSER16` also need both pins of
+  the AUX tile (`check_io16_placement`). Before, some seeds put `IDES4`,
+  `IDES8`, `IDES16`, `OSER16` or `IVIDEO` next to a harness pin, and nextpnr
+  stopped with "already taken by harness_ib_in4". The sites are filtered after
+  the shuffle, so the random state and the cases are unchanged; only I/O
+  cases can land on other pins.
 - **The harness clock goes on a clock-only true clock pin**: one whose only
   functions are `GCLK*`, so no PLL input or feedback and no config pin, and
   `GCLKT` before `GCLKC`. Measured on one pair only: on GW1N-9C pin 51

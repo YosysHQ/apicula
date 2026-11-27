@@ -57,8 +57,6 @@ KNOWN = [
      'unpack to no cell; nextpnr cannot place IDES16/OSER16 on the pins the harness chose'),
     ('OSER4|OSER8|OSER10', 'GW5A', any_params,
      'GW5A OSER: FCLKSEL, IOB PULLMODE/SLEWRATE and HCLK TO_IHCLK rows'),
-    ('IDES16|IVIDEO', 'GW1N-9C', any_params,
-     'harness: the pin pair of the case holds a harness input (nextpnr: "already taken by harness_ib_in4")'),
     ('ALU', ALL, any_params,
      'constant CIN: Apicula adds a head ALU where the vendor folds it into the LUTs; ALU_MODE=5'),
     ('MULT9X9|MULT18X18|PADD9|PADD18', ALL, any_params,

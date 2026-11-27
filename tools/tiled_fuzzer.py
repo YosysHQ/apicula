@@ -158,10 +158,19 @@ class Sites:
                 r, c, ab = gowin_unpack.tbrl2rc(db, name)
                 self.iob.append((r, c, f'IOB{ab}', pin))
         rng.shuffle(self.iob)
+        # Most I/O logic needs the other pin of its tile free (nextpnr's
+        # check_iologic_placement: "already taken by harness_ib_in4"), so no
+        # case shares a tile with a harness pin. Filtered after the shuffle,
+        # which leaves the random draw as it was.
+        harness_tiles = {gowin_unpack.tbrl2rc(db, pinout[pin][0])[:2] for pin in harness}
+        self.iob = [s for s in self.iob if s[:2] not in harness_tiles]
         # IDES16/OSER16 need an "X16 location" (vendor PR2046): pin A of a tile
-        # whose io16 role is MAIN; the AUX tile beside it is used as well
-        self.iob16 = [s for s in self.iob if s[2] == 'IOBA'
-                      and db.extra_func.get(s[:2], {}).get('io16', {}).get('role') == 'MAIN']
+        # whose io16 role is MAIN; both pins of the AUX tile beside it must be
+        # free as well (nextpnr's check_io16_placement)
+        def x16(s):
+            io16 = db.extra_func.get(s[:2], {}).get('io16', {})
+            return io16.get('role') == 'MAIN' and (s[0] + io16['pair'][0], s[1] + io16['pair'][1]) not in harness_tiles
+        self.iob16 = [s for s in self.iob if s[2] == 'IOBA' and x16(s)]
         if not any('io16' in f for f in db.extra_func.values()):
             self.iob16 = self.iob  # no X16 data in the chipdb (GW5A): let the vendor say
         # differential pairs: A is the positive pin; TLVDS needs true-LVDS pins
