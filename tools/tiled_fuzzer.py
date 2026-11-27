@@ -219,6 +219,7 @@ def allocate(cases, sites):
     queues = collections.defaultdict(list)
     for case in cases:
         queues[case.site].append(case)
+    queues['dsp'].sort(key=lambda case: case.prim)
     by_batch = lambda b: [k for k, kind in KINDS.items() if kind.batch == b]
     # alone: one per design, placed by the tools
     batches = [[(case, None)] for k in by_batch('alone') for case in queues.pop(k, [])]
@@ -265,7 +266,13 @@ def allocate(cases, sites):
             else:
                 break
         for k in by_batch('shared'):
-            if k not in ('lut', 'dff'):
+            if k == 'dsp':
+                # DSP cases of one primitive per design: the vendor and nextpnr
+                # pack several into one block, whose macro-wide rows (PRAD_FBB1,
+                # IRMATCH) every case in it then owns
+                prim = queues[k][-1].prim if queues[k] else None
+                batch += [(queues[k].pop(), site) for site in sites.dsp if queues[k] and queues[k][-1].prim == prim]
+            elif k not in ('lut', 'dff'):
                 batch += [(queues[k].pop(), site) for site in getattr(sites, k) if queues[k]]
         batch += [(queues[k].pop(), None) for k in by_batch('single') if queues[k]]
         batches.append(batch)
@@ -974,6 +981,13 @@ class Dsp(Kind):
     so nextpnr places them. gowin_unpack decodes fuse-level modes only."""
     placement = 'nextpnr'
 
+    def source(self, case, port, conns):
+        # the vendor reads an undriven select as GND (getASELConNetFlag
+        # @0x1f9e1da, IDE 1.9.10.03), nextpnr as a dynamic one: drive it
+        if port in ('ASEL', 'BSEL'):
+            return 'data'
+        return super().source(case, port, conns)
+
     def ins_loc(self, case, site):
         row, n = site[0], site[3]
         return f'DSP_R{row + 1}[{n}][A]'
@@ -995,10 +1009,14 @@ class Dsp(Kind):
         if col not in cols:
             return None
         n = cols.index(col)
-        # DSP_R<row>[n][A|B]: the macro is the digit after the primitive name
-        macro = m.group(3)[len(case.prim):][:1]
+        # the digits after the primitive name are the macro and, for the 9- and
+        # 18-bit units, the slot in it: pin both, or the vendor picks another slot
+        macro, slot = (m.group(3)[len(case.prim):] + '__')[:2]
+        letters = {'MULT9X9': 'ABCD', 'PADD9': 'ABCD', 'MULT18X18': 'AB', 'PADD18': 'AB'}.get(case.prim)
         loc = f'DSP_R{row + 1}[{n}]'
-        if macro:
+        if letters and slot.isdigit():
+            loc = f'R{row + 1}C{col + 1}[{macro}][{letters[int(slot)]}]'
+        elif macro.isdigit():
             loc += f'[{"AB"[int(macro)]}]'
         return (row, col, 'DSP', n), loc
 

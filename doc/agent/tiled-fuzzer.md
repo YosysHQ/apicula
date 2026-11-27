@@ -155,7 +155,9 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
      `primitive.xml` default.
 2. **Batch.** Each case gets a site of its kind (a `Kind` class in
    `tiled_fuzzer.py`; see "Site kinds"). A slice holds two LUT cases or one DFF
-   case. Cases that must be alone get a design each.
+   case. Cases that must be alone get a design each. A design holds DSP cases
+   of one primitive: cases sharing a DSP block share its macro-wide rows
+   (`PRAD_FBB1`, `IRMATCH`), and a MULT next to a PADD differs there.
 3. **Run.** The same netlist and `.cst` go to both flows, at the same time unless
    one needs the other's placement. `-j` runs several designs at once.
    - vendor: `codegen.Pnr.run_pnr`, with placement fixed by `INS_LOC`;
@@ -280,7 +282,9 @@ What each kind relies on, checked by running both flows (IDE 1.9.10.03):
 
 - **Placement.** nextpnr ignores `INS_LOC`, so it gets `BEL` attributes. It
   ignores BEL, or crashes, for ALU clusters, SSRAM and DSP (`placement =
-  'nextpnr'`): nextpnr places them and the vendor gets the same place. The
+  'nextpnr'`): nextpnr places them and the vendor gets the same place, down
+  to the slot in the macro for `MULT9X9`/`PADD9` (`R<row>C<col>[macro][A–D]`)
+  and `MULT18X18`/`PADD18` (`[A|B]`); other DSP get the macro only. The
   vendor reports no position for `CLKDIV`/`CLKDIV2`, so nextpnr gets the bel
   read from the vendor's HCLK fuses; it ignores it, so HCLK settings are then
   compared without positions. Pads of other primitives (`lone`) get the pins
@@ -289,7 +293,9 @@ What each kind relies on, checked by running both flows (IDE 1.9.10.03):
   `CLKDIV2`, `DHCEN`, `DHCENC`, `DHCE` and `DCC` may only drive HCLK loads
   (PR2060) and not dangle (PA2099), so a harness `CLKDIV` follows them;
   `DLLSTEP` needs a DLL (PR2015, PR0015) and `DQSIN` a buffer (PR0014);
-  `OSCEN` must be driven, or the vendor clears `OSCZ` power rows.
+  `OSCEN` must be driven, or the vendor clears `OSCZ` power rows. DSP
+  `ASEL`/`BSEL` are driven: the vendor reads an undriven select as GND
+  (`getASELConNetFlag @0x1f9e1da`), nextpnr as a dynamic one.
 - **Fuse footprints:** BSRAM also uses the two tiles to its right, DSP its
   `DSP_AUX` tiles, an rPLL its `RPLLB` tiles, a GW5A PLL a bitstream slot, and
   I/O its bank tile.
