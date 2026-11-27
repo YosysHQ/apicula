@@ -22,7 +22,17 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
 **`gowin_pack`**
 - **I/O:**
   - one `IO_TYPE` per bank, where the vendor allows any standards of one
-    voltage (SSTL18 with HSTL18, SSTL33 with LVCMOS33);
+    voltage (SSTL18 with HSTL18, SSTL33 with LVCMOS33), and inputs of another
+    voltage (`IO_BANK` cases);
+  - an output without `IO_TYPE` gets LVCMOS12 in `gowin_pack` (#433)
+    (`Device.get_default_io_type`; only `GW5AST_138C` overrides it, with
+    LVCMOS33), LVCMOS18 in the vendor on GW1N/GW2A and LVCMOS33 on GW5A-25A
+    (its `top.io.cst`), so bank and `DRIVE` rows differ, and on GW5A-25A
+    gowin_pack stops with "Default IO_TYPE (LVCMOS12) and BANK_VCCIO
+    conflict" on a `BANK_VCCIO=3.3` the vendor accepts;
+  - attribute values the vendor calls illegal for the buffer's `IO_TYPE`
+    (CT1108: `DRIVE`, `OPEN_DRAIN`, `HYSTERESIS`, `PULL_MODE`, `BANK_VCCIO`)
+    are packed rather than rejected (status `accepted`);
   - unused-I/O `BANK_VCCIO` fuses, and bank-tile `IO_TYPE=…,IO_BANK` /
     `BLVDS…` rows;
   - `DRIVE,OPENDRAIN`, `ODMUX`, `PULLMODE`;
@@ -73,6 +83,10 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
     `DSP1` `AIRMUX`/`BIRMUX`/`IRMATCH` bits, attributed to both by tile
     (inferred: the `MULT18X18`'s); the same `ALU54D` case passes on GW1N-9C
     in that run;
+  - `MULTALU36X18` on GW2A-18C: CI's draw (seed 7) puts one in DSP block
+    (18, 37) with a `PADD18`, and it gets the `PADD18`'s `PRAD_MUXA1`,
+    `PRAD_FBB1` and `IRMATCH` rows, attributed by tile (inferred: the
+    `PADD18`'s); the same case passes in another block of the same run;
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`;
   - GW5A `MULTADDALU12X12`/`MULTALU27X18` with `ACC_SEL` or `C_SEL` omitted: the
@@ -147,8 +161,8 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
   the harness takes bank 1. nextpnr rejects `MIPI_IBUF*` anyway.
 - SiP-locked banks (GW1N-9C, GW1NS-4) get no I/O cases: the vendor moved
   outputs constrained there to other pins (CT1136, #622).
-- I/O attributes beyond IO_TYPE, PULL_MODE, HYSTERESIS, DRIVE, SLEW_RATE,
-  OPEN_DRAIN and DIFF_RESISTOR.
+- I/O attributes beyond IO_TYPE, BANK_VCCIO, PULL_MODE, HYSTERESIS, DRIVE,
+  SLEW_RATE, OPEN_DRAIN and DIFF_RESISTOR.
 
 ## Pipeline
 
@@ -316,6 +330,20 @@ What each kind relies on, checked by running both flows (IDE 1.9.10.03):
   the pad's I/O logic and no other case's (measured on GW1N-9C, GW2A-18C and
   GW5A-25A), so the fuses are compared at the `IOLOGIC` bel. The register's Q
   of `IOB_IREG` is left unconnected; both tools still pack it.
+- **I/O standards.** A single-ended buffer may omit `IO_TYPE`; the vendor then
+  uses LVCMOS18 on GW1N/GW2A and LVCMOS33 on GW5A (read from its
+  `top.io.cst` with an `OBUF` on GW1N-9C, GW2A-18C and GW5A-25A), and the
+  case is batched by that voltage. It may also set `BANK_VCCIO`, which
+  batches it by that voltage when it has no `IO_TYPE`. A case with no
+  attributes gets no `IO_PORT` line: the vendor rejects one without
+  attributes (CT2000).
+- **`IO_BANK`** is a pseudo-primitive: two or three single-ended buffers, each
+  with its own type and attributes, on pins of one bank that holds no harness
+  pin (`Sites.iobank`, at least three free pins). Buffer n is the param `IO<n>`
+  and its attributes `IO<n>_<attribute>`. It is alone in its design, so every
+  difference in its bank belongs to it. Outputs of different voltages in one
+  bank are rejected by the vendor (CT1136), as is a `BANK_VCCIO` that
+  contradicts an `IO_TYPE` (CT1108); see "Reject agreement".
 
 ## Running
 
@@ -385,7 +413,8 @@ is `accepted`, a failure.
   rejects any case: a rejection can name an innocent case. `CT1136` names the
   pad that loses the bank voltage, not the case that set it (seen with an
   `IBUF` `BANK_VCCIO=1.2` next to an `OBUF` without `IO_TYPE`, which the
-  vendor makes LVCMOS18, on GW1N-9C).
+  vendor makes LVCMOS18, on GW1N-9C). A message that names only a harness pad
+  names no case: it neither rejects a case nor splits the design.
 - Every other vendor error stays `invalid` and is skipped: those are rules of
   the harness or the netlist (PR2060, PR0018, PR1113, PA2085, ...).
 - A failing combination does not count if the vendor rejected one of its cases.
@@ -409,6 +438,8 @@ fails.
 | #622 | GW1N-9C | OBUF LVCMOS33 on pin 80 | CT1136, moves the pad | accepted |
 | #433 | GW2A-18C | OBUF on IOL47A, `BANK_VCCIO=3.3` without `IO_TYPE` | CT1108 | rejected |
 | #433 | GW2A-18C | OBUF on IOL47A, LVCMOS33 with `BANK_VCCIO=1.8` | CT1108 | rejected |
+| #433 | GW2A-18C, GW1N-9C | OBUF on IOL47A or pin 26, `BANK_VCCIO=1.8` without `IO_TYPE` | accepts (LVCMOS18) | unsupported |
+| — | GW1N-9C, GW2A-18C | `IO_BANK`: OBUF, IBUF and IOBUF, all LVCMOS33, on the first free bank | accepts | ok |
 
 ## Adding a primitive
 
@@ -423,101 +454,67 @@ Device-dependent parameter values go in `Primitives.fixed`. Rules involving seve
 parameters, such as the PLL VCO range in `gowin_pll.py`, are filters on the
 strategy.
 
-## Design: I/O cases and reject agreement (planned)
+## Evidence for the I/O cases and reject agreement
 
-Approved by Pepijn, not built yet. Measured with IDE 1.9.10.03, nextpnr
-b4faf934 and master e6dc4a6, through the fuzzer's own flow (`--replay` or
-`run_batch`) unless marked inferred. It builds on the `KNOWN` table
-(prim regex, device regex, predicate, reason) and lands as a stack of three
-pull requests in this order.
+How these cases work is in "Site kinds", "Reject agreement" and "Pinned
+cases". Measured with IDE 1.9.10.03, nextpnr b4faf934 and master e6dc4a6,
+through the fuzzer's own flow (`--replay` or `run_batch`) unless marked
+inferred.
 
-### 1. IOB registers (#668) — built
+### IOB registers (#668)
 
-The `IobReg` kind, the `-*reg_in_iob` options and the KNOWN entry are in
-place; see "Site kinds".
-
-- New kind `IobReg` for three pseudo-primitives, `IOB_IREG`, `IOB_OREG` and
-  `IOB_IOREG`. Params: `TYPE`, one of `DFFS` minus `UNAVAILABLE`, and `INIT`.
-  Wiring: pad→IBUF→DFF.D; DFF.Q→OBUF→pad; for IOREG one IOBUF with an input
-  and an output DFF of the same type and control nets.
-- Batch `io` (pool `iob`, LVCMOS33), placement `pin`, owner `IOLOGIC{A|B}`,
-  compared on fuses only.
-- `run_batch` adds, for each of these kinds in the batch, `-ireg_in_iob 1`,
-  `-oreg_in_iob 1` or `-ioreg_in_iob 1` to the vendor's `pnr.opt` (already in
-  `codegen.PnrOptions`) and `--vopt ireg_in_iob` etc. to nextpnr. This is safe
-  design-wide: no harness net and no other case puts a DFF next to a buffer.
-  nextpnr's `ioreg_in_iob` packs only IOBUFs, `ireg_in_iob` only IBUFs and
-  `oreg_in_iob` only OBUFs; the vendor's options pack the same way.
-- Measured: on GW1N-9C, GW2A-18C and GW5A-25A, with DFF, DFFR, DFFRE, DFFNCE,
-  DFFPE and DFFNS, both tools pack the DFF into the same IOLOGIC. Apicula lacks
+- On GW1N-9C, GW2A-18C and GW5A-25A, with DFF, DFFR, DFFRE, DFFNCE, DFFPE and
+  DFFNS, both tools pack the flip-flop into the same IOLOGIC. Apicula lacks
   `CLKIMUX`/`CLKOMUX=ENABLE`, `SRMODE=LSR_OVER_CE`, `CEIMUX_1`/`CEOMUX_1`,
   `OUTMODE=OREG`, `OREG_REGSET` and the `*_INREGMODE`/`OUTREGMODE` rows, and
   sets a stray `LSRxMUX_0`. No vendor DRC fired.
-- KNOWN: `IOB_(IREG|OREG|IOREG)`, all devices → `#668`.
+- nextpnr's `ioreg_in_iob` packs only IOBUFs, `ireg_in_iob` only IBUFs and
+  `oreg_in_iob` only OBUFs; the vendor's options pack the same way, so they
+  are passed for the whole design.
+- KNOWN: `IOB_IREG|IOB_OREG|IOB_IOREG`, all devices → #668.
 
-### 2. Reject agreement and pinned cases (#409, #433, #622) — built
+### Reject agreement (#409, #433, #622)
 
-See "Reject agreement". The `allocate()` guard is in; the empty `IO_PORT`
-line is fixed with section 3, the first change that can write one.
+- The vendor errors that stay `invalid`, all seen in CI: PR2060, PR0018,
+  PR0026, PR1113, PR1016, PR1079, PA2068, PA2050, PA2067, PR1082, PR0003/4,
+  PA2085, CT1094.
+- The pinned cases' vendor results are in the table under "Pinned cases". The
+  generator can't reach them: `ODIV_SEL` is an enum in `primitive.xml`,
+  `package_pins` avoids locked banks, and #433's cases need one fixed pin.
+- #622's IBUF: the vendor sets bank 3 to 1.8 V, Apicula to 3.3 V (the bank row
+  plus 70 IOB rows).
+- Harness bugs fixed on the way:
+  - `allocate()` looped forever (9.6 GB measured) on a device with no DSP
+    (GW1N-1, GW1NZ-1): a shared kind with an empty site pool never empties its
+    queue. Such kinds are skipped, as the I/O path already did. No CI device
+    lacks a site kind, so no test covers this.
+  - A case without `IO_PORT` attributes wrote `IO_PORT "x" ;`, which the
+    vendor rejects (CT2000). No line is written.
 
-- The vendor *rejects* a case when it writes no bitstream, or when it warns
-  with a validity code that names the case: `PA1002` (invalid parameter
-  value), `CT1108` (illegal port attribute), `CT1136` (pad moved for a
-  conflicting bank voltage). The vendor still writes a bitstream after those
-  warnings; Pepijn decided Apicula must not accept illegal values, so they
-  count as rejections. A code is attributed to a case by name prefix (CT1108
-  names the pad).
-- `REJECT_CODES = {'PA1002', 'CT1108', 'CT1136'}`. For a rejected case the
-  Apicula flow also runs (today it is skipped when the vendor fails). If Yosys,
-  nextpnr or `gowin_pack` exits non-zero, the case agrees; otherwise its
-  status is `accepted`, a failure.
-- Every other vendor error stays `invalid` and skipped: those are DRCs of the
-  harness or the netlist (PR2060, PR0018, PR0026, PR1113, PR1016, PR1079,
-  PA2068, PA2050, PA2067, PR1082, PR0003/4, PA2085, CT1094, all seen in CI).
-  A combination doesn't fail if any of its cases was rejected.
-- Pinned cases: `PINNED` in `tests/test_fuzz.py`, entries
-  `(device, prim, params, pads, issue, status)`, run as one replay design per
-  device by `test_pinned`. The vendor decides the outcome at run time; the
-  status says how a known bug fails. The generator can't reach these by itself:
-  `ODIV_SEL` is an enum in `primitive.xml`, and `package_pins` avoids locked
-  banks.
-  - #409: rPLL `ODIV_SEL=3` on GW1N-9C and GW2A-18C. Vendor PA1002; Apicula
-    accepts → `accepted`.
-  - #622: IBUF and OBUF LVCMOS33 on GW1N-9C pin 80 (bank 3). IBUF: the vendor
-    sets bank 3 to 1.8 V, Apicula to 3.3 V (bank row plus 70 IOB rows) →
-    mismatch. OBUF: vendor CT1136 (moves the pad), Apicula keeps it →
-    `accepted`.
-  - #433: OBUF @ IOL47A on GW2A-18C, `BANK_VCCIO=3.3` without IO_TYPE, and
-    `LVCMOS33` with `BANK_VCCIO=1.8`. Both are CT1108 in the vendor; Apicula
-    rejects both, so these pass and guard the agreement.
-- Harness bugs fixed here:
-  - `allocate()` loops forever (9.6 GB measured) on a device with no DSP
-    (GW1N-1, GW1NZ-1): a shared kind with an empty site pool never pops. Skip
-    shared kinds without sites, as the I/O path already does.
-  - A case without IO_PORT attributes writes `IO_PORT "x" ;`, which the vendor
-    rejects (CT2000). Write no line.
+### I/O standards and IO_BANK
 
-### 3. I/O standards: optional attributes and mixed banks
-
-- `io_case`: `IO_TYPE` becomes optional and `BANK_VCCIO` an optional
-  attribute. Without IO_TYPE the vendor uses LVCMOS18 on GW1N/GW2A and
-  LVCMOS33 on GW5A (read from its `top.io.cst`); `io_vccio` uses that.
-- Found on the way: an output without IO_TYPE gets LVCMOS12 in Apicula
-  (`get_default_io_type`), LVCMOS18 in the vendor; bank and IOB `DRIVE` rows
-  differ on GW1N-9C and GW2A-18C, GW5A-25A matches. KNOWN:
-  `OBUF|TBUF|IOBUF`, `GW1N|GW2A`, `'IO_TYPE' not in p` →
-  "default IO_TYPE (issue pending)".
-- New kind `IoBank` with pseudo-primitive `IO_BANK`: 2–3 buffers in one bank,
-  no harness pins, alone in its design. Each buffer has its own type, standard
-  and attributes as flattened params (`IO0`, `IO0_IO_TYPE`, …). Site selection
-  in `Sites` picks a bank with enough free pins.
-- Expected vendor DRCs: CT1136 (outputs of different VCCIO; the vendor moves
-  the pad) and CT1108 (BANK_VCCIO vs IO_TYPE), both rejections by section 2.
-- Measured: the vendor accepts, and Apicula rejects with `IO_TYPE conflict`,
-  LVCMOS33 + SSTL33_I + PCI33 in one bank; an LVCMOS33 output with an
-  LVCMOS18 input; an LVDS25 output with LVCMOS33 and LVCMOS25 inputs. Those
-  fail as `unsupported`; KNOWN: `IO_BANK` with mixed standards → one IO_TYPE
-  per bank.
+- Without `IO_TYPE` the vendor uses LVCMOS18 on GW1N/GW2A and LVCMOS33 on
+  GW5A-25A (its `top.io.cst`, with an `OBUF` on GW1N-9C, GW2A-18C and
+  GW5A-25A). `gowin_pack` uses LVCMOS12 (#433): bank and IOB `DRIVE` rows
+  differ, and with a `BANK_VCCIO` that fits the vendor's default (1.8 on
+  GW1N-9C and GW2A-18C, 3.3 on GW5A-25A) it stops with "Default IO_TYPE
+  (LVCMOS12) and BANK_VCCIO conflict". Covered by the generic I/O entry and
+  the `IO_BANK` entry; the 1.8 V cases are pinned.
+- The vendor accepts, and `gowin_pack` stops with `IO_TYPE conflict` on,
+  LVCMOS33 + SSTL33_I + PCI33 in one bank, an LVCMOS33 output with an LVCMOS18
+  input, and an LVDS25 output with LVCMOS33 and LVCMOS25 inputs.
+- `IO_BANK` has KNOWN entries of its own: explicit `IO_TYPE`s that differ (one
+  `IO_TYPE` per bank), an output without `IO_TYPE` (#433), and any attribute
+  besides `IO_TYPE` (the attribute rows and the untraced CT1108 legality
+  table). Buffers that share one explicit `IO_TYPE` and set nothing else must
+  pass on GW1N and GW2A: an `OBUF`, `IBUF` and `IOBUF`, all LVCMOS33, replay
+  `ok` on GW1N-9C and GW2A-18C. On GW5A-25A the same case, two LVCMOS33
+  `IBUF`s and two `IBUF`s without `IO_TYPE` all differ: a bank row of the
+  input-only bank, the outputs' IOB `PULLMODE`/`SLEWRATE`/`IOB_UNKNOWN67`
+  rows, and without `IO_TYPE` the `LVDS_OUT` rows of the bank's unused pins.
+  So `IO_BANK` keeps an `any_params` entry on GW5A.
+- `Sites.iobank` needs a bank with no harness pin and three free pins; on
+  GW1N-9C only bank 2 qualifies.
 
 ### Bugs not given a new test
 
@@ -536,7 +533,5 @@ No new CI device: every tracked bug except the fixed #547 shows on GW1N-9C,
 GW2A-18C or GW5A-25A. Local full runs at `-j 2` (count 2, seed 7): GW1N-9C
 635 s (156 designs, 12–13 min in CI), GW1N-1 586 s (195 designs), GW2A-18
 847 s (222 designs); inferred CI cost from the 9C ratio ≈1.2: GW1N-1 ≈12 min,
-GW2A-18 ≈17 min. Adding one later needs the `allocate()` guard and an
-`UNAVAILABLE` list first: 79 of 89 GW1N-1 invalids and 58 of 85 GW2A-18
-invalids are PA2085 (no resource). The new cases add about 5–8 designs,
-≈1 min, per CI device.
+GW2A-18 ≈17 min. Adding one later needs an `UNAVAILABLE` list first: 79 of 89
+GW1N-1 invalids and 58 of 85 GW2A-18 invalids are PA2085 (no resource).

@@ -47,6 +47,7 @@ import collections
 import concurrent.futures
 import copy
 import functools
+import itertools
 import json
 import os
 import random
@@ -195,6 +196,16 @@ class Sites:
         # emulated LVDS can use any differential pair
         self.elvds += self.tlvds
         rng.shuffle(self.elvds)
+        # banks without harness pins and with at least three free pins, for
+        # IO_BANK: (row, col, 'IOBA'|'IOBB', [pin, ...]) with the place of the
+        # first pin. Taken in the order of the shuffled pins, without a draw of
+        # its own, which leaves the random state as it was.
+        harness_banks = {db.pin_bank.get(pinout[pin][0]) for pin in harness}
+        by_bank = collections.defaultdict(list)
+        for s in self.iob:
+            by_bank[io_bank(db, s[0], s[1], s[2][-1])].append(s)
+        self.iobank = [(*s[0][:3], [p[3] for p in s[:3]]) for bank, s in by_bank.items()
+                       if bank not in harness_banks and len(s) >= 3]
 
 
 def io_bank(db, r, c, ab):
@@ -217,12 +228,12 @@ def io_pads(case, site):
     return [(IO_PAD[case.prim], site[3])]
 
 
-def io_class(batch):
+def io_class(batch, device):
     """Bank voltage shared by the I/O cases of a batch, or None."""
-    return next((ps.io_vccio(c) for c, _ in batch if KINDS[c.site].batch == 'io'), None)
+    return next((ps.io_vccio(c, device) for c, _ in batch if KINDS[c.site].batch == 'io'), None)
 
 
-def allocate(cases, sites):
+def allocate(cases, sites, device):
     """Split cases into batches and give each a site. Returns [[(case, site), ...]]."""
     queues = collections.defaultdict(list)
     for case in cases:
@@ -230,6 +241,13 @@ def allocate(cases, sites):
     by_batch = lambda b: [k for k, kind in KINDS.items() if kind.batch == b]
     # alone: one per design, placed by the tools
     batches = [[(case, None)] for k in by_batch('alone') for case in queues.pop(k, [])]
+    # bank: one per design, on pins of a bank of its own
+    for k in by_batch('bank'):
+        group, free = queues.pop(k, []), getattr(sites, k)
+        if group and not free:
+            print(f'no {k} sites for {sorted({c.prim for c in group})}; {len(group)} cases not run')
+        elif group:
+            batches += [[(case, free[i % len(free)])] for i, case in enumerate(group)]
     # wide LUT trees: in designs of their own, with no LUT INIT used twice in a design
     batch, inits = [], set()
     for case in queues.pop('widelut', []):
@@ -250,7 +268,7 @@ def allocate(cases, sites):
     for case in (case for k in by_batch('io') for case in queues.pop(k, [])):
         pool = (case.prim.split('_')[0].lower() if case.site == 'diob'
                 else 'iob16' if case.prim in ('IDES16', 'OSER16') else 'iob')
-        by_vccio[(ps.io_vccio(case), pool)].append(case)
+        by_vccio[(ps.io_vccio(case, device), pool)].append(case)
     for (_, pool), group in by_vccio.items():
         free = getattr(sites, pool)
         if not free:
@@ -1137,7 +1155,8 @@ class Io(Kind):
             conns[pad] = f'{name}_pad' + ('_n' if k else '')
             getattr(d.mod, PORT_LISTS[ports[pad][0]]).add(conns[pad])
             d.cst.ports[conns[pad]] = pin
-            d.cst.attrs[conns[pad]] = dict(case.params)
+            if case.params:  # the vendor rejects an IO_PORT line without attributes (CT2000)
+                d.cst.attrs[conns[pad]] = dict(case.params)
 
     def describe(self, dec, case, site):
         cell = dec.first(lambda typ: typ.endswith('BUF'), site, f'_{site[2][-1]}')
@@ -1229,6 +1248,32 @@ class IobReg(Kind):
             d.inst(typ, f'{name}_oreg', {**ctrl, 'D': next(src), 'Q': oq}, params.items())
         d.mod.wires.update([d_in, q])
         d.inst(typ, name, {**ctrl, 'D': d_in, 'Q': q}, params.items())
+        return True
+
+
+class IoBank(Kind):
+    """IO_BANK: two or three buffers on pins of one bank, (row, col,
+    'IOBA'|'IOBB', [pin, ...]) with the place of the first pin. Buffer n is
+    the param IO<n>, its IO_PORT attributes IO<n>_<attribute>. Alone in its
+    design and compared on fuses; differences on the bank's other pins belong
+    to it as the bank's only I/O case."""
+    batch = 'bank'
+    placement = 'pin'
+    cell_params = False
+
+    def wire(self, d, name, case, site, conns, sources):
+        params, src = dict(case.params), itertools.cycle(sources)
+        bufs = [prim for k, prim in sorted(params.items()) if re.fullmatch(r'IO\d', k)]
+        for n, (prim, pin) in enumerate(zip(bufs, site[3])):
+            ports, pad_port, pad = d.spec[prim]['ports'], IO_PAD[prim], f'{name}_io{n}_pad'
+            getattr(d.mod, PORT_LISTS[ports[pad_port][0]]).add(pad)
+            inputs = {port: next(src) for port, (direction, _) in ports.items()
+                      if direction == 'input' and port != pad_port}
+            d.inst(prim, f'{name}_io{n}', {pad_port: pad, **inputs})
+            d.cst.ports[pad] = pin
+            attrs = {k.split('_', 1)[1]: v for k, v in params.items() if k.startswith(f'IO{n}_')}
+            if attrs:
+                d.cst.attrs[pad] = attrs
         return True
 
 
@@ -1342,7 +1387,7 @@ class WideLut(Kind):
 
 # in allocation order within each batch class
 KINDS = {'clock': Clock(), 'lone': Lone(), 'widelut': WideLut(), 'alu': Alu(), 'ssram': Ssram(),
-         'iob': Io(), 'diob': Io(), 'iol': Iol(), 'iobreg': IobReg(), 'lut': Lut(), 'dff': Dff(),
+         'iob': Io(), 'diob': Io(), 'iol': Iol(), 'iobreg': IobReg(), 'iobank': IoBank(), 'lut': Lut(), 'dff': Dff(),
          'bsram': Bsram(), 'pll': Pll(), 'plla': Plla(), 'dsp': Dsp(), 'osc': Osc()}
 
 
@@ -1673,13 +1718,13 @@ def fuzz(device, out, count=2, seed=0, jobs=1, prims=None, replay=None, log=prin
         # dict.fromkeys drops repeated draws and, unlike a set, keeps their order
         cases = [c for p in names for c in dict.fromkeys(ps.draw(spec.case(p), count, seed))]
         rng.shuffle(cases)
-        batches = allocate(cases, sites)
+        batches = allocate(cases, sites, device)
     log(f'{sum(map(len, batches))} cases in {len(batches)} designs; pins {pins}')
 
     # Differences of the harness alone, with each harness I/O standard the
     # batches need. They are subtracted from the batches' differences.
     baselines = {}
-    for vccio in dict.fromkeys(map(io_class, batches)):
+    for vccio in dict.fromkeys(io_class(b, device) for b in batches):
         io_type = HARNESS_IO_TYPE.get(vccio)
         _, b = run_batch(device, db, spec.spec, pins, [], os.path.join(out, f'baseline_{io_type}'), None, io_type)
         if b is None:
@@ -1687,8 +1732,9 @@ def fuzz(device, out, count=2, seed=0, jobs=1, prims=None, replay=None, log=prin
         baselines[vccio] = b
 
     def run(i, batch):
+        vccio = io_class(batch, device)
         report, _ = run_batch(device, db, spec.spec, pins, batch, os.path.join(out, i),
-                              baselines[io_class(batch)], HARNESS_IO_TYPE.get(io_class(batch)))
+                              baselines[vccio], HARNESS_IO_TYPE.get(vccio))
         with open(os.path.join(out, i, 'report.json'), 'w') as f:
             json.dump(report, f, indent=1)
         return report
