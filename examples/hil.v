@@ -40,6 +40,8 @@
 `include "hil/dsp-multaddalu12x12.v"
 `include "hil/dsp-multalu27x18.v"
 `include "hil/dsp-mult27x36.v"
+`include "hil/carry-crt.v"
+`include "hil/iob-ireg.v"
 
 // The DSP tests have five 64-bit outputs; w is a 5*64-bit wire.
 `define DSP_PORTS(w) \
@@ -51,6 +53,9 @@
 (* top *)
 module top (
 	input wire clk,
+`ifdef HIL_iob_ireg
+	inout wire hil_pad,  // a pad that is safe to drive, see the board CSTs
+`endif
 	output wire TXD
 );
 
@@ -347,6 +352,14 @@ dsp_multalu27x18 multalu27x18_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(multalu27
 wire [5*64-1:0] mult27x36;
 dsp_mult27x36 mult27x36_i(.clk(dsp_clk), .reset(rst), `DSP_PORTS(mult27x36));
 `endif
+`ifdef HIL_carry_crt
+wire [2:0] carry_crt_pass;
+carry_crt_test carry_crt(.clk(clk), .rst(rst), .pass(carry_crt_pass));
+`endif
+`ifdef HIL_iob_ireg
+wire [2:0] iob_ireg_pass;
+iob_ireg_test iob_ireg(.clk(clk), .rst(rst), .pad(hil_pad), .pass(iob_ireg_pass));
+`endif
 
 // ---- Report rows ----
 // Row (slot, i) of the report. A test owns a slot of 8 rows; the slot number
@@ -637,6 +650,12 @@ always @* begin
 	`ROW(38, "dsp-mult27x36", 1, `DSP_OUT(mult27x36, 1))
 	`ROW(38, "dsp-mult27x36", 2, `DSP_OUT(mult27x36, 2))
 	`ROW(38, "dsp-mult27x36", 3, `DSP_OUT(mult27x36, 3))
+`endif
+`ifdef HIL_carry_crt
+	`ROW(41, "carry-crt", 0, carry_crt_pass)
+`endif
+`ifdef HIL_iob_ireg
+	`ROW(42, "iob-ireg", 0, iob_ireg_pass)
 `endif
 	default: ;
 	endcase

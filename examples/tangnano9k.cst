@@ -166,3 +166,8 @@ INS_LOC  "clk_div" TOPSIDE[0];
 
 IO_LOC  "div_led" 10;
 IO_PORT "div_led" IO_TYPE=LVCMOS18 PULL_MODE=NONE;
+
+// HIL pad self-readback (hil/iob-ireg.v): the test drives this pad and reads
+// it back. LED0: only its resistor and LED hang on it.
+IO_LOC  "hil_pad" 10;
+IO_PORT "hil_pad" IO_TYPE=LVCMOS18 PULL_MODE=NONE;

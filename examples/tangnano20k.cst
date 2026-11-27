@@ -148,3 +148,7 @@ IO_PORT "tmds_d_n[2]" IO_TYPE=LVDS25 PULL_MODE=NONE;
 IO_LOC  "div_led" 15;
 IO_PORT "div_led" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
 
+// HIL pad self-readback (hil/iob-ireg.v): the test drives this pad and reads
+// it back. LED0: only its resistor and LED hang on it.
+IO_LOC  "hil_pad" 15;
+IO_PORT "hil_pad" IO_TYPE=LVCMOS33 PULL_MODE=NONE;

@@ -26,24 +26,36 @@ reference `0x7`:
 - Every register is enabled once in 16 clocks (one sweep is 0.3 s at 27 MHz).
   The CRT paths miss 27 MHz by nextpnr's own timing (about 22 MHz), and a slow
   path must not pass for a wrong carry.
+- The carry flip-flops between chunks have no enable: a carry moves one chunk
+  per clock, and the check samples 15 clocks after the operands change. Over
+  the LFSRs' whole period (2^24 - 1 steps) the longest run of propagating
+  chunks is 12, so no carry needs more than 13 clocks (counted by simulation,
+  `ripple.py` in the stage-2 evidence).
 
 **Build.** `synth_gowin -nodsp` for this test only:
 `hil-carry-crt-%-synth.json: YOSYS_FLAGS += -nodsp`. Measured: with DSP
 products, shifted-add products, or unregistered residues, the design no longer
 caught #514 (below). `-nodsp` must not reach the DSP tests, so `carry-crt` is a
 batch of its own, listed directly in `HIL_BATCHES_*` for tangnano9k,
-tangnano20k and primer25k. Size: 2888 LUT4 + 1952 ALU, 56 % of the GW1N-9C.
+tangnano20k and primer25k. Size on the GW1N-9C: 2926 LUT4 (33 %) + 1978 ALU
+(30 %).
 
 **Diversity.** One placement per run. The `-r` seed changes every CI run, which
-over time covers placement-dependent bugs like #541; #514's class failed on
-every seed.
+over time covers placement-dependent bugs. Both bugs are placement-dependent
+in this design (below): a single run catches #514 in about 3 of 5 placements.
 
 **What it catches** (measured on the rig):
 
 | build | 9K | 20K | 25K |
 |---|---|---|---|
-| nextpnr main | 0x7 | 0x7 | 0x7 |
-| main with nextpnr #1736 (175787b2) reverted, the #514 bug | | 0x6 | |
+| nextpnr main, seed 1 | 0x7 | 0x7 | 0x7 |
+| nextpnr main, 20K seeds 2–5 | | 0x7 ×4 | |
+| main with nextpnr #1736 (175787b2) reverted, the #514 bug, seeds 1–5 | | 0x7, 0x6, 0x6, 0x7, 0x6 | |
+| #541 emulated (below), seeds 1–5 | | 0x5 ×5 | |
+
+The design stage's prototype with 4-bit chunks failed with #1736 reverted at
+seed 1 (0x6, reloaded in stage 2); with 2-bit chunks seed 1 passes, so the
+#514 catch depends on placement too.
 
 - #514 is fixed on nextpnr main; the test is a regression guard. The issue's
   kit `rad_min_uart` agrees: main passes, the reverted build fails with the
@@ -57,27 +69,35 @@ every seed.
   is that commit's diff. With 4-bit chunks this was caught in 1 of 4
   placements (`0x5`). Bisecting the heads: the leak comes from heads whose west
   ALU5 is empty; heads next to another chain's tail did not leak. Hence 2-bit
-  chunks, for more heads.
+  chunks, for more heads (23 carry-from-logic heads).
 
-**Gate on the #541 part** (decided by the coordinator): stage 2 measures the
-emulated #541 detection with 2-bit chunks over 5 seeds on the 20K. If it is
-caught in fewer than about half, drop the chunked add, and say so in the pull
-request.
+**Gate on the #541 part** (decided by the coordinator): stage 2 measured the
+emulated #541 with 2-bit chunks over 5 seeds on the 20K: caught in 5 of 5
+(`0x5`), with every seed's unpatched build at `0x7`. The chunked add stays.
 
 ## `iob-ireg`: an input register in the pad's I/O logic
 
 **Design.** `examples/hil/iob-ireg.v`, module `iob_ireg_test`, report 3 bits,
 reference `0x7`. A counter bit drives a pad through an `(* IOBFF *) IOBUF`
 (`OEN=0`), and the same pad's input buffer feeds a flip-flop that nextpnr packs
-into the pad's IOLOGIC. The register must equal the driven value one clock
-later. `pass[0]`: never disagreed; `pass[1]`: read a 1; `pass[2]`: read a 0.
+into the pad's IOLOGIC. The register must equal the driven value.
+`pass[0]`: never disagreed; `pass[1]`: read a 1; `pass[2]`: read a 0.
 #668 shows as `0x4`: the register stuck at 0.
+
+Stage 2 changed when it checks. The pad changes every 8 clocks and is checked
+only in the last 2 of them, and only from 1024 clocks after reset. The
+design-stage version (a one-clock check from the second clock) failed its own
+control on the 25K: `0x6` with the register in the fabric, and so did the
+8-clock window alone. A diagnostic build with the window, reporting mismatch
+times and levels, found them all early: the pad read 1 while 0 was driven,
+between clocks 6 and 39 after reset, and never after. With the warm-up the
+25K control passes. The 9K and 20K controls passed in every version.
 
 **No `ioreg_in_iob` batch.** nextpnr packs per cell when the IOBUF has the
 `IOBFF` attribute (read from `pack_io.cc`), so the test needs no
 `--vopt ioreg_in_iob`, which would apply to the whole batch.
 
-**Pad.** `hil.v` gets an `` `ifdef HIL_IOB_IREG `` `inout hil_pad` on `top`,
+**Pad.** `hil.v` gets an `` `ifdef HIL_iob_ireg `` `inout hil_pad` on `top`,
 constrained in each board's CST:
 
 | board | pad | why it is safe |
@@ -89,13 +109,13 @@ constrained in each board's CST:
 The SDRAM DQ0 that #668 used was rejected: its safety rests on CS_n. Header pins
 were avoided because #651 will wire them.
 
-**Measured:** 9K and 20K `0x4` with `IOBFF`, `0x7` without (register in the
-fabric). The 25K builds with IOLOGICI packed but was not loaded.
+**Measured** (final version, one load each): 9K, 20K and 25K `0x4` with
+`IOBFF` (one IOLOGICI packed), `0x7` without (register in the fabric). The
+25K's symptom is #668's; its cause in the GW5A packer was not traced.
 
-**Batch.** `HIL_BROKEN_tangnano9k` and `HIL_BROKEN_tangnano20k`, comment `#668`.
-For the 25K, stage 2 loads it once: `0x7` puts it in `gw5a-a`, anything else in
-`HIL_BROKEN_primer25k` with `#668`. Once #668 is fixed, it moves into `gw1n9-a`
-and `gw2a-a`; it is a few cells.
+**Batch.** `HIL_BROKEN_tangnano9k`, `HIL_BROKEN_tangnano20k` and
+`HIL_BROKEN_primer25k`, comment `#668`. Once #668 is fixed, it moves into
+`gw1n9-a`, `gw2a-a` and `gw5a-a`; it is a few cells.
 
 ## #534 is not testable on the rig
 
