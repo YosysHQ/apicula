@@ -34,7 +34,7 @@ jobs:
         pip install "dist/apycula-$(python setup.py --version)-py3-none-any.whl"
         gowin_pack --help
     - name: Run the unit tests
-      # tests/test_fuzz.py runs nothing without --device; see toolchain.yml.
+      # tests/test_fuzz.py and tests/test_roundtrip.py run nothing without --device; see toolchain.yml.
       run: |
         pip install pytest hypothesis==6.170.15
         python -m pytest tests -ra

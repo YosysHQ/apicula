@@ -25,6 +25,8 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
   allowed values from the IDE's `primitive.xml`, compared with Yosys' cell library.
 - [tiled-fuzzer.md](tiled-fuzzer.md): comparing Apicula with the vendor on random
   primitive configurations, and what the comparison has to allow for.
+- [roundtrip.md](roundtrip.md): proving the unpacked bitstream equivalent to the
+  synthesised netlist on random designs, and what that cannot see.
 - [hand-written-tables.md](hand-written-tables.md): which Apicula tables have a
   vendor source, and what each `logicinfo` table is for.
 
