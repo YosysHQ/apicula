@@ -152,3 +152,20 @@ IO_PORT "div_led" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
 // it back. LED0: only its resistor and LED hang on it.
 IO_LOC  "hil_pad" 15;
 IO_PORT "hil_pad" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+
+// HIL same-pin I/O (hil/io-readback.v): each test drives its pads and reads
+// them back. hil_rb: free pins in banks 4, 3 and 5 (32 goes only to the empty
+// LCD connector), their PULL_MODE as io_readback_test expects. The others are
+// LEDs.
+IO_LOC  "hil_rb[0]" 42;
+IO_PORT "hil_rb[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC  "hil_rb[1]" 48;
+IO_PORT "hil_rb[1]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+IO_LOC  "hil_rb[2]" 32;
+IO_PORT "hil_rb[2]" IO_TYPE=LVCMOS33 PULL_MODE=KEEPER;
+IO_LOC  "hil_st" 16;
+IO_PORT "hil_st" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC  "hil_ddr" 17;
+IO_PORT "hil_ddr" IO_TYPE=LVCMOS33 PULL_MODE=NONE;
+IO_LOC  "hil_ser4" 19;
+IO_PORT "hil_ser4" IO_TYPE=LVCMOS33 PULL_MODE=NONE;

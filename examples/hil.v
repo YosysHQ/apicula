@@ -42,6 +42,7 @@
 `include "hil/dsp-mult27x36.v"
 `include "hil/carry-crt.v"
 `include "hil/iob-ireg.v"
+`include "hil/io-readback.v"
 
 // The DSP tests have five 64-bit outputs; w is a 5*64-bit wire.
 `define DSP_PORTS(w) \
@@ -55,6 +56,19 @@ module top (
 	input wire clk,
 `ifdef HIL_iob_ireg
 	inout wire hil_pad,  // a pad that is safe to drive, see the board CSTs
+`endif
+// The pads of the same-pin I/O tests (hil/io-readback.v), see the board CSTs
+`ifdef HIL_io_readback
+	inout wire [2:0] hil_rb,  // PULL_MODE UP, DOWN, KEEPER
+`endif
+`ifdef HIL_io_startup
+	inout wire hil_st,
+`endif
+`ifdef HIL_io_ddr
+	inout wire hil_ddr,
+`endif
+`ifdef HIL_io_ser4
+	inout wire hil_ser4,
 `endif
 	output wire TXD
 );
@@ -360,6 +374,22 @@ carry_crt_test carry_crt(.clk(clk), .rst(rst), .pass(carry_crt_pass));
 wire [2:0] iob_ireg_pass;
 iob_ireg_test iob_ireg(.clk(clk), .rst(rst), .pad(hil_pad), .pass(iob_ireg_pass));
 `endif
+`ifdef HIL_io_readback
+wire [11:0] io_readback_pass;
+io_readback_test io_readback(.clk(clk), .rst(rst), .pad(hil_rb), .pass(io_readback_pass));
+`endif
+`ifdef HIL_io_startup
+wire [2:0] io_startup_pass;
+io_startup_test io_startup(.clk(clk), .rst(rst), .pad(hil_st), .pass(io_startup_pass));
+`endif
+`ifdef HIL_io_ddr
+wire [2:0] io_ddr_pass;
+io_serdes_test #(.N(2)) io_ddr(.clk(clk), .rst(rst), .pad(hil_ddr), .pass(io_ddr_pass));
+`endif
+`ifdef HIL_io_ser4
+wire [2:0] io_ser4_pass;
+io_serdes_test #(.N(4)) io_ser4(.clk(clk), .rst(rst), .pad(hil_ser4), .pass(io_ser4_pass));
+`endif
 
 // ---- Report rows ----
 // Row (slot, i) of the report. A test owns a slot of 8 rows; the slot number
@@ -656,6 +686,18 @@ always @* begin
 `endif
 `ifdef HIL_iob_ireg
 	`ROW(42, "iob-ireg", 0, iob_ireg_pass)
+`endif
+`ifdef HIL_io_readback
+	`ROW(43, "io-readback", 0, io_readback_pass)
+`endif
+`ifdef HIL_io_startup
+	`ROW(44, "io-startup", 0, io_startup_pass)
+`endif
+`ifdef HIL_io_ddr
+	`ROW(45, "io-ddr", 0, io_ddr_pass)
+`endif
+`ifdef HIL_io_ser4
+	`ROW(46, "io-ser4", 0, io_ser4_pass)
 `endif
 	default: ;
 	endcase

@@ -26,7 +26,8 @@ checked against data, or inferred. Correct them when they turn out to be wrong.
 - [tiled-fuzzer.md](tiled-fuzzer.md): comparing Apicula with the vendor on random
   primitive configurations, and what the comparison has to allow for.
 - [hil-carry-pad.md](hil-carry-pad.md): HIL self-checks without loopback wiring:
-  carry chains by CRT arithmetic, and a pad read back into its own I/O logic.
+  carry chains by CRT arithmetic, and pads read back by their own I/O logic
+  (input register, read-back, pulls, DDR, SER4).
 - [hand-written-tables.md](hand-written-tables.md): which Apicula tables have a
   vendor source, and what each `logicinfo` table is for.
 
