@@ -246,4 +246,9 @@ IO_PORT "adc_4_p"    IO_TYPE=ADC_IN PULL_MODE=NONE BANK_VCCIO=3.3;
 IO_LOC  "adc_4_n"    K5;
 IO_PORT "adc_4_n"    IO_TYPE=ADC_IN PULL_MODE=NONE BANK_VCCIO=3.3;
 
+// HIL pad self-readback (hil/iob-ireg.v): the test drives this pad and reads
+// it back. A Dock PMOD pin; nothing is plugged into the rig board.
+IO_LOC  "hil_pad" G5;
+IO_PORT "hil_pad" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
 // vim: set et sw=4 ts=4:

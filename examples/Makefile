@@ -24,10 +24,11 @@ HIL_BATCH_gw1n9-bsram-b := bsram-sdp2 bsram-dp
 # userflash is in no batch: every load erases a flash page (10,000 cycles).
 # Run it alone, as make hil-userflash-tangnano9k.
 HIL_BATCHES_tangnano9k := gw1n9-a gw1n9-b gw1n9-c gw1n9-d gw1n9-e \
-	gw1n9-clk-a gw1n9-clk-b gw1n9-bsram-a gw1n9-bsram-b
+	gw1n9-clk-a gw1n9-clk-b gw1n9-bsram-a gw1n9-bsram-b carry-crt
 # Known broken, in no batch; make hil-tangnano9k-broken runs them.
 # dhcen: #648. bsram-sp, bsram-dp16, bsram-sdp: byte enables, #652.
-HIL_BROKEN_tangnano9k := dhcen bsram-sp bsram-dp16 bsram-sdp
+# iob-ireg: the input register in the pad's I/O logic reads 0, #668.
+HIL_BROKEN_tangnano9k := dhcen bsram-sp bsram-dp16 bsram-sdp iob-ireg
 
 HIL_BATCH_gw2a-a := latch dsp-mult36x36 dsp-multalu36x18 dsp-multalu18x18 dsp-multaddalu18x18
 HIL_BATCH_gw2a-b := dsp-alu54d dsp-mult9x9 dsp-padd9 dsp-padd18
@@ -38,11 +39,14 @@ HIL_BATCH_gw2a-clk-a := osc dqce dcs rpll
 HIL_BATCH_gw2a-clk-b := clkdiv
 HIL_BATCH_gw2a-clk-c := dhcen
 HIL_BATCH_gw2a-bsram := bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp2 bsram-dp bsram-dp16
-HIL_BATCHES_tangnano20k := gw2a-a gw2a-b gw2a-c gw2a-clk-a gw2a-clk-b gw2a-clk-c gw2a-bsram
+HIL_BATCHES_tangnano20k := gw2a-a gw2a-b gw2a-c gw2a-clk-a gw2a-clk-b gw2a-clk-c gw2a-bsram \
+	carry-crt
 # Known broken, in no batch; make hil-tangnano20k-broken runs them.
 # bsram-sdp: SDPX9B byte enables fail at some BSRAM sites, #647.
 # *-bugs: the BSRAM failures of #649; bsram-dp-bugs crashes nextpnr, #650.
-HIL_BROKEN_tangnano20k := bsram-sdp bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs
+# iob-ireg: the input register in the pad's I/O logic reads 0, #668.
+HIL_BROKEN_tangnano20k := bsram-sdp bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs \
+	iob-ireg
 
 HIL_BATCH_gw5a-a := latch lut8 alu rom16 big-shift osc
 # The clock tests each alone: with too many PLL clocks on global wires (plla
@@ -56,7 +60,10 @@ HIL_BATCH_gw5a-clk-c := plla2
 HIL_BATCH_gw5a-bsram := bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp bsram-sdp2 bsram-dp bsram-dp16 \
 	bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs
 HIL_BATCH_gw5a-dsp := dsp-mult12x12 dsp-multaddalu12x12 dsp-multalu27x18 dsp-mult27x36 dsp-casisel
-HIL_BATCHES_primer25k := gw5a-a gw5a-clk-a gw5a-clk-b gw5a-clk-c gw5a-bsram gw5a-dsp
+HIL_BATCHES_primer25k := gw5a-a gw5a-clk-a gw5a-clk-b gw5a-clk-c gw5a-bsram gw5a-dsp carry-crt
+# Known broken, in no batch; make hil-primer25k-broken runs them.
+# iob-ireg: the input register in the pad's I/O logic reads 0, as in #668.
+HIL_BROKEN_primer25k := iob-ireg
 # The other GW5A boards are not on a bench: build-only, from gw5a/Makefile.
 # GW5AT-60B: nextpnr asserts on dcs ("No clock inputs"), cannot place
 # dsp-mult27x36, and fails to route the BSRAM inputs of six bsram tests
@@ -75,6 +82,11 @@ HIL_BATCHES_tangconsole138k := gw5ast-a gw5a-bsram
 # every target with the local and with CI's dev nextpnr.
 hil-%-tangconsole60k.json hil-%-tangmega138k.json hil-%-tangconsole138k.json: \
 	NEXTPNR_FLAGS = --timing-allow-fail --seed 1
+
+# carry-crt checks carry chains: without DSPs its products are built from
+# ALUs, and only then did it catch #514. Being its own batch, -nodsp reaches
+# no DSP test.
+hil-carry-crt-%-synth.json: YOSYS_FLAGS += -nodsp
 
 .DEFAULT_GOAL := all
 
