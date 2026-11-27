@@ -610,7 +610,7 @@ def fuse_rows(db, r, c, bit):
                          f'{vals.get(li[abs(k)][1], li[abs(k)][1])}' for k in key if k and abs(k) in li]
                 out.append(f'{name}: ' + ','.join(terms))
     out += [f'{bel}.{flag}' for bel, b in db[r, c].bels.items() for flag, bits in b.flags.items() if bit in bits]
-    return sorted(set(out), key=lambda row: (len(row), row))[:3]
+    return sorted(set(out), key=len)[:3]
 
 
 # ---------------------------------------------------------------- unpacked netlists

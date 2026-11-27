@@ -44,8 +44,8 @@ KNOWN = [
     ('(TLVDS|ELVDS)_(IBUF|OBUF|TBUF|IOBUF)', ALL, any_params,
      'differential I/O: placement on true LVDS pins, ELVDS and bank rows; they decode as single-ended'),
     ('TLVDS_(OBUF|TBUF|IOBUF)', 'GW2A', any_params,
-     '#534: a TLVDS output sets IOB BANK_VCCIO on its bank, and the bank tile\'s LVDS25 rows differ from the '
-     'vendor\'s'),
+     '#534 (the freeze is reported with a TLVDS output): a TLVDS buffer sets IOB BANK_VCCIO on its bank, and '
+     'the bank tile\'s LVDS25 rows differ from the vendor\'s; TLVDS_IBUF shows the same rows'),
     ('IDDR|IDDRC|ODDR|ODDRC', ALL, any_params,
      'I/O logic: IDDR/IDDRC and ODDR/ODDRC unpack as each other; ODDR OUTMODE; on GW5A-25A, FCLKSEL, IOB and '
      'HCLK TO_IHCLK rows'),

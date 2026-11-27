@@ -50,12 +50,20 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
     `BIT_WIDTH_1` ("The fix for SDP when ports A and B have different bit
     widths has not yet been implemented");
   - byte enables (`BELB`/`BEHB`) of the 16/18-bit port of a `DPB`/`DPX9B`
-    with mixed port widths.
+    with mixed port widths: Apicula enables them, the vendor does not. Seeds 2
+    and 3 (`-n 20`) on GW1N-9C and GW2A-18C: 14 of 14 such cases differ per
+    device, while the 4 mixed-width `DPB` cases without a 16-bit port and all
+    equal-width cases pass.
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
 - **DSP:**
   - GW1N/GW2A input register muxes (`AIRMUX`/`BIRMUX`), `RSTGEN*MUX`, and the
     pre-adder `PRAD_MUXA1`/`PRAD_MUXB`/`PRAD_FBB1`/`IRMATCH` rows;
+  - `ALU54D` on GW1N-9C: CI's all-default case differs in the `DSP1`
+    `IRMATCH`/`PRAD` rows on every run, but the same case and 9 others pass
+    in a seed-2 run with ALU54D and DCS alone, so the trigger is not in the
+    parameters (inferred: the site or the other cases of the design). On
+    GW2A-18C `ALU54D` matches: 4 distinct cases in CI and 10 at seed 2;
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`;
   - GW5A `MULTADDALU12X12`/`MULTALU27X18` with `ACC_SEL` or `C_SEL` omitted: the
@@ -66,7 +74,8 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
 - **GW5A `TLVDS_IBUF_ADC`** on the vendor's pins raises "IO(0, 0) has ADC bus 0,
   but used in bus 2". `ADC` itself matches the vendor in every case since the
   fuzzer omits parameters (bd8c167); an earlier `5A_PCLK_ENABLE` difference
-  did not come back in 16 cases.
+  did not come back in the 6 distinct cases the vendor has accepted since
+  (CI's seed 7 and a seed-3 run on GW5A-25A; it rejected 7 more).
 - **`I3C_IOBUF`** (GW1N-9C): the vendor sets `DRIVE`/`OPENDRAIN` rows in IOBB that
   Apicula does not. **`MIPI_OBUF`**: Apicula sets an `IO_TYPE=…` IOB row and the
   vendor a bank row instead.
