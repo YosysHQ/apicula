@@ -251,4 +251,20 @@ IO_PORT "adc_4_n"    IO_TYPE=ADC_IN PULL_MODE=NONE BANK_VCCIO=3.3;
 IO_LOC  "hil_pad" G5;
 IO_PORT "hil_pad" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
 
+// HIL same-pin I/O (hil/io-readback.v): each test drives its pads and reads
+// them back. Dock PMOD pins; hil_rb in banks 1, 6 and 7, their PULL_MODE as
+// io_readback_test expects.
+IO_LOC  "hil_rb[0]" F5;
+IO_PORT "hil_rb[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "hil_rb[1]" D11;
+IO_PORT "hil_rb[1]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN BANK_VCCIO=3.3;
+IO_LOC  "hil_rb[2]" G11;
+IO_PORT "hil_rb[2]" IO_TYPE=LVCMOS33 PULL_MODE=KEEPER BANK_VCCIO=3.3;
+IO_LOC  "hil_st" K11;
+IO_PORT "hil_st" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC  "hil_ddr" G7;
+IO_PORT "hil_ddr" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC  "hil_ser4" B11;
+IO_PORT "hil_ser4" IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+
 // vim: set et sw=4 ts=4:

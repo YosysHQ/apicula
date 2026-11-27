@@ -154,9 +154,9 @@ same pins:
   SER4 offset of 25 was close to the old limit of 29. Row bits: [0] checks
   ran, [1] some offset hypothesis survived, [2] a survivor has D0 sent first and
   Q0 oldest. Reference `0x7`; #680 shows as `0x1`.
-  - Bit [2]'s reference is the vendor bitstream on the 25K. Stage 2 confirms it
-    with one vendor build each on the 9K and 20K (the spike's `vendor.sh`,
-    device and pins changed), or drops the bit.
+  - Bit [2]'s reference: vendor builds of the final test (GowinSynthesis and
+    PnR from `hil.v`, IDE 1.9.10.03) give `0x7` on the 9K, 20K and 25K, one
+    load each.
 
 **Settle.** Every check starts 2^16 clocks after `rst` (1.3 ms at 50 MHz),
 except `io-startup`. In 4 recorded 25K loads every wrong read ended by clock
@@ -165,8 +165,8 @@ except `io-startup`. In 4 recorded 25K loads every wrong read ended by clock
 **Clocks.** FCLK = the board clock (27 or 50 MHz), PCLK = FCLK/2 from a fabric
 flip-flop. The spike measured this, the vendor passes with it, and it uses no
 HCLK or CLKDIV (the clock-divider test must stay alone on its divider).
-nextpnr warns of a PCLK hold violation for SER4, as in the spike; the round
-trip still passes on the 9K and 20K.
+PCLK clocks only the I/O logic: the sender and the checker run on the board
+clock and work one clock after each PCLK rise (stage 2, below).
 
 **Pins.** None of #651's proposed loop pins, so later wiring cannot short two
 drivers. The pulls go on unconnected pins; the actively driven tests (DDR,
@@ -182,7 +182,7 @@ SER4, startup) go on LEDs, harmless to drive (as `iob-ireg`).
 | startup | 11, LED, IOL16B, LVCMOS18 | 16, LED1, IOL47B | K11, IOT11A, B7 |
 
 The readback, DDR and SER4 pins were loaded on the rig in the batch-fit builds
-below (the 25K's from the spike); the startup pins and the 25K's B11 were not.
+below (the 25K's from the spike); stage 2 loaded all of them.
 
 **Plumbing.** `hil.v` gets `inout [2:0] hil_rb`, `inout hil_st`,
 `inout hil_ddr` and `inout hil_ser4`, each under its test's `ifdef` like
@@ -195,6 +195,9 @@ below (the 25K's from the spike); the startup pins and the 25K's B11 were not.
 - 20K `gw2a-c` += the same four.
 - 25K `gw5a-a` += readback, ddr. `HIL_BROKEN_primer25k` += `io-ser4` (#680)
   and `io-startup` (#681).
+- The Tang Console 60K (build-only) built `gw5a-a` too. Its CST has no pins
+  for the new pads, and nextpnr refuses an unconstrained IO, so it gets
+  `gw5at-a`, the old `gw5a-a` list.
 
 Measured fit (seed 1, one load each, with the spike's modules): 9K
 `dsp-padd9` with pads, DDR and SER4 at LUT4 20 %, DFF 17 %; 20K
@@ -204,14 +207,41 @@ reference. Pads, DDR and SER4 passed on the 9K and 20K; on the 25K DDR passed
 and the pads showed #681 again (27 wrong reads per pad, the last at clock
 0x3000). nextpnr placed ODDR/IDDR and OSER4/IDES4 in the LED pins' IOLOGIC.
 
-**Stage 2 test plan.**
+**Stage 2 results.** Toolchain: nextpnr b4faf934, Yosys 0.70+ fbe6f4d66, this
+branch's Apicula; one rig load per result.
 
-- Prove each check can fail: a wrong `PULL` parameter, an inverted read-back,
-  a wrong order expectation.
-- Build each batch over 5 seeds per board and load it.
-- `make hil-primer25k-broken`: XFAIL for `io-ser4` and `io-startup`.
-- `io-startup` passes on the 9K and 20K.
-- Rebuild master's untouched batches and confirm they are byte-identical.
+- Each batch at seeds 1–5 (and the 20K at 6–10) matched its references:
+  `gw1n9-e`, `gw2a-c` and `gw5a-a` pass on all 20 placements.
+- Controls, one build per board with three mutations (pad 0 expects DOWN,
+  read-back compared inverted, order bit on the Q(N-1)-oldest group): rows
+  `0xee6`, `0x6`, `0x3`, `0x3` on the 9K and 20K, `0xee6` and `0x3` on the 25K,
+  as predicted.
+- `make hil-primer25k-broken`: XFAIL for `iob-ireg`, `io-ser4` (`0x1`) and
+  `io-startup` (`0x6`).
+- Vendor builds of the four tests pass on all three boards (`0xfff`, `0x7`).
+
+The first round of seeds found two races in the test itself, on the 20K:
+
+- `io-readback` read `0x7ff` (the keeper's windows wrong) at one seed, 3 of 3
+  loads. Its IOB fuses matched a passing build; only the routing of the
+  pad's I and OEN differed. `drv` changed together with `oen` at the start of
+  the after-1 window, so the pad could see I = 0 before it was released, and
+  the keeper held 0 [inferred]. `drv` now keeps its value through the
+  tristate phase.
+- `io-ser4` read `0x1` at another seed, 1 of 3 loads. nextpnr reported up to 12
+  hold violations from the fabric PCLK's skew (up to 2.4 ns) in the checker's
+  registers. The sender and checker now run on the board clock and work one
+  clock after each PCLK rise; PCLK clocks only the I/O logic. OSER4 loads D on
+  PCLK's rising edge and IDES4 updates Q on it in the vendor's simulation
+  models (`IDE/simlib/{gw1n,gw2a,gw5a}/prim_sim.v`), so both words are half a
+  PCLK from their edge. No build since reports a hold violation.
+
+Untouched batches built from #673's branch and this one at seed 1 are
+byte-identical (`gw2a-a`, `gw5a-dsp`, `gw5a-bsram`, `carry-crt` on the 20K,
+`blinky` on the 9K), except `gw1n9-a` on the 9K: Yosys numbers its internal
+names (`$proc$…`) across all modules read, and the new modules shift them.
+Without the `include` of `hil/io-readback.v`, `gw1n9-a` is byte-identical too.
+The branch's `gw1n9-a` passes on the 9K.
 
 Out of scope, with #651: the pin-pair serialisers (OSER8/10, OVIDEO, OSER16),
 IODELAY/IEM and differential I/O.

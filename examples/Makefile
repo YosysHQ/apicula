@@ -13,7 +13,7 @@ HIL_BATCH_gw1n9-a := latch dsp-multalu36x18 dsp-multalu18x18
 HIL_BATCH_gw1n9-b := dsp-mult36x36 dsp-multaddalu18x18
 HIL_BATCH_gw1n9-c := dsp-alu54d dsp-mult18x18
 HIL_BATCH_gw1n9-d := dsp-padd18 dsp-mult9x9
-HIL_BATCH_gw1n9-e := dsp-padd9
+HIL_BATCH_gw1n9-e := dsp-padd9 io-readback io-startup io-ddr io-ser4
 # Clock tests: nextpnr runs out of global clock routing with clkdiv and the
 # others together, and crashes on dhcen next to dqce or dcs.
 HIL_BATCH_gw1n9-clk-a := osc dqce dcs rpll
@@ -34,7 +34,8 @@ HIL_BATCH_gw2a-a := latch dsp-mult36x36 dsp-multalu36x18 dsp-multalu18x18 dsp-mu
 HIL_BATCH_gw2a-b := dsp-alu54d dsp-mult9x9 dsp-padd9 dsp-padd18
 # Alone, so its SOA chain starts inside a DSP macro: on GW2A the cascade from
 # the first multiplier breaks when nextpnr puts it across a macro boundary.
-HIL_BATCH_gw2a-c := dsp-mult18x18
+# The I/O tests use no DSP.
+HIL_BATCH_gw2a-c := dsp-mult18x18 io-readback io-startup io-ddr io-ser4
 HIL_BATCH_gw2a-clk-a := osc dqce dcs rpll
 HIL_BATCH_gw2a-clk-b := clkdiv
 HIL_BATCH_gw2a-clk-c := dhcen
@@ -48,7 +49,9 @@ HIL_BATCHES_tangnano20k := gw2a-a gw2a-b gw2a-c gw2a-clk-a gw2a-clk-b gw2a-clk-c
 HIL_BROKEN_tangnano20k := bsram-sdp bsram-rom-bugs bsram-sp-bugs bsram-sdp-bugs bsram-dp-bugs \
 	iob-ireg
 
-HIL_BATCH_gw5a-a := latch lut8 alu rom16 big-shift osc
+HIL_BATCH_gw5a-a := latch lut8 alu rom16 big-shift osc io-readback io-ddr
+# gw5a-a without the I/O tests: only the Primer 25K's CST places their pads.
+HIL_BATCH_gw5at-a := latch lut8 alu rom16 big-shift osc
 # The clock tests each alone: with too many PLL clocks on global wires (plla
 # and dcs together, or all seven PLLA outputs in one test) nextpnr routes the
 # system clock partly through the fabric in some placements, and those builds
@@ -63,7 +66,9 @@ HIL_BATCH_gw5a-dsp := dsp-mult12x12 dsp-multaddalu12x12 dsp-multalu27x18 dsp-mul
 HIL_BATCHES_primer25k := gw5a-a gw5a-clk-a gw5a-clk-b gw5a-clk-c gw5a-bsram gw5a-dsp carry-crt
 # Known broken, in no batch; make hil-primer25k-broken runs them.
 # iob-ireg: the input register in the pad's I/O logic reads 0, as in #668.
-HIL_BROKEN_primer25k := iob-ireg
+# io-ser4: OSER4 -> IDES4 on one pad returns no data, #680.
+# io-startup: pads read wrong for ~10k clocks after start-up, #681.
+HIL_BROKEN_primer25k := iob-ireg io-ser4 io-startup
 # The other GW5A boards are not on a bench: build-only, from gw5a/Makefile.
 # GW5AT-60B: nextpnr asserts on dcs ("No clock inputs"), cannot place
 # dsp-mult27x36, and fails to route the BSRAM inputs of six bsram tests
@@ -72,7 +77,7 @@ HIL_BROKEN_primer25k := iob-ireg
 # and gowin_pack has no MULTALU27X18 for it. None of these boards had a dcs or
 # DSP example before.
 HIL_BATCH_gw5ast-a := latch lut8 alu rom16 big-shift
-HIL_BATCHES_tangconsole60k := gw5a-a gw5a-clk-a gw5a-clk-c \
+HIL_BATCHES_tangconsole60k := gw5at-a gw5a-clk-a gw5a-clk-c \
 	bsram-rom bsram-rom2 bsram-sp bsram-sp2 bsram-sdp bsram-sdp2 bsram-dp bsram-dp16 \
 	bsram-rom-bugs bsram-sdp-bugs bsram-dp-bugs
 HIL_BATCHES_tangmega138k := gw5ast-a gw5a-bsram
