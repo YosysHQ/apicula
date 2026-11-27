@@ -75,6 +75,9 @@ KNOWN = [
     ('ALU54D', 'GW1N|GW2A', any_params,
      'DSP: input register muxes (AIRMUX/BIRMUX, IRMATCH), pre-adder rows (PRAD_MUXA1, PRAD_FBB1); not in the '
      'parameters: on GW2A-18C it shares a DSP block, and the same differing bits, with a MULT18X18'),
+    ('MULTALU36X18', 'GW2A', any_params,
+     'DSP: not in the parameters: on GW2A-18C it shares a DSP block with a PADD18 and gets the same pre-adder '
+     'and IRMATCH rows (PRAD_MUXA1, PRAD_FBB1, IRMATCH); the same case passes in another block of the same run'),
     ('MULTALU18X18', ALL, any_params,
      'DSP: input register muxes (AIRMUX/BIRMUX, IRMATCH), RSTGEN*MUX_REGC0 rows; gowin_pack stops with '
      'KeyError CLK_BSIGN12'),
