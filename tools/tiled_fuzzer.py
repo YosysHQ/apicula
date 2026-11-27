@@ -413,15 +413,17 @@ def netlist(batch, spec, pins, harness_io_type=None):
 
 # ---------------------------------------------------------------- flows
 
-def run_vendor(workdir, mod, cst, vendor_device, part):
+def run_vendor(workdir, mod, cst, vendor_device, part, iob_regs=()):
     pnr = codegen.Pnr()
     pnr.device, pnr.partnumber, pnr.netlist, pnr.cst = vendor_device, part, mod, cst
+    for mode in iob_regs:
+        pnr.opt.options[f'{mode}_in_iob'] = '1'
     os.makedirs(workdir, exist_ok=True)
     with open(os.path.join(workdir, 'gw_sh.log'), 'w') as log:
         return pnr.run_pnr(workdir=workdir, stdout=log)
 
 
-def run_apicula(workdir, mod, cst, names, device, part):
+def run_apicula(workdir, mod, cst, names, device, part, iob_regs=()):
     os.makedirs(workdir, exist_ok=True)
     mod = copy.deepcopy(mod)
     for prim in mod.primitives.values():
@@ -460,7 +462,8 @@ def run_apicula(workdir, mod, cst, names, device, part):
         json.dump(syn, f)
     subprocess.run([tool('NEXTPNR', 'nextpnr-himbaechel', 'yowasp-nextpnr-himbaechel-gowin'),
                     '--json', 'syn.json', '--write', 'pnr.json', '--device', part,
-                    '--vopt', f'family={device}', '--vopt', 'cst=top.cst'],
+                    '--vopt', f'family={device}', '--vopt', 'cst=top.cst',
+                    *(arg for mode in iob_regs for arg in ('--vopt', f'{mode}_in_iob'))],
                    cwd=workdir, check=True, stdout=log, stderr=subprocess.STDOUT)
     subprocess.run([sys.executable, '-m', 'apycula.gowin_pack', '-d', device, '-o', 'top.fs', 'pnr.json'],
                    cwd=workdir, check=True, stdout=log, stderr=subprocess.STDOUT,
@@ -1179,6 +1182,44 @@ class Iol(Kind):
         return {'cell': case.prim, 'params': literals(case.params)}
 
 
+class IobReg(Kind):
+    """A flip-flop (IOB_IREG, IOB_OREG, IOB_IOREG) that both tools pack into
+    the I/O logic of its pad, (row, col, 'IOBA'|'IOBB', pin). Compared on
+    fuses, like a primitive without a decoder."""
+    batch = 'io'
+    placement = 'pin'
+    owner, tiles = Iol.owner, Iol.tiles  # the I/O logic it is packed into
+
+    def wire(self, d, name, case, site, conns, sources):
+        params = dict(case.params)
+        typ = params.pop('TYPE', d.spec[case.prim]['params']['TYPE']['default'])
+        pad = f'{name}_pad'
+        d.cst.ports[pad] = site[3]
+        d.cst.attrs[pad] = {'IO_TYPE': ps.IOL_IO_TYPE}
+        # clock and control inputs, each from its own pin; D and Q below
+        src = iter(sources)
+        ctrl = {port: 'clk' if port == 'CLK' else next(src)
+                for port, (direction, _) in d.spec[typ]['ports'].items()
+                if direction == 'input' and port != 'D'}
+        d_in, q = f'{name}_d', f'{name}_q'
+        if case.prim == 'IOB_IREG':
+            d.mod.inputs.add(pad)
+            d.inst('IBUF', f'{name}_buf', {'I': pad, 'O': d_in})
+        elif case.prim == 'IOB_OREG':
+            d_in = next(src)
+            d.mod.outputs.add(pad)
+            d.inst('OBUF', f'{name}_buf', {'I': q, 'O': pad})
+        else:  # IOB_IOREG: an input and an output flip-flop on one IOBUF
+            oq = f'{name}_oq'
+            d.mod.inouts.add(pad)
+            d.mod.wires.add(oq)
+            d.inst('IOBUF', f'{name}_buf', {'IO': pad, 'O': d_in, 'I': oq, 'OEN': next(src)})
+            d.inst(typ, f'{name}_oreg', {**ctrl, 'D': next(src), 'Q': oq}, params.items())
+        d.mod.wires.update([d_in, q])
+        d.inst(typ, name, {**ctrl, 'D': d_in, 'Q': q}, params.items())
+        return True
+
+
 class Clock(Kind):
     """A clock buffer, divider or selector, alone in its design and driving the
     harness output. The vendor reports no position for CLKDIV and CLKDIV2, so
@@ -1289,7 +1330,7 @@ class WideLut(Kind):
 
 # in allocation order within each batch class
 KINDS = {'clock': Clock(), 'lone': Lone(), 'widelut': WideLut(), 'alu': Alu(), 'ssram': Ssram(),
-         'iob': Io(), 'diob': Io(), 'iol': Iol(), 'lut': Lut(), 'dff': Dff(),
+         'iob': Io(), 'diob': Io(), 'iol': Iol(), 'iobreg': IobReg(), 'lut': Lut(), 'dff': Dff(),
          'bsram': Bsram(), 'pll': Pll(), 'plla': Plla(), 'dsp': Dsp(), 'osc': Osc()}
 
 
@@ -1314,11 +1355,14 @@ def apicula_errors(log):
 def run_batch(device, db, spec, pins, batch, workdir, baseline, harness_io_type=None):
     vendor_device, part, _ = DEVICES[device]
     mod, cst, names, wiring = netlist(batch, spec, pins, harness_io_type)
-    vendor = functools.partial(run_vendor, os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part)
+    # IOB_* cases: ask both tools to pack registers into I/O logic. Only those
+    # cases put a flip-flop next to a buffer, so no other case is affected.
+    iob_regs = sorted({case.prim[4:].lower() for case, _ in batch if case.site == 'iobreg'})
+    vendor = functools.partial(run_vendor, os.path.join(workdir, 'vendor'), mod, cst, vendor_device, part, iob_regs)
 
     def apicula():
         try:
-            return run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, device, part)
+            return run_apicula(os.path.join(workdir, 'apicula'), mod, cst, names, device, part, iob_regs)
         except subprocess.CalledProcessError:
             return None
 

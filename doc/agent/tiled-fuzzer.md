@@ -29,7 +29,11 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
   - GW5A output `ODMUX`/`DRIVE` rows (check `fuse_cell_offset` first).
 - **I/O logic:** `ODDR` `OUTMODE`; GW5A-25A `FCLKSEL*` and a standalone
   `IODELAY` without its `INDEL`/`IDEL_*` rows and with LSR mux rows the vendor
-  leaves off. Fixed: on GW5 the B-site
+  leaves off. A flip-flop packed into I/O logic (`IOB_IREG`/`IOB_OREG`/
+  `IOB_IOREG`, #668) lacks the `CLKIMUX`/`CLKOMUX`, `SRMODE`, CE mux,
+  `OUTMODE=OREG` and register mode rows (on GW5A-25A also `IREG_REGSET`/
+  `OREG_REGSET` and IOB rows), and sets LSR mux rows the vendor leaves off.
+  Fixed: on GW5 the B-site
   cells are in the IOBB `fuse_cell_offset` tile (see `gw5-devices.md`). Fixed:
   on GW5 the LSR mux
   (`LSRIMUX_0`/`LSROMUX_0`) follows the reset net, off for GND or no reset port
@@ -298,6 +302,14 @@ What each kind relies on, checked by running both flows (IDE 1.9.10.03):
   MUX2 cells `gowin_unpack` writes (each tile's OF3 feeds two `MUX2_LUT8`s).
 - **ROM16** becomes a LUT in nextpnr. **INV** becomes a LUT in nextpnr and is
   removed by the vendor.
+- **IOB registers** (`IOB_IREG`, `IOB_OREG`, `IOB_IOREG`) are pseudo-primitives:
+  a flip-flop of any `DFFS` type the device has, fed by an `IBUF`, driving an
+  `OBUF`, or one of each on an `IOBUF`. A design with them runs the vendor
+  with `-ireg_in_iob 1`, `-oreg_in_iob 1` or `-ioreg_in_iob 1` (`pnr.opt`) and
+  nextpnr with the matching `--vopt`. Both tools pack each such flip-flop into
+  the pad's I/O logic and no other case's (measured on GW1N-9C, GW2A-18C and
+  GW5A-25A), so the fuses are compared at the `IOLOGIC` bel. The register's Q
+  of `IOB_IREG` is left unconnected; both tools still pack it.
 
 ## Running
 
@@ -367,7 +379,10 @@ b4faf934 and master e6dc4a6, through the fuzzer's own flow (`--replay` or
 (prim regex, device regex, predicate, reason) and lands as a stack of three
 pull requests in this order.
 
-### 1. IOB registers (#668)
+### 1. IOB registers (#668) — built
+
+The `IobReg` kind, the `-*reg_in_iob` options and the KNOWN entry are in
+place; see "Site kinds".
 
 - New kind `IobReg` for three pseudo-primitives, `IOB_IREG`, `IOB_OREG` and
   `IOB_IOREG`. Params: `TYPE`, one of `DFFS` minus `UNAVAILABLE`, and `INIT`.
