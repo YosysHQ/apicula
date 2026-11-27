@@ -11,7 +11,8 @@ same fuses for them. IDE **1.9.10.03**.
 
 Trivial ones were fixed on the way; these were not. The failing cases, with
 the fuse table rows that differ, are in the test output of
-`tests/test_fuzz.py`, where these are the known broken primitives.
+`tests/test_fuzz.py`, whose `KNOWN` list holds these bugs (see "Known bugs"
+below).
 
 A failing case with omitted parameters may be a default bug. Replay it as a
 pair, once with the parameters omitted and once with them set to their
@@ -40,21 +41,29 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
   (`fusegenMem::setIolODDR @0x308ac42`). `IDES16`/`OSER16` take `GSR` and the LSR mux
   on their two pin sites from `GSREN`/`LSREN`, which nextpnr copies onto those
   cells (YosysHQ/nextpnr#1919); the helper site in the next tile stays at
-  `ENGSR` and mux 1. On GW1N-9C the harness puts an `OSER`'s output
-  pad in bank 3, which is locked to 1.8 V (CT1136); the vendor moves
-  it and sets IOB `ODMUX`/`TRI_MUX`/`SLEWRATE` rows Apicula does not.
+  `ENGSR` and mux 1.
 - **BSRAM:**
-  - GW5A `SDPB`/`SDPX9B` `DBLWB=X36`;
+  - GW5A `SDPB`/`SDPX9B` with a 32/36-bit read port (`BIT_WIDTH_1`) and a
+    narrower write port: Apicula sets `DBLWB=X36`, the vendor does not (4 of 4
+    such cases on GW5A-25A; equal widths pass);
   - GW5A-25A: nextpnr rejects `BIT_WIDTH_0` of 32/36 with a different
     `BIT_WIDTH_1` ("The fix for SDP when ports A and B have different bit
     widths has not yet been implemented");
   - byte enables (`BELB`/`BEHB`) of the 16/18-bit port of a `DPB`/`DPX9B`
-    with mixed port widths.
+    with mixed port widths: Apicula enables them, the vendor does not. Seeds 2
+    and 3 (`-n 20`) on GW1N-9C and GW2A-18C: 14 of 14 such cases differ per
+    device, while the 4 mixed-width `DPB` cases without a 16-bit port and all
+    equal-width cases pass.
 - **PLL:** GW2A `rPLL` `FBSEL`; GW5A `PLLA` phase/duty, charge pump, loop
   filter, `KVCO`, `ODIVn`, dynamic enables.
 - **DSP:**
   - GW1N/GW2A input register muxes (`AIRMUX`/`BIRMUX`), `RSTGEN*MUX`, and the
     pre-adder `PRAD_MUXA1`/`PRAD_MUXB`/`PRAD_FBB1`/`IRMATCH` rows;
+  - `ALU54D` on GW1N-9C: CI's all-default case differs in the `DSP1`
+    `IRMATCH`/`PRAD` rows on every run, but the same case and 9 others pass
+    in a seed-2 run with ALU54D and DCS alone, so the trigger is not in the
+    parameters (inferred: the site or the other cases of the design). On
+    GW2A-18C `ALU54D` matches: 4 distinct cases in CI and 10 at seed 2;
   - GW5A `MULT27X36` `MULT_RESET_MODE`, `CASO`, CE muxes;
   - GW5A `MULTALU27X18` `PRELOAD_BIT`/`DYN_P_ADDSUB`;
   - GW5A `MULTADDALU12X12`/`MULTALU27X18` with `ACC_SEL` or `C_SEL` omitted: the
@@ -62,9 +71,11 @@ in `gowin_pack` is wrong; if both fail, the default is not the cause.
     none.
 - **Missing handler, fixed:** `FLASH96K` had no `get_…_fuses` method, so GW1N-1
   stopped with `AttributeError`. The vendor sets no fuses outside routing for it.
-- **GW5A `ADC`:** Apicula sets a `5A_PCLK_ENABLE` fuse the vendor does not.
-  `TLVDS_IBUF_ADC` on the vendor's pins raises "IO(0, 0) has ADC bus 0, but used
-  in bus 2".
+- **GW5A `TLVDS_IBUF_ADC`** on the vendor's pins raises "IO(0, 0) has ADC bus 0,
+  but used in bus 2". `ADC` itself matches the vendor in every case since the
+  fuzzer omits parameters (bd8c167); an earlier `5A_PCLK_ENABLE` difference
+  did not come back in the 6 distinct cases the vendor has accepted since
+  (CI's seed 7 and a seed-3 run on GW5A-25A; it rejected 7 more).
 - **`I3C_IOBUF`** (GW1N-9C): the vendor sets `DRIVE`/`OPENDRAIN` rows in IOBB that
   Apicula does not. **`MIPI_OBUF`**: Apicula sets an `IO_TYPE=…` IOB row and the
   vendor a bank row instead.
@@ -223,6 +234,14 @@ design, to confirm a failure in isolation.
   harness inputs there did not stop it (GW1N-9C). Sorting rather than filtering
   keeps five harness inputs on GW1NS-4 QFN48P, which then has no plain pin left
   for I/O cases (banks 0 and 3 are SiP-locked, bank 2 holds MIPI outputs).
+- **No I/O case shares a tile with a harness pin** (`Sites`): nextpnr places
+  most I/O logic only with the other pin of its tile free
+  (`check_iologic_placement`), and `IDES16`/`OSER16` also need both pins of
+  the AUX tile (`check_io16_placement`). Before, some seeds put `IDES4`,
+  `IDES8`, `IDES16`, `OSER16` or `IVIDEO` next to a harness pin, and nextpnr
+  stopped with "already taken by harness_ib_in4". The sites are filtered after
+  the shuffle, so the random state and the cases are unchanged; only I/O
+  cases can land on other pins.
 - **The harness clock goes on a clock-only true clock pin**: one whose only
   functions are `GCLK*`, so no PLL input or feedback and no config pin, and
   `GCLKT` before `GCLKC`. Measured on one pair only: on GW1N-9C pin 51
@@ -287,8 +306,8 @@ What each kind relies on, checked by running both flows (IDE 1.9.10.03):
 
 One fuzzer run per device makes all designs; `tests/test_fuzz.py` has a test
 per primitive, plus one for unattributed tiles and one for failing
-combinations. Known broken primitives are in its `BROKEN` table, with a
-reason; their failures are logged as xfail. Cases the vendor rejects are
+combinations. Known bugs are in its `KNOWN` list (see below); their failures
+are logged as xfail. Cases the vendor rejects are
 skipped: a generator limit, not an Apicula failure. Reports are in
 `--fuzz-out/<device>`, with `results.json` holding every case.
 
@@ -296,6 +315,36 @@ CI (the `fuzz` job in `.github/workflows/toolchain.yml`) runs the tests for
 GW1N-9C, GW2A-18C and GW5A-25A in the `pepijndevos/apicula:1.9.10.03` image,
 with the dev Yosys and nextpnr that workflow builds in the same image, the
 chipdb from the `python-dist` wheel, pinned Hypothesis and a fixed seed.
+
+## Known bugs
+
+A property test marks a known bug by the region of inputs that triggers it,
+not by its symptom. Each `KNOWN` entry has the shape of `RULES` in
+`primitive_strategies.py`: a primitive regex (whole name), a device regex
+(prefix), a predicate over the case's parameters (Verilog literals, omitted
+ones at their `primitive.xml` default) and the reason, with the issue number
+where there is one.
+
+- A failing case that no entry matches fails the test, even if its primitive
+  has other known bugs. So a new bug in a primitive with known bugs is no
+  longer hidden, unless its cases fall in a known bug's region.
+- A passing case that an entry matches is reported as a warning: the entry is
+  stale, or broader than its bug.
+- A bug whose trigger is not known yet gets `any_params`, every case of the
+  primitive on those devices, until someone narrows it. nextpnr and Yosys
+  gaps keep `any_params` too.
+- Where CI shows a primitive passing on a device, its entries leave that device
+  out, so a regression there fails.
+- It is an allowlist of known vendor mismatches, not a change-detector: the
+  expected value stays the vendor's bitstream, and fixing a bug never fails the
+  test, it only turns the entry's cases into warnings.
+- CI draws the same cases on every run (fixed seed and count). A change that
+  alters the draw (a new primitive, a generator change) must update `KNOWN` in
+  the same pull request. The failure message lists the cases outside `KNOWN`
+  with their parameters.
+
+Unattributed tiles and failing combinations are not per case, and keep a
+single reason each.
 
 ## Adding a primitive
 
